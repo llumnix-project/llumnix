@@ -1,0 +1,27 @@
+# Ref: https://aliyuque.antfin.com/alicode/docs/btevdryaniom98ry
+name: '[Llumnix-CMS] UnitTest'
+
+triggers:
+  push:
+    branches:
+      - 'release/**'
+      - 'dev'
+  merge_request:
+    target-branches:
+      - '**'
+
+jobs:
+  unit-test:
+    timeout: 5m
+    runs-on:
+      - amd64
+      - linux
+    image: "alios-8u"
+    steps:
+      - uses: setup-env
+        inputs:
+          python-version: '3.12'
+      - uses: checkout
+      - run: |
+          pip install .
+          make cms_test

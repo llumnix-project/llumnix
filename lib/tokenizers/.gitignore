@@ -1,0 +1,11 @@
+libtokenizers_rs.a
+/artifacts
+
+# Rust
+target
+
+# Bazel
+/bazel-*
+
+# Python
+.env
