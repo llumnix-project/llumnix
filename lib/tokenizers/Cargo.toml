@@ -1,0 +1,31 @@
+[package]
+name = "tokenizers_rs"
+version = "0.0.0"
+edition = "2021"
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+libc = "0.2.177"
+tokenizers = {version = "0.22.1" }
+tiktoken-rs = { git = "https://github.com/steved/tiktoken-rs", branch = "steved/bump-fancy-regex" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json ={ version = "1.0.145", features = ["std", "preserve_order"] }
+base64 = "0.22"
+rustc-hash = "1.1.0"
+minijinja = { version = "2.12.0", features = ["json", "loop_controls", "unstable_machinery", "builtins"] }
+minijinja-contrib = { version = "2.12.0", features = ["pycompat"] }
+chrono = "0.4"
+tracing = "0.1"
+anyhow = "1.0"
+thiserror = "1.0.69"
+utoipa = { version = "5.4.0", features = ["axum_extras"] }
+
+[dev-dependencies]
+criterion = { version = "0.5.1", features = ["html_reports"] }
+rand = "0.8.5"
+
+[[bench]]
+name = "decode_benchmark"
+harness = false

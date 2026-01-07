@@ -1,0 +1,23 @@
+package service
+
+import (
+	"easgo/cmd/llm-gateway/app/options"
+	"easgo/pkg/llm-gateway/schedule-policy"
+)
+
+type ReschedulerService struct {
+	config           *options.Config
+	reschedulePolicy schedule_policy.ReschedulePolicy
+}
+
+func NewRescheduleService(c *options.Config) *ReschedulerService {
+	return &ReschedulerService{
+		config:           c,
+		reschedulePolicy: schedule_policy.NewReschedulePolicy(c),
+	}
+}
+
+func (r *ReschedulerService) Start() error {
+	go r.reschedulePolicy.RescheduleLoop()
+	return nil
+}

@@ -1,0 +1,17 @@
+{
+  "one": 1,
+  "two": "2.2",
+  "four": [1,2,3,4],
+  "five": {
+    "alpha": ["fo", "fum"],
+    "beta": {
+      "hey": "How's tricks?"
+    }
+  },
+  "abool": true,
+  "abool2": false,
+  "id": 66912849,
+  "test": [
+    {"b": 1}
+  ]
+}
