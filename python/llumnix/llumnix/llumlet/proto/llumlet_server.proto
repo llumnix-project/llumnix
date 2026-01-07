@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package llumlet;
+
+import "llumnix/cms/proto/cms.proto";
+
+service Llumlet {
+  rpc Migrate(MigrateRequest) returns (MigrateResponse) {}
+  rpc Abort(AbortRequests) returns (AbortResponse) {}
+  rpc MigrateIn(MigrateInRequest) returns (MigrateInResponse) {}
+  rpc AbortMigrateIn(AbortMigrateInRequest) returns (AbortResponse) {}
+  rpc PushInstanceStatus(cms.InstanceStatus) returns (PushInstanceStatusResponse) {}
+}
+
+message MigrateRequest {
+  string src_engine_id = 1;
+  string dst_engine_id = 2;
+  string dst_engine_ip = 3;
+  int32 dst_engine_port = 4;
+  string migration_type = 5;
+  string migration_req_policy = 6;
+  oneof migration_value {
+    int64 num_reqs = 7;
+    int64 num_tokens = 8;
+    float block_ratio = 9;
+  }
+  string trigger_policy = 10;
+}
+
+message MigrateResponse {
+  bool success = 1;
+  string message = 2; 
+}
+
+message AbortRequests {
+  repeated string request_ids = 1;
+}
+
+message AbortResponse {
+  bool success = 1;
+  string message = 2; 
+}
+
+message MigrateInRequest {
+  bytes serialized_migrate_req = 1;
+  string serialization_format = 2;
+}
+
+message MigrateInResponse {
+  bool success = 1;
+  string message = 2; 
+}
+
+message AbortMigrateInRequest {
+  repeated string request_ids = 1;
+  string migrate_in_ip_address = 2;
+  int32 migrate_in_port = 3;
+}
+
+message PushInstanceStatusResponse {
+  bool success = 1;
+  string message = 2;
+}
