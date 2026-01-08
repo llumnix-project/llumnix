@@ -40,7 +40,6 @@ fi
 echo "==> 正在删除服务组: $GROUP_NAME"
 
 
-
 # 2. 删除 StatefulSets 和 Deployments
 echo "==> 删除 StatefulSets"
 kubectl delete statefulsets --all -n "$GROUP_NAME" --grace-period=0 --force 2>/dev/null || true

@@ -1,4 +1,4 @@
-module gitlab.alibaba-inc.com/eas/tokenizers
+module easgo/lib/tokenizers
 
 go 1.18
 

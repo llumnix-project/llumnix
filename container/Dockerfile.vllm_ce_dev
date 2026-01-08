@@ -26,11 +26,11 @@ COPY ./python/llumnix/patches/vllm_ce/mooncake/mooncake_connector_v1.py /usr/loc
 RUN export RUSTUP_DIST_SERVER="https://rsproxy.cn" \
     && export RUSTUP_UPDATE_ROOT="https://rsproxy.cn/rustup" \
     && curl --proto '=https' --tlsv1.2 -sSf https://rsproxy.cn/rustup-init.sh | sh -s -- -y \
-    && . $HOME/.cargo/env \
+    && . /root/.cargo/env \
     && rustup self update \
     && rustup update stable \
-    && mkdir -p $HOME/.cargo \
-    && cat > $HOME/.cargo/config.toml <<'EOF'
+    && mkdir -p /root/.cargo \
+    && cat > /root/.cargo/config.toml <<'EOF'
 [source.crates-io]
 replace-with = 'rsproxy-sparse'
 
@@ -43,6 +43,7 @@ index = "sparse+https://rsproxy.cn/index/"
 [net]
 git-fetch-with-cli = true
 EOF
+ENV PATH=$PATH:/root/.cargo/bin
 
 # Install golang
 RUN wget https://golang.google.cn/dl/go1.23.0.linux-amd64.tar.gz \

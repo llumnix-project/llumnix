@@ -3,7 +3,7 @@ FROM ubuntu:22.04
 RUN apt-get update && apt-get install -y ca-certificates git curl wget vim \
     && rm -rf /var/lib/apt/lists/*
 
-COPY bin/* /usr/local/bin/
+COPY ./bin/* /usr/local/bin/
 
 COPY ./lib/tokenizers/resources /tokenizers
 
