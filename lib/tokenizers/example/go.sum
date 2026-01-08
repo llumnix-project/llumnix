@@ -1,10 +1,10 @@
+github.com/daulet/tokenizers v1.22.0 h1:Bj7sRW99FpfGU4tNIp0s0j/IKr26pPHqYLb6i1oT+kA=
+github.com/daulet/tokenizers v1.22.0/go.mod h1:tGnMdZthXdcWY6DGD07IygpwJqiPvG85FQUnhs/wSCs=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/stretchr/testify v1.8.2 h1:+h33VjcLVPDHtOdpUCuF+7gSuG3yGIftsP1YvFihtJ8=
 github.com/stretchr/testify v1.8.2/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
-gitlab.alibaba-inc.com/eas/tokenizers v0.0.0-20251119101052-6649b9b0b5f9 h1:wPhPyxgyN//IcMQXKAHwPG4A3BAF6eo6HJA5OubqZ48=
-gitlab.alibaba-inc.com/eas/tokenizers v0.0.0-20251119101052-6649b9b0b5f9/go.mod h1:N2IJ4l6o2r57erCo85b2rXBRfHy41L1nVbfyekCasdE=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=

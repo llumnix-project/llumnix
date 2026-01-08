@@ -242,7 +242,7 @@ class LlumletProc:
         llumlet_specific_meta = {
             "utc_create": utc_now,
             "utc_update": utc_now,
-            "node_id": 0,  # TODO(jiangjiemin): get from eas env variables
+            "node_id": 0,  # TODO(jiangjiemin): get from env variables
             "llumlet_port": self.rpc_port,
             "backend_type": engine_type,
         }

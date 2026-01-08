@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"log"
 	"tokenizers"
-
-	// "gitlab.alibaba-inc.com/eas/tokenizers"
 )
 
 func simple() error {
