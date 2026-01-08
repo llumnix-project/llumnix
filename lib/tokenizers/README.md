@@ -6,13 +6,6 @@ Go bindings for the [HuggingFace Tokenizers](https://github.com/huggingface/toke
 
 `make build` to build `libtokenizers_rs.a` that you need to run your application that uses bindings. In addition, you need to inform the linker where to find that static library: `go run -ldflags="-extldflags '-L./path/to/libtokenizers/directory'" .` or just add it to the `CGO_LDFLAGS` environment variable: `CGO_LDFLAGS="-L./path/to/libtokenizers/directory"` to avoid specifying it every time.
 
-### Using pre-built binaries
-
-If you don't want to install Rust toolchain, build it in docker: `docker build --platform=linux/amd64 -f release/Dockerfile .` or use prebuilt binaries from the [releases](https://gitlab.alibaba-inc.com/eas/tokenizers/releases) page. Prebuilt libraries are available for:
-
-* [darwin-arm64](https://eas-data.oss-cn-shanghai.aliyuncs.com/3rdparty/tokenizers/20251114/libtokenizers_rs.darwin-aarch64.tar.gz)
-* [linux-amd64](https://eas-data.oss-cn-shanghai.aliyuncs.com/3rdparty/tokenizers/20251114/libtokenizers_rs.linux-x86_64.tar.gz)
-
 ## Getting started
 
 TLDR: [working example](example/main.go).
@@ -39,7 +32,7 @@ BenchmarkDecodeNTimes/tiktoken-10                2369224               513.9 ns/
 BenchmarkDecodeNTokens/huggingface-10            7423770               170.8 ns/op             4 B/op          0 allocs/op
 BenchmarkDecodeNTokens/tiktoken-10              80597544                19.40 ns/op            4 B/op          0 allocs/op
 PASS
-ok      gitlab.alibaba-inc.com/eas/tokenizers    40.626s
+ok      github.com/daulet/tokenizers    40.626s
 ```
 
 ### Go vs Rust
@@ -53,13 +46,13 @@ go test . -bench=. -benchmem -benchtime=10s
 
 goos: darwin
 goarch: arm64
-pkg: gitlab.alibaba-inc.com/eas/tokenizers
+pkg: github.com/daulet/tokenizers
 BenchmarkEncodeNTimes-10     	  959494	     12622 ns/op	     232 B/op	      12 allocs/op
 BenchmarkEncodeNChars-10      1000000000	     2.046 ns/op	       0 B/op	       0 allocs/op
 BenchmarkDecodeNTimes-10     	 2758072	      4345 ns/op	      96 B/op	       3 allocs/op
 BenchmarkDecodeNTokens-10    	18689725	     648.5 ns/op	       7 B/op	       0 allocs/op
 PASS
-ok   gitlab.alibaba-inc.com/eas/tokenizers 126.681s
+ok   github.com/daulet/tokenizers
 ```
 
 Run equivalent Rust tests with `cargo bench`.

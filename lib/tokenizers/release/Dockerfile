@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.4
 
-FROM registry.cn-hangzhou.aliyuncs.com/eas/rust:1.87 as builder-rust
+FROM rust:1.87 as builder-rust
 ARG TARGETPLATFORM
 WORKDIR /workspace
 COPY ./benches ./benches
@@ -9,7 +9,7 @@ COPY ./Cargo.toml ./Cargo.toml
 COPY ./Cargo.lock ./Cargo.lock
 RUN cargo build --release
 
-FROM registry.cn-hangzhou.aliyuncs.com/eas/golang:1.21.5 as builder-go
+FROM golang:1.21.5 as builder-go
 ARG DOCKER_TARGETPLATFORM
 WORKDIR /workspace
 COPY ./release/go.mod   .

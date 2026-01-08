@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	// "github.com/daulet/tokenizers"
-	// tokenizers "gitlab.alibaba-inc.com/eas/tokenizers"
 	tokenizers "easgo/pkg/tokenizers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
