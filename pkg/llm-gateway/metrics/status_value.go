@@ -1,18 +1,17 @@
 package metrics
 
 import (
-	"easgo/pkg/llm-gateway/structs"
 	"sync"
 	"sync/atomic"
 )
 
 type StatusData struct {
 	key    string
-	labels structs.Labels
+	labels Labels
 	mValue atomic.Int64
 }
 
-func NewStatusData(k string, l structs.Labels) *StatusData {
+func NewStatusData(k string, l Labels) *StatusData {
 	return &StatusData{
 		key:    k,
 		labels: l,
@@ -34,7 +33,7 @@ func NewStatusDataGroup() *StatusDataGroup {
 	}
 }
 
-func (cg *StatusDataGroup) Get(k string, l structs.Labels) *StatusData {
+func (cg *StatusDataGroup) Get(k string, l Labels) *StatusData {
 	key := l.FlattenWithKey(k)
 
 	cg.mu.Lock()
@@ -74,7 +73,7 @@ var (
 	statusValueGroup *StatusDataGroup
 )
 
-func StatusValue(k string, l structs.Labels) *StatusData {
+func StatusValue(k string, l Labels) *StatusData {
 	return statusValueGroup.Get(k, l)
 }
 

@@ -15,7 +15,6 @@ import (
 	"easgo/pkg/llm-gateway/consts"
 	"easgo/pkg/llm-gateway/llumlet"
 	"easgo/pkg/llm-gateway/metrics"
-	"easgo/pkg/llm-gateway/structs"
 )
 
 const DefaultLlumletGrpcTimeoutSeconds = 5
@@ -178,7 +177,7 @@ func (p *ReschedulePolicy) executeMigrations(reschedulePairs []*reschedulePair) 
 
 	for _, rp := range reschedulePairs {
 		go func(pair *reschedulePair) {
-			labels := structs.Labels{
+			labels := metrics.Labels{
 				{"reschedule_req_select_rule", rp.reqSelectRule},
 				{"reschedule_req_select_order", rp.reqSelectOrder},
 			}
@@ -244,7 +243,7 @@ func (p *ReschedulePolicy) executeMigrations(reschedulePairs []*reschedulePair) 
 	for i := 0; i < len(reschedulePairs); i++ {
 		result := <-results
 		if result.err != nil || !result.migrateResponse.Success {
-			metrics.IncrLlumnixCounterByOne(metrics.LlumnixMetricRescheduleFailedCount, structs.Labels{})
+			metrics.IncrLlumnixCounterByOne(metrics.LlumnixMetricRescheduleFailedCount, metrics.Labels{})
 		}
 		migrationResults = append(migrationResults, &result)
 	}

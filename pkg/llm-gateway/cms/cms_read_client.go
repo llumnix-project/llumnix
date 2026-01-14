@@ -14,7 +14,8 @@ import (
 	"easgo/pkg/llm-gateway/consts"
 	"easgo/pkg/llm-gateway/metrics"
 	"easgo/pkg/llm-gateway/predictor"
-	"easgo/pkg/llm-gateway/structs"
+	"easgo/pkg/llm-gateway/types"
+	"easgo/pkg/llm-gateway/utils"
 )
 
 var (
@@ -23,14 +24,14 @@ var (
 )
 
 type InstanceView struct {
-	Token    *structs.Token
+	Worker   *types.LLMWorker
 	Status   *InstanceStatus
 	Metadata *InstanceMetadata
 	InstanceStatusLocalAccount
 }
 
-func (iv *InstanceView) GetToken() *structs.Token {
-	return iv.Token
+func (iv *InstanceView) GetInstance() *types.LLMWorker {
+	return iv.Worker
 }
 
 func (iv *InstanceView) GetInstanceId() string {
@@ -38,7 +39,7 @@ func (iv *InstanceView) GetInstanceId() string {
 }
 
 func (iv *InstanceView) GetInferMode() string {
-	return iv.Token.InferMode
+	return iv.Worker.Role.String()
 }
 
 type CMSReadClientInterface interface {
@@ -235,7 +236,7 @@ func (c *CMSReadClient) refreshMetadataLoop() {
 		elapsed := time.Since(start)
 		klog.V(4).Infof("[refreshMetadataLoop] refreshInstanceMetadata took %v", elapsed)
 		if c.recordMetricsInterval > 0 && metricRecordIndex == 0 {
-			metrics.AddLlumnixLatency(metrics.LlumnixMetricCmsRefreshInstanceMetadataLatencyMicroseconds, structs.Labels{}, elapsed.Microseconds())
+			metrics.AddLlumnixLatency(metrics.LlumnixMetricCmsRefreshInstanceMetadataLatencyMicroseconds, metrics.Labels{}, elapsed.Microseconds())
 			metricRecordIndex = (metricRecordIndex + 1) % c.recordMetricsInterval
 		}
 		sleepTime := time.Duration(c.redisPullMetadataIntervalMs)*time.Millisecond - elapsed
@@ -268,7 +269,7 @@ func (c *CMSReadClient) refreshStatusLoop() {
 		elapsed := time.Since(start)
 		klog.V(4).Infof("[refreshStatusLoop] refreshInstanceStatus took %v", elapsed)
 		if needRecordMetrics {
-			metrics.AddLlumnixLatency(metrics.LlumnixMetricCmsRefreshInstanceStatusLatencyMicroseconds, structs.Labels{}, elapsed.Microseconds())
+			metrics.AddLlumnixLatency(metrics.LlumnixMetricCmsRefreshInstanceStatusLatencyMicroseconds, metrics.Labels{}, elapsed.Microseconds())
 		}
 
 		sleepTime := time.Duration(c.redisPullStatusIntervalMs)*time.Millisecond - elapsed
@@ -487,20 +488,21 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 				StepId: math.MinInt32, UpdateId: math.MinInt32, TimestampMs: math.MinInt64,
 				ProfilingId: math.MinInt32,
 			}
-			inferMode := consts.TransformInstanceType2InferMode(c.instanceMetadatas[instanceID].InstanceType)
+			instanceRole := utils.TransformInstanceType2InferMode(c.instanceMetadatas[instanceID].InstanceType)
 			c.instanceViews[instanceID] = &InstanceView{
 				Metadata: c.instanceMetadatas[instanceID],
 				Status:   c.instanceStatuses[instanceID],
-				Token: &structs.Token{
-					Endpoint: structs.Endpoint{
-						IP:         c.instanceMetadatas[instanceID].Ip,
-						Port:       int(c.instanceMetadatas[instanceID].ApiServerPort),
-						OptionPort: int(c.instanceMetadatas[instanceID].KvtPort),
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{
+						Host: c.instanceMetadatas[instanceID].Ip,
+						Port: int(c.instanceMetadatas[instanceID].ApiServerPort),
 					},
-					Count:     consts.MaxConcurrentRequests,
-					InferMode: inferMode,
+					AuxPort: int(c.instanceMetadatas[instanceID].KvtPort),
+					Role:    types.InferRole(instanceRole),
+					DPRank:  int(c.instanceMetadatas[instanceID].DpRank),
+					DPSize:  int(c.instanceMetadatas[instanceID].DataParallelSize),
 					// NOTE(zhaohanyu.zhy): use v6d parser format by default
-					WorkerId: fmt.Sprintf("%s_worker%d_%d",
+					ID: fmt.Sprintf("%s_worker%d_%d",
 						c.instanceMetadatas[instanceID].Ip,
 						c.instanceMetadatas[instanceID].DpRank,
 						c.instanceMetadatas[instanceID].DataParallelSize),
@@ -514,10 +516,10 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 					NumBlocksInflightDispatchDecodeRequests:            0,
 				},
 			}
-			if c.groupedInstanceViews[inferMode] == nil {
-				c.groupedInstanceViews[inferMode] = make(map[string]*InstanceView)
+			if c.groupedInstanceViews[instanceRole] == nil {
+				c.groupedInstanceViews[instanceRole] = make(map[string]*InstanceView)
 			}
-			c.groupedInstanceViews[inferMode][instanceID] = c.instanceViews[instanceID]
+			c.groupedInstanceViews[instanceRole][instanceID] = c.instanceViews[instanceID]
 		}
 		err := proto.Unmarshal(instanceStatusBytes, &c.statusUnmarshalBuffer)
 		if err != nil {
@@ -565,10 +567,10 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 
 		if needRecordMetrics {
 			metrics.SetLlumnixStatusValue(metrics.LlumnixMetricInstanceNumUncomputedBlocksAllWaitingPrefills,
-				structs.Labels{{"instance_id", c.instanceStatuses[instanceID].InstanceId}},
+				metrics.Labels{{"instance_id", c.instanceStatuses[instanceID].InstanceId}},
 				float32(c.instanceStatuses[instanceID].NumUncomputedBlocksAllWaitingPrefills))
 			metrics.SetLlumnixStatusValue(metrics.LlumnixMetricInstanceNumUsedGpuBlocks,
-				structs.Labels{{"instance_id", c.instanceStatuses[instanceID].InstanceId}},
+				metrics.Labels{{"instance_id", c.instanceStatuses[instanceID].InstanceId}},
 				float32(c.instanceStatuses[instanceID].NumUsedGpuBlocks))
 		}
 	}

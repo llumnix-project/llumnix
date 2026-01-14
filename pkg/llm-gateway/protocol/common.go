@@ -21,9 +21,18 @@ type Usage struct {
 
 type ProtocolType int
 
+func (p ProtocolType) String() string {
+	switch p {
+	case OpenAIChatCompletion:
+		return "chat"
+	case OpenAICompletion:
+		return "completions"
+	default:
+		return "unknown"
+	}
+}
+
 const (
-	ProtocolChat ProtocolType = iota
-	ProtocolCompletions
-	ProtocolTokenizedChat
-	ProtocolUnknown
+	OpenAIChatCompletion ProtocolType = iota
+	OpenAICompletion
 )

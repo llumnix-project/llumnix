@@ -5,9 +5,8 @@ import (
 	"context"
 	"easgo/cmd/llm-gateway/app/options"
 	"easgo/pkg/llm-gateway/resolver"
-	"easgo/pkg/llm-gateway/structs"
 	"easgo/pkg/llm-gateway/tokenizer"
-	"easgo/pkg/llm-gateway/utils"
+	"easgo/pkg/llm-gateway/types"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -22,7 +21,7 @@ type RequestReporter struct {
 	mux           sync.RWMutex
 	reqTokenState map[string]*ReqTokenState
 
-	schedulerResolver *resolver.EasResolver
+	schedulerResolver resolver.Resolver
 	client            *http.Client
 	config            *options.Config
 }
@@ -40,7 +39,7 @@ func NewRequestReporter(config *options.Config) *RequestReporter {
 		gReporter = &RequestReporter{
 			reqTokenState:     make(map[string]*ReqTokenState),
 			schedulerResolver: resolver.CreateSchedulerResolver(config),
-			client:            utils.NewHttpClient(),
+			client:            &http.Client{Timeout: 3 * time.Second},
 			config:            config,
 		}
 		go gReporter.reportLoop()
@@ -83,7 +82,7 @@ func (r *RequestReporter) report() {
 	for _, rs := range r.reqTokenState {
 		reportDatas = append(reportDatas, ReqReportData{
 			Id:         rs.req.Id,
-			Model:      rs.req.Model,
+			Model:      rs.req.LLMRequest.Model,
 			InferMode:  rs.InferMode,
 			InstanceId: rs.InstanceId,
 			GatewayId:  rs.GatewayId,
@@ -92,15 +91,15 @@ func (r *RequestReporter) report() {
 	}
 	r.mux.RUnlock()
 
-	endpoint := r.schedulerResolver.GetWeightEndpoints()
-	if len(endpoint) == 0 {
+	endpoint, err := r.schedulerResolver.GetEndpoints()
+	if len(endpoint) == 0 || err != nil {
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	url := fmt.Sprintf("http://%s/request_report", endpoint[0].Ep.String())
+	url := fmt.Sprintf("http://%s/request_report", endpoint[0].String())
 	data, _ := json.Marshal(reportDatas)
 	klog.V(3).Infof("report request data: %s", string(data))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
@@ -142,7 +141,7 @@ func (r *RequestReporter) reportLoop() {
 // ReqTokenState indicates the token length of the current request processing
 // it record token length when enable tokenizer, otherwise it records message text count
 type ReqTokenState struct {
-	req        *structs.Request
+	req        *types.RequestContext
 	Model      string
 	InferMode  string
 	InstanceId string
@@ -156,10 +155,16 @@ type ReqTokenState struct {
 }
 
 func NewReqTokenState(
-	req *structs.Request, model string, inferMode string, instanceId string, gatewayId string) *ReqTokenState {
+	req *types.RequestContext, model string, inferMode string, instanceId string, gatewayId string) *ReqTokenState {
+	promptTokens, ok := req.LLMRequest.GetPromptTokens()
+	if !ok {
+		klog.Errorf("Failed to get prompt tokens.")
+		return nil
+	}
+
 	return &ReqTokenState{
 		req:           req,
-		lastNumTokens: req.PromptLength(),
+		lastNumTokens: uint64(len(promptTokens)),
 		Model:         model,
 		InferMode:     inferMode,
 		InstanceId:    instanceId,

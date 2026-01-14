@@ -6,28 +6,22 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/sglang/sglang-go-grpc-sdk"
+
 	"k8s.io/klog/v2"
 )
 
 var (
 	builtInTokenizerDir = "/tokenizers"
-	builtInTokenizer    = map[string]Tokenizer{}
+	builtInTokenizer    = map[string]*sglang.Tokenizer{}
 )
-
-type Tokenizer interface {
-	Encode(string, bool) ([]uint32, error)
-	Decode([]uint32, bool) string
-	MaxModelLen() uint64
-	VocabSize() uint32
-	ApplyChatTemplate(messages, tools, params string) (string, error)
-}
 
 var (
 	tkOnce     sync.Once
-	gTokenizer Tokenizer
+	gTokenizer *sglang.Tokenizer
 )
 
-func newTokenizer(name string, path string, chatTemplatePath string) (Tokenizer, error) {
+func newTokenizer(name string, path string, chatTemplatePath string) (*sglang.Tokenizer, error) {
 	if name == "" && path == "" {
 		return nil, nil
 	}
@@ -36,7 +30,7 @@ func newTokenizer(name string, path string, chatTemplatePath string) (Tokenizer,
 		if chatTemplatePath != "" {
 			klog.Infof("loading chat template: %v", chatTemplatePath)
 		}
-		return NewFileTokenizer(path, chatTemplatePath)
+		return sglang.CreateTokenizerFromFileWithChatTemplate(path, chatTemplatePath)
 	}
 	klog.Infof("loading builtin tokenizer: %v", name)
 	if t, ok := builtInTokenizer[name]; ok {
@@ -59,7 +53,7 @@ func InitTokenizer(name, path, chatTemplatePath string) {
 	})
 }
 
-func GetTokenizer() (Tokenizer, error) {
+func GetTokenizer() (*sglang.Tokenizer, error) {
 	if gTokenizer == nil {
 		return nil, fmt.Errorf("tokenizer not been loaded")
 	}
@@ -75,7 +69,7 @@ func init() {
 		for _, file := range files {
 			if file.IsDir() {
 				path := filepath.Join(builtInTokenizerDir, file.Name())
-				tokenizer, err := NewFileTokenizer(path, "")
+				tokenizer, err := sglang.CreateTokenizerFromFileWithChatTemplate(path, "")
 				if err != nil {
 					klog.Warningf("failed to load builtin tokenizer %s, error: %v", file.Name(), err)
 					continue

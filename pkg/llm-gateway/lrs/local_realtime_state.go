@@ -3,13 +3,12 @@ package lrs
 import (
 	"easgo/pkg/llm-gateway/consts"
 	"easgo/pkg/llm-gateway/metrics"
+	"easgo/pkg/llm-gateway/types"
 	"fmt"
 	"runtime/debug"
 	"time"
 
 	"k8s.io/klog/v2"
-
-	"easgo/pkg/llm-gateway/structs"
 )
 
 // Notes on the scheduler state store shard Algorithm
@@ -46,7 +45,7 @@ import (
 //     > Version-mismatched release requests are rejected
 
 type InstanceView struct {
-	token         *structs.Token
+	worker        *types.LLMWorker
 	version       int64
 	numTokens     int64 // allocated number of tokens of the instance, sum(requestStates.numTokens)
 	requestStates map[string]*RequestState
@@ -62,10 +61,6 @@ type RequestState struct {
 	updateTime time.Time
 }
 
-type Gateway interface {
-	Id() string
-}
-
 func NewRequestState(
 	reqId string, numTokens int64, instanceId string, gatewayId string) *RequestState {
 	return &RequestState{
@@ -77,25 +72,25 @@ func NewRequestState(
 	}
 }
 
-func NewInstanceView(token *structs.Token) *InstanceView {
+func NewInstanceView(worker *types.LLMWorker) *InstanceView {
 	return &InstanceView{
-		token:         token,
-		version:       token.Version,
+		worker:        worker,
+		version:       worker.Version,
 		numTokens:     0,
 		requestStates: make(map[string]*RequestState),
 	}
 }
 
-func (iv *InstanceView) GetToken() *structs.Token {
-	return iv.token
+func (iv *InstanceView) GetInstance() *types.LLMWorker {
+	return iv.worker
 }
 
 func (iv *InstanceView) GetInstanceId() string {
-	return iv.token.Id()
+	return iv.worker.Id()
 }
 
 func (iv *InstanceView) GetInferMode() string {
-	return iv.token.InferMode
+	return iv.worker.Role.String()
 }
 
 func (iv *InstanceView) NumTokens() int64 {
@@ -150,7 +145,7 @@ func (iv *InstanceView) ReleaseRequestState(reqId string) {
 	if reqState != nil {
 		if iv.numTokens < reqState.numTokens {
 			klog.Warningf("instance %s num tokens %d < request %s num tokens %d, set instance num tokens to 0",
-				iv.token.Endpoint.Description(), iv.numTokens, reqId, reqState.numTokens)
+				iv.worker.Endpoint.String(), iv.numTokens, reqId, reqState.numTokens)
 			iv.numTokens = 0
 		} else {
 			iv.numTokens -= reqState.numTokens
@@ -167,7 +162,7 @@ func (iv *InstanceView) ClearStates() {
 }
 
 func (iv *InstanceView) GetModel() string {
-	return iv.token.Model
+	return iv.worker.Model
 }
 
 // LocalRealtimeState records the request states allocated to instances, and tracks which gateway allocated
@@ -197,7 +192,7 @@ func (lrs *LocalRealtimeState) GetInstanceViews() map[string]*InstanceView {
 func (lrs *LocalRealtimeState) GetInstanceViewsByModel(model string) map[string]*InstanceView {
 	results := make(map[string]*InstanceView)
 	for _, instance := range lrs.instanceViews {
-		if instance.token.Model == model || instance.token.Model == "" {
+		if instance.worker.Model == model || instance.worker.Model == "" {
 			results[instance.GetInstanceId()] = instance
 		}
 	}
@@ -224,22 +219,22 @@ func (lrs *LocalRealtimeState) removeInstance(instanceId string) {
 	}
 }
 
-func (lrs *LocalRealtimeState) AddInstance(token *structs.Token) {
-	id := token.Id()
+func (lrs *LocalRealtimeState) AddInstance(worker *types.LLMWorker) {
+	id := worker.Id()
 	oldInstance := lrs.instanceViews[id]
 	if oldInstance != nil {
-		if token.Version > oldInstance.version {
+		if worker.Version > oldInstance.version {
 			klog.Infof("instance %s version changed: %d -> %d, remove old instance",
-				id, oldInstance.version, token.Version)
+				id, oldInstance.version, worker.Version)
 			lrs.removeInstance(id)
 		} else {
-			klog.Warningf("instance %s version not changed: %d -> %d", id, oldInstance.version, token.Version)
+			klog.Warningf("instance %s version not changed: %d -> %d", id, oldInstance.version, worker.Version)
 			return
 		}
 	}
 
-	klog.Infof("add new instance %s, version: %d", id, token.Ver())
-	newInstanceView := NewInstanceView(token)
+	klog.Infof("add new instance %s, version: %d", id, worker.Version)
+	newInstanceView := NewInstanceView(worker)
 	lrs.instanceViews[id] = newInstanceView
 }
 
@@ -247,10 +242,9 @@ func (lrs *LocalRealtimeState) RemoveInstance(instanceId string) {
 	lrs.removeInstance(instanceId)
 }
 
-func (lrs *LocalRealtimeState) AddGateway(gateway Gateway) {
-	id := gateway.Id()
-	if lrs.gatewayRequestSet[id] == nil {
-		lrs.gatewayRequestSet[id] = make(map[string]struct{})
+func (lrs *LocalRealtimeState) AddGateway(gatewayId string) {
+	if lrs.gatewayRequestSet[gatewayId] == nil {
+		lrs.gatewayRequestSet[gatewayId] = make(map[string]struct{})
 	}
 }
 
@@ -292,7 +286,7 @@ func (lrs *LocalRealtimeState) gatewayExists(gatewayId string) bool {
 func (lrs *LocalRealtimeState) PrintInstanceViews() {
 	for _, instanceView := range lrs.instanceViews {
 		fmt.Printf("worker: %s, reqs: %d, tokens: %d\n",
-			instanceView.token.Id(), instanceView.NumRequests(), instanceView.NumTokens())
+			instanceView.worker.Id(), instanceView.NumRequests(), instanceView.NumTokens())
 	}
 }
 
@@ -388,12 +382,12 @@ func (lrs *LocalRealtimeState) SubmitMetric() {
 	for {
 		instanceViews := lrs.GetInstanceViews()
 		for _, iv := range instanceViews {
-			instanceAddress := iv.GetToken().Endpoint
+			instanceAddress := iv.GetInstance().Endpoint
 			tokens := iv.NumTokens()
 			reqs := iv.NumRequests()
 
-			labels := structs.Labels{
-				{Name: "model", Value: iv.GetToken().Model},
+			labels := metrics.Labels{
+				{Name: "model", Value: iv.GetInstance().Model},
 				{Name: "instance_address", Value: instanceAddress.String()},
 				{Name: "infer_mode", Value: iv.GetInferMode()},
 			}

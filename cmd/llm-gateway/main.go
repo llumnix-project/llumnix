@@ -52,12 +52,9 @@ func NewCommand() *cobra.Command {
 				}()
 			}
 			cfg.LoadCfgFromProperties()
-
-			// Parse llumnix-extra-args to override flags
-			if err := cfg.ParseLlumnixExtraArgs(cmd.Flags()); err != nil {
-				klog.Fatalf("Failed to parse llumnix-extra-args: %v", err)
-			}
-
+			// Process llumnix config after flags are parsed
+			options.ProcessLlumnixConfig(cmd.Flags())
+			klog.Infof("llm-gateway config: %+v", cfg)
 			if cfg.ScheduleMode {
 				cs := service.NewScheduleService(cfg)
 				klog.Info("llm scheduler start ...")
@@ -73,7 +70,7 @@ func NewCommand() *cobra.Command {
 			} else {
 				// try init tokenizer
 				tokenizer.InitTokenizer(cfg.TokenizerName, cfg.TokenizerPath, cfg.ChatTemplatePath)
-				gw := service.NewGwService(cfg)
+				gw := service.NewGatewayService(cfg)
 				klog.Info("llm gateway start ...")
 				if err := gw.Start(); err != nil {
 					klog.Fatalf("llm gateway exit: %v", err)

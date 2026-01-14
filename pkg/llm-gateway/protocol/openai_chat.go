@@ -16,6 +16,10 @@ const (
 
 const ChatCompletionsSuffix = "/chat/completions"
 
+func IsChatCompletionsURL(url string) bool {
+	return len(url) >= len(ChatCompletionsSuffix) && url[len(url)-len(ChatCompletionsSuffix):] == ChatCompletionsSuffix
+}
+
 type Hate struct {
 	Filtered bool   `json:"filtered"`
 	Severity string `json:"severity,omitempty"`
@@ -251,7 +255,7 @@ type StreamOptions struct {
 	// The usage field on this chunk shows the token usage statistics for the entire request,
 	// and the choices field will always be an empty array.
 	// All other chunks will also include a usage field, but with a null value.
-	IncludeUsage           bool `json:"include_usage,omitempty"`
+	IncludeUsage           bool `json:"include_usage"`
 	IncludeContinuousUsage bool `json:"include_continuous_usage,omitempty"`
 }
 

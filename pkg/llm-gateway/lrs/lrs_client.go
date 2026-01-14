@@ -3,7 +3,7 @@ package lrs
 import (
 	"easgo/cmd/llm-gateway/app/options"
 	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/structs"
+	"easgo/pkg/llm-gateway/types"
 	"sync"
 )
 
@@ -55,11 +55,11 @@ func (lrsClient *LocalRealtimeStateClient) Unlock() {
 	lrsClient.mu.Unlock()
 }
 
-func (lrsClient *LocalRealtimeStateClient) AddInstance(token *structs.Token) {
+func (lrsClient *LocalRealtimeStateClient) AddInstance(token *types.LLMWorker) {
 	lrsClient.mu.Lock()
 	defer lrsClient.mu.Unlock()
 
-	switch token.InferMode {
+	switch token.Role.String() {
 	case consts.DecodeInferMode:
 		lrsClient.decodeState.AddInstance(token)
 	case consts.PrefillInferMode:
@@ -83,13 +83,13 @@ func (lrsClient *LocalRealtimeStateClient) RemoveInstance(inferMode string, work
 	}
 }
 
-func (lrsClient *LocalRealtimeStateClient) AddGateway(gateway Gateway) {
+func (lrsClient *LocalRealtimeStateClient) AddGateway(gatewayId string) {
 	lrsClient.mu.Lock()
 	defer lrsClient.mu.Unlock()
 
-	lrsClient.normalState.AddGateway(gateway)
-	lrsClient.prefillState.AddGateway(gateway)
-	lrsClient.decodeState.AddGateway(gateway)
+	lrsClient.normalState.AddGateway(gatewayId)
+	lrsClient.prefillState.AddGateway(gatewayId)
+	lrsClient.decodeState.AddGateway(gatewayId)
 }
 
 func (lrsClient *LocalRealtimeStateClient) RemoveGateway(gatewayId string) {

@@ -1,172 +1,95 @@
 package resolver
 
 import (
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/structs"
-	"easgo/pkg/llm-gateway/utils"
+	"context"
+	"easgo/pkg/llm-gateway/types"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"sort"
+	"os"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
-	mapset "github.com/deckarep/golang-set/v2"
 	"k8s.io/klog/v2"
 )
 
-// utils function
-func getGroup(fullName string) string {
-	parts := strings.Split(fullName, ".")
-	return parts[0]
-}
-
-// EasResolver can work in two modes: grouping service and specifying backend service.
-// If serviceName is set, it is considered to work in the mode of specifying the backend service,
-// and if it is not set, it is considered to work in the grouping service mode
-type EasResolver struct {
-	backendService  string
-	excludeServices []string
-	lck             sync.RWMutex
-
-	// The main purpose of testService is to obtain all the service names under the group,
-	// because when there is no grouping service under the group, the cache server returns empty
-	testService       string
-	group             string
-	discoveryEndpoint string
-	cacheClient       *http.Client
-	updateDuration    time.Duration
-
-	mu        sync.RWMutex
-	endpoints []structs.WeightEndpoint
-}
-
-func NewEasResolver(c *options.Config) *EasResolver {
-	var r *EasResolver
-	if len(c.BackendService) > 0 {
-		r = createEasResolver(c.DiscoveryEndpoint, c.BackendService, "")
-		klog.Infof("create default balancer with a backend service resolver: %s", c.BackendService)
-	} else {
-		excludeService := fmt.Sprintf("%s,%s", c.LlmScheduler, c.LlmGateway)
-		if len(c.Redis) > 0 {
-			excludeService = fmt.Sprintf("%s,%s", excludeService, c.Redis)
-		}
-		r = createEasResolver(c.DiscoveryEndpoint, "", excludeService)
-		klog.Infof("create default balancer with a eas service group resolver")
-	}
-	return r
-}
-
-var (
-	schOnce      sync.Once
-	gSchResolver *EasResolver
+const (
+	EasUriPrefix    = "eas://"
+	EasLlmUriPrefix = "llm+eas://"
 )
 
-func CreateSchedulerResolver(c *options.Config) *EasResolver {
-	schOnce.Do(func() {
-		klog.Infof("create a scheduler(%s) resolver", c.LlmScheduler)
-		gSchResolver = createEasResolver(c.DiscoveryEndpoint, c.LlmScheduler, "")
-	})
-	return gSchResolver
-}
+// Global configuration variables for EAS resolver
+var (
+	// discoveryEndpoint is the endpoint URL for the EAS discovery service.
+	// It is read from the DISCOVERY_ENDPOINT environment variable.
+	discoveryEndpoint = os.Getenv("DISCOVERY_ENDPOINT")
 
-func createEasResolver(discovery, backendService, excludeService string) *EasResolver {
-	var excludes []string
-	if len(excludeService) > 0 {
-		excludes = strings.Split(excludeService, ",")
-	}
-	if len(backendService) == 0 && len(excludes) == 0 {
-		panic("exception: config error, backendService or excludes must be set.")
-	}
-	if len(backendService) != 0 && len(excludes) != 0 {
-		panic("exception: config error, backendService and excludes must not be set at the same time.")
-	}
+	// easSyncDuration defines the interval for synchronizing EAS endpoints.
+	// Default is 5 seconds.
+	easSyncDuration = time.Second * 5
+)
 
-	var (
-		testService string
-		group       string
-	)
-	if len(excludes) > 0 {
-		testService = excludes[0]
-		group = getGroup(excludes[0])
-	}
-	r := &EasResolver{
-		backendService:    backendService,
-		excludeServices:   excludes,
-		testService:       testService,
-		group:             group,
-		discoveryEndpoint: discovery,
-		updateDuration:    5 * time.Second,
-	}
-	go r.syncLoop()
-	return r
-}
-
-func (er *EasResolver) Name() string {
-	if len(er.backendService) > 0 {
-		return er.backendService
-	} else {
-		return er.group
-	}
-}
-
+// EasEndpoint represents a single endpoint in the EAS (Elastic Algorithm Service) system.
+// It contains the network address and metadata for a service instance.
 type EasEndpoint struct {
-	Name    string `json:"name"`
-	Service string `json:"service"`
-	IP      string `json:"ip"`
-	Port    int    `json:"port"`
-	Weight  int    `json:"weight"`
+	Name    string `json:"name"`    // types.Endpoint name
+	Service string `json:"service"` // Service name
+	IP      string `json:"ip"`      // IP address
+	Port    int    `json:"port"`    // Port number
+	Weight  int    `json:"weight"`  // Load balancing weight
 }
 
+// EasEndpointList represents a collection of EAS endpoints.
+// This is typically returned by the EAS discovery service.
 type EasEndpointList struct {
-	Items []EasEndpoint `json:"items"`
+	Items []EasEndpoint `json:"items"` // List of endpoints
 }
 
+// EasUpstream represents the upstream configuration for an EAS service.
+// It includes both the service endpoints and correlated services.
 type EasUpstream struct {
-	Correlative []string `json:"correlative"`
+	Correlative []string `json:"correlative"` // List of correlated service names
 
-	List *EasEndpointList `json:"endpoints"`
+	List *EasEndpointList `json:"endpoints"` // Endpoints for the service
 }
 
-func (er *EasResolver) AddExcludeService(serviceName string) {
-	if len(er.group) == 0 {
-		return
-	}
-
-	er.lck.Lock()
-	defer er.lck.Unlock()
-
-	groupName := er.group + "." + serviceName
-	for _, name := range er.excludeServices {
-		if name == groupName {
-			return
-		}
-	}
-	er.excludeServices = append(er.excludeServices, groupName)
-	klog.Infof("add a exclude service: %s", groupName)
+// ServiceResult represents the result of fetching endpoints for a service.
+// It contains either the endpoints or an error if the fetch failed.
+type ServiceResult struct {
+	err       error               // Error if endpoint fetch failed
+	endpoints types.EndpointSlice // Endpoints if fetch succeeded
 }
 
-func (er *EasResolver) excludeServiceMatch(serviceName string) bool {
-	er.lck.RLock()
-	defer er.lck.RUnlock()
-	for _, exclude := range er.excludeServices {
-		parts := strings.Split(exclude, ".")
-		if len(parts) != 2 {
-			klog.Errorf("invalid exclude service name: %s", exclude)
-			continue
-		}
-		if parts[1] == serviceName {
-			return true
-		}
-	}
-	return false
+// GroupEndpointsFetcher defines the interface for fetching endpoints for a group of services.
+// Implementations of this interface retrieve endpoint information from the EAS discovery service.
+type GroupEndpointsFetcher interface {
+	// FetchGroupEndpoints fetches endpoints for all services in a group.
+	// Returns a map where keys are service names and values are ServiceResult objects.
+	// The testService parameter is used to discover correlated services in the group.
+	FetchGroupEndpoints(group, testService string) (map[string]ServiceResult, error)
 }
 
-// doGetEasUpstream read eas upstream from cache server
-func (er *EasResolver) doGetEasUpstream(url string) (EasUpstream, error) {
+// GroupEndpointsFetcherImpl is the default implementation of GroupEndpointsFetcher.
+// It uses HTTP requests to communicate with the EAS discovery service.
+type GroupEndpointsFetcherImpl struct {
+	client *http.Client // HTTP client for making requests
+}
+
+// NewGroupEndpointsFetcherImpl creates a new instance of GroupEndpointsFetcherImpl.
+// The returned fetcher uses an HTTP client with a 10-second timeout.
+func NewGroupEndpointsFetcherImpl() GroupEndpointsFetcher {
+	return &GroupEndpointsFetcherImpl{
+		client: &http.Client{Timeout: 10 * time.Second},
+	}
+}
+
+// doGetEasUpstream retrieves EAS upstream configuration from the cache server.
+// It makes an HTTP GET request to the specified URL and parses the JSON response.
+// Returns the parsed EasUpstream or an error if the request fails.
+func (f *GroupEndpointsFetcherImpl) doGetEasUpstream(url string) (EasUpstream, error) {
 	var easUpstream EasUpstream
 	newReq, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -174,10 +97,7 @@ func (er *EasResolver) doGetEasUpstream(url string) (EasUpstream, error) {
 		return easUpstream, err
 	}
 
-	if er.cacheClient == nil {
-		er.cacheClient = utils.NewHttpClient()
-	}
-	resp, err := er.cacheClient.Do(newReq)
+	resp, err := f.client.Do(newReq)
 	if err != nil {
 		err = fmt.Errorf("do request to discovery service %s error: %v", url, err)
 		return easUpstream, err
@@ -201,177 +121,490 @@ func (er *EasResolver) doGetEasUpstream(url string) (EasUpstream, error) {
 	return easUpstream, nil
 }
 
-// key: service name
-// value: a list of service endpoints
-type ResolverResults map[string][]structs.WeightEndpoint
-
-// getGroupBackendServices get grouping service endpoints and related services from cache server.
-func (er *EasResolver) getGroupBackendServices(group, testService string) (results ResolverResults, err error) {
-	results = make(ResolverResults)
-
-	url := fmt.Sprintf("http://%s/exported/apis/eas.alibaba-inc.k8s.io/v1/upstreams/%s?internal=true", er.discoveryEndpoint, testService)
-	easUpstream, err := er.doGetEasUpstream(url)
+// getGroupServices retrieves grouping service endpoints and related services from the cache server.
+// It first fetches the test service to discover correlated services in the group,
+// then returns a map of service names to ServiceResult objects.
+// The testService endpoints are included in the results if available.
+func (f *GroupEndpointsFetcherImpl) getGroupServices(group, testService string) (results map[string]ServiceResult, err error) {
+	if discoveryEndpoint == "" {
+		panic("discovery endpoint is not set by env DISCOVERY_ENDPOINT")
+	}
+	results = make(map[string]ServiceResult)
+	url := fmt.Sprintf("http://%s/exported/apis/eas.alibaba-inc.k8s.io/v1/upstreams/%s?internal=true", discoveryEndpoint, testService)
+	easUpstream, err := f.doGetEasUpstream(url)
 	if err != nil {
 		return results, err
 	}
-
 	// a gateway service and a scheduler service must be excluded from the group.
 	for _, item := range easUpstream.Correlative {
-		if !er.excludeServiceMatch(item) {
-			service := fmt.Sprintf("%s.%s", group, item)
-			results[service] = []structs.WeightEndpoint{}
-		}
+		service := fmt.Sprintf("%s.%s", group, item)
+		results[service] = ServiceResult{}
 	}
 	if len(results) == 0 {
-		return results, consts.ErrorBackendServiceNoFound
+		return results, fmt.Errorf("no service found in group %s", group)
 	}
 
 	if easUpstream.List == nil ||
 		len(easUpstream.List.Items) == 0 {
 		return results, nil
 	}
+	var endpoints types.EndpointSlice
 	for _, item := range easUpstream.List.Items {
-		if er.excludeServiceMatch(item.Service) {
-			continue
-		}
-		ep := structs.Endpoint{
-			IP:   item.IP,
+		ep := types.Endpoint{
+			Host: item.IP,
 			Port: item.Port,
 		}
-		wep := structs.WeightEndpoint{
-			Ep:     ep,
-			Weight: 100,
-		}
-		service := fmt.Sprintf("%s.%s", group, item.Service)
-		results[service] = append(results[service], wep)
+		endpoints = append(endpoints, ep)
+	}
+	results[testService] = ServiceResult{
+		endpoints: endpoints,
 	}
 	return results, nil
 }
 
-func (er *EasResolver) getEndpointsFromCacheServer() ([]structs.WeightEndpoint, error) {
-	resolverResults := make(ResolverResults)
-	if len(er.backendService) > 0 {
-		// work in the mode of specifying the backend service
-		resolverResults[er.backendService] = []structs.WeightEndpoint{}
-	} else {
-		// work in grouping mode
-		var err error
-		resolverResults, err = er.getGroupBackendServices(er.group, er.testService)
-		if err != nil {
-			klog.Errorf("get group backend service error: %v", err)
-			return nil, err
-		}
+// FetchGroupEndpoints fetches endpoints for all services in a group.
+// It first discovers correlated services using the testService,
+// then concurrently fetches endpoints for each service that doesn't already have endpoints.
+// Returns a map of service names to ServiceResult objects.
+// Errors are logged but individual service failures don't stop the entire operation.
+func (f *GroupEndpointsFetcherImpl) FetchGroupEndpoints(group, testService string) (map[string]ServiceResult, error) {
+	resolverResults, err := f.getGroupServices(group, testService)
+	if err != nil {
+		klog.Errorf("get group backend service error: %v", err)
+		return nil, err
 	}
 
 	var wg sync.WaitGroup
 	var lock sync.Mutex
 
-	var weightEndpoints []structs.WeightEndpoint
-	for serviceName, endpoints := range resolverResults {
-		if len(endpoints) > 0 {
-			lock.Lock()
-			weightEndpoints = append(weightEndpoints, endpoints...)
-			lock.Unlock()
+	for serviceName, serviceResult := range resolverResults {
+		if len(serviceResult.endpoints) > 0 {
 			continue
 		}
 		wg.Add(1)
 		go func(name string) {
 			defer wg.Done()
-			url := fmt.Sprintf("http://%s/exported/apis/eas.alibaba-inc.k8s.io/v1/upstreams/%s?internal=true", er.discoveryEndpoint, name)
-			easUpstream, err := er.doGetEasUpstream(url)
+			url := fmt.Sprintf("http://%s/exported/apis/eas.alibaba-inc.k8s.io/v1/upstreams/%s?internal=true", discoveryEndpoint, name)
+			easUpstream, err := f.doGetEasUpstream(url)
 			if err != nil {
 				klog.Errorf("get service(%s) upstream error: %v", name, err)
+				lock.Lock()
+				resolverResults[name] = ServiceResult{
+					err: fmt.Errorf("get service(%s) upstream error: %v", name, err),
+				}
+				lock.Unlock()
 				return
 			}
 			if easUpstream.List == nil ||
 				len(easUpstream.List.Items) == 0 {
+				lock.Lock()
+				resolverResults[name] = ServiceResult{
+					err: fmt.Errorf("get service(%s) upstream error: empty", name),
+				}
+				lock.Unlock()
 				return
 			}
 
-			var wEndpoints []structs.WeightEndpoint
+			var endpoints types.EndpointSlice
 			for _, item := range easUpstream.List.Items {
-				ep := structs.Endpoint{
-					IP:   item.IP,
+				ep := types.Endpoint{
+					Host: item.IP,
 					Port: item.Port,
 				}
-				wep := structs.WeightEndpoint{
-					Ep:     ep,
-					Weight: 100,
-				}
-				wEndpoints = append(wEndpoints, wep)
+				endpoints = append(endpoints, ep)
 			}
-			if len(wEndpoints) > 0 {
+			if len(endpoints) > 0 {
 				lock.Lock()
-				weightEndpoints = append(weightEndpoints, wEndpoints...)
+				resolverResults[name] = ServiceResult{
+					endpoints: endpoints,
+				}
 				lock.Unlock()
 			}
 		}(serviceName)
 	}
 	wg.Wait()
 
-	if len(weightEndpoints) == 0 {
-		return weightEndpoints, consts.ErrorEndpointNotFound
-	}
-
-	return weightEndpoints, nil
+	return resolverResults, nil
 }
 
-func (er *EasResolver) endpointsDiff(origin, current []structs.WeightEndpoint) bool {
-	diff := false
+// EasResolverBackend is the central backend that manages all EAS resolvers.
+// It periodically synchronizes endpoint information from the EAS discovery service
+// and distributes updates to registered resolvers.
+type EasResolverBackend struct {
+	fetcher GroupEndpointsFetcher // Fetcher for retrieving endpoint information
 
-	set1 := mapset.NewSet(origin...)
-	set2 := mapset.NewSet(current...)
-	removed := set1.Difference(set2).ToSlice()
-	added := set2.Difference(set1).ToSlice()
-
-	var removedStr []string
-	for _, r := range removed {
-		removedStr = append(removedStr, r.String())
-	}
-	rStr := strings.Join(removedStr, ",")
-	if len(rStr) > 0 {
-		klog.Infof("resolve service(%s) remove: %s", er.Name(), rStr)
-		diff = true
-	}
-
-	var addStr []string
-	for _, r := range added {
-		addStr = append(addStr, r.String())
-	}
-	aStr := strings.Join(addStr, ",")
-	if len(aStr) > 0 {
-		klog.Infof("resolve service(%s) add: %s", er.Name(), aStr)
-		diff = true
-	}
-	return diff
+	// key is the resolver uri address
+	resolvers map[string]*EasResolver // Map of URI to resolver instances
+	rlMutex   sync.Mutex              // Mutex for protecting the resolvers map
 }
 
-func (er *EasResolver) syncLoop() {
-	for {
-		endpoints, err := er.getEndpointsFromCacheServer()
-		if err == nil {
-			sort.Slice(endpoints, func(i, j int) bool {
-				return strings.Compare(endpoints[i].Ep.String(), endpoints[j].Ep.String()) < 0
-			})
-			diff := er.endpointsDiff(er.endpoints, endpoints)
-			if diff {
-				er.mu.Lock()
-				er.endpoints = endpoints
-				er.mu.Unlock()
+var (
+	easResolverBackend *EasResolverBackend // Singleton instance
+	easOnce            sync.Once           // Ensures singleton initialization happens only once
+)
+
+// getOrCreateEasResolverBackend returns the singleton instance of EasResolverBackend.
+// If it doesn't exist, it creates one and starts the synchronization loop.
+func getOrCreateEasResolverBackend() *EasResolverBackend {
+	easOnce.Do(
+		func() {
+			easResolverBackend = &EasResolverBackend{
+				fetcher:   NewGroupEndpointsFetcherImpl(),
+				resolvers: make(map[string]*EasResolver),
 			}
-		} else if len(endpoints) == 0 {
-			er.mu.Lock()
-			er.endpoints = endpoints
-			er.mu.Unlock()
-		}
+			go easResolverBackend.syncLoop()
+		},
+	)
+	return easResolverBackend
+}
 
-		time.Sleep(er.updateDuration)
+// getResolvers returns a copy of the current resolvers map.
+// This ensures external modifications don't affect the internal state.
+func (rb *EasResolverBackend) getResolvers() map[string]*EasResolver {
+	rb.rlMutex.Lock()
+	defer rb.rlMutex.Unlock()
+
+	// Create a copy of the map to avoid external modifications
+	resolversCopy := make(map[string]*EasResolver, len(rb.resolvers))
+	for k, v := range rb.resolvers {
+		resolversCopy[k] = v
+	}
+	return resolversCopy
+}
+
+// registerResolver adds a new resolver to the backend's registry.
+func (rb *EasResolverBackend) registerResolver(r *EasResolver) {
+	rb.rlMutex.Lock()
+	defer rb.rlMutex.Unlock()
+	rb.resolvers[r.uri] = r
+}
+
+// getUniqueGroupService extracts a unique group-to-service mapping from all registered resolvers.
+// For each group, it selects the first includeService or excludeService as the test service.
+func (rb *EasResolverBackend) getUniqueGroupService() map[string]string {
+	uniqueGroupService := make(map[string]string)
+	resolvers := rb.getResolvers()
+	for _, resolver := range resolvers {
+		if len(resolver.includeServices) > 0 {
+			uniqueGroupService[resolver.group] = resolver.includeServices[0]
+		} else if len(resolver.excludeServices) > 0 {
+			uniqueGroupService[resolver.group] = resolver.excludeServices[0]
+		} else {
+			panic("could not run here")
+		}
+	}
+	return uniqueGroupService
+}
+
+// syncGroupBackendServicesOnce performs a single synchronization cycle.
+// It fetches endpoints for all unique group-service pairs and updates all resolvers.
+func (rb *EasResolverBackend) syncGroupBackendServicesOnce() {
+	servicesEndpoints := make(map[string]types.EndpointSlice)
+
+	groupService := rb.getUniqueGroupService()
+	for group, testService := range groupService {
+		results, err := rb.fetcher.FetchGroupEndpoints(group, testService)
+		if err != nil {
+			continue
+		}
+		for service, result := range results {
+			if result.err != nil {
+				continue
+			}
+			servicesEndpoints[service] = result.endpoints
+		}
+	}
+
+	resolvers := rb.getResolvers()
+	for _, resolver := range resolvers {
+		resolver.update(servicesEndpoints)
 	}
 }
 
-func (er *EasResolver) GetWeightEndpoints() (ret []structs.WeightEndpoint) {
+// syncLoop runs the periodic synchronization loop.
+// It calls syncGroupBackendServicesOnce at regular intervals defined by easSyncDuration.
+// The loop includes panic recovery to ensure it continues running even if errors occur.
+func (rb *EasResolverBackend) syncLoop() {
+	defer func() {
+		if err := recover(); err != nil {
+			klog.Errorf("Eas Resolver backend resolver panic: %v\n%s", err, string(debug.Stack()))
+		}
+	}()
+
+	ticker := time.NewTicker(easSyncDuration)
+	defer ticker.Stop()
+
+	// Then run on every tick
+	for range ticker.C {
+		rb.syncGroupBackendServicesOnce()
+	}
+}
+
+// EasResolver implements both Resolver and LLMResolver interfaces for EAS service discovery.
+// It maintains a list of endpoints for services in a specific group, with optional
+// inclusion or exclusion filters. Endpoints are periodically updated by the backend.
+type EasResolver struct {
+	uri             string   // The original URI used to create this resolver
+	group           string   // EAS group name
+	role            string   // LLM infer role
+	includeServices []string // Services to include (if non-empty, only these services are included)
+	excludeServices []string // Services to exclude (if non-empty, all services except these are included)
+
+	mu        sync.RWMutex        // Mutex for protecting endpoints
+	endpoints types.EndpointSlice // Current list of endpoints
+
+	// watcher provides common observer management functionality
+	watcher *Watcher // Watcher for monitoring endpoint changes
+}
+
+// newEasResolver creates a new EAS resolver instance from a URI.
+// The URI must follow the format: eas://{group}?include={services} or eas://{group}?exclude={services}
+// Returns an error if the URI is invalid or if both include and exclude are specified.
+func newEasResolver(uri, role string) (*EasResolver, error) {
+	group, excludeServices, includeServices, err := checkParseEasURI(uri)
+	if err != nil {
+		return nil, fmt.Errorf("create eas resolver %s failed: %v", uri, err)
+	}
+	if len(excludeServices) == 0 && len(includeServices) == 0 {
+		return nil, fmt.Errorf("create eas resolver failed: include or exclude must be set")
+	}
+	r := &EasResolver{
+		uri:             uri,
+		group:           group,
+		role:            role,
+		includeServices: includeServices,
+		excludeServices: excludeServices,
+		watcher:         NewWatcher(),
+	}
+	rb := getOrCreateEasResolverBackend()
+	rb.registerResolver(r)
+	rb.syncGroupBackendServicesOnce()
+	return r, nil
+}
+
+// GetEndpoints implements the Resolver interface.
+// It returns the current list of endpoints for this resolver.
+// The method is thread-safe and provides a snapshot of the endpoint state.
+func (er *EasResolver) GetEndpoints() ([]types.Endpoint, error) {
 	er.mu.RLock()
 	defer er.mu.RUnlock()
-	ret = er.endpoints
-	return
+
+	return er.endpoints, nil
+}
+
+// GetLLMWorkers implements the LLMResolver interface.
+// It converts the current endpoints to types.LLMWorker objects.
+// Note: Only the types.Endpoint field is populated; other types.LLMWorker fields remain zero values.
+func (er *EasResolver) GetLLMWorkers() (types.LLMWorkerSlice, error) {
+	er.mu.RLock()
+	defer er.mu.RUnlock()
+	workers := make(types.LLMWorkerSlice, 0, len(er.endpoints))
+	for _, ep := range er.endpoints {
+		workers = append(workers, types.LLMWorker{
+			Endpoint: ep,
+			Role:     types.InferRole(er.role),
+		})
+	}
+	return workers, nil
+}
+
+// Watch implements the LLMResolver interface.
+// It returns channels for monitoring added and removed LLM workers.
+// The watcher handles observer management and context cancellation.
+func (er *EasResolver) Watch(ctx context.Context) (<-chan types.LLMWorkerSlice, <-chan types.LLMWorkerSlice, error) {
+	return er.watcher.Watch(ctx, er.GetLLMWorkers)
+}
+
+// endpointExist checks if a service endpoint exists in the candidates list.
+func endpointExist(endpoint string, candidates []string) bool {
+	for _, e := range candidates {
+		if endpoint == e {
+			return true
+		}
+	}
+	return false
+}
+
+// update updates the resolver's endpoints based on the provided service endpoints.
+// It filters services according to the include/exclude rules, calculates differences
+// with the current endpoints, and notifies observers if changes are detected.
+func (er *EasResolver) update(serviceEndpoints map[string]types.EndpointSlice) {
+	newEndpoints := make(types.EndpointSlice, 0, 8)
+	for service, eps := range serviceEndpoints {
+		if len(er.includeServices) > 0 {
+			if endpointExist(service, er.includeServices) {
+				newEndpoints = append(newEndpoints, eps...)
+			}
+		} else if len(er.excludeServices) > 0 {
+			if !endpointExist(service, er.excludeServices) {
+				newEndpoints = append(newEndpoints, eps...)
+			}
+		} else {
+			panic("could not run here")
+		}
+	}
+
+	er.mu.Lock()
+	defer er.mu.Unlock()
+	added, removed := DiffSets(er.endpoints, newEndpoints, func(ep types.Endpoint) string { return ep.String() })
+	if len(added) > 0 || len(removed) > 0 {
+		er.endpoints = newEndpoints
+		// Notify all observers about the changes
+		er.notifyObservers(added, removed)
+	}
+}
+
+// notifyObservers sends added and removed endpoints to all registered observers.
+// It converts endpoints to types.LLMWorkerSlice before notifying the watcher.
+func (er *EasResolver) notifyObservers(added, removed []types.Endpoint) {
+	// Convert endpoints to types.LLMWorkerSlice
+	var addedWorkers, removedWorkers types.LLMWorkerSlice
+	for _, ep := range added {
+		addedWorkers = append(addedWorkers, types.LLMWorker{
+			Endpoint: ep,
+		})
+	}
+	for _, ep := range removed {
+		removedWorkers = append(removedWorkers, types.LLMWorker{
+			Endpoint: ep,
+		})
+	}
+	er.watcher.notifyObservers(addedWorkers, removedWorkers)
+}
+
+// checkParseEasURI parses an EAS URI and extracts the group and service filters.
+// URI format: eas://{group}?exclude={service1},{service2} or eas://{group}?include={service1},{service2}
+// Returns: group name, exclude services list, include services list, error
+// The function validates the URI format and ensures exclude and include are not both specified.
+func checkParseEasURI(uri string) (string, []string, []string, error) {
+	// Split host:port and query parameters
+	parts := strings.Split(uri, "?")
+	if len(parts) != 2 {
+		return "", nil, nil, fmt.Errorf("invalid eas URI format: missing query parameters: %s", uri)
+	}
+
+	group := parts[0]
+	query := parts[1]
+
+	if group == "" {
+		return "", nil, nil, fmt.Errorf("invalid eas URI format: group cannot be empty")
+	}
+
+	// Parse query parameters
+	var excludeServices, includeServices []string
+	queryParams := strings.Split(query, "&")
+	for _, param := range queryParams {
+		if param == "" {
+			continue
+		}
+
+		paramParts := strings.Split(param, "=")
+		if len(paramParts) != 2 {
+			return "", nil, nil, fmt.Errorf("invalid query parameter format: %s", param)
+		}
+
+		key := paramParts[0]
+		value := paramParts[1]
+
+		switch key {
+		case "exclude":
+			// Split comma-separated services
+			if value != "" {
+				services := strings.Split(value, ",")
+				for _, service := range services {
+					if service != "" {
+						excludeServices = append(excludeServices, service)
+					}
+				}
+			}
+		case "include":
+			// Split comma-separated services
+			if value != "" {
+				services := strings.Split(value, ",")
+				for _, service := range services {
+					if service != "" {
+						includeServices = append(includeServices, service)
+					}
+				}
+			}
+		default:
+			return "", nil, nil, fmt.Errorf("unsupported query parameter: %s", key)
+		}
+	}
+
+	// Validate that exclude and include are not both specified
+	if len(excludeServices) > 0 && len(includeServices) > 0 {
+		return "", nil, nil, fmt.Errorf("invalid eas URI: cannot specify both exclude and include parameters")
+	}
+
+	return group, excludeServices, includeServices, nil
+}
+
+// EasResolverBuilder implements ResolverBuilder for creating EAS resolvers.
+// It registers with schema "eas" in the resolver builder registry.
+type EasResolverBuilder struct{}
+
+// Schema returns the schema identifier for this builder: "eas".
+func (b *EasResolverBuilder) Schema() string {
+	return "eas"
+}
+
+// Build creates a new EAS resolver instance from the provided arguments.
+// The args map must contain a "uri" key with a valid EAS URI string.
+func (b *EasResolverBuilder) Build(uri string, args BuildArgs) (Resolver, error) {
+	if uri == "" {
+		return nil, fmt.Errorf("missing or invalid 'uri' argument")
+	}
+	// Remove the eas:// prefix
+	if !strings.HasPrefix(uri, EasUriPrefix) {
+		return nil, fmt.Errorf("invalid eas URI format: must start with 'eas://'")
+	}
+	uri = strings.TrimPrefix(uri, EasUriPrefix)
+
+	// start parse eas naming
+	return newEasResolver(uri, types.InferRoleNormal.String())
+}
+
+// EasLlmResolverBuilder implements LLMResolverBuilder for creating EAS LLM resolvers.
+// It registers with schema "eas+llm" in the resolver builder registry.
+type EasLlmResolverBuilder struct{}
+
+// Schema returns the schema identifier for this builder: "eas+llm".
+func (b *EasLlmResolverBuilder) Schema() string {
+	return "llm+eas"
+}
+
+// Build creates a new EAS LLM resolver instance from the provided arguments.
+// The args map must contain a "uri" key with a valid EAS URI string.
+func (b *EasLlmResolverBuilder) Build(uri string, args BuildArgs) (LLMResolver, error) {
+	if uri == "" {
+		return nil, fmt.Errorf("missing or invalid 'uri' argument")
+	}
+
+	// Remove the llm+eas:// prefix
+	if !strings.HasPrefix(uri, EasLlmUriPrefix) {
+		return nil, fmt.Errorf("invalid eas URI format: must start with 'llm+eas://'")
+	}
+	uri = strings.TrimPrefix(uri, EasLlmUriPrefix)
+
+	// Read role build args
+	role, ok := args["role"].(string)
+	if !ok || role == "" {
+		return nil, fmt.Errorf("missing role or invalid role build args: %v", role)
+	}
+
+	if role == types.InferRoleAll.String() {
+		role = string(types.InferRoleNormal)
+	}
+	if role != types.InferRoleNormal.String() {
+		return nil, fmt.Errorf("eas resolver does not support role: %s", role)
+	}
+
+	// start parse eas naming
+	return newEasResolver(uri, role)
+}
+
+func init() {
+	Register(&EasResolverBuilder{})
+	RegisterLLM(&EasLlmResolverBuilder{})
 }

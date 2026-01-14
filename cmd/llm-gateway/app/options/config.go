@@ -91,6 +91,7 @@ type Config struct {
 	TokenizerPath    string
 	ChatTemplatePath string
 	ToolCallParser   string
+	ReasoningParser  string
 	TokenizerMode    string
 
 	// enable token filter
@@ -98,6 +99,8 @@ type Config struct {
 
 	// requests token reporter duration (seconds)
 	RequestsReporterDuration int
+
+	// TODO(sunbiao.sun): remove
 
 	// max requests for every instance
 	LimitRequests        int
@@ -112,10 +115,6 @@ type Config struct {
 	// the scale of threshold, used to calculate the threshold of every decode tokens
 	LimitTokensThresholdScale float32
 
-	// batch schedule timeout(milliseconds)
-	BatchScheduleTimeout int
-	BatchScheduleCount   int
-
 	// the threshold of request prompt length
 	PromptLengthThreshold int
 
@@ -126,16 +125,24 @@ type Config struct {
 	RoutePolicy    string
 	RouteConfigRaw string
 
+	RedisAddrs      string
+	RedisUsername   string
+	RedisPassword   string
+	RedisRetryTimes int
+
+	RedisDiscoveryRefreshIntervalMs int
+	RedisDiscoveryStatusTTLMs       int
+
 	BatchOSSPath           string
 	BatchOSSEndpoint       string
-	RedisAddrs             string
-	RedisUsername          string
-	RedisPassword          string
-	RedisRetryTimes        int
 	BatchParallel          int
 	BatchLinesPerShard     int
 	BatchRequestTimeout    time.Duration
 	BatchRequestRetryTimes int
+
+	// TODO(sunbiao.sun): remove
+	PrefillPolicy string
+	DecodePolicy  string
 
 	LlumnixConfig LlumnixConfig
 }
@@ -219,6 +226,9 @@ type LlumnixConfig struct {
 	CmsRecordMetricsInterval int32
 
 	ExtraArgs string
+
+	// TODO(sunbiao.sun): remove
+	DispatchPolicy string
 }
 
 func (c *Config) AddServerFlags(flags *pflag.FlagSet) {
@@ -242,9 +252,9 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&c.ScheduleMode, "schedule-mode", false, "work as a scheduler")
 	flags.BoolVar(&c.ColocatedRescheduleMode, "colocated-reschedule-mode", false, "work as a scheduler with a colocated rescheduler")
 	flags.BoolVar(&c.StandaloneRescheduleMode, "standalone-reschedule-mode", false, "work as a standalone rescheduler")
-	flags.StringVar(&c.SchedulePolicy, "schedule-policy", "least-token", "schedule policy, now support round-robin, least-request, least-token, pd-split, llumnix")
+	flags.StringVar(&c.SchedulePolicy, "schedule-policy", "least-token", "schedule policy, now support round-robin, load-balance, flood")
 
-	flags.StringVar(&c.PDSplitMode, "pdsplit-mode", "", "pd split mode, this configuration only takes effect under the pd-split policy, now support blade, vllm-vineyard")
+	flags.StringVar(&c.PDSplitMode, "pdsplit-mode", "", "pd split mode, this configuration only takes effect under the pd-split policy, now support vllm-vineyard, vllm-kvt, sglang-mooncake")
 
 	flags.BoolVar(&c.EnableAccessLog, "enable-access-log", true, "enable access log or not")
 	flags.BoolVar(&c.EnableLogInput, "enable-log-input", false, "enable log input or not")
@@ -267,11 +277,13 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.TokenizerPath, "tokenizer-path", "", "builtin tokenizer path")
 	flags.StringVar(&c.ChatTemplatePath, "chat-template", "", "chat template path")
 	flags.StringVar(&c.ToolCallParser, "tool-call-parser", "", "tool call parser type")
+	flags.StringVar(&c.ReasoningParser, "reasoning-parser", "", "reasoning parser type")
 	flags.StringVar(&c.TokenizerMode, "tokenizer-mode", "", "builtin tokenizer mode, support formatter or leave null as vllmv0")
 
 	flags.BoolVar(&c.EnableTokenFilter, "enable-token-filter", false, "Specify whether to enable token filter")
 	flags.IntVar(&c.RequestsReporterDuration, "requests-report-duration", 0, "Specify requests reporter duration")
 
+	// TODO(sunbiao.sun): remove
 	flags.IntVar(&c.LimitRequests, "limit-requests", 0, "max requests for every backend llm instances.")
 	flags.IntVar(&c.PrefillLimitRequests, "prefill-limit-requests", 0, "max requests for every backend llm instances.")
 	flags.IntVar(&c.DecodeLimitRequests, "decode-limit-requests", 0, "max requests for every backend llm instances.")
@@ -282,6 +294,10 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.Float32Var(&c.LimitTokensThresholdScale, "limit-tokens-threshold-scale", 0.0, "the scale of threshold, used to calculate the threshold of every decode tokens.")
 	flags.IntVar(&c.PromptLengthThreshold, "prompt-length-threshold", 0, "the threshold of request prompt length, used to determine whether the request is a long request")
 	flags.BoolVar(&c.SeparatePDSchedule, "separate-pd-schedule", false, "Specify whether to separate pd schedule")
+
+	// TODO(sunbiao.sun): remove
+	flags.StringVar(&c.PrefillPolicy, "prefill-policy", "load-balance", "prefill schedule policy, the same value as the schedule policy")
+	flags.StringVar(&c.DecodePolicy, "decode-policy", "load-balance", "decode schedule policy, the same value as the schedule policy")
 
 	flags.BoolVar(&c.LlumnixConfig.EnableFullModeScheduling, "enable-full-mode-scheduling", false, "Enable full mode scheduling")
 
@@ -365,10 +381,17 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.RedisUsername, "redis-username", "default", "Redis username")
 	flags.StringVar(&c.RedisPassword, "redis-password", "default", "Redis password")
 	flags.IntVar(&c.RedisRetryTimes, "redis-retry-times", 3, "Redis retry times")
+
+	flags.IntVar(&c.RedisDiscoveryStatusTTLMs, "redis-discovery-status-ttl-ms", 10000, "Redis discovery status TTL milliseconds")
+	flags.IntVar(&c.RedisDiscoveryRefreshIntervalMs, "redis-discovery-refresh-interval-ms", 5000, "Redis discovery refresh interval milliseconds")
+
 	flags.IntVar(&c.BatchParallel, "batch-parallel", 8, "The parallel of shard process")
 	flags.IntVar(&c.BatchLinesPerShard, "batch-lines-per-shard", 1000, "The number of lines per shard file")
 	flags.DurationVar(&c.BatchRequestTimeout, "batch-request-timeout", 3*time.Minute, "HTTP request timeout duration")
 	flags.IntVar(&c.BatchRequestRetryTimes, "batch-request-retry-times", 3, "HTTP retry times")
+
+	// TODO(sunbiao.sun): remove
+	flags.StringVar(&c.LlumnixConfig.DispatchPolicy, "llumnix-dispatch-policy", consts.DefaultLlumnixDispatchPolicy, "Llumnix dispatch policy")
 }
 
 func (c *Config) AddFlags(flags *pflag.FlagSet) {
@@ -385,6 +408,47 @@ func (c *Config) IsPDSplitMode() bool {
 	return c.PDSplitMode != ""
 }
 
+func ProcessLlumnixConfig(flags *pflag.FlagSet) {
+	// use a deprecated args to hack
+	hackArgs := flags.Lookup("prefill-policy")
+	if hackArgs != nil && strings.HasPrefix(hackArgs.Value.String(), "llumnix-") {
+		parts := strings.SplitN(hackArgs.Value.String(), ",", 2)
+
+		fullPolicyName := parts[0]
+		realPolicyName := strings.TrimPrefix(fullPolicyName, "llumnix-")
+		schedulePolicy := flags.Lookup("schedule-policy")
+		err := schedulePolicy.Value.Set(realPolicyName)
+		if err != nil {
+			klog.Errorf("Failed to set schedule-policy to %s: %v", realPolicyName, err)
+			return
+		}
+		klog.Infof("Set schedule-policy to %s", realPolicyName)
+
+		if len(parts) == 2 {
+			llumnixArgs := strings.Split(parts[1], ",")
+			for _, arg := range llumnixArgs {
+				kv := strings.SplitN(strings.TrimSpace(arg), "=", 2)
+				if len(kv) == 2 {
+					key := strings.TrimSpace(kv[0])
+					value := strings.TrimSpace(kv[1])
+
+					flag := flags.Lookup(key)
+					if flag != nil {
+						klog.Infof("Set flag %s with value %s", key, value)
+						err := flag.Value.Set(value)
+						if err != nil {
+							klog.Errorf("Failed to set flag %s to value %s: %v", key, value, err)
+						}
+					} else {
+						flags.String(key, value, "Auto-generated flag from schedule-policy")
+						klog.Infof("Created new flag %s with value %s", key, value)
+					}
+				}
+			}
+		}
+	}
+}
+
 func (c *Config) IsPDRoundRobin() bool {
 	return c.IsPDSplitMode() && c.SchedulePolicy == consts.SchedulePolicyRoundRobin
 }
@@ -399,6 +463,10 @@ func (c *Config) IsVllmKvtSplitMode() bool {
 
 func (c *Config) IsSGLangMooncakeSplitMode() bool {
 	return c.PDSplitMode == consts.SplitModeSGlangMooncake
+}
+
+func (c *Config) IsVllmMooncakeSplitMode() bool {
+	return c.PDSplitMode == consts.SplitModeVllmMooncake
 }
 
 func (c *Config) IsPDProxySplitMode() bool {
@@ -452,11 +520,6 @@ type RedisServiceProperty struct {
 
 type RPCProperty struct {
 	ServiceToken *string `json:"token"`
-}
-
-
-func (c *Config) IsVllmMooncakeSplitMode() bool {
-	return c.PDSplitMode == consts.SplitModeVllmMooncake
 }
 
 type Properties struct {
@@ -569,6 +632,7 @@ func (c *Config) LoadCfgFromProperties() {
 	// Scheduling policies
 	logIfNotEmpty("schedule policy: %s", c.SchedulePolicy)
 	logIfNotEmpty("pd split mode: %s", c.PDSplitMode)
+	// TODO(sunbiao.sun): remove
 	logIfNotEmpty("limit requests: %d", c.LimitRequests)
 	logIfNotEmpty("prefill limit requests: %d", c.PrefillLimitRequests)
 	logIfNotEmpty("decode limit requests: %d", c.DecodeLimitRequests)
