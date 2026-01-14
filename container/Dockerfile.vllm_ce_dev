@@ -1,7 +1,7 @@
 ARG BASE_IMAGE=vllm/vllm-openai:v0.12.0
 FROM ${BASE_IMAGE}
 
-RUN apt-get update && apt-get install -y git curl wget protobuf-compiler vim
+RUN apt-get update && apt-get install -y git curl wget protobuf-compiler vim pkg-config libssl-dev
 
 RUN pip3 config set global.index-url https://mirrors.aliyun.com/pypi/simple/
 
@@ -57,7 +57,7 @@ RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.5 \
     && go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
 
 # Install go requirements
-COPY ./go.mod ./go.sum /tmp/llumnix_go/
+COPY . /tmp/llumnix_go/
 RUN cd /tmp/llumnix_go && go mod download \
     && rm -rf /tmp/llumnix_go
 

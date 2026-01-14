@@ -274,8 +274,8 @@ func TestDispatchPolicyScheduleNeutral(t *testing.T) {
 	result := policy.schedule(clusterViewScheduling, "", nil)
 	assert.Len(t, result, 1)
 	assert.Len(t, result[0], 1)
-	assert.Equal(t, "127.0.0.1", result[0][0].GetToken().Endpoint.IP)
-	assert.Equal(t, 8000, result[0][0].GetToken().Endpoint.Port)
+	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, 8000, result[0][0].GetInstance().Endpoint.Port)
 }
 
 func TestDispatchPolicySchedulePD(t *testing.T) {
@@ -352,10 +352,10 @@ func TestDispatchPolicySchedulePD(t *testing.T) {
 	assert.Len(t, result, 2)
 	assert.Len(t, result[0], 1)
 	assert.Len(t, result[1], 1)
-	assert.Equal(t, "127.0.0.1", result[0][0].GetToken().Endpoint.IP)
-	assert.Equal(t, 8001, result[0][0].GetToken().Endpoint.Port)
-	assert.Equal(t, "127.0.0.1", result[1][0].GetToken().Endpoint.IP)
-	assert.Equal(t, 8002, result[1][0].GetToken().Endpoint.Port)
+	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, 8001, result[0][0].GetInstance().Endpoint.Port)
+	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, 8002, result[1][0].GetInstance().Endpoint.Port)
 }
 
 func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
@@ -520,10 +520,10 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 	assert.Len(t, result, 2)
 	assert.Len(t, result[0], 1)
 	assert.Len(t, result[1], 1)
-	assert.Equal(t, "127.0.0.1", result[0][0].GetToken().Endpoint.IP)
-	assert.Equal(t, 8002, result[0][0].GetToken().Endpoint.Port) // Choose D for prefill
-	assert.Equal(t, "127.0.0.1", result[1][0].GetToken().Endpoint.IP)
-	assert.Equal(t, 8002, result[1][0].GetToken().Endpoint.Port) // Choose D for decode
+	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, 8002, result[0][0].GetInstance().Endpoint.Port) // Choose D for prefill
+	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, 8002, result[1][0].GetInstance().Endpoint.Port) // Choose D for decode
 
 	// No available P instances, No available D instances, fallback to P for prefill
 	// No available P instances, No available D instances, fallback to D for decode
@@ -596,10 +596,10 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 	assert.Len(t, result, 2)
 	assert.Len(t, result[0], 1)
 	assert.Len(t, result[1], 1)
-	assert.Equal(t, "127.0.0.1", result[0][0].GetToken().Endpoint.IP)
-	assert.Equal(t, 8001, result[0][0].GetToken().Endpoint.Port) // Fallback to P for prefill
-	assert.Equal(t, "127.0.0.1", result[1][0].GetToken().Endpoint.IP)
-	assert.Equal(t, 8002, result[1][0].GetToken().Endpoint.Port) // Fallback to D for decode
+	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, 8001, result[0][0].GetInstance().Endpoint.Port) // Fallback to P for prefill
+	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, 8002, result[1][0].GetInstance().Endpoint.Port) // Fallback to D for decode
 
 	// No available D instances, choose P for decode
 	instanceViews3 := map[string]*instanceViewScheduling{
@@ -671,10 +671,10 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 	assert.Len(t, result, 2)
 	assert.Len(t, result[0], 1)
 	assert.Len(t, result[1], 1)
-	assert.Equal(t, "127.0.0.1", result[0][0].GetToken().Endpoint.IP)
-	assert.Equal(t, 8001, result[0][0].GetToken().Endpoint.Port) // Choose P for prefill
-	assert.Equal(t, "127.0.0.1", result[1][0].GetToken().Endpoint.IP)
-	assert.Equal(t, 8001, result[1][0].GetToken().Endpoint.Port) // Choose P for decode
+	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, 8001, result[0][0].GetInstance().Endpoint.Port) // Choose P for prefill
+	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, 8001, result[1][0].GetInstance().Endpoint.Port) // Choose P for decode
 }
 
 func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
@@ -801,10 +801,10 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 	assert.Len(t, result, 2)
 	assert.Len(t, result[0], 1)
 	assert.Len(t, result[1], 1)
-	assert.Equal(t, "127.0.0.1", result[0][0].GetToken().Endpoint.IP)
-	assert.Equal(t, 8003, result[0][0].GetToken().Endpoint.Port)
-	assert.Equal(t, "127.0.0.1", result[1][0].GetToken().Endpoint.IP)
-	assert.Equal(t, 8004, result[1][0].GetToken().Endpoint.Port)
+	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, 8003, result[0][0].GetInstance().Endpoint.Port)
+	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, 8004, result[1][0].GetInstance().Endpoint.Port)
 }
 
 func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
@@ -960,12 +960,12 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 		assert.Len(t, result[0], 1)
 		assert.Len(t, result[1], 1)
 
-		port := result[0][0].GetToken().Endpoint.Port
+		port := result[0][0].GetInstance().Endpoint.Port
 		selections[port]++
 
-		assert.Equal(t, "127.0.0.1", result[0][0].GetToken().Endpoint.IP)
-		assert.Equal(t, "127.0.0.1", result[1][0].GetToken().Endpoint.IP)
-		assert.Equal(t, 8005, result[1][0].GetToken().Endpoint.Port)
+		assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.IP)
+		assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.IP)
+		assert.Equal(t, 8005, result[1][0].GetInstance().Endpoint.Port)
 	}
 
 	assert.True(t, selections[8003] > 0, "instance-prefill-3 should be selected")
@@ -1067,8 +1067,8 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 	result := policy.schedule(clusterViewScheduling, "", promptTokenIds)
 	policy.cmsClient.Unlock()
 	assert.Len(t, result, 1)
-	assert.Equal(t, "127.0.0.1", result[0][0].GetToken().Endpoint.IP)
-	assert.Equal(t, 8003, result[0][0].GetToken().Endpoint.Port)
+	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, 8003, result[0][0].GetInstance().Endpoint.Port)
 }
 
 func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
@@ -1595,7 +1595,7 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 	assert.Equal(t, int32(10), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(0), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(0), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests)
-	assert.Equal(t, 8001, result1[0][0].GetToken().Endpoint.Port)
+	assert.Equal(t, 8001, result1[0][0].GetInstance().Endpoint.Port)
 
 	// Clear metrics for next schedule
 	instanceViews["instance-neutral-1"].metrics = map[string]instanceSchedulingMetric{}
@@ -1606,7 +1606,7 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 	assert.Equal(t, int32(20), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(0), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(0), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests)
-	assert.Equal(t, 8001, result2[0][0].GetToken().Endpoint.Port)
+	assert.Equal(t, 8001, result2[0][0].GetInstance().Endpoint.Port)
 
 	// Clear metrics for next schedule
 	instanceViews["instance-neutral-1"].metrics = map[string]instanceSchedulingMetric{}
@@ -1617,5 +1617,5 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 	assert.Equal(t, int32(20), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(1), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(10), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests)
-	assert.Equal(t, 8002, result3[0][0].GetToken().Endpoint.Port)
+	assert.Equal(t, 8002, result3[0][0].GetInstance().Endpoint.Port)
 }

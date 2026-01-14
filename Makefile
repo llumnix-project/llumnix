@@ -11,7 +11,7 @@ llm-gateway-proto-build:
 
 .PHONY: llm-gateway-build
 llm-gateway-build: llm-gateway-proto-build
-	CGO_ENABLED=1 go build -buildvcs=false -ldflags="-extldflags '-L./lib/tokenizers'" -o bin/llm-gateway ./cmd/llm-gateway
+	CGO_ENABLED=1 go build -buildvcs=false -ldflags="-extldflags '-L./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release/'" -o bin/llm-gateway ./cmd/llm-gateway
 
 .PHONY: llumnix-unit-test
 llumnix-unit-test: llm-gateway-proto-build

@@ -12,11 +12,12 @@ import (
 	kvs "easgo/pkg/llm-gateway/kvs"
 	"easgo/pkg/llm-gateway/lrs"
 	"easgo/pkg/llm-gateway/metrics"
-	"easgo/pkg/llm-gateway/structs"
+	"easgo/pkg/llm-gateway/types"
+	"easgo/pkg/llm-gateway/utils"
 )
 
 type InstanceViewInterface interface {
-	GetToken() *structs.Token
+	GetInstance() *types.LLMWorker
 	GetInstanceId() string
 	GetInferMode() string
 }
@@ -144,7 +145,15 @@ func (p *DispatchPolicy) Name() string {
 	return p.schedulePolicy
 }
 
-func (p *DispatchPolicy) GetToken(request *structs.TokenRequest) error {
+func Uint32ToInt64(arr []uint32) []int64 {
+	result := make([]int64, len(arr))
+	for i, v := range arr {
+		result[i] = int64(v)
+	}
+	return result
+}
+
+func (p *DispatchPolicy) Schedule(request *types.ScheduleRequest) error {
 	tStart := time.Now()
 	defer func() {
 		elapsed := time.Since(tStart).Milliseconds()
@@ -175,7 +184,7 @@ func (p *DispatchPolicy) GetToken(request *structs.TokenRequest) error {
 			p.clusterViewClient.Unlock()
 		}
 		metrics.AddLlumnixLatency(
-			metrics.LlumnixMetricScheduleLatencyMicroseconds, structs.Labels{}, time.Since(startTime).Microseconds())
+			metrics.LlumnixMetricScheduleLatencyMicroseconds, metrics.Labels{}, time.Since(startTime).Microseconds())
 	}()
 
 	if p.c.LlumnixConfig.EnableFullModeScheduling {
@@ -186,23 +195,26 @@ func (p *DispatchPolicy) GetToken(request *structs.TokenRequest) error {
 	clusterViewScheduling := toClusterViewScheduling(p.clusterView)
 	klog.V(4).Infof("Retrieved cluster instances, count: %d", len(clusterViewScheduling.instanceViews))
 
-	selectedInstances := p.schedule(clusterViewScheduling, request.Id, request.PromptTokenIds)
+	selectedInstances := p.schedule(clusterViewScheduling, request.Id, Uint32ToInt64(request.PromptTokenIds))
 	if len(selectedInstances) == 0 {
 		klog.Warningf("No instances selected, return ErrorNoAvailableEndpoint")
 		return consts.ErrorNoAvailableEndpoint
 	}
+
+	var schResults types.ScheduledResult
 	for _, instance := range selectedInstances[0] {
-		request.Tokens = append(request.Tokens, *instance.GetToken())
+		schResults = append(schResults, *instance.GetInstance())
 		klog.V(4).Infof("Added token from instance: %s", instance.GetInstanceId())
 		logSelectedInstance(instance, request.Id, consts.PrefillInferMode, p.c.LlumnixConfig.EnableFullModeScheduling)
 	}
 	if len(selectedInstances) > 1 {
 		for _, instance := range selectedInstances[1] {
-			request.Tokens2 = append(request.Tokens2, *instance.GetToken())
+			schResults = append(schResults, *instance.GetInstance())
 			klog.V(4).Infof("Added token2 from instance: %s", instance.GetInstanceId())
 			logSelectedInstance(instance, request.Id, consts.DecodeInferMode, p.c.LlumnixConfig.EnableFullModeScheduling)
 		}
 	}
+	request.ScheduleResult = schResults
 	return nil
 }
 
@@ -355,7 +367,7 @@ func (p *DispatchPolicy) executeScheduleSteps(
 		}
 
 		availableInstanceType = schedulerStep.instanceType
-		groupedInstanceInferMode := consts.TransformInstanceType2InferMode(schedulerStep.instanceType)
+		groupedInstanceInferMode := utils.TransformInstanceType2InferMode(schedulerStep.instanceType)
 		availableInstanceViews = p.policyInternal.filter(
 			pipeline.inferMode,
 			schedulerStep.instanceType,

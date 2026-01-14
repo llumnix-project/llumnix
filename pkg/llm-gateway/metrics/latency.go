@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"easgo/pkg/llm-gateway/structs"
 	"math"
 	"math/rand"
 	"sort"
@@ -14,7 +13,7 @@ const (
 
 type LatencyValue struct {
 	key    string
-	labels structs.Labels
+	labels Labels
 
 	data        []int64
 	sampleCount int64
@@ -33,7 +32,7 @@ type LatencyResult struct {
 	p50Value int64
 }
 
-func NewLatencyValue(k string, l structs.Labels, cap int) *LatencyValue {
+func NewLatencyValue(k string, l Labels, cap int) *LatencyValue {
 	return &LatencyValue{
 		key:      k,
 		labels:   l,
@@ -144,7 +143,7 @@ func NewLatencyGroup() *LatencyGroup {
 	}
 }
 
-func (lg *LatencyGroup) Get(k string, l structs.Labels) *LatencyValue {
+func (lg *LatencyGroup) Get(k string, l Labels) *LatencyValue {
 	key := l.FlattenWithKey(k)
 
 	lg.mu.Lock()
@@ -192,22 +191,22 @@ func (lg *LatencyGroup) Expose() []Metric {
 			},
 			Metric{
 				Name:  key + "_percent",
-				Tags:  l.labels.Append(structs.Label{Name: "percent_line", Value: "99"}).Convert(),
+				Tags:  l.labels.Append(Label{Name: "percent_line", Value: "99"}).Convert(),
 				Value: float32(result.p99Value),
 			},
 			Metric{
 				Name:  key + "_percent",
-				Tags:  l.labels.Append(structs.Label{Name: "percent_line", Value: "90"}).Convert(),
+				Tags:  l.labels.Append(Label{Name: "percent_line", Value: "90"}).Convert(),
 				Value: float32(result.p90Value),
 			},
 			Metric{
 				Name:  key + "_percent",
-				Tags:  l.labels.Append(structs.Label{Name: "percent_line", Value: "75"}).Convert(),
+				Tags:  l.labels.Append(Label{Name: "percent_line", Value: "75"}).Convert(),
 				Value: float32(result.p75Value),
 			},
 			Metric{
 				Name:  key + "_percent",
-				Tags:  l.labels.Append(structs.Label{Name: "percent_line", Value: "50"}).Convert(),
+				Tags:  l.labels.Append(Label{Name: "percent_line", Value: "50"}).Convert(),
 				Value: float32(result.p50Value),
 			},
 		)
@@ -219,7 +218,7 @@ var (
 	latencyGroup *LatencyGroup
 )
 
-func Latency(k string, l structs.Labels) *LatencyValue {
+func Latency(k string, l Labels) *LatencyValue {
 	return latencyGroup.Get(k, l)
 }
 

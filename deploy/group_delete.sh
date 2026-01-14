@@ -1,89 +1,86 @@
 #!/bin/bash
 
-set -e  # 遇到错误立即退出
+set -e
 
+# Usage check
 if [ -z "$1" ]; then
-  echo "使用方法: $0 <group-name>"
-  echo "例如: $0 llumnix1"
+  echo "Usage: $0 <group-name>"
+  echo "Example: $0 llumnix1"
   exit 1
 fi
 
 GROUP_NAME=$1
 
-# 检查 namespace 是否存在
+# Check if namespace exists
 if ! kubectl get namespace "$GROUP_NAME" &> /dev/null; then
-  echo "错误: namespace '$GROUP_NAME' 不存在"
+  echo "Error: namespace '$GROUP_NAME' does not exist"
   exit 1
 fi
 
-# 显示将要删除的资源
-echo "==> 将要删除的资源:"
+# Display resources to be deleted
+echo "==> Resources to be deleted:"
 echo "--- Deployments ---"
-kubectl get deployments -n "$GROUP_NAME" 2>/dev/null || echo "无"
+kubectl get deployments -n "$GROUP_NAME" 2>/dev/null || echo "None"
 echo ""
 echo "--- StatefulSets ---"
-kubectl get statefulsets -n "$GROUP_NAME" 2>/dev/null || echo "无"
+kubectl get statefulsets -n "$GROUP_NAME" 2>/dev/null || echo "None"
 echo ""
 echo "--- Services ---"
-kubectl get services -n "$GROUP_NAME" 2>/dev/null || echo "无"
+kubectl get services -n "$GROUP_NAME" 2>/dev/null || echo "None"
 echo ""
 
-
-echo ""
-read -p "确认删除服务组 '$GROUP_NAME' 及其所有资源? (yes/no): " CONFIRM
-
+# Confirmation prompt
+read -p "Confirm deletion of group '$GROUP_NAME' and all its resources? (yes/no): " CONFIRM
 if [ "$CONFIRM" != "yes" ]; then
-  echo "已取消删除"
+  echo "Deletion cancelled"
   exit 0
 fi
 
-echo "==> 正在删除服务组: $GROUP_NAME"
+echo "==> Deleting service group: $GROUP_NAME"
 
+# Delete resources in proper order
+delete_resource() {
+  local resource_type=$1
+  local resource_name=${2:-"--all"}
+  echo "==> Deleting $resource_type"
+  kubectl delete "$resource_type" $resource_name -n "$GROUP_NAME" --grace-period=0 --force 2>/dev/null || true
+}
 
-# 2. 删除 StatefulSets 和 Deployments
-echo "==> 删除 StatefulSets"
-kubectl delete statefulsets --all -n "$GROUP_NAME" --grace-period=0 --force 2>/dev/null || true
+# 1. Delete workloads
+delete_resource "statefulsets"
+delete_resource "deployments"
 
-echo "==> 删除 Deployments"
-kubectl delete deployments --all -n "$GROUP_NAME" --grace-period=0 --force 2>/dev/null || true
+# 2. Delete pods
+delete_resource "pods"
 
-# 3. 强制删除所有 Pod
-echo "==> 强制删除所有 Pod"
-kubectl delete pods --all -n "$GROUP_NAME" --grace-period=0 --force 2>/dev/null || true
+# 3. Delete services
+delete_resource "services"
 
-# 4. 删除 Services
-echo "==> 删除 Services"
-kubectl delete services --all -n "$GROUP_NAME" --grace-period=0 2>/dev/null || true
+# 4. Delete PVCs first
+delete_resource "pvc"
 
-# 1. 先删除 PVC (关键步骤，必须最先删除)
-echo "==> 删除 PVC"
-kubectl delete pvc --all -n "$GROUP_NAME" --grace-period=0 --force 2>/dev/null || true
-
-# 等待一下
 sleep 1
 
-# 5. 删除 namespace
-echo "==> 删除 namespace"
+# 5. Delete namespace
+echo "==> Deleting namespace"
 kubectl delete namespace "$GROUP_NAME" --grace-period=0 --force 2>/dev/null || true
 
-# 等待一下，确保 API Server 稳定
 sleep 2
 
-# 6. 删除对应的 PV (最后删除集群级别资源)
-echo "==> 正在删除 PV: $GROUP_NAME-oss-llm-cache"
-if kubectl get pv "$GROUP_NAME-oss-llm-cache" &> /dev/null; then
-  kubectl delete pv "$GROUP_NAME-oss-llm-cache" --grace-period=0 --force
-  echo "✓ PV 已删除"
-else
-  echo "⚠️  PV '$GROUP_NAME-oss-llm-cache' 不存在，跳过"
-fi
-echo "==> 正在删除 PV: $GROUP_NAME-nas"
-if kubectl get pv "$GROUP_NAME-nas" &> /dev/null; then
-  kubectl delete pv "$GROUP_NAME-nas" --grace-period=0 --force
-  echo "✓ PV 已删除"
-else
-  echo "⚠️  PV '$GROUP_NAME-nas' 不存在，跳过"
-fi
+# 6. Delete associated PVs
+delete_pv() {
+  local pv_name=$1
+  echo "==> Deleting PV: $pv_name"
+  if kubectl get pv "$pv_name" &> /dev/null; then
+    kubectl delete pv "$pv_name" --grace-period=0 --force
+    echo "✓ PV deleted"
+  else
+    echo "⚠ PV '$pv_name' not found, skipping"
+  fi
+}
+
+delete_pv "$GROUP_NAME-oss-llm-cache"
+delete_pv "$GROUP_NAME-nas"
 
 echo ""
-echo "✓ 服务组 $GROUP_NAME 已删除"
+echo "✓ Service group '$GROUP_NAME' deleted successfully"

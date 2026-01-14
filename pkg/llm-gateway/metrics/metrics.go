@@ -3,7 +3,6 @@ package metrics
 import (
 	"bytes"
 	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/utils"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -28,11 +27,13 @@ type MetricContext struct {
 
 func newMetricContext() *MetricContext {
 	return &MetricContext{
-		client: utils.NewHttpClient(),
+		client: &http.Client{Timeout: 5 * time.Second},
 	}
 }
 
 func (m *MetricContext) submitMetrics(metrics []Metric) {
+	return
+
 	if len(metrics) == 0 {
 		return
 	}

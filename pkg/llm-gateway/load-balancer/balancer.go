@@ -1,11 +1,11 @@
-package loadbalancer
+package balancer
 
-import "easgo/pkg/llm-gateway/structs"
+import (
+	"easgo/pkg/llm-gateway/types"
+)
 
-type LoadBalancer interface {
-	GetNextTokens(req *structs.Request) (*structs.NextTokens, error)
+type Balancer interface {
+	Get(*types.RequestContext) (types.ScheduledResult, error)
 
-	ReleaseToken(*structs.Request, *structs.Token)
-
-	ExcludeService(string)
+	Release(*types.RequestContext, *types.LLMWorker)
 }

@@ -21,6 +21,7 @@ var (
 	ErrorRequestAbortedByEngine = errors.New("request aborted by LLM engine")
 	ErrorReadSSETimeout         = errors.New("read sse timeout")
 	ErrorCmsNotAvailable        = errors.New("cms not available")
+	ErrorBackendBadRequest      = errors.New("bad inference request") // inference return not status ok
 
 	// protocol error
 	ErrorInvalidModel                            = errors.New("this model is not supported now")
