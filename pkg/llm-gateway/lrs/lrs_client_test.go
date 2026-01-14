@@ -204,29 +204,29 @@ func TestScheduelrStateStore(t *testing.T) {
 		t.Run("Filter by Model in Normal Mode", func(t *testing.T) {
 			results := scsClient.GetInstanceViewsByModel("gpt-3.5-turbo", consts.NormalInferMode)
 			assert.Equal(t, 1, len(results))
-			assert.Equal(t, gpt35NormalInstance.Id(), results[0].GetToken().Id())
+			assert.Equal(t, gpt35NormalInstance.Id(), results[0].GetInstance().Id())
 		})
 
 		t.Run("Filter by Model in Prefill Mode", func(t *testing.T) {
 			results := scsClient.GetInstanceViewsByModel("gpt-3.5-turbo", consts.PrefillInferMode)
 			assert.Equal(t, 1, len(results))
-			assert.Equal(t, gpt35PrefillInstance.Id(), results[0].GetToken().Id())
+			assert.Equal(t, gpt35PrefillInstance.Id(), results[0].GetInstance().Id())
 		})
 
 		t.Run("Filter by Model in Decode Mode", func(t *testing.T) {
 			results := scsClient.GetInstanceViewsByModel("gpt-3.5-turbo", consts.DecodeInferMode)
 			assert.Equal(t, 1, len(results))
-			assert.Equal(t, gpt35DecodeInstance.Id(), results[0].GetToken().Id())
+			assert.Equal(t, gpt35DecodeInstance.Id(), results[0].GetInstance().Id())
 		})
 
 		t.Run("Filter Different Models", func(t *testing.T) {
 			gpt4Results := scsClient.GetInstanceViewsByModel("gpt-4", consts.NormalInferMode)
 			assert.Equal(t, 1, len(gpt4Results))
-			assert.Equal(t, gpt4NormalInstance.Id(), gpt4Results[0].GetToken().Id())
+			assert.Equal(t, gpt4NormalInstance.Id(), gpt4Results[0].GetInstance().Id())
 
 			claudeResults := scsClient.GetInstanceViewsByModel("claude-2", consts.NormalInferMode)
 			assert.Equal(t, 1, len(claudeResults))
-			assert.Equal(t, claudeNormalInstance.Id(), claudeResults[0].GetToken().Id())
+			assert.Equal(t, claudeNormalInstance.Id(), claudeResults[0].GetInstance().Id())
 		})
 
 		t.Run("Non-existent Model", func(t *testing.T) {
@@ -240,7 +240,7 @@ func TestScheduelrStateStore(t *testing.T) {
 
 			results := scsClient.GetInstanceViewsByModel("", consts.NormalInferMode)
 			assert.Equal(t, 1, len(results))
-			assert.Equal(t, emptyModelInstance.Id(), results[0].GetToken().Id())
+			assert.Equal(t, emptyModelInstance.Id(), results[0].GetInstance().Id())
 		})
 	})
 
@@ -265,7 +265,7 @@ func TestScheduelrStateStore(t *testing.T) {
 		// Verify both instances are in the result
 		instanceIds := make(map[string]bool)
 		for _, result := range results {
-			instanceIds[result.GetToken().Id()] = true
+			instanceIds[result.GetInstance().Id()] = true
 		}
 		assert.True(t, instanceIds[gpt35Instance.Id()])
 		assert.True(t, instanceIds[gpt4Instance.Id()])

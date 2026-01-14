@@ -6,7 +6,7 @@ import (
 	"easgo/cmd/llm-gateway/app/options"
 	"easgo/pkg/llm-gateway/lrs"
 	"easgo/pkg/llm-gateway/schedule-policy/llumnix"
-	"easgo/pkg/llm-gateway/structs"
+	"easgo/pkg/llm-gateway/types"
 )
 
 type SchedulePolicy interface {
@@ -14,7 +14,7 @@ type SchedulePolicy interface {
 	Name() string
 
 	// GetToken attempts to acquire a token for processing a new request.
-	GetToken(*structs.TokenRequest) error
+	Schedule(*types.ScheduleRequest) error
 }
 
 func NewSchedulePolicy(

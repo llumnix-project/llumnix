@@ -21,6 +21,7 @@ require (
 	github.com/onsi/gomega v1.33.1 // indirect
 	github.com/pkg/errors v0.9.1
 	github.com/redis/go-redis/v9 v9.2.0
+	github.com/sglang/sglang-go-grpc-sdk v0.0.0-00010101000000-000000000000
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.10.0
@@ -42,7 +43,6 @@ require (
 
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/deckarep/golang-set/v2 v2.6.0
 	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
@@ -52,7 +52,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/go-redis/redismock/v9 v9.2.0
 	github.com/tmaxmax/go-sse v0.11.0
-	golang.org/x/sync v0.10.0
 	gonum.org/v1/gonum v0.13.0
 	google.golang.org/grpc v1.69.2
 )
@@ -82,6 +81,8 @@ require (
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
+
+replace github.com/sglang/sglang-go-grpc-sdk => ./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang
 
 go 1.23.0
 

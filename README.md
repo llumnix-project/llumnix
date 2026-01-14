@@ -39,13 +39,13 @@ bash scripts/build_gw_release.sh
 
 # how to deploy
 
-update the image name in prefill.yaml,decode.yaml,gateway.yaml,scheduler.yaml
+update the image name in normal.yaml,prefill.yaml,decode.yaml,gateway.yaml,scheduler.yaml
 
 ```bash
 cd deploy
 
 # deploy
-bash group_deploy.sh $NAMESPACE
+bash group_deploy.sh $NAMESPACE $DEPLOY_MODE
 
 # delete (if hang, please CTRL+C and re-run the delete command)
 bash group_delete.sh $NAMESPACE

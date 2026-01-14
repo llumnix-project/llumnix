@@ -15,28 +15,9 @@ import (
 	"github.com/valyala/fastjson"
 	"k8s.io/klog/v2"
 
+	"easgo/pkg/llm-gateway/consts"
 	"easgo/pkg/util/jsquery"
 )
-
-const (
-	maxIdleConns          = 1000
-	idleConnTimeout       = 5 * time.Minute
-	maxConnsPerHost       = 0 // no limit
-	responseHeaderTimeout = 15 * time.Minute
-
-	prefixData    = "data: "
-	suffixNewLine = "\n\n"
-)
-
-func NewHttpClient() *http.Client {
-	t := http.DefaultTransport.(*http.Transport).Clone()
-	t.MaxIdleConnsPerHost = maxIdleConns
-	t.IdleConnTimeout = idleConnTimeout
-	t.MaxIdleConns = 0
-	t.MaxConnsPerHost = maxConnsPerHost
-	t.ResponseHeaderTimeout = responseHeaderTimeout
-	return &http.Client{Transport: t}
-}
 
 // Hop-by-hop headers. These are removed when sent to the backend.
 // http://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html
@@ -471,11 +452,16 @@ func Md5sum(data []byte) string {
 	return fmt.Sprintf("%x", md5.Sum(data))
 }
 
-func BuildSSEData(data []byte) []byte {
-	wData := make([]byte, 0, len(prefixData)+len(data)+len(suffixNewLine))
-	wData = append(wData, []byte(prefixData)...)
-	wData = append(wData, data...)
-	wData = append(wData, suffixNewLine...)
+var instanceType2InferModeMap = map[string]string{
+	consts.LlumnixNeutralInstanceType: consts.NormalInferMode,
+	consts.LlumnixPrefillInstanceType: consts.PrefillInferMode,
+	consts.LlumnixDecodeInstanceType:  consts.DecodeInferMode,
+}
 
-	return wData
+func TransformInstanceType2InferMode(instanceType string) string {
+	if mode, exists := instanceType2InferModeMap[instanceType]; exists {
+		return mode
+	}
+	klog.Warningf("Unknown instance type: %s", instanceType)
+	return ""
 }

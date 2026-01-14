@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"easgo/pkg/llm-gateway/structs"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -9,12 +8,12 @@ import (
 
 type CounterValue struct {
 	key     string
-	labels  structs.Labels
+	labels  Labels
 	counter atomic.Int64
 	pre     int64
 }
 
-func NewCounter(k string, l structs.Labels) *CounterValue {
+func NewCounter(k string, l Labels) *CounterValue {
 	return &CounterValue{
 		key:    k,
 		labels: l,
@@ -40,7 +39,7 @@ func NewCounterGroup() *CounterGroup {
 	}
 }
 
-func (cg *CounterGroup) Get(k string, l structs.Labels) *CounterValue {
+func (cg *CounterGroup) Get(k string, l Labels) *CounterValue {
 	key := l.FlattenWithKey(k)
 
 	cg.mu.Lock()
@@ -95,7 +94,7 @@ var (
 	counterGroup *CounterGroup
 )
 
-func Counter(k string, l structs.Labels) *CounterValue {
+func Counter(k string, l Labels) *CounterValue {
 	return counterGroup.Get(k, l)
 }
 

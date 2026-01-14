@@ -9,7 +9,7 @@ docker run --rm \
   -v "$(pwd):/workspace" \
   -w /workspace \
   "$IMAGE" \
-  bash -c "cd ./lib/tokenizers && make build"
+  bash -c "cd ./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang && make build"
 
 echo "✓ Build completed"
-echo "Generated tokenizers package: $(ls -1 ./lib/tokenizers/*.a)"
+echo "Generated tokenizers package: $(ls -1 ./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release/*.a)"

@@ -2,458 +2,521 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"runtime/debug"
 	"strconv"
-	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/gorilla/websocket"
-	"github.com/valyala/fastjson"
 	"k8s.io/klog/v2"
 
 	"easgo/cmd/llm-gateway/app/options"
 	"easgo/pkg/llm-gateway/batch"
 	"easgo/pkg/llm-gateway/consts"
-	loadbalancer "easgo/pkg/llm-gateway/load-balancer"
-	"easgo/pkg/llm-gateway/lrs"
+	balancer "easgo/pkg/llm-gateway/load-balancer"
+	"easgo/pkg/llm-gateway/logging"
 	"easgo/pkg/llm-gateway/metrics"
-	"easgo/pkg/llm-gateway/protocol"
-	"easgo/pkg/llm-gateway/request_processor"
 	"easgo/pkg/llm-gateway/resolver"
-	servicerouter "easgo/pkg/llm-gateway/service-router"
-	"easgo/pkg/llm-gateway/structs"
-	"easgo/pkg/llm-gateway/utils"
+	"easgo/pkg/llm-gateway/service/handler"
+	"easgo/pkg/llm-gateway/service/mirror"
+	"easgo/pkg/llm-gateway/service/queue"
+	"easgo/pkg/llm-gateway/service/router"
+	"easgo/pkg/llm-gateway/types"
 )
 
+// LlmGatewayService is the main service for LLM gateway that handles all inference requests
+// It provides core features including load balancing, request queuing, and batch processing
 type LlmGatewayService struct {
+	// Gateway configuration
 	config *options.Config
 
-	mmpq *utils.MultiModelProxyQueue
+	// Request buffer queue for traffic control
+	bufferQueue *queue.QueueWorkerPool
+	// Request handler for parsing and processing requests
+	reqHandler handler.RequestHandler
 
-	client *http.Client
-	lb     loadbalancer.LoadBalancer
-
-	sr *servicerouter.ServiceRouter
-
-	upgrader *websocket.Upgrader
-
-	tokenFilter     *TokenFilter
-	requestReporter *lrs.RequestReporter
-
+	balancer balancer.Balancer
+	// Service router for request routing and load balancing
+	router *router.ServiceRouter
+	// Batch service for handling batch inference tasks
 	batchService *batch.BatchService
 
+	// Traffic mirror component
+	mirror *mirror.Mirror
+
+	// a shared HTTP client for simple proxying to backend endpoints
+	simpleClient *http.Client
+
+	// Current number of requests being processed (atomic operation)
+	numReqs atomic.Int32
+
+	// Whether to enable input logging
 	logInputEnabled bool
 }
 
-func NewGwService(c *options.Config) *LlmGatewayService {
-	// DefaultUpgrader specifies the parameters for upgrading an HTTP
-	// connection to a WebSocket connection.
-	defaultUpgrader := &websocket.Upgrader{
-		ReadBufferSize:  8 * 1024,
-		WriteBufferSize: 8 * 1024,
-	}
-
-	hs := &LlmGatewayService{
+// NewGatewayService creates a new gateway service instance
+// Parameters:
+//   - c: Gateway configuration
+//
+// Returns:
+//   - *LlmGatewayService: Gateway service instance, or nil if initialization fails
+func NewGatewayService(c *options.Config) *LlmGatewayService {
+	lgs := &LlmGatewayService{
 		config:          c,
-		upgrader:        defaultUpgrader,
-		client:          utils.NewHttpClient(),
-		tokenFilter:     nil,
 		logInputEnabled: c.EnableLogInput,
-		requestReporter: lrs.NewRequestReporter(c),
-	}
-	hs.mmpq = utils.NewMultiModelProxyQueue(c.ServerlessMode, c.MaxQueueSize, c.WaitQueueThreads, hs.QueueReadHandle)
-
-	// create load balancer
-	hs.lb = loadbalancer.NewLoadBalancerProxy(c)
-
-	if hs.config.EnableTokenFilter {
-		hs.tokenFilter = NewTokenFilter()
+		simpleClient:    &http.Client{Timeout: 30 * time.Second},
 	}
 
-	// Initialize batch service
+	// Create request buffer queue for traffic control and request scheduling
+	lgs.bufferQueue = queue.NewQueueWorkerPool(c.MaxQueueSize, c.WaitQueueThreads)
+	lgs.bufferQueue.Start()
+
+	// Create request handler for parsing OpenAI format requests
+	lgs.reqHandler = handler.NewOpenAIHandler(c)
+
+	// Create load balancer and service router
+	var lb balancer.Balancer
+	if len(c.LocalTestIPs) == 0 {
+		lb = balancer.NewCompositeBalancer(c)
+	} else {
+		// Local debug mode: use fixed test IP list
+		uri := fmt.Sprintf("llm+endpoints://%s", c.LocalTestIPs)
+		r, err := resolver.BuildLlmResolver(uri, resolver.BuildArgs{"role": types.InferRoleNormal.String()})
+		if err != nil {
+			klog.Errorf("create resolver failed: %v", err)
+			return nil
+		}
+		lb = balancer.NewRoundRobinBalancer(r)
+	}
+	lgs.balancer = lb
+	lgs.router = router.NewServiceRouter(c.RoutePolicy, c.RouteConfigRaw)
+
+	// Create traffic mirror component
+	lgs.mirror = mirror.NewMirror(c)
+
+	// Initialize batch service if OSS path is configured
 	var err error
 	if c.BatchOSSPath != "" {
-		hs.batchService, err = batch.NewBatchService(c)
+		lgs.batchService, err = batch.NewBatchService(c)
 		if err != nil {
 			klog.Errorf("Failed to initialize batch service: %v", err)
-			// Continue without batch service
+			// Continue without batch service if initialization fails
 		}
 	}
 
-	// local debug mode
-	if len(c.LocalTestIPs) != 0 {
-		ipResolver := resolver.NewIPListResolver(c.LocalTestIPs)
-		hs.lb = loadbalancer.NewSWRRLoadBalancer(ipResolver)
-	}
-
-	// create service router
-	hs.sr = servicerouter.NewServiceRouter(hs.lb, c.RoutePolicy, c.RouteConfigRaw)
-
-	return hs
+	return lgs
 }
 
-func (hs *LlmGatewayService) filterModelTokens(nextToken *structs.NextTokens, model string) (*structs.Token, *structs.Token) {
-	if hs.tokenFilter != nil {
-		klog.V(3).Infof("get filtered tokens: %v, %v", nextToken.Tokens, nextToken.Tokens2)
-		return hs.tokenFilter.FilterModelTokens(nextToken, model)
-	}
-	if len(nextToken.Tokens2) > 0 {
-		return &nextToken.Tokens[0], &nextToken.Tokens2[0]
-	} else {
-		return &nextToken.Tokens[0], nil
-	}
-}
-
-func (hs *LlmGatewayService) record(endpoint structs.Endpoint, model string) {
-	if hs.tokenFilter != nil {
-		hs.tokenFilter.Record(endpoint, model)
-	}
-}
-
-func (hs *LlmGatewayService) erase(endpoint structs.Endpoint, model string) {
-	if hs.tokenFilter != nil {
-		hs.tokenFilter.Erase(endpoint, model)
-	}
-}
-
-func (hs *LlmGatewayService) getTokenFilterCount(model string) int64 {
-	if hs.tokenFilter != nil {
-		return hs.tokenFilter.GetModelTotalCount(model)
-	}
-	return 0
-}
-
-func (hs *LlmGatewayService) tryNext(req *structs.Request) bool {
-	// clear time
-	req.DeQueueTime = time.Time{}
-	req.BalanceTime = time.Time{}
-	req.FirstTime = time.Time{}
-	req.ProcessTime = time.Time{}
-
-	q := hs.mmpq.GetOrCreateModelProxyQueue(req.Model)
-
-	req.Retrying = true
-	req.EnQueueTime = time.Now()
-	return q.EnqueuePriority(req)
-}
-
-func (hs *LlmGatewayService) handleProxy(req *structs.Request, enableWorkerCount bool) {
-	defer func() {
-		if enableWorkerCount {
-			req.ProxyQueue.AddBusyWorker(-1)
-		}
-		if !req.Retrying {
-			req.Done <- 0
-		}
-		if e := recover(); e != nil {
-			klog.Warningf("serve proxy crashed , err: %s , \ntrace:%s", e, string(debug.Stack()))
-		}
-	}()
-
-	if enableWorkerCount {
-		req.ProxyQueue.AddBusyWorker(1)
-	}
-	req.Retrying = false
-
-	if structs.IsWebsocketRequest(req.Req) {
-		hs.handleWebsocket(req)
-	} else {
-		hs.handleHttp(req)
-	}
-}
-
-func (hs *LlmGatewayService) QueueReadHandle(item utils.Item, queue *utils.ProxyQueue) {
-	req := item.(*structs.Request)
-	req.ProxyQueue = queue
-	req.DeQueueTime = time.Now()
-
-	req.ProxyQueue.AddWaitScheduler(1)
-	klog.V(3).Infof("get next token with model [%v]", req.Model)
-	// GetNextTokensByModel may wait until an available service endpoint
-
-	if hs.config.SeparatePDSchedule {
-		req.ScheduleStage = consts.PrefillInferMode
-	}
-	nextTokens, err := hs.sr.GetNextTokensByRouter(req)
-	if err != nil {
-		if fallbackTokens, _err := hs.sr.GetFallbackTokens(req); _err == nil {
-			nextTokens = fallbackTokens
-		} else {
-			req.ProxyQueue.AddWaitScheduler(-1)
-
-			klog.Warningf("[%s] could not get a backend endpoint: %v", req.Id, err)
-			req.StatusCode = http.StatusBadRequest
-			switch err {
-			case consts.ErrorNoAvailableEndpoint:
-				req.StatusCode = http.StatusTooManyRequests
-				http.Error(req.Writer, "too many requests", http.StatusTooManyRequests)
-			case consts.ErrorEndpointNotFound:
-				req.StatusCode = http.StatusNotFound
-				http.Error(req.Writer, "no backend endpoint found", http.StatusNotFound)
-			case consts.ErrorInvalidModel:
-				req.StatusCode = http.StatusNotFound
-				http.Error(req.Writer, "invalid model name", http.StatusNotFound)
-			default:
-				req.StatusCode = http.StatusBadRequest
-				http.Error(req.Writer, err.Error(), http.StatusBadRequest)
-			}
-			hs.LogRequestAccess(req)
-			req.Done <- 0
-			return
-		}
-	}
-	req.ProxyQueue.AddWaitScheduler(-1)
-
-	if len(nextTokens.Tokens) > 0 {
-		// pd split mode: token indicate the prefill node and token2 is decode node;
-		// normal mode: token indicate the inference node and token2 must be nil.
-		token, token2 := hs.filterModelTokens(nextTokens, req.Model)
-		req.Token = token
-		req.SecondToken = token2
-		req.BalanceTime = time.Now()
-	} else {
-		req.ExternalEp = nextTokens.ExternalEp
-	}
-
-	go hs.handleProxy(req, true)
-}
-
-func (hs *LlmGatewayService) healthz(w http.ResponseWriter, r *http.Request) {
+// healthz is the health check endpoint for K8s liveness/readiness probes
+func (lgs *LlmGatewayService) healthz(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (hs *LlmGatewayService) parseRequest(req *structs.Request) error {
-	if len(req.Data) == 0 {
-		return nil
-	}
-
-	switch req.Req.URL.Path {
-	case "/v1/chat/completions":
-		req.Protocol = protocol.ProtocolChat
-	case "/v1/completions":
-		req.Protocol = protocol.ProtocolCompletions
-	}
-
-	c := hs.config
-
-	var p fastjson.Parser
-	v, err := p.ParseBytes(req.Data)
-	if err != nil {
-		klog.Warningf("could not parse request: %v", err)
-		return err
-	}
-	req.ReqObj = v
-
-	if model := v.GetStringBytes("model"); model != nil {
-		req.Model = string(model)
-	}
-
-	req.Stream = v.GetBool("stream") || (v.Get("stream") != nil && strings.ToLower(string(v.GetStringBytes("stream"))) == "true")
-	req.InferStream = req.Stream
-	klog.V(4).Infof("request : %s, stream: %v", v, req.Stream)
-
-	if prompt := v.GetStringBytes("prompt"); prompt != nil {
-		req.Prompt = prompt
-	}
-
-	if msgs := v.Get("messages"); msgs != nil && msgs.Type() == fastjson.TypeArray {
-		if strings.HasSuffix(msgs.String(), "]") {
-			req.Prompt = []byte(msgs.String())[:len(msgs.String())-1]
-		} else {
-			req.Prompt = []byte(msgs.String())
-		}
-	}
-
-	if c.UseTokenizerProcessor() {
-		processor, err := request_processor.NewRequestProcessor(c.TokenizerName, c.TokenizerPath, c.TokenizerMode, c.ToolCallParser)
+// convertErrorResponse converts error response message to HTTP status code and response body
+// Parameters:
+//   - msg: Response message containing error information
+//
+// Returns:
+//   - int: HTTP status code
+//   - string: Response body in JSON format
+func (lgs *LlmGatewayService) convertErrorResponse(msg *types.ResponseMsg) (int, []byte) {
+	switch msg.Err {
+	case consts.ErrorNoAvailableEndpoint:
+		return http.StatusTooManyRequests, []byte(`{"error": {"code": 429, "message": "too many requests"}}`)
+	case consts.ErrorEndpointNotFound:
+		return http.StatusNotFound, []byte(`{"error": {"code": 404, "message": "no inference worker found"}}`)
+	case consts.ErrorBackendBadRequest:
+		// Parse backend error response to extract specific error details
+		var response types.ErrorResponse
+		err := json.Unmarshal([]byte(msg.Message), &response)
 		if err != nil {
-			klog.Errorf("create tokenizer processor error: %v", err)
-			return err
+			klog.Warningf("invalid bad backend bad request: %s", msg.Message)
+			return http.StatusBadRequest, []byte("{}")
 		}
-		if err := processor.Preprocess(req); err == nil {
-			req.RequestProcessor = processor
+		if json.Valid([]byte(response.Error)) {
+			return response.Code, []byte(response.Error)
 		} else {
-			klog.Errorf("req %v failed to postprocess, err: %v", req.Id, err)
-			return err
+			return response.Code, []byte(fmt.Sprintf(`{"error": {"code": %d, "message": "%s"}}`, response.Code, response.Error))
+		}
+
+	default:
+		if msg.Err == nil {
+			return http.StatusOK, []byte(msg.Message)
+		} else {
+			return http.StatusBadRequest, []byte(msg.Err.Error())
 		}
 	}
-	return nil
 }
 
-func (hs *LlmGatewayService) preProcessRequest(req *structs.Request) error {
-	if structs.IsWebsocketRequest(req.Req) {
-		return nil
-	}
-
+// writeResponse writes non-streaming response to the client
+// Parameters:
+//   - req: Request context
+//   - response: Response message
+func (lgs *LlmGatewayService) writeResponse(req *types.RequestContext, response *types.ResponseMsg) {
 	var (
-		data []byte
-		err  error
+		code int
+		body []byte
 	)
-	if data, err = io.ReadAll(req.Req.Body); err != nil {
-		klog.Warningf("could not read body: %v", err)
-		return err
+	if response.Err == nil {
+		code, body = http.StatusOK, response.Message
+	} else {
+		code, body = lgs.convertErrorResponse(response)
 	}
-
-	req.RawData = data
-	req.Data = data
-
-	tStart := time.Now()
-	err = hs.parseRequest(req)
-	tCost := time.Since(tStart)
-	if tCost > time.Millisecond {
-		klog.V(3).Infof("parse request cost: %vms", tCost.Milliseconds())
-	}
-	return err
+	req.HttpRequest.StatusCode = code
+	writer := req.HttpRequest.Writer
+	// Note: Must set header before WriteHeader
+	writer.Header().Set("content-type", "application/json")
+	writer.WriteHeader(code)
+	writer.Write([]byte(body))
 }
 
-func (hs *LlmGatewayService) HandleRequest(w http.ResponseWriter, r *http.Request) {
-	req := structs.NewRequest(r, w)
-	err := hs.preProcessRequest(req)
+// writeStreamResponse writes streaming response in SSE (Server-Sent Events) format
+// Parameters:
+//   - req: Request context
+//   - response: Response message
+//   - headerResponded: Whether response header has been sent
+//
+// Returns:
+//   - bool: Whether the connection should be closed
+func (lgs *LlmGatewayService) writeStreamResponse(req *types.RequestContext, response *types.ResponseMsg, headerResponded bool) bool {
+	writer := req.HttpRequest.Writer
+
+	// Error response: append [DONE] marker and close the connection
+	if response.Err != nil {
+		if !headerResponded {
+			code, body := lgs.convertErrorResponse(response)
+			body = []byte("data: " + string(body) + "\n\ndata: [DONE]\n\n")
+			req.HttpRequest.StatusCode = code
+			writer.Header().Set("content-type", "text/event-stream; charset=utf-8")
+			writer.WriteHeader(code)
+			writer.Write([]byte(body))
+		}
+		// If header already sent, just close the connection
+		return true
+	}
+
+	// Normal response: send SSE formatted data
+	if !headerResponded {
+		writer.Header().Set("content-type", "text/event-stream; charset=utf-8")
+		req.HttpRequest.StatusCode = http.StatusOK
+		writer.WriteHeader(http.StatusOK)
+	}
+
+	body := []byte("data: " + string(response.Message) + "\n\n")
+	writer.Write([]byte(body))
+	// Flush immediately to ensure data is sent to client in real-time
+	writer.(http.Flusher).Flush()
+
+	return false
+}
+
+// writeResponseUntilDone continuously writes responses until completion
+// Supports both streaming and non-streaming modes, and handles client disconnection
+// Parameters:
+//   - reqCtx: Request context
+func (lgs *LlmGatewayService) writeResponseUntilDone(reqCtx *types.RequestContext) {
+	writer := reqCtx.HttpRequest.Writer
+	for {
+		select {
+		case response, ok := <-reqCtx.ResponseChan:
+			if !ok {
+				// Response channel closed
+				if !reqCtx.HttpRequest.HeaderResponded {
+					klog.Warningf("request %s response channel closed before response sent", reqCtx.Id)
+					writer.WriteHeader(http.StatusBadRequest)
+				}
+				return
+			}
+			stream := reqCtx.LLMRequest.ClientStream
+			if stream {
+				needClose := lgs.writeStreamResponse(reqCtx, response, reqCtx.HttpRequest.HeaderResponded)
+				reqCtx.HttpRequest.HeaderResponded = true
+				if needClose {
+					return
+				}
+			} else {
+				lgs.writeResponse(reqCtx, response)
+				return
+			}
+		case <-reqCtx.Context.Done():
+			// Client disconnected or request timeout
+			klog.Infof("request %s disconnected by client", reqCtx.Id)
+			return
+		}
+	}
+}
+
+func (lgs *LlmGatewayService) externalRouteRequest(reqCtx *types.RequestContext, dst *router.RouteEndpoint) {
+	originURL := reqCtx.HttpRequest.Request.URL.String()
+	url := dst.JoinURL(originURL)
+	SimpleHTTPProxy(lgs.simpleClient, url, reqCtx.HttpRequest.Writer, reqCtx.HttpRequest.Request)
+	reqCtx.HttpRequest.HeaderResponded = true
+	close(reqCtx.ResponseChan)
+}
+
+// dispatchRequest routes the request and dispatches it to appropriate handler
+// It supports three routing types:
+//   - Internal: schedule to internal workers via balancer
+//   - External: proxy to external service
+//   - Fallback: use fallback service when no route matches
+func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext) {
+	// If the router policy is enabled, the router will be used first.
+	dst, rType := lgs.router.Route(reqCtx)
+	switch rType {
+	case router.RouteInternal:
+		// schedule the request
+		schResult, err := lgs.balancer.Get(reqCtx)
+		if err != nil {
+			reqCtx.ResponseChan <- &types.ResponseMsg{Err: err, Message: []byte(err.Error())}
+			return
+		}
+		klog.V(2).Infof("request [%s] scheduled to %s", reqCtx.Id, schResult.String())
+		reqCtx.ScheduleCtx.ScheduleResults = schResult
+		go lgs.reqHandler.Handle(reqCtx)
+	case router.RouteExternal:
+		// Match external route
+		go lgs.externalRouteRequest(reqCtx, dst)
+	case router.RouteUnknown:
+		// Not match external route, try fallback
+		fdst, err := lgs.router.Fallback(reqCtx)
+		if err != nil {
+			reqCtx.ResponseChan <- &types.ResponseMsg{Err: err, Message: []byte(err.Error())}
+			return
+		}
+		go lgs.externalRouteRequest(reqCtx, fdst)
+	}
+}
+
+func (lgs *LlmGatewayService) scheduleMode() types.ScheduleMode {
+	if !lgs.config.IsPDSplitMode() {
+		return types.ScheduleModeNormal
+	}
+	if lgs.config.SeparatePDSchedule {
+		return types.ScheduleModePDStaged
+	} else {
+		return types.ScheduleModePDBatch
+	}
+}
+
+// balancerDecodeScheduler implements the decodeScheduler interface using a balancer
+type balancerDecodeScheduler struct {
+	balancer balancer.Balancer
+}
+
+// ScheduleDecode schedules the request for decoding using the balancer
+func (s *balancerDecodeScheduler) ScheduleDecode(req *types.RequestContext) (types.ScheduledResult, error) {
+	if req.ScheduleCtx.ScheduleMode != types.ScheduleModePDStaged {
+		klog.Warningf("request %s is not in staged schedule mode, decode does not need to be scheduled separately.", req.Id)
+		return nil, fmt.Errorf("not in staged schedule mode")
+	}
+	req.ScheduleCtx.InferStage = types.InferStageDecode
+	results, err := s.balancer.Get(req)
 	if err != nil {
-		klog.Errorf("req %v failed to preprocess, err: %v", req.Id, err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
+		return nil, err
 	}
-	// Try to mirror the request if traffic_mirror is enabled
-	if hs.EnableMirrorRequest() {
-		hs.MirrorRequest(req)
-	}
-
-	hs.LogRequestInput(req)
-
-	modelLabel := structs.Label{Name: "model", Value: ""}
-	if hs.config.ServerlessMode {
-		modelLabel = structs.Label{Name: "model", Value: req.Model}
-	}
-	req.DefaultLabels = req.DefaultLabels.Append(modelLabel)
-
-	req.EnQueueTime = time.Now()
-	modelQueue := hs.mmpq.GetOrCreateModelProxyQueue(req.Model)
-	ok := modelQueue.Enqueue(req)
-	if !ok {
-		klog.Warningf("too many requests, the buffer queue overflow")
-		http.Error(w, "requests buffer queue overflow", http.StatusTooManyRequests)
-		return
-	}
-	<-req.Done
+	schResult := req.ScheduleCtx.ScheduleResults
+	req.ScheduleCtx.ScheduleResults = append(schResult, results...)
+	return results, nil
 }
 
-func (hs *LlmGatewayService) Run() {
-	// Create a new Router for handling routes
+// HandleOpenAIRequest is the main entry point for handling LLM inference requests
+// It handles request parsing, queue scheduling, response processing, and logging
+// Parameters:
+//   - w: HTTP response writer
+//   - r: HTTP request
+func (lgs *LlmGatewayService) HandleOpenAIRequest(w http.ResponseWriter, r *http.Request) {
+	// Increment request counter for monitoring and traffic control
+	lgs.numReqs.Add(1)
+	defer lgs.numReqs.Add(-1)
+
+	ctx := r.Context()
+	reqCtx := types.NewRequestContext(ctx, r, w)
+	// Set schedule mode based on configuration
+	scheduleMode := lgs.scheduleMode()
+	reqCtx.ScheduleCtx.ScheduleMode = scheduleMode
+	reqCtx.ScheduleCtx.InferStage = types.InferStagePrefill
+	reqCtx.ScheduleCtx.SetDecodeScheduler(&balancerDecodeScheduler{balancer: lgs.balancer})
+
+	// Parse and validate OpenAI format request parameters
+	if err := lgs.reqHandler.ParseRequest(reqCtx); err != nil {
+		logging.Logf("Received request [%s]: %v", reqCtx.Id, err)
+		http.Error(w, "Invalid OpenAI request", http.StatusBadRequest)
+		return
+	}
+	// Log request input
+	lgs.LogRequestInput(reqCtx)
+
+	// Mirror the request to another target if traffic mirroring is enabled
+	if lgs.mirror.Enabled() {
+		lgs.mirror.TryMirror(reqCtx)
+	}
+
+	// Request handler does not directly process HTTP return messages
+	// All messages are returned through responseChan for unified message handling
+	responseChan := make(chan *types.ResponseMsg, 100)
+	reqCtx.ResponseChan = responseChan
+
+	// Enter buffer queue, then perform preprocessing and scheduling
+	reqCtx.RequestStats.EnQueueTime = time.Now()
+	lgs.bufferQueue.Dispatch(func() {
+		reqCtx.RequestStats.DeQueueTime = time.Now()
+		lgs.dispatchRequest(reqCtx)
+	}, false)
+
+	// Wait for and write responses (supports both streaming and non-streaming)
+	lgs.writeResponseUntilDone(reqCtx)
+
+	// Log request access logs and metrics
+	lgs.LogRequestAccess(reqCtx)
+}
+
+// HandleSimpleRequest handles simple requests (e.g., /v1/models)
+// It forwards the request to a backend endpoint and returns the response to the client
+// Parameters:
+//   - w: HTTP response writer
+//   - r: HTTP request
+func (lgs *LlmGatewayService) HandleSimpleRequest(w http.ResponseWriter, r *http.Request) {
+	// For this scenario, create a request context but disable scheduling
+	reqCtx := types.NewRequestContext(r.Context(), r, w)
+	reqCtx.ScheduleCtx.NeedSchedule = false
+
+	// Get an available endpoint from the balancer
+	schResult, err := lgs.balancer.Get(reqCtx)
+	if err != nil || len(schResult) == 0 {
+		klog.Errorf("Failed to get endpoint: %v", err)
+		http.Error(w, "failed to get endpoint", http.StatusServiceUnavailable)
+		return
+	}
+	// Build the target URL with http:// scheme (endpoint format is host:port)
+	endpoint := schResult[0].Endpoint
+	url := fmt.Sprintf("http://%s%s", endpoint, r.URL.Path)
+	if r.URL.RawQuery != "" {
+		url = fmt.Sprintf("%s?%s", url, r.URL.RawQuery)
+	}
+
+	// Forward the request to the backend endpoint
+	SimpleHTTPProxy(lgs.simpleClient, url, w, r)
+}
+
+// Run starts the HTTP server and listens for requests
+// This method blocks until the server is shut down
+func (lgs *LlmGatewayService) Run() {
+	// Create router for handling different HTTP paths
 	router := mux.NewRouter()
 
-	// Register default routes
-	router.HandleFunc("/healthz", hs.healthz)
+	// Register health check route
+	router.HandleFunc("/healthz", lgs.healthz)
 	// Register batch API routes if batch service is available
-	if hs.batchService != nil {
-		hs.batchService.RegisterRoutes(router)
+	if lgs.batchService != nil {
+		lgs.batchService.RegisterRoutes(router)
 	}
-	// Default to root handler
-	router.PathPrefix("/").HandlerFunc(hs.HandleRequest)
+	// handle all LLM inference requests
+	router.HandleFunc("/v1/chat/completions", lgs.HandleOpenAIRequest)
+	router.HandleFunc("/v1/completions", lgs.HandleOpenAIRequest)
+	router.HandleFunc("/v1/models", lgs.HandleSimpleRequest)
 
-	address := fmt.Sprintf("%s:%d", hs.config.Host, hs.config.Port)
-	klog.Infof("http service start listen on %s", address)
+	address := fmt.Sprintf("%s:%d", lgs.config.Host, lgs.config.Port)
+	klog.Infof("LLM Gateway start listen on %s", address)
 	klog.Fatal(http.ListenAndServe(address, router))
 }
 
-func recordStatusValues(pq *utils.ProxyQueue, model string) {
-	pendingRequests := float32(pq.Length() + pq.WaitSchedules())
-	modelLabels := []structs.Label{{Name: "model", Value: model}}
-	metrics.StatusValue("gateway_pending_requests", modelLabels).Set(pendingRequests)
-
-	requests := pendingRequests + float32(pq.BusyWorkers())
-	metrics.StatusValue("gateway_requests", modelLabels).Set(requests)
+// recordStatusValues is a placeholder method for recording status values
+// TODO: Implement specific status recording logic
+func (lgs *LlmGatewayService) recordStatusValues() {
 }
 
-func (hs *LlmGatewayService) StartMetricRecord() {
+// StartMetricRecord starts the metric recording loop
+// Periodically collects and reports gateway operational metrics (e.g., pending requests, active requests)
+func (lgs *LlmGatewayService) StartMetricRecord() {
 	defer func() {
 		if e := recover(); e != nil {
 			klog.Warningf("submit metric loop crashed , err: %s\ntrace:%s", e, string(debug.Stack()))
-			go hs.StartMetricRecord()
 		}
 	}()
 
 	for {
 		time.Sleep(consts.MetricRecordDuration)
-		modelQueues := hs.mmpq.GetModelProxyQueue()
-		for model, pq := range modelQueues {
-			recordStatusValues(pq, model)
-		}
+		// Calculate pending requests: queued + being scheduled
+		pendingRequests := float32(lgs.bufferQueue.Length() + lgs.bufferQueue.BusyWorkers())
+		modelLabels := []metrics.Label{}
+		metrics.StatusValue("gateway_pending_requests", modelLabels).Set(pendingRequests)
+		// Record current total active requests
+		requests := float32(lgs.numReqs.Load())
+		metrics.StatusValue("gateway_requests", modelLabels).Set(requests)
 	}
 }
 
-func (hs *LlmGatewayService) Start() (err error) {
-	go hs.Run()
-	go hs.StartMetricRecord()
+// Start starts all components of the gateway service
+// Including HTTP server, metric recorder, and batch service (if available)
+// Returns:
+//   - error: Startup error, currently always returns nil
+func (lgs *LlmGatewayService) Start() (err error) {
+	// Start HTTP server (asynchronously)
+	go lgs.Run()
+	// Start metric recording loop (asynchronously)
+	go lgs.StartMetricRecord()
 
 	// Start batch service reactors if batch service is available
-	if hs.batchService != nil {
+	if lgs.batchService != nil {
 		// Create a context for the batch service
 		ctx := context.Background()
-		go hs.batchService.Start(ctx)
+		go lgs.batchService.Start(ctx)
 	}
 
 	return nil
 }
 
-func (hs *LlmGatewayService) LogRequestInput(req *structs.Request) {
-	if hs.logInputEnabled {
-		utils.AsyncLog("Received request [%s] %s", req.Id, string(req.RawData))
+// LogRequestInput logs request input
+// Logs complete request data based on configuration
+// Parameters:
+//   - req: Request context
+func (lgs *LlmGatewayService) LogRequestInput(req *types.RequestContext) {
+	if lgs.logInputEnabled {
+		logging.AsyncLogf("Received request [%s] %s", req.Id, string(req.LLMRequest.RawData))
 	} else {
-		utils.LogAccess("Received request [%s]", req.Id)
+		logging.Logf("Received request [%s]", req.Id)
 	}
 }
 
-func (hs *LlmGatewayService) LogRequestAccess(req *structs.Request) {
-	if req.Logged {
-		return
+// LogRequestAccess logs request access logs and metrics
+// Including latency, status code, token count, queue status, etc.
+// Parameters:
+//   - req: Request context
+func (lgs *LlmGatewayService) LogRequestAccess(req *types.RequestContext) {
+	stats := req.RequestStats
+	httpReq := req.HttpRequest
+	stats.ProcessTime = time.Now()
+	// Only record latency metrics for successful requests
+	if httpReq.StatusCode == http.StatusOK {
+		metrics.Latency("llm_response_time", stats.DefaultLabels).Add(time.Since(stats.HandleTime).Milliseconds())
 	}
-	req.ProcessTime = time.Now()
-	if req.StatusCode == http.StatusOK {
-		if req.ExternalEp != nil {
-			metrics.Latency("external_llm_response_time", req.DefaultLabels).Add(time.Since(req.HandleTime).Milliseconds())
-		} else {
-			metrics.Latency("llm_response_time", req.DefaultLabels).Add(time.Since(req.HandleTime).Milliseconds())
-		}
-	}
-	requestsLabel := req.DefaultLabels.Append(structs.Label{Name: "status_code", Value: strconv.Itoa(req.StatusCode)})
-	if req.ExternalEp != nil {
-		metrics.Counter("external_llm_requests", requestsLabel).IncrByOne()
-	} else {
-		metrics.Counter("llm_requests", requestsLabel).IncrByOne()
-	}
+	// Record request counter metric with status code label
+	requestsLabel := stats.DefaultLabels.Append(metrics.Label{Name: "status_code", Value: strconv.Itoa(httpReq.StatusCode)})
+	metrics.Counter("llm_requests", requestsLabel).IncrByOne()
 
-	var endpoint string
-	if req.Token != nil {
-		endpoint = req.Token.Endpoint.String()
-	}
-	if req.SecondToken != nil {
-		endpoint = endpoint + "|" + req.SecondToken.Endpoint.String()
-	}
-	if req.ExternalEp != nil {
-		endpoint = req.ExternalEp.String()
-	}
+	schResultString := req.ScheduleCtx.ScheduleResults.String()
 
-	utils.LogAccess("Request completed [%s] %d,%s,%s,%s;%s;prompt_len:%d(%d),gen_token_len:%d,queue:%d,work:%d,sch:%d,nresp:%d;retry:%d,model:%s",
+	// Calculate request counts at different stages
+	queueSize := lgs.bufferQueue.Length()                     // Requests waiting in queue
+	schSize := lgs.bufferQueue.BusyWorkers()                  // Requests being scheduled
+	workSize := int(lgs.numReqs.Load()) - queueSize - schSize // Requests being inferred
+
+	// Log detailed request completion information
+	logging.Logf("Request completed [%s] status:%d,method:%s,schedule:%s,url:%s;%s;input_tokens:%d,output_tokens:%d;queue:%d,sch:%d,work:%d;retry:%d,model:%s",
 		req.Id,
-		req.StatusCode,
-		req.Req.Method,
-		endpoint,
-		req.Req.URL.String(),
-		req.SprintDuration(),
-		len(req.Prompt),
-		req.InputTokensLen,
-		req.OutputTokensLen,
-		req.ProxyQueue.Length(),
-		req.ProxyQueue.BusyWorkers(),
-		req.ProxyQueue.WaitSchedules(),
-		hs.getTokenFilterCount(req.Model),
-		req.ReScheduleCount,
-		req.Model)
-
-	req.Logged = true
+		httpReq.StatusCode,
+		httpReq.Request.Method,
+		schResultString,
+		httpReq.Request.URL.String(),
+		stats.String(),
+		stats.InputTokensLen,
+		stats.OutputTokensLen,
+		queueSize,
+		schSize,
+		workSize,
+		stats.RetryCount,
+		req.LLMRequest.Model)
 }

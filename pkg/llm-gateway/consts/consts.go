@@ -100,6 +100,7 @@ const (
 const (
 	DiscoveryCacheServer = "cache-server"
 	DiscoveryMessageBus  = "message-bus"
+	DiscoveryRedis       = "redis"
 )
 
 const (

@@ -1,7 +1,5 @@
 package metrics
 
-import "easgo/pkg/llm-gateway/structs"
-
 const (
 	LlumnixMetricRescheduleCount                               = "llumnix_reschedule_count"
 	LlumnixMetricRescheduleFailedCount                         = "llumnix_reschedule_failed_count"
@@ -20,14 +18,14 @@ func EnableLlumnixMetrics() {
 }
 
 // counter
-func IncrLlumnixCounterBy(k string, l structs.Labels, value int) {
+func IncrLlumnixCounterBy(k string, l Labels, value int) {
 	if !enableLlumnixMetrics {
 		return
 	}
 	Counter(k, l).IncrBy(value)
 }
 
-func IncrLlumnixCounterByOne(k string, l structs.Labels) {
+func IncrLlumnixCounterByOne(k string, l Labels) {
 	if !enableLlumnixMetrics {
 		return
 	}
@@ -35,14 +33,14 @@ func IncrLlumnixCounterByOne(k string, l structs.Labels) {
 }
 
 // latency
-func AddLlumnixLatency(k string, l structs.Labels, value int64) {
+func AddLlumnixLatency(k string, l Labels, value int64) {
 	if !enableLlumnixMetrics {
 		return
 	}
 	Latency(k, l).Add(value)
 }
 
-func AddManyLlumnixLatency(k string, l structs.Labels, value []int64) {
+func AddManyLlumnixLatency(k string, l Labels, value []int64) {
 	if !enableLlumnixMetrics {
 		return
 	}
@@ -50,7 +48,7 @@ func AddManyLlumnixLatency(k string, l structs.Labels, value []int64) {
 }
 
 // status_value
-func SetLlumnixStatusValue(k string, l structs.Labels, value float32) {
+func SetLlumnixStatusValue(k string, l Labels, value float32) {
 	if !enableLlumnixMetrics {
 		return
 	}
