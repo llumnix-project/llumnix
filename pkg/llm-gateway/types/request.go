@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"easgo/pkg/llm-gateway/metrics"
+	reasoning_parser "easgo/pkg/llm-gateway/processor/reasoning-parser"
 	"easgo/pkg/llm-gateway/protocol"
 
 	"github.com/google/uuid"
+	"github.com/sglang/sglang-go-grpc-sdk"
 	"k8s.io/klog/v2"
 )
 
@@ -67,6 +69,14 @@ func Avg(itls []int64) int64 {
 	return sum / int64(len)
 }
 
+func (m *RequestStats) TTFT() int64 {
+	if !m.FirstTime.IsZero() && !m.BalanceTime.IsZero() {
+		return m.FirstTime.Sub(m.BalanceTime).Milliseconds()
+	} else {
+		return 0
+	}
+}
+
 func (m *RequestStats) String() string {
 	var durationCost []string
 
@@ -92,10 +102,9 @@ func (m *RequestStats) String() string {
 		durationCost = append(durationCost, fmt.Sprintf("ST:%dms", lbCost.Milliseconds()))
 	}
 
-	if !m.ProcessTime.IsZero() && !m.FirstTime.IsZero() {
-		durationCost = append(durationCost, fmt.Sprintf("PREPROCESS:%dms", m.PreprocessCost.Milliseconds()))
-		durationCost = append(durationCost, fmt.Sprintf("POSTPROCESS:%dms", m.PostprocessCost.Milliseconds()))
-	}
+	durationCost = append(durationCost, fmt.Sprintf("PRE:%dms", m.PreprocessCost.Milliseconds()))
+	durationCost = append(durationCost, fmt.Sprintf("POST:%dms", m.PostprocessCost.Milliseconds()))
+
 	if !m.PrefillTime.IsZero() && !m.BalanceTime.IsZero() {
 		prefillCost := m.PrefillTime.Sub(m.BalanceTime)
 		durationCost = append(durationCost, fmt.Sprintf("PF:%vms", int64(prefillCost/time.Millisecond)))
@@ -143,6 +152,15 @@ type LLMRequest struct {
 	// completion API
 	CompletionRequest  *protocol.CompletionRequest
 	CompletionResponse *protocol.CompletionResponse
+
+	// reasoning parser
+	ReasoningParser *reasoning_parser.ReasoningParser
+	ToolParser      *sglang.ToolParser
+
+	// To convert from streaming to non-streaming, the returned results need to be merged.
+	BufferChatResp *protocol.ChatCompletionResponse
+	// The last chunk of the streaming response, only include finish reason and not include content.
+	LastChatStreamResp *protocol.ChatCompletionStreamResponse
 }
 
 func (req *LLMRequest) GetPromptTokens() ([]uint32, bool) {
@@ -163,10 +181,19 @@ func (req *LLMRequest) Stream() bool {
 	}
 }
 
-// decodeScheduler is internal interface, does not expose the balancer
-type decodeScheduler interface {
-	// ScheduleDecode schedules the request for decoding.
+// RequestLifecycleHandler handles lifecycle events for a request.
+// It provides unified interface for scheduling and resource management across different stages.
+type RequestLifecycleHandler interface {
+	// ScheduleDecode schedules the request for decoding stage.
 	ScheduleDecode(req *RequestContext) (ScheduledResult, error)
+
+	// OnPostPrefill is called after prefill stage completes.
+	// Used for resource cleanup or state transition.
+	OnPostPrefill(req *RequestContext)
+
+	// OnPostRequest is called after the entire request completes.
+	// Used for final resource cleanup.
+	OnPostRequest(req *RequestContext)
 }
 
 type ScheduleContext struct {
@@ -187,16 +214,6 @@ type ScheduleContext struct {
 
 	// whether to schedule the request
 	NeedSchedule bool
-
-	// Required for staged schedule. When decoding is needed, this scheduling function is executed.
-	DecodeScheduler decodeScheduler
-}
-
-// SetDecodeScheduler sets the decode scheduler for the schedule context.
-func (ctx *ScheduleContext) SetDecodeScheduler(scheduleDecodeFunc decodeScheduler) {
-	if ctx.ScheduleMode == ScheduleModePDStaged {
-		ctx.DecodeScheduler = scheduleDecodeFunc
-	}
 }
 
 // ErrorResponse is used when the engine returns an error directly.
@@ -232,6 +249,36 @@ type RequestContext struct {
 
 	// Some information forwarded to a specific inference backend
 	ScheduleCtx *ScheduleContext
+
+	// Lifecycle handler for scheduling and resource management
+	lifecycleHandler RequestLifecycleHandler
+}
+
+// SetLifecycleHandler sets the lifecycle handler for the request.
+func (req *RequestContext) SetLifecycleHandler(handler RequestLifecycleHandler) {
+	req.lifecycleHandler = handler
+}
+
+// ScheduleDecode schedules the request for decoding stage.
+func (req *RequestContext) ScheduleDecode() (ScheduledResult, error) {
+	if req.lifecycleHandler != nil {
+		return req.lifecycleHandler.ScheduleDecode(req)
+	}
+	return nil, nil
+}
+
+// TriggerPostPrefill triggers the post-prefill lifecycle hook.
+func (req *RequestContext) TriggerPostPrefill() {
+	if req.lifecycleHandler != nil {
+		req.lifecycleHandler.OnPostPrefill(req)
+	}
+}
+
+// TriggerPostRequest triggers the post-request lifecycle hook.
+func (req *RequestContext) TriggerPostRequest() {
+	if req.lifecycleHandler != nil {
+		req.lifecycleHandler.OnPostRequest(req)
+	}
 }
 
 func NewRequestContext(ctx context.Context, r *http.Request, w http.ResponseWriter) *RequestContext {

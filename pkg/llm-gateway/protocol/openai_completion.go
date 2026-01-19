@@ -91,22 +91,23 @@ type CompletionRequest struct {
 	// LogitBias is must be a token id string (specified by their token ID in the tokenizer), not a word string.
 	// incorrect: `"logit_bias":{"You": 6}`, correct: `"logit_bias":{"1639": 6}`
 	// refs: https://platform.openai.com/docs/api-reference/completions/create#completions/create-logit_bias
-	LogitBias        map[string]int         `json:"logit_bias,omitempty"`
-	LogProbs         int                    `json:"logprobs,omitempty"`
-	MaxTokens        *int                   `json:"max_tokens,omitempty"`
-	N                int                    `json:"n,omitempty"`
-	PresencePenalty  float32                `json:"presence_penalty,omitempty"`
-	Seed             *int                   `json:"seed,omitempty"`
-	Stop             []string               `json:"stop,omitempty"`
-	Stream           bool                   `json:"stream,omitempty"`
-	StreamOptions    *StreamOptions         `json:"stream_options,omitempty"`
-	Suffix           string                 `json:"suffix,omitempty"`
-	Temperature      float32                `json:"temperature,omitempty"`
-	TopP             float32                `json:"top_p,omitempty"`
-	User             string                 `json:"user,omitempty"`
-	KvTransferParams map[string]interface{} `json:"kv_transfer_params,omitempty"`
-	BootStrapHost    string                 `json:"bootstrap_host,omitempty"` // sglang
-	BootStrapRoom    string                 `json:"bootstrap_room,omitempty"` // sglang
+	LogitBias           map[string]int         `json:"logit_bias,omitempty"`
+	LogProbs            int                    `json:"logprobs,omitempty"`
+	MaxTokens           *int                   `json:"max_tokens,omitempty"`
+	MaxCompletionTokens *int                   `json:"max_completion_tokens,omitempty"`
+	N                   int                    `json:"n,omitempty"`
+	PresencePenalty     float32                `json:"presence_penalty,omitempty"`
+	Seed                *int                   `json:"seed,omitempty"`
+	Stop                []string               `json:"stop,omitempty"`
+	Stream              bool                   `json:"stream,omitempty"`
+	StreamOptions       *StreamOptions         `json:"stream_options,omitempty"`
+	Suffix              string                 `json:"suffix,omitempty"`
+	Temperature         float32                `json:"temperature,omitempty"`
+	TopP                float32                `json:"top_p,omitempty"`
+	User                string                 `json:"user,omitempty"`
+	KvTransferParams    map[string]interface{} `json:"kv_transfer_params,omitempty"`
+	BootStrapHost       string                 `json:"bootstrap_host,omitempty"` // sglang
+	BootStrapRoom       string                 `json:"bootstrap_room,omitempty"` // sglang
 }
 
 // CompletionChoice represents one of possible completions.
@@ -129,13 +130,13 @@ type LogprobResult struct {
 
 // CompletionResponse represents a response structure for completion API.
 type CompletionResponse struct {
-	ID                string             `json:"id"`
-	Object            string             `json:"object"`
-	Created           int64              `json:"created"`
-	Model             string             `json:"model"`
-	Choices           []CompletionChoice `json:"choices"`
-	Usage             *Usage             `json:"usage"`
-	ServiceTier       string             `json:"service_tier,omitempty"`
-	KvTransferParams  interface{}        `json:"kv_transfer_params,omitempty"`
-	SystemFingerprint string             `json:"system_fingerprint"`
+	ID                string                 `json:"id"`
+	Object            string                 `json:"object"`
+	Created           int64                  `json:"created"`
+	Model             string                 `json:"model"`
+	Choices           []CompletionChoice     `json:"choices"`
+	Usage             *Usage                 `json:"usage"`
+	ServiceTier       string                 `json:"service_tier,omitempty"`
+	KvTransferParams  map[string]interface{} `json:"kv_transfer_params,omitempty"`
+	SystemFingerprint string                 `json:"system_fingerprint"`
 }

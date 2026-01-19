@@ -3,8 +3,6 @@ package reasoning_parser
 import (
 	"fmt"
 	"strings"
-
-	"k8s.io/klog/v2"
 )
 
 type ReasoningFormatDetector interface {
@@ -162,7 +160,6 @@ func NewReasoningParser(reasoningParser string, streamReasoning, forceReasoning 
 	default:
 		return nil, fmt.Errorf("Unsupported reasoning parser: %s", reasoningParser)
 	}
-	klog.Infof("Using reasoning parser: %s", reasoningParser)
 	return &ReasoningParser{detector: det}, nil
 }
 

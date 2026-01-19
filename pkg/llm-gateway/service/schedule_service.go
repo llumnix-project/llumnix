@@ -67,13 +67,13 @@ func NewScheduleService(c *options.Config) *ScheduleService {
 			case workers := <-ss.addChan:
 				for _, w := range workers {
 					// create realtime stats for this worker
-					ss.lrsClient.AddInstance(&w)
 					klog.Infof("add backend service endpoint: %s/%s", w.Role, w.String())
+					ss.lrsClient.AddInstance(&w)
 				}
 			case workers := <-ss.delChan:
 				for _, w := range workers {
-					ss.lrsClient.RemoveInstance(w.Role.String(), w.Id())
 					klog.Infof("remove backend service endpoint: %s/%s", w.Role, w.String())
+					ss.lrsClient.RemoveInstance(w.Role.String(), w.Id())
 				}
 			}
 		}
@@ -221,7 +221,7 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusOK)
 	w.Write(retBytes)
 	if ss.config.EnableAccessLog {
-		utils.LogAccess("[%s] status_code:%d,response_time:%vms,endpoints:%s", schReq.Id, http.StatusOK, time.Since(tStart).Milliseconds(), schReq.String())
+		utils.LogAccess("[%s] status_code:%d,response_time:%vms,schedule results:%s", schReq.Id, http.StatusOK, time.Since(tStart).Milliseconds(), schReq.String())
 	}
 }
 

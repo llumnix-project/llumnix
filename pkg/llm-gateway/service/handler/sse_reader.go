@@ -21,8 +21,7 @@ type TimeoutReader struct {
 // Close closes the underlying reader
 // Returns any error encountered during closing
 func (t *TimeoutReader) Close() error {
-	t.r.Close()
-	return nil
+	return t.r.Close()
 }
 
 // Read reads data from the underlying reader with timeout protection
@@ -149,9 +148,9 @@ func (s *SSEReader) Read(p []byte) (n int, err error) {
 // Close closes the SSE reader and stops background processing
 // Returns any error encountered during closing
 func (s *SSEReader) Close() error {
-	s.r.Close()
+	err := s.r.Close()
 	close(s.done)
-	return nil
+	return err
 }
 
 // NewSSEReaderWithTimeout creates a new SSE reader with timeout and context awareness

@@ -32,8 +32,6 @@ func newMetricContext() *MetricContext {
 }
 
 func (m *MetricContext) submitMetrics(metrics []Metric) {
-	return
-
 	if len(metrics) == 0 {
 		return
 	}

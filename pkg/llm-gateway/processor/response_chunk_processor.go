@@ -25,12 +25,10 @@ const (
 )
 
 type ResponseChunkProcessor struct {
-	tokenizer       *sglang.Tokenizer
-	reasoningParser *reasoning_parser.ReasoningParser
-	toolParser      *sglang.ToolParser
+	tokenizer *sglang.Tokenizer
 
-	chatResp           *protocol.ChatCompletionResponse
-	lastChatStreamResp *protocol.ChatCompletionStreamResponse
+	reasoningParser string
+	toolParser      string
 
 	cmplResp *protocol.CompletionResponse
 }
@@ -41,23 +39,11 @@ func NewResponseChunkProcessor(config *options.Config) *ResponseChunkProcessor {
 		klog.Errorf("Failed to get tokenizer: %v", err)
 		return nil
 	}
-
-	p, err := reasoning_parser.NewReasoningParser(config.ReasoningParser, true, false)
-	if err != nil {
-		klog.Errorf("Failed to create reasoning parser: %v", err)
-		return nil
-	}
-
-	tp, err := sglang.NewToolParser(config.ToolCallParser)
-	if err != nil {
-		klog.Errorf("Failed to create tool parser: %v", err)
-		return nil
-	}
-
+	klog.Infof("use reasoning parser: %s, tool parser: %s", config.ReasoningParser, config.ToolCallParser)
 	return &ResponseChunkProcessor{
 		tokenizer:       tk,
-		reasoningParser: p,
-		toolParser:      tp,
+		reasoningParser: config.ReasoningParser,
+		toolParser:      config.ToolCallParser,
 	}
 }
 
@@ -66,24 +52,27 @@ func (rp *ResponseChunkProcessor) Name() string {
 }
 
 func (rp *ResponseChunkProcessor) ChatCompletionStreamProcess(req *types.RequestContext, done bool) error {
-	if done && rp.lastChatStreamResp != nil {
-		req.LLMRequest.ChatCompletionStreamResponse = rp.lastChatStreamResp
+	llmRequest := req.LLMRequest
+	if done && llmRequest.LastChatStreamResp != nil {
+		llmRequest.ChatCompletionStreamResponse = llmRequest.LastChatStreamResp
 		return nil
 	}
 
-	cmpStreamResp := req.LLMRequest.CompletionResponse
+	cmpStreamResp := llmRequest.CompletionResponse
 	if len(cmpStreamResp.Choices) == 0 {
 		return nil
 	}
 
+	reasoningParser := llmRequest.ReasoningParser
+	toolParser := llmRequest.ToolParser
 	choice := cmpStreamResp.Choices[0]
 	parseResult := &toolParseResult{}
 	reasoningContent, content := "", ""
 	if choice.Text != "" {
-		reasoningContent, content = rp.reasoningParser.ParseStreamChunk(choice.Text)
-		if rp.toolParser != nil && content != "" {
+		reasoningContent, content = reasoningParser.ParseStreamChunk(choice.Text)
+		if toolParser != nil && content != "" {
 			tools := getToolString(req)
-			parseResultStr, err := rp.toolParser.ParseStreamIncremental(content, tools)
+			parseResultStr, err := toolParser.ParseStreamIncremental(content, tools)
 			if err != nil {
 				klog.Errorf("[%s] failed to parse tool stream: %v, content: %s, tools: %s", req.Id, err, content, tools)
 				return fmt.Errorf("failed to parse tool")
@@ -131,7 +120,7 @@ func (rp *ResponseChunkProcessor) ChatCompletionStreamProcess(req *types.Request
 			stats.OutputTokensLen += getTokenLen(string(toolCalls))
 		}
 	}
-	klog.V(2).Infof("[%s] ChatCompletionStreamProcess: output_len: %d, reasoning_content_len: %d, raw_content_len: %d, capacity: %d, max_len: %d",
+	klog.V(3).Infof("[%s] ChatCompletionStreamProcess: output_len: %d, reasoning_content_len: %d, raw_content_len: %d, capacity: %d, max_len: %d",
 		req.Id, stats.OutputTokensLen, stats.ReasoningTokensLen, rawContentTokensLen, capacity, stats.MaxTokensLimit)
 
 	needSplitLastResp := false
@@ -143,7 +132,7 @@ func (rp *ResponseChunkProcessor) ChatCompletionStreamProcess(req *types.Request
 		}
 	}
 
-	klog.V(2).Infof("[%s] ChatCompletionStreamProcess: contentInCapacity: ##%s##, reasoningContent: ##%s##, finishReason: %s, needSplitLastResp: %v",
+	klog.V(3).Infof("[%s] ChatCompletionStreamProcess: contentInCapacity: ##%s##, reasoningContent: ##%s##, finishReason: %s, needSplitLastResp: %v",
 		req.Id, contentInCapacity, reasoningContent, choice.FinishReason, needSplitLastResp)
 
 	// set the output choice
@@ -171,7 +160,7 @@ func (rp *ResponseChunkProcessor) ChatCompletionStreamProcess(req *types.Request
 
 	// send one more response when stop (not in tool_calls)
 	if needSplitLastResp {
-		rp.lastChatStreamResp = &protocol.ChatCompletionStreamResponse{
+		llmRequest.LastChatStreamResp = &protocol.ChatCompletionStreamResponse{
 			ID:                chatStreamResp.ID,
 			Object:            chatStreamResp.Object,
 			Created:           chatStreamResp.Created,
@@ -194,19 +183,20 @@ func (rp *ResponseChunkProcessor) ChatCompletionStreamProcess(req *types.Request
 		chatStreamResp.Choices[0].FinishReason = ""
 	}
 
-	req.LLMRequest.ChatCompletionStreamResponse = chatStreamResp
+	llmRequest.ChatCompletionStreamResponse = chatStreamResp
 	return nil
 }
 
 func (rp *ResponseChunkProcessor) ChatCompletionProcess(req *types.RequestContext, done bool) error {
+	llmRequest := req.LLMRequest
 	if done {
-		req.LLMRequest.ChatCompletionResponse = rp.chatResp
+		llmRequest.ChatCompletionResponse = llmRequest.BufferChatResp
 		return nil
 	}
 
-	cmpStreamResp := req.LLMRequest.CompletionResponse
-	if rp.chatResp == nil {
-		rp.chatResp = &protocol.ChatCompletionResponse{
+	cmpStreamResp := llmRequest.CompletionResponse
+	if llmRequest.BufferChatResp == nil {
+		llmRequest.BufferChatResp = &protocol.ChatCompletionResponse{
 			ID:                strings.ReplaceAll(cmpStreamResp.ID, completionsIdPrefix, chatPrefix),
 			Object:            chatObjectString,
 			Created:           cmpStreamResp.Created,
@@ -229,15 +219,18 @@ func (rp *ResponseChunkProcessor) ChatCompletionProcess(req *types.RequestContex
 	if len(cmpStreamResp.Choices) == 0 {
 		return nil
 	}
+
+	reasoningParser := req.LLMRequest.ReasoningParser
+	toolParser := req.LLMRequest.ToolParser
 	stats := req.RequestStats
 	choice := cmpStreamResp.Choices[0]
 	parseResult := &toolParseResult{NormalText: "", ToolCalls: nil}
 	reasoningContent, content := "", ""
 	if choice.Text != "" {
-		reasoningContent, content = rp.reasoningParser.ParseStreamChunk(choice.Text)
-		if rp.toolParser != nil && content != "" {
+		reasoningContent, content = reasoningParser.ParseStreamChunk(choice.Text)
+		if toolParser != nil && content != "" {
 			tools := getToolString(req)
-			parseResultStr, err := rp.toolParser.ParseStreamIncremental(content, tools)
+			parseResultStr, err := toolParser.ParseStreamIncremental(content, tools)
 			if err != nil {
 				klog.Errorf("failed to parse tool stream: %v, content: %s, tools: %s", err, content, tools)
 				return fmt.Errorf("failed to parse tool")
@@ -270,16 +263,16 @@ func (rp *ResponseChunkProcessor) ChatCompletionProcess(req *types.RequestContex
 		}
 	}
 
-	rp.chatResp.Choices[0].Message.Content += content
-	rp.chatResp.Choices[0].Message.ReasoningContent += reasoningContent
+	llmRequest.BufferChatResp.Choices[0].Message.Content += content
+	llmRequest.BufferChatResp.Choices[0].Message.ReasoningContent += reasoningContent
 	if parseResult != nil && len(parseResult.ToolCalls) > 0 {
 		klog.V(4).Infof("after tool parser: ##%s##, func: %s, args: %s", content, parseResult.ToolCalls[0].Function.Name, parseResult.ToolCalls[0].Function.Arguments)
-		toolCalls := &(rp.chatResp.Choices[0].Message.ToolCalls)
+		toolCalls := &(llmRequest.BufferChatResp.Choices[0].Message.ToolCalls)
 		mergeToolCalls(toolCalls, parseResult.ToolCalls)
 	}
-	rp.chatResp.Choices[0].FinishReason = choice.FinishReason
+	llmRequest.BufferChatResp.Choices[0].FinishReason = choice.FinishReason
 
-	rp.chatResp.Usage = &protocol.Usage{
+	llmRequest.BufferChatResp.Usage = &protocol.Usage{
 		PromptTokens:     stats.InputTokensLen,
 		TotalTokens:      stats.InputTokensLen + stats.OutputTokensLen,
 		CompletionTokens: stats.OutputTokensLen,
@@ -288,10 +281,10 @@ func (rp *ResponseChunkProcessor) ChatCompletionProcess(req *types.RequestContex
 		},
 	}
 
-	klog.V(2).Infof("[%s] ChatCompletionProcess: output_len: %d, reasoning_content_len: %d, raw_content_len: %d, capacity: %d, max_len: %d",
+	klog.V(3).Infof("[%s] ChatCompletionProcess: output_len: %d, reasoning_content_len: %d, raw_content_len: %d, capacity: %d, max_len: %d",
 		req.Id, stats.OutputTokensLen, stats.ReasoningTokensLen, rawContentTokensLen, capacity, stats.MaxTokensLimit)
-	klog.V(2).Infof("[%s] ChatCompletionProcess: content: ##%s##, reasoningContent: ##%s##, finishReason: %s, response: %p",
-		req.Id, content, reasoningContent, choice.FinishReason, rp.chatResp)
+	klog.V(3).Infof("[%s] ChatCompletionProcess: content: ##%s##, reasoningContent: ##%s##, finishReason: %s, response: %p",
+		req.Id, content, reasoningContent, choice.FinishReason, llmRequest.BufferChatResp)
 
 	return nil
 }
@@ -320,7 +313,7 @@ func (rp *ResponseChunkProcessor) completionProcess(req *types.RequestContext, d
 		return nil
 	}
 
-	klog.V(2).Infof("[%s] completionProcess: processing completion chunk", req.Id)
+	klog.V(3).Infof("[%s] completionProcess: processing completion chunk", req.Id)
 
 	if cmplResp := req.LLMRequest.CompletionResponse; cmplResp == nil {
 		klog.Errorf("[%s] completion process: completion response is empty", req.Id)
@@ -368,6 +361,26 @@ func (rp *ResponseChunkProcessor) completionProcess(req *types.RequestContext, d
 	return nil
 }
 
+func (rp *ResponseChunkProcessor) trySetParser(req *types.RequestContext) error {
+	if req.LLMRequest.ReasoningParser == nil {
+		p, err := reasoning_parser.NewReasoningParser(rp.reasoningParser, true, false)
+		if err != nil {
+			klog.Errorf("[%s] Failed to create reasoning parser: %v", req.Id, err)
+			return err
+		}
+		req.LLMRequest.ReasoningParser = p
+	}
+	if req.LLMRequest.ToolParser == nil {
+		tp, err := sglang.NewToolParser(rp.toolParser)
+		if err != nil {
+			klog.Errorf("[%s] Failed to create tool parser: %v", req.Id, err)
+			return err
+		}
+		req.LLMRequest.ToolParser = tp
+	}
+	return nil
+}
+
 func (rp *ResponseChunkProcessor) PostProcess(req *types.RequestContext, done bool) error {
 	stream := req.LLMRequest.ClientStream
 	p := req.LLMRequest.Protocol
@@ -383,6 +396,11 @@ func (rp *ResponseChunkProcessor) PostProcess(req *types.RequestContext, done bo
 			klog.Errorf("[%s] completion response has more than one choice, not support now.", req.Id)
 			return fmt.Errorf("chat completion response has more than one choice")
 		}
+
+		if err := rp.trySetParser(req); err != nil {
+			return err
+		}
+
 		if stream {
 			return rp.ChatCompletionStreamProcess(req, done)
 		} else {

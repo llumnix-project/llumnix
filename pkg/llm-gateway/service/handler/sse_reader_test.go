@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"easgo/pkg/llm-gateway/consts"
 	"errors"
 	"io"
@@ -37,9 +38,10 @@ func TestTimeoutReader_ReadFromRegularReader_Success(t *testing.T) {
 	// Setup
 	data := "hello world"
 	reader := io.NopCloser(strings.NewReader(data))
-	tr := &timeoutReader{
+	tr := &TimeoutReader{
 		r:       reader,
 		timeout: 5 * time.Second,
+		ctx:     context.Background(),
 	}
 
 	// Execute
@@ -60,9 +62,10 @@ func TestTimeoutReader_ReadFromRegularReader_Timeout(t *testing.T) {
 	}
 	mockReader.On("Read", mock.Anything).Return(5, nil)
 
-	tr := &timeoutReader{
+	tr := &TimeoutReader{
 		r:       mockReader,
 		timeout: 50 * time.Millisecond, // Short timeout
+		ctx:     context.Background(),
 	}
 
 	// Execute
@@ -84,9 +87,10 @@ func TestTimeoutReader_ReadFromRegularReader_Error(t *testing.T) {
 	mockReader := &mockReader{delay: 10 * time.Millisecond}
 	mockReader.On("Read", mock.Anything).Return(0, expectedErr)
 
-	tr := &timeoutReader{
+	tr := &TimeoutReader{
 		r:       mockReader,
 		timeout: 100 * time.Millisecond,
+		ctx:     context.Background(),
 	}
 
 	// Execute
@@ -104,9 +108,10 @@ func TestTimeoutReader_ReadFromRegularReader_EOF(t *testing.T) {
 	mockReader := &mockReader{delay: 10 * time.Millisecond}
 	mockReader.On("Read", mock.Anything).Return(0, io.EOF)
 
-	tr := &timeoutReader{
+	tr := &TimeoutReader{
 		r:       mockReader,
 		timeout: 100 * time.Millisecond,
+		ctx:     context.Background(),
 	}
 
 	// Execute
@@ -128,9 +133,10 @@ func TestTimeoutReader_ReadFromRegularReader_PartialRead(t *testing.T) {
 	}
 	mockReader.On("Read", mock.Anything).Return(len(data), nil)
 
-	tr := &timeoutReader{
+	tr := &TimeoutReader{
 		r:       mockReader,
 		timeout: 100 * time.Millisecond,
+		ctx:     context.Background(),
 	}
 
 	// Execute
@@ -148,9 +154,10 @@ func TestTimeoutReader_ReadWithBufferSmallerThanData(t *testing.T) {
 	// Setup
 	longData := "this is a very long string that exceeds small buffer size"
 	reader := io.NopCloser(strings.NewReader(longData))
-	tr := &timeoutReader{
+	tr := &TimeoutReader{
 		r:       reader,
 		timeout: 100 * time.Millisecond,
+		ctx:     context.Background(),
 	}
 
 	// Execute
