@@ -12,7 +12,7 @@ const (
 	InferRolePrefill InferRole = "prefill"
 	InferRoleDecode  InferRole = "decode"
 
-	InferRoleAll InferRole = "all"
+	InferRoleAll InferRole = "all" // Only for filtering purposes, will not appear in llm worker
 )
 
 func (r InferRole) String() string {
@@ -23,6 +23,8 @@ func (r InferRole) String() string {
 		return "prefill"
 	case InferRoleDecode:
 		return "decode"
+	case InferRoleAll:
+		return "all"
 	default:
 		return "unknown"
 	}
@@ -82,7 +84,7 @@ func (w *LLMWorker) String() string {
 
 	// Add Aux Port
 	if w.AuxPort > 0 {
-		parts = append(parts, fmt.Sprintf("%s", w.AuxPort))
+		parts = append(parts, fmt.Sprintf("%d", w.AuxPort))
 	}
 
 	// Add data parallel information if applicable

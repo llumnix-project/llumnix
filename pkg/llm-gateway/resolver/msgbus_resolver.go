@@ -47,7 +47,7 @@ type msgBusParser struct {
 }
 
 var (
-	re = regexp.MustCompile(`^worker\d+_\d+$`)
+	re = regexp.MustCompile(`^worker(\d+)_(\d+)$`)
 )
 
 // ParseWorker parses a key-value pair from message bus into an types.LLMWorker.
@@ -88,7 +88,6 @@ func (p *msgBusParser) valueParse(str string) (*types.LLMWorker, error) {
 	fields := strings.Split(str, ",")
 	if len(fields) < 3 {
 		return nil, fmt.Errorf("Message Bus parse failed: got %v", str)
-
 	}
 
 	var worker types.LLMWorker
@@ -185,7 +184,7 @@ func getOrCreateMsgBusResolverBackend() *MsgBusResolverBackend {
 				resolvers:     make(map[string][]*MsgBusResolver),
 				messageReader: NewHTTPMessageReader(msgBusURL),
 			}
-			msgBusResolverBackend.syncWorkersLoop()
+			msgBusResolverBackend.SyncWorkerOnce()
 			go msgBusResolverBackend.syncWorkersLoop()
 		},
 	)
@@ -328,7 +327,8 @@ func (r *MsgBusResolverBackend) updateResolver(newWorkerSlices map[string]types.
 				continue
 			}
 			role := workers[0].Role
-			if role == types.InferRole(key) {
+			resolverRole := types.InferRole(key)
+			if role == resolverRole || resolverRole == types.InferRoleAll {
 				filteredWorkers = append(filteredWorkers, workers...)
 			}
 		}

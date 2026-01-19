@@ -75,7 +75,11 @@ func NewGatewayService(c *options.Config) *LlmGatewayService {
 	lgs.bufferQueue.Start()
 
 	// Create request handler for parsing OpenAI format requests
-	lgs.reqHandler = handler.NewOpenAIHandler(c)
+	reqHandler, handlerErr := handler.BuildHandler("openai", c)
+	if handlerErr != nil {
+		klog.Fatalf("failed to create request handler: %v", handlerErr)
+	}
+	lgs.reqHandler = reqHandler
 
 	// Create load balancer and service router
 	var lb balancer.Balancer
@@ -244,6 +248,7 @@ func (lgs *LlmGatewayService) writeResponseUntilDone(reqCtx *types.RequestContex
 		case <-reqCtx.Context.Done():
 			// Client disconnected or request timeout
 			klog.Infof("request %s disconnected by client", reqCtx.Id)
+			reqCtx.HttpRequest.StatusCode = 499
 			return
 		}
 	}
@@ -273,7 +278,7 @@ func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext) {
 			reqCtx.ResponseChan <- &types.ResponseMsg{Err: err, Message: []byte(err.Error())}
 			return
 		}
-		klog.V(2).Infof("request [%s] scheduled to %s", reqCtx.Id, schResult.String())
+		klog.V(3).Infof("request [%s] scheduled to %s", reqCtx.Id, schResult.String())
 		reqCtx.ScheduleCtx.ScheduleResults = schResult
 		go lgs.reqHandler.Handle(reqCtx)
 	case router.RouteExternal:
@@ -301,25 +306,51 @@ func (lgs *LlmGatewayService) scheduleMode() types.ScheduleMode {
 	}
 }
 
-// balancerDecodeScheduler implements the decodeScheduler interface using a balancer
-type balancerDecodeScheduler struct {
+// balancerLifecycleHandler implements the RequestLifecycleHandler interface using a balancer
+type balancerLifecycleHandler struct {
 	balancer balancer.Balancer
 }
 
 // ScheduleDecode schedules the request for decoding using the balancer
-func (s *balancerDecodeScheduler) ScheduleDecode(req *types.RequestContext) (types.ScheduledResult, error) {
+func (h *balancerLifecycleHandler) ScheduleDecode(req *types.RequestContext) (types.ScheduledResult, error) {
 	if req.ScheduleCtx.ScheduleMode != types.ScheduleModePDStaged {
 		klog.Warningf("request %s is not in staged schedule mode, decode does not need to be scheduled separately.", req.Id)
 		return nil, fmt.Errorf("not in staged schedule mode")
 	}
 	req.ScheduleCtx.InferStage = types.InferStageDecode
-	results, err := s.balancer.Get(req)
+	results, err := h.balancer.Get(req)
 	if err != nil {
 		return nil, err
 	}
 	schResult := req.ScheduleCtx.ScheduleResults
 	req.ScheduleCtx.ScheduleResults = append(schResult, results...)
 	return results, nil
+}
+
+// OnPostPrefill is called after prefill stage completes
+// Mainly used for resource cleanup or state transition after the prefill phase is completed
+func (h *balancerLifecycleHandler) OnPostPrefill(req *types.RequestContext) {
+	klog.V(3).Infof("[%s] Post-prefill lifecycle hook triggered", req.Id)
+	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
+	if pWorker != nil {
+		h.balancer.Release(req, pWorker)
+	}
+	req.ScheduleCtx.InferStage = types.InferStageDecode
+}
+
+// OnPostRequest is called after the entire request completes
+func (h *balancerLifecycleHandler) OnPostRequest(req *types.RequestContext) {
+	klog.V(3).Infof("[%s] Post-request lifecycle hook triggered", req.Id)
+	// For non-PD mode, resources also need to be released at the end of the request.
+	nWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleNormal)
+	if nWorker != nil {
+		h.balancer.Release(req, nWorker)
+	}
+	// For PD separated mode, only decode resources need to be released
+	dWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode)
+	if dWorker != nil {
+		h.balancer.Release(req, dWorker)
+	}
 }
 
 // HandleOpenAIRequest is the main entry point for handling LLM inference requests
@@ -338,7 +369,7 @@ func (lgs *LlmGatewayService) HandleOpenAIRequest(w http.ResponseWriter, r *http
 	scheduleMode := lgs.scheduleMode()
 	reqCtx.ScheduleCtx.ScheduleMode = scheduleMode
 	reqCtx.ScheduleCtx.InferStage = types.InferStagePrefill
-	reqCtx.ScheduleCtx.SetDecodeScheduler(&balancerDecodeScheduler{balancer: lgs.balancer})
+	reqCtx.SetLifecycleHandler(&balancerLifecycleHandler{balancer: lgs.balancer})
 
 	// Parse and validate OpenAI format request parameters
 	if err := lgs.reqHandler.ParseRequest(reqCtx); err != nil {
@@ -364,6 +395,7 @@ func (lgs *LlmGatewayService) HandleOpenAIRequest(w http.ResponseWriter, r *http
 	lgs.bufferQueue.Dispatch(func() {
 		reqCtx.RequestStats.DeQueueTime = time.Now()
 		lgs.dispatchRequest(reqCtx)
+		reqCtx.RequestStats.BalanceTime = time.Now()
 	}, false)
 
 	// Wait for and write responses (supports both streaming and non-streaming)
@@ -423,11 +455,6 @@ func (lgs *LlmGatewayService) Run() {
 	klog.Fatal(http.ListenAndServe(address, router))
 }
 
-// recordStatusValues is a placeholder method for recording status values
-// TODO: Implement specific status recording logic
-func (lgs *LlmGatewayService) recordStatusValues() {
-}
-
 // StartMetricRecord starts the metric recording loop
 // Periodically collects and reports gateway operational metrics (e.g., pending requests, active requests)
 func (lgs *LlmGatewayService) StartMetricRecord() {
@@ -441,11 +468,10 @@ func (lgs *LlmGatewayService) StartMetricRecord() {
 		time.Sleep(consts.MetricRecordDuration)
 		// Calculate pending requests: queued + being scheduled
 		pendingRequests := float32(lgs.bufferQueue.Length() + lgs.bufferQueue.BusyWorkers())
-		modelLabels := []metrics.Label{}
-		metrics.StatusValue("gateway_pending_requests", modelLabels).Set(pendingRequests)
+		metrics.StatusValue("gateway_pending_requests", []metrics.Label{}).Set(pendingRequests)
 		// Record current total active requests
 		requests := float32(lgs.numReqs.Load())
-		metrics.StatusValue("gateway_requests", modelLabels).Set(requests)
+		metrics.StatusValue("gateway_requests", []metrics.Label{}).Set(requests)
 	}
 }
 
@@ -497,7 +523,8 @@ func (lgs *LlmGatewayService) LogRequestAccess(req *types.RequestContext) {
 	requestsLabel := stats.DefaultLabels.Append(metrics.Label{Name: "status_code", Value: strconv.Itoa(httpReq.StatusCode)})
 	metrics.Counter("llm_requests", requestsLabel).IncrByOne()
 
-	schResultString := req.ScheduleCtx.ScheduleResults.String()
+	metrics.Latency("llm_ttft", stats.DefaultLabels).Add(stats.TTFT())
+	metrics.Latency("llm_tpot", stats.DefaultLabels).AddMany(req.RequestStats.ITLs)
 
 	// Calculate request counts at different stages
 	queueSize := lgs.bufferQueue.Length()                     // Requests waiting in queue
@@ -509,7 +536,7 @@ func (lgs *LlmGatewayService) LogRequestAccess(req *types.RequestContext) {
 		req.Id,
 		httpReq.StatusCode,
 		httpReq.Request.Method,
-		schResultString,
+		req.ScheduleCtx.ScheduleResults.String(),
 		httpReq.Request.URL.String(),
 		stats.String(),
 		stats.InputTokensLen,

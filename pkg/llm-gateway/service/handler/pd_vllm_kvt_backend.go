@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"easgo/pkg/llm-gateway/consts"
 	"easgo/pkg/llm-gateway/types"
 	"encoding/json"
 	"fmt"
@@ -10,16 +11,25 @@ import (
 	"k8s.io/klog/v2"
 )
 
+func init() {
+	RegisterBackend(consts.SplitModeVllmKvt, func(scheduleMode types.ScheduleMode) (InferenceBackend, error) {
+		return NewPdSplitVllmKvtBackend(scheduleMode)
+	})
+}
+
 type PdSplitVllmKvtBackend struct {
 	client       *http.Client
 	scheduleMode types.ScheduleMode
 }
 
-func NewPdSplitVllmKvtBackend(schMode types.ScheduleMode) *PdSplitVllmKvtBackend {
+func NewPdSplitVllmKvtBackend(schMode types.ScheduleMode) (InferenceBackend, error) {
+	if schMode != types.ScheduleModePDBatch && schMode != types.ScheduleModePDStaged {
+		return nil, fmt.Errorf("unsupported schedule mode: %s", schMode)
+	}
 	return &PdSplitVllmKvtBackend{
 		client:       NewLlmForwardClient(),
 		scheduleMode: schMode,
-	}
+	}, nil
 }
 
 func (b *PdSplitVllmKvtBackend) buildTransferParams(req *types.RequestContext, pWorker, dWorker *types.LLMWorker) map[string]interface{} {
@@ -83,13 +93,13 @@ func (b *PdSplitVllmKvtBackend) doPrefill(req *types.RequestContext, pWorker *ty
 		klog.Errorf("[%s] failed to make new backend request: %v", err, req.Id)
 		return err
 	}
-	r, err := DoRequest(newReq, b.client, data)
+	body, err := DoRequest(newReq, b.client, data)
 	if err != nil {
 		klog.Errorf("[%s] failed to do request: %v", req.Id, err)
 		return err
 	}
-	defer r.Close()
-	_, err = io.ReadAll(r)
+	defer body.Close()
+	_, err = io.ReadAll(body)
 	if err != nil {
 		klog.Errorf("[%s] failed to read response: %v", req.Id, err)
 		return err
@@ -133,7 +143,7 @@ func (b *PdSplitVllmKvtBackend) StagedScheduleStreamInference(req *types.Request
 		}
 
 		// start decode scheduling
-		results, err := req.ScheduleCtx.DecodeScheduler.ScheduleDecode(req)
+		results, err := req.ScheduleDecode()
 		if err != nil {
 			klog.Errorf("[%s] decode scheduling failed: %v", req.Id, err)
 			chunkChan <- StreamChunk{err: err}
@@ -141,7 +151,7 @@ func (b *PdSplitVllmKvtBackend) StagedScheduleStreamInference(req *types.Request
 		}
 
 		dWorker := results.GetWorkerByRole(types.InferRoleDecode)
-		if pWorker == nil {
+		if dWorker == nil {
 			klog.Errorf("[%s] decode worker not found", req.Id)
 			chunkChan <- StreamChunk{err: fmt.Errorf("decode worker not found")}
 			return

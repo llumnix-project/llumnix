@@ -83,7 +83,7 @@ func RegisterLLM(builder LLMResolverBuilder) {
 	}
 
 	llmResolverBuilders[schema] = builder
-	klog.V(2).Infof("resolver builder registered: %s", schema)
+	klog.V(2).Infof("llm resolver builder registered: %s", schema)
 }
 
 func getBuilder(schema string) (ResolverBuilder, bool) {

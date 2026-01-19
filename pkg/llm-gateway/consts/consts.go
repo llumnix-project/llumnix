@@ -6,8 +6,6 @@ import (
 
 const (
 	StatusDisConnection = 499
-
-	MaxConcurrentRequests = 1000
 )
 
 const (
