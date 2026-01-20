@@ -1,0 +1,8 @@
+bin
+eas
+.eas
+.idea
+.vscode
+.env
+.qoder
+.DS_Store
