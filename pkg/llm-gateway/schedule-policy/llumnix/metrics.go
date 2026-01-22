@@ -123,12 +123,12 @@ func getSchedulingMetric(p *options.LlumnixConfig, metricName string) func() ins
 				enableFullModeScheduling: p.EnableFullModeScheduling,
 			}
 		}
-	case consts.LlumnixSchedulingMetricAllDecodesSeqLenWithAllPrefills:
-		klog.V(3).Infof("Creating AllDecodesSeqLenWithAllPrefills metric factory")
+	case consts.LlumnixSchedulingMetricAllDecodesKVBlocksNumWithAllPrefills:
+		klog.V(3).Infof("Creating AllDecodesKVBlocksNumWithAllPrefills metric factory")
 		return func() instanceSchedulingMetric {
-			return &allDecodesSeqLenWithAllPrefills{
+			return &allDecodesKVBlocksNumWithAllPrefills{
 				baseMetric: baseMetric{
-					name: consts.LlumnixSchedulingMetricAllDecodesSeqLenWithAllPrefills,
+					name: consts.LlumnixSchedulingMetricAllDecodesKVBlocksNumWithAllPrefills,
 				},
 			}
 		}
@@ -419,19 +419,19 @@ func (adbs *adaptiveDecodeBatchSize) ValueLess(value float32) bool {
 	return adbs.value < value
 }
 
-type allDecodesSeqLenWithAllPrefills struct {
+type allDecodesKVBlocksNumWithAllPrefills struct {
 	baseMetric
 }
 
-func (br *allDecodesSeqLenWithAllPrefills) Calculate(instanceView *instanceViewScheduling) {
+func (adb *allDecodesKVBlocksNumWithAllPrefills) Calculate(instanceView *instanceViewScheduling) {
 	allDecodeBlocks := instanceView.cmsView.Status.HybridSchedulerWaitingToDecodeBlocksNum +
 		instanceView.cmsView.Status.SchedulerWaitingToDecodeBlocksNum +
 		instanceView.cmsView.Status.SchedulerRunningToDecodeBlocksNum +
 		instanceView.cmsView.Status.NumBlocksLoadingRequests
-	br.value = float32(allDecodeBlocks +
+	adb.value = float32(allDecodeBlocks +
 		instanceView.cmsView.NumBlocksInflightDispatchDecodeRequests)
 	klog.V(3).Infof(
-		"Instance %s allDecodesSeqLenWithAllPrefills calculated: "+
+		"Instance %s allDecodesKVBlocksNumWithAllPrefills calculated: "+
 			"(hybridSchedulerWaitingToDecodesBlocks:%d + schedulerWaitingToDecodeBlocks:%d + "+
 			"schedulerRunningToDecodesBlocks:%d + loadingBlocks:%d + inflightDecodesBlocks:%d = %f",
 		instanceView.GetInstanceId(),
@@ -440,14 +440,14 @@ func (br *allDecodesSeqLenWithAllPrefills) Calculate(instanceView *instanceViewS
 		instanceView.cmsView.Status.SchedulerRunningToDecodeBlocksNum,
 		instanceView.cmsView.Status.NumBlocksLoadingRequests,
 		instanceView.cmsView.NumBlocksInflightDispatchDecodeRequests,
-		br.value)
+		adb.value)
 }
 
-func (br *allDecodesSeqLenWithAllPrefills) ValueLess(value float32) bool {
+func (br *allDecodesKVBlocksNumWithAllPrefills) ValueLess(value float32) bool {
 	return br.value < value
 }
 
-func (br *allDecodesSeqLenWithAllPrefills) Less(metric instanceSchedulingMetric) bool {
+func (br *allDecodesKVBlocksNumWithAllPrefills) Less(metric instanceSchedulingMetric) bool {
 	return br.value < metric.GetValue()
 }
 

@@ -5,10 +5,6 @@ import (
 )
 
 const (
-	StatusDisConnection = 499
-)
-
-const (
 	MetricRecordDuration = 5 * time.Second
 )
 
@@ -39,21 +35,17 @@ const (
 	SchedulePolicyFlood       = "flood"
 )
 
-// TODO(sunbiao.sun): remove llumnix prefix
-
-// TODO(sunbiao.sun): rename metric
-
 const (
-	LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills     = "kv_blocks_ratio_with_all_prefills"
-	LlumnixSchedulingMetricDecodeBatchSize                  = "decode_batch_size"
-	LlumnixSchedulingMetricNumWaitingRequests               = "num_waiting_requests"
-	LlumnixSchedulingMetricAllPrefillsKVBlocksNum           = "all_prefills_kv_blocks_num"
-	LlumnixSchedulingMetricKVCacheHitLen                    = "kv_cache_hit_len"
-	LlumnixSchedulingMetricCacheAwareAllPrefillsKVBlocksNum = "cache_aware_all_prefills_kv_blocks_num"
-	LlumnixSchedulingMetricAdaptiveDecodeBatchSize          = "adaptive_decode_batch_size"
-	LlumnixSchedulingMetricNumRequests                      = "num_requests"
-	LlumnixSchedulingMetricAllDecodesSeqLenWithAllPrefills  = "all_decodes_seq_len_with_all_prefills"
-	LlumnixSchedulingMetricNumTokens                        = "num_tokens"
+	LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills         = "kv_blocks_ratio_with_all_prefills"
+	LlumnixSchedulingMetricDecodeBatchSize                      = "decode_batch_size"
+	LlumnixSchedulingMetricNumWaitingRequests                   = "num_waiting_requests"
+	LlumnixSchedulingMetricAllPrefillsKVBlocksNum               = "all_prefills_kv_blocks_num"
+	LlumnixSchedulingMetricKVCacheHitLen                        = "kv_cache_hit_len"
+	LlumnixSchedulingMetricCacheAwareAllPrefillsKVBlocksNum     = "cache_aware_all_prefills_kv_blocks_num"
+	LlumnixSchedulingMetricAdaptiveDecodeBatchSize              = "adaptive_decode_batch_size"
+	LlumnixSchedulingMetricNumRequests                          = "num_requests"
+	LlumnixSchedulingMetricAllDecodesKVBlocksNumWithAllPrefills = "all_decodes_kv_blocks_num_with_all_prefills"
+	LlumnixSchedulingMetricNumTokens                            = "num_tokens"
 )
 
 const (
@@ -88,7 +80,6 @@ const (
 
 // different pd-split mode
 const (
-	SplitModeVllmV6d        = "vllm-vineyard"
 	SplitModeVllmKvt        = "vllm-kvt"
 	SplitModeSGlangMooncake = "sglang-mooncake"
 	SplitModeVllmMooncake   = "vllm-mooncake"
@@ -112,14 +103,9 @@ const (
 	LlumnixFailoverScopeInstance = "instance"
 )
 
-const (
-	TokenizerProcessor = "TOKENIZER"
-	RESPONSEFORMATTER  = "RESPONSEFORMATTER"
-)
-
 // default value
 const (
-	DefaultEnableFullModeScheduling = true
+	DefaultLlumnixEnableFullModeScheduling = true
 
 	// CMS defaults
 	DefaultLlumnixCmsRedisHost              = "redis.roles"
@@ -196,7 +182,4 @@ const (
 	DefaultLlumnixEnableMetrics = false
 
 	DefaultLlumnixExtraArgs = ""
-
-	// TODO(sunbiao.sun): remove
-	DefaultLlumnixDispatchPolicy = "load-balance"
 )

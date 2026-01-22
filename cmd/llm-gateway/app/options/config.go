@@ -15,7 +15,6 @@ import (
 	prop "easgo/pkg/llm-gateway/property"
 )
 
-// TODO(sunbiao.sun): Group the parameters in the config.
 type Config struct {
 	Port int
 	Host string
@@ -30,10 +29,12 @@ type Config struct {
 	LocalTestSchedulerIP string // local test ip for scheduler
 	EnablePprof          bool   // enable pprof
 
-	ServiceToken        string
-	DiscoveryEndpoint   string
-	BackendService      string // backend service
-	BackendServiceToken string // backend service token
+	ServiceToken string
+
+	// max queue size
+	MaxQueueSize int
+	// number of coroutines which read the requests from queue
+	WaitQueueThreads int
 
 	ScheduleMode bool
 	// ColocatedRescheduleMode means whether to start a rescheduler inside a scheduler process
@@ -45,94 +46,71 @@ type Config struct {
 	// schedule policy
 	SchedulePolicy string
 
-	// The configuration of pd splits
-	// LLM Gateway currently supports a variety of separate implementations of the prefill
-	// and decode phases, which can be distinguished by this configuration
-	PDSplitMode string
-
-	// separate scheduling for p and d or not
-	SeparatePDSchedule bool
-
-	// number of retries when forwarding fails
-	RetryCount int
-
-	// number of coroutines which read the requests from queue
-	WaitQueueThreads int
-
-	// waiting timeout if no free token, unit is milliseconds, 0 means that drop request
+	// waiting schedule timeout if no schedule result, unit is milliseconds, 0 means that drop request
 	WaitScheduleTimeout int
-	// retry period while waiting free tokens, unit is milliseconds
-	WaitScheduleTryPeriod int
-
-	// max queue size
-	MaxQueueSize int
-
-	// deprecated, inference backend type, support vllm, blade
-	InferBackend string
+	// retry interval of waiting schedule results, unit is milliseconds
+	WaitScheduleRetryInterval int
 
 	// enable access log
 	EnableAccessLog bool
-
 	// enable input log
 	EnableLogInput bool
 
 	// run on serverless
 	ServerlessMode bool
 
+	DiscoveryConfig
+	ProcessorConfig
+	RouteConfig
+
+	PDSplitConfig
+	LlumnixConfig
+	RequestReporterConfig
+
+	BatchServiceConfig
+}
+
+type PDSplitConfig struct {
+	// The configuration of pd split
+	// LLM Gateway currently supports a variety of separate implementations of the prefill
+	// and decode phases, which can be distinguished by this configuration
+	PDSplitMode string
+	// separate scheduling for p and d or not
+	SeparatePDSchedule bool
+}
+
+type RequestReporterConfig struct {
+	// request token state report (report to llm scheduler) interval (seconds)
+	RequestReportInterval int
+}
+
+type RouteConfig struct {
+	RoutePolicy    string
+	RouteConfigRaw string
+}
+
+type DiscoveryConfig struct {
 	// instead of relying on the active registration of inference workers, the
 	// backend services are actively discovered through the scheduler, which can
 	// only be used in the scenario where BackendService are set
-	UseDiscovery string
+	UseDiscovery                    string
+	RedisDiscoveryRefreshIntervalMs int
+	RedisDiscoveryStatusTTLMs       int
+}
 
+type ProcessorConfig struct {
 	// Tokenizer related configuration
 	// builtin tokenizer name
 	TokenizerName string
 	// self defined tokenizer path, will overwrite the builtin tokenizer name when not empty
 	TokenizerPath    string
 	ChatTemplatePath string
-	ToolCallParser   string
-	ReasoningParser  string
-	TokenizerMode    string
 
-	// enable token filter
-	EnableTokenFilter bool
+	ToolCallParser  string
+	ReasoningParser string
+}
 
-	// requests token reporter duration (seconds)
-	RequestsReporterDuration int
-
-	// TODO(sunbiao.sun): remove
-
-	// max requests for every instance
-	LimitRequests        int
-	PrefillLimitRequests int
-	DecodeLimitRequests  int
-
-	// the limit of every instance tokens, used to limit the number of tokens in the instance
-	LimitTokens        int
-	PrefillLimitTokens int
-	DecodeLimitTokens  int
-
-	// the scale of threshold, used to calculate the threshold of every decode tokens
-	LimitTokensThresholdScale float32
-
-	// the threshold of request prompt length
-	PromptLengthThreshold int
-
-	// ProcessorType，used to select the processor
-	ProcessorType string
-
-	// route config for llm gateway
-	RoutePolicy    string
-	RouteConfigRaw string
-
-	RedisAddrs      string
-	RedisUsername   string
-	RedisPassword   string
-	RedisRetryTimes int
-
-	RedisDiscoveryRefreshIntervalMs int
-	RedisDiscoveryStatusTTLMs       int
-
+type BatchServiceConfig struct {
 	BatchOSSPath           string
 	BatchOSSEndpoint       string
 	BatchParallel          int
@@ -140,11 +118,10 @@ type Config struct {
 	BatchRequestTimeout    time.Duration
 	BatchRequestRetryTimes int
 
-	// TODO(sunbiao.sun): remove
-	PrefillPolicy string
-	DecodePolicy  string
-
-	LlumnixConfig LlumnixConfig
+	RedisAddrs      string
+	RedisUsername   string
+	RedisPassword   string
+	RedisRetryTimes int
 }
 
 type LlumnixConfig struct {
@@ -226,9 +203,6 @@ type LlumnixConfig struct {
 	CmsRecordMetricsInterval int32
 
 	ExtraArgs string
-
-	// TODO(sunbiao.sun): remove
-	DispatchPolicy string
 }
 
 func (c *Config) AddServerFlags(flags *pflag.FlagSet) {
@@ -239,16 +213,12 @@ func (c *Config) AddServerFlags(flags *pflag.FlagSet) {
 func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&c.EnablePprof, "enable-pprof", false, "enable pprof")
 
-	flags.StringVar(&c.BackendService, "backend-service", "", "backend services")
-	flags.StringVar(&c.BackendServiceToken, "backend-service-token", "", "backend service token")
-
 	flags.StringVar(&c.ServiceToken, "token", "", "service token")
 	flags.StringVar(&c.LlmScheduler, "llm-scheduler", "", "llm scheduler service")
 
 	flags.StringVar(&c.LocalTestIPs, "local-test-ip", "", "local test")
 	flags.StringVar(&c.LocalTestSchedulerIP, "local-test-scheduler-ip", "", "local test scheduler ip")
 
-	flags.StringVar(&c.DiscoveryEndpoint, "discovery-endpoint", "", "discovery endpoint")
 	flags.BoolVar(&c.ScheduleMode, "schedule-mode", false, "work as a scheduler")
 	flags.BoolVar(&c.ColocatedRescheduleMode, "colocated-reschedule-mode", false, "work as a scheduler with a colocated rescheduler")
 	flags.BoolVar(&c.StandaloneRescheduleMode, "standalone-reschedule-mode", false, "work as a standalone rescheduler")
@@ -257,49 +227,27 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.PDSplitMode, "pdsplit-mode", "", "pd split mode, this configuration only takes effect under the pd-split policy, now support vllm-vineyard, vllm-kvt, sglang-mooncake")
 
 	flags.BoolVar(&c.EnableAccessLog, "enable-access-log", true, "enable access log or not")
-	flags.BoolVar(&c.EnableLogInput, "enable-log-input", false, "enable log input or not")
 	flags.BoolVar(&c.ServerlessMode, "serverless-mode", false, "run on serverless")
 
-	flags.IntVar(&c.RetryCount, "retry-count", 0, "gateway forwarding retry count")
 	flags.IntVar(&c.WaitQueueThreads, "wait-queue-threads", 5, "number of coroutines which read the requests from queue")
 	flags.IntVar(&c.WaitScheduleTimeout, "wait-schedule-timeout", 10000, "waiting timeout if no free token, unit(milliseconds)")
-	flags.IntVar(&c.WaitScheduleTryPeriod, "wait-schedule-try-period", 1000, "retry period while waiting free tokens, unit(milliseconds)")
+	flags.IntVar(&c.WaitScheduleRetryInterval, "wait-schedule-try-period", 1000, "retry period while waiting free tokens, unit(milliseconds)")
 
 	flags.IntVar(&c.MaxQueueSize, "max-queue-size", 512, "max buffer queue size")
 
-	flags.StringVar(&c.InferBackend, "infer-backend", "vllm", "deprecated, inference backend type, support vllm, blade")
-
 	flags.StringVar(&c.UseDiscovery, "use-discovery", "", "the scheduler use cache-server/message-bus to discovery backend services.")
-
-	flags.StringVar(&c.ProcessorType, "processor-type", "", "use processor to modify request")
 
 	flags.StringVar(&c.TokenizerName, "tokenizer-name", "", "builtin tokenizer name")
 	flags.StringVar(&c.TokenizerPath, "tokenizer-path", "", "builtin tokenizer path")
 	flags.StringVar(&c.ChatTemplatePath, "chat-template", "", "chat template path")
 	flags.StringVar(&c.ToolCallParser, "tool-call-parser", "", "tool call parser type")
 	flags.StringVar(&c.ReasoningParser, "reasoning-parser", "", "reasoning parser type")
-	flags.StringVar(&c.TokenizerMode, "tokenizer-mode", "", "builtin tokenizer mode, support formatter or leave null as vllmv0")
 
-	flags.BoolVar(&c.EnableTokenFilter, "enable-token-filter", false, "Specify whether to enable token filter")
-	flags.IntVar(&c.RequestsReporterDuration, "requests-report-duration", 0, "Specify requests reporter duration")
+	flags.IntVar(&c.RequestReportInterval, "requests-report-duration", 0, "Specify requests reporter duration")
 
-	// TODO(sunbiao.sun): remove
-	flags.IntVar(&c.LimitRequests, "limit-requests", 0, "max requests for every backend llm instances.")
-	flags.IntVar(&c.PrefillLimitRequests, "prefill-limit-requests", 0, "max requests for every backend llm instances.")
-	flags.IntVar(&c.DecodeLimitRequests, "decode-limit-requests", 0, "max requests for every backend llm instances.")
-
-	flags.IntVar(&c.LimitTokens, "limit-tokens", 0, "max tokens for every backend llm instances.")
-	flags.IntVar(&c.PrefillLimitTokens, "prefill-limit-tokens", 0, "max tokens for every backend for prefill llm instances.")
-	flags.IntVar(&c.DecodeLimitTokens, "decode-limit-tokens", 0, "max tokens for every backend for decode llm instances.")
-	flags.Float32Var(&c.LimitTokensThresholdScale, "limit-tokens-threshold-scale", 0.0, "the scale of threshold, used to calculate the threshold of every decode tokens.")
-	flags.IntVar(&c.PromptLengthThreshold, "prompt-length-threshold", 0, "the threshold of request prompt length, used to determine whether the request is a long request")
 	flags.BoolVar(&c.SeparatePDSchedule, "separate-pd-schedule", false, "Specify whether to separate pd schedule")
 
-	// TODO(sunbiao.sun): remove
-	flags.StringVar(&c.PrefillPolicy, "prefill-policy", "load-balance", "prefill schedule policy, the same value as the schedule policy")
-	flags.StringVar(&c.DecodePolicy, "decode-policy", "load-balance", "decode schedule policy, the same value as the schedule policy")
-
-	flags.BoolVar(&c.LlumnixConfig.EnableFullModeScheduling, "enable-full-mode-scheduling", false, "Enable full mode scheduling")
+	flags.BoolVar(&c.LlumnixConfig.EnableFullModeScheduling, "enable-full-mode-scheduling", consts.DefaultLlumnixEnableFullModeScheduling, "Enable full mode scheduling")
 
 	flags.StringVar(&c.LlumnixConfig.CmsRedisHost, "llumnix-cms-redis-host", consts.DefaultLlumnixCmsRedisHost, "Llumnix CMS redis host")
 	flags.StringVar(&c.LlumnixConfig.CmsRedisPort, "llumnix-cms-redis-port", consts.DefaultLlumnixCmsRedisPort, "Llumnix CMS redis port")
@@ -331,12 +279,8 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.LlumnixConfig.DispatchDecodeLoadMetric, "llumnix-dispatch-decode-load-metric", consts.DefaultLlumnixDispatchDecodeLoadMetric, "Llumnix dispatch decode load metric")
 	flags.Float32Var(&c.LlumnixConfig.DispatchDecodeLoadThreshold, "llumnix-dispatch-decode-load-threshold", consts.DefaultLlumnixDispatchDecodeLoadThreshold, "Llumnix dispatch decode load threshold")
 	flags.StringVar(&c.LlumnixConfig.DispatchPrefillCacheLocalityMetric, "llumnix-dispatch-prefill-cache-locality-metric", consts.DefaultLlumnixDispatchPrefillCacheLocalityMetric, "Llumnix dispatch prefill cache locality metric")
-	// TODO(sunbiao.sun): delete it
-	flags.BoolVar(&c.LlumnixConfig.EnableInstanceStatusLocalAccount, "llumnix-enable-scheduling-account", consts.DefaultLlumnixEnableInstanceStatusLocalAccount, "Llumnix enable instance status local account")
 	flags.BoolVar(&c.LlumnixConfig.EnableInstanceStatusLocalAccount, "llumnix-enable-instance-status-local-account", consts.DefaultLlumnixEnableInstanceStatusLocalAccount, "Llumnix enable instance status local account")
 	flags.Int32Var(&c.LlumnixConfig.KvCacheBlockSize, "llumnix-kv-cache-block-size", consts.DefaultLlumnixKvCacheBlockSize, "Llumnix KV cache block size")
-	// TODO(sunbiao.sun): delete it
-	flags.Int32Var(&c.LlumnixConfig.RequestLocalAccountStalenessSeconds, "llumnix-scheduling-account-request-staleness-seconds", consts.DefaultLlumnixRequestLocalAccountStalenessSeconds, "Llumnix request local account staleness seconds")
 	flags.Int32Var(&c.LlumnixConfig.RequestLocalAccountStalenessSeconds, "llumnix-request-local-account-staleness-seconds", consts.DefaultLlumnixRequestLocalAccountStalenessSeconds, "Llumnix request local account staleness seconds")
 	flags.BoolVar(&c.LlumnixConfig.AllowConcurrentSchedule, "llumnix-allow-concurrent-schedule", consts.DefaultLlumnixAllowConcurrentSchedule, "Llumnix allow concurrent schedule")
 	flags.BoolVar(&c.LlumnixConfig.EnablePredictorEnhancedScheduling, "llumnix-enable-predictor-enhanced-scheduling", consts.DefaultLlumnixEnablePredictorEnhancedScheduling, "Llumnix enable predictor enhanced scheduling")
@@ -389,9 +333,6 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&c.BatchLinesPerShard, "batch-lines-per-shard", 1000, "The number of lines per shard file")
 	flags.DurationVar(&c.BatchRequestTimeout, "batch-request-timeout", 3*time.Minute, "HTTP request timeout duration")
 	flags.IntVar(&c.BatchRequestRetryTimes, "batch-request-retry-times", 3, "HTTP retry times")
-
-	// TODO(sunbiao.sun): remove
-	flags.StringVar(&c.LlumnixConfig.DispatchPolicy, "llumnix-dispatch-policy", consts.DefaultLlumnixDispatchPolicy, "Llumnix dispatch policy")
 }
 
 func (c *Config) AddFlags(flags *pflag.FlagSet) {
@@ -453,26 +394,6 @@ func (c *Config) IsPDRoundRobin() bool {
 	return c.IsPDSplitMode() && c.SchedulePolicy == consts.SchedulePolicyRoundRobin
 }
 
-func (c *Config) IsVllmV6dSplitMode() bool {
-	return c.PDSplitMode == consts.SplitModeVllmV6d
-}
-
-func (c *Config) IsVllmKvtSplitMode() bool {
-	return c.PDSplitMode == consts.SplitModeVllmKvt
-}
-
-func (c *Config) IsSGLangMooncakeSplitMode() bool {
-	return c.PDSplitMode == consts.SplitModeSGlangMooncake
-}
-
-func (c *Config) IsVllmMooncakeSplitMode() bool {
-	return c.PDSplitMode == consts.SplitModeVllmMooncake
-}
-
-func (c *Config) IsPDProxySplitMode() bool {
-	return c.IsPDSplitMode() && c.IsSGLangMooncakeSplitMode()
-}
-
 func (c *Config) GetModelName(origName string) string {
 	if c.ServerlessMode {
 		return origName
@@ -480,17 +401,9 @@ func (c *Config) GetModelName(origName string) string {
 		return ""
 	}
 }
-func (c *Config) UseTokenizerProcessor() bool {
-	return strings.ToLower(c.ProcessorType) == strings.ToLower(consts.TokenizerProcessor) ||
-		c.TokenizerName != "" || c.TokenizerPath != ""
-}
-
-func (c *Config) UseResponseFormatterProcessor() bool {
-	return strings.ToLower(c.ProcessorType) == strings.ToLower(consts.RESPONSEFORMATTER)
-}
 
 func (c *Config) EnableRequestReport() bool {
-	return c.RequestsReporterDuration > 0 && !c.LlumnixConfig.EnableFullModeScheduling
+	return c.RequestReportInterval > 0 && !c.LlumnixConfig.EnableFullModeScheduling
 }
 
 type LlmSchedulerProperty struct {
@@ -568,9 +481,6 @@ func (c *Config) LoadCfgFromProperties() {
 	if property.LlmGateway.Name != nil && property.LlmGateway.Group != nil {
 		c.LlmGateway = fmt.Sprintf("%s.%s", *property.LlmGateway.Group, *property.LlmGateway.Name)
 	}
-	if property.LlmGateway.RetryCount != nil {
-		c.RetryCount = *property.LlmGateway.RetryCount
-	}
 	if property.LlmGateway.MaxQueueSize != nil {
 		c.MaxQueueSize = *property.LlmGateway.MaxQueueSize
 	}
@@ -578,10 +488,7 @@ func (c *Config) LoadCfgFromProperties() {
 		c.WaitScheduleTimeout = *property.LlmGateway.WaitScheduleTimeout
 	}
 	if property.LlmGateway.WaitScheduleTryPeriod != nil {
-		c.WaitScheduleTryPeriod = *property.LlmGateway.WaitScheduleTryPeriod
-	}
-	if property.LlmGateway.InferBackend != nil {
-		c.InferBackend = *property.LlmGateway.InferBackend
+		c.WaitScheduleRetryInterval = *property.LlmGateway.WaitScheduleTryPeriod
 	}
 	if property.LlmGateway.ServerlessMode != nil {
 		c.ServerlessMode = *property.LlmGateway.ServerlessMode
@@ -605,48 +512,31 @@ func (c *Config) LoadCfgFromProperties() {
 		}
 	}
 
-	discoveryEndpoint := os.Getenv("DISCOVERY_ENDPOINT")
-	if len(discoveryEndpoint) > 0 {
-		c.DiscoveryEndpoint = discoveryEndpoint
-	}
-
 	// Basic service settings
 	klog.Infof("service listen host and port: %s:%d", c.Host, c.Port)
 	logIfNotEmpty("service: %s", c.Service)
 	logIfNotEmpty("llm gateway: %s", c.LlmGateway)
 	logIfNotEmpty("llm scheduler: %s", c.LlmScheduler)
-	logIfNotEmpty("llm backend service: %s", c.BackendService)
 	logIfNotEmpty("use discovery: %s", c.UseDiscovery)
-	logIfNotEmpty("discovery endpoint: %s", c.DiscoveryEndpoint)
 	logIfNotEmpty("local test ips: %s", c.LocalTestIPs)
 	logIfNotEmpty("builtin tokenizer: %s", c.TokenizerName)
 	logIfNotEmpty("tokenizer path: %s", c.TokenizerPath)
 
 	// Network/connection settings
-	logIfNotEmpty("retry count: %d", c.RetryCount)
+	logIfNotEmpty("max queue size: %d", c.MaxQueueSize)
 	logIfNotEmpty("wait queue threads: %d", c.WaitQueueThreads)
 	logIfNotEmpty("wait schedule timeout: %dms", c.WaitScheduleTimeout)
-	logIfNotEmpty("wait schedule try period: %dms", c.WaitScheduleTryPeriod)
-	logIfNotEmpty("max queue size: %d", c.MaxQueueSize)
+	logIfNotEmpty("wait schedule try period: %dms", c.WaitScheduleRetryInterval)
 
 	// Scheduling policies
 	logIfNotEmpty("schedule policy: %s", c.SchedulePolicy)
 	logIfNotEmpty("pd split mode: %s", c.PDSplitMode)
-	// TODO(sunbiao.sun): remove
-	logIfNotEmpty("limit requests: %d", c.LimitRequests)
-	logIfNotEmpty("prefill limit requests: %d", c.PrefillLimitRequests)
-	logIfNotEmpty("decode limit requests: %d", c.DecodeLimitRequests)
-	logIfNotEmpty("limit tokens: %d", c.LimitTokens)
-	logIfNotEmpty("prefill limit tokens: %d", c.PrefillLimitTokens)
-	logIfNotEmpty("decode limit decode tokens: %d", c.DecodeLimitRequests)
-	logIfNotEmpty("limit tokens threshold scale: %f", c.LimitTokensThresholdScale)
-	logIfNotEmpty("prompt length threshold: %d", c.PromptLengthThreshold)
-	logIfNotEmpty("requests report duration: %d", c.RequestsReporterDuration)
+	logIfNotEmpty("request report interval: %d", c.RequestReportInterval)
 
 	// Feature flags
 	logIfNotEmpty("llm serverless mode: %v", c.ServerlessMode)
-	logIfNotEmpty("enable access log: %v", c.EnableAccessLog)
 	logIfNotEmpty("schedule mode: %v", c.ScheduleMode)
+	logIfNotEmpty("enable access log: %v", c.EnableAccessLog)
 }
 
 // safeSplitArgs safely splits a string by comma, handling quotes and square brackets.
