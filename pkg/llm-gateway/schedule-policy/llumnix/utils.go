@@ -67,7 +67,7 @@ func verifyDispatchLoadMetric(c *options.Config) {
 		consts.LlumnixSchedulingMetricNumWaitingRequests, consts.LlumnixSchedulingMetricAllPrefillsKVBlocksNum,
 		consts.LlumnixSchedulingMetricKVCacheHitLen, consts.LlumnixSchedulingMetricCacheAwareAllPrefillsKVBlocksNum,
 		consts.LlumnixSchedulingMetricAdaptiveDecodeBatchSize, consts.LlumnixSchedulingMetricNumRequests,
-		consts.LlumnixSchedulingMetricAllDecodesSeqLenWithAllPrefills)
+		consts.LlumnixSchedulingMetricAllDecodesKVBlocksNumWithAllPrefills)
 
 	if !c.LlumnixConfig.EnableFullModeScheduling {
 		if !liteModeSchedulingMetricSet.Has(c.LlumnixConfig.DispatchNeutralLoadMetric) {

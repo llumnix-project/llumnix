@@ -133,7 +133,7 @@ func (r *RequestReporter) reportLoop() {
 	}()
 	// report every 5 seconds
 	for {
-		time.Sleep(time.Duration(r.config.RequestsReporterDuration) * time.Second)
+		time.Sleep(time.Duration(r.config.RequestReportInterval) * time.Second)
 		r.report()
 	}
 }
