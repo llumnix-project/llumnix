@@ -45,14 +45,14 @@ class BenchmarkConfig:
     data_path: str = "test.jsonl"
     max_tokens: int = 10000
     num_mig: int =1
-    
+
     # backend API
     url: str = "http://127.0.0.1:8080"
-    
+
     # parallel
     parallel: int = 64
     n_ctx: int = 4096
-    
+
     # migration
     send_migration: bool = False
     mutual_mig: bool = False
@@ -62,10 +62,10 @@ class BenchmarkConfig:
     dst_llumlet_host: int = ""
     dst_llumlet_port: int = 5678
 
-    
+
     # result
     result_file: str = "result.jsonl"
-    
+
     # server interface
     api_url: str = field(init=False)
 
@@ -107,7 +107,7 @@ def parse_args() -> BenchmarkConfig:
                 missing_args.append(f"--{arg_name.replace('_', '-')}")
         if missing_args:
             parser.error(f"The following arguments are required when --send_migration is set: {', '.join(missing_args)}")
-    
+
     if args.mutual_mig:
         required_for_migration = [
             'send_migration',
@@ -148,7 +148,7 @@ class LlumletClient:
     async def send_migrate(self, src, dst, num_mig):
         if not self._stub:
             raise RuntimeError("Client is not connected. Call connect() first.")
-        
+
         self._logger.info("Sending migrate request from %s to %s...", src.id, dst.id)
         request = llumlet_server_pb2.MigrateRequest(
             src_engine_id=src.id,
@@ -206,7 +206,7 @@ class GSM8KDataset:
             return ret
 
         few_shot_examples = "\n\n".join([get_one_example(self._lines, i, True) for i in range(self._num_shots)]) + "\n\n"
-        
+
         questions = [get_one_example(self._lines, i, False) for i in range(len(self._lines))]
         labels = [self._get_answer_value(line["answer"]) for line in self._lines]
 
@@ -216,9 +216,9 @@ class GSM8KDataset:
         while len(prompts) < self._num_questions:
             prompts.extend([few_shot_examples + q for q in questions])
             final_labels.extend(labels)
-            
+
         return prompts[:self._num_questions], final_labels[:self._num_questions]
-    
+
     @staticmethod
     def _get_answer_value(answer_str: str) -> int:
         answer_str = answer_str.replace(",", "")
@@ -288,14 +288,14 @@ class Evaluator(Protocol):
 class GSM8KEvaluator:
     def evaluate(self, predictions: List[str], labels: List[int]) -> Dict[str, float]:
         parsed_preds = [GSM8KDataset._get_answer_value(p) for p in predictions]
-        
+
         correct = np.array(parsed_preds) == np.array(labels)
         invalid = np.array(parsed_preds) == INVALID_ANSWER
         logger.info(f"correct: %s", labels)
         logger.info("predict: %s", parsed_preds)
         accuracy = np.mean(correct)
         invalid_rate = np.mean(invalid)
-        
+
         logger.info(f"Accuracy: {accuracy:.4f}")
         logger.info(f"Invalid Rate: {invalid_rate:.4f}")
         return {"accuracy": accuracy, "invalid_rate": invalid_rate}
@@ -318,7 +318,7 @@ class CountingEvaluator:
             numbers_found = [int(num) for num in re.findall(r'\d+', text)]
         except (ValueError, TypeError):
             return False
-        
+
         expected = list(range(start, end + 1))
         main_sequence = self._find_longest_consecutive_subsequence(numbers_found)
         return main_sequence == expected
@@ -327,7 +327,7 @@ class CountingEvaluator:
         # 'labels' is a list of True values
         results = [self._validate(p, 0, 100) for p in predictions]
         accuracy = np.mean(np.array(results) == np.array(labels))
-        
+
         logger.info(f"Accuracy: {accuracy:.3f}")
         return {"accuracy": accuracy}
 
@@ -386,7 +386,7 @@ class BenchmarkRunner:
         if self._config.mode == 'cnt':
             return CountingAPIClient(self._config.api_url)
         return VLLMAPIClient(self._config.api_url)
-    
+
     def _create_evaluator(self) -> Evaluator:
         if self._config.mode == 'gsm8k':
             return GSM8KEvaluator()
@@ -412,7 +412,7 @@ class BenchmarkRunner:
         prompts = self._dataset.get_prompts()
         labels = self._dataset.get_labels()
         predictions = [""] * len(prompts)
-        
+
         loop = asyncio.get_running_loop()
         stop_event = asyncio.Event()
         migration_task_src = None
@@ -438,14 +438,14 @@ class BenchmarkRunner:
                     predictions[i] = result
                 except Exception:
                     self._logger.error(f"Request {i} failed.", exc_info=True)
-            
+
             main_tasks = [asyncio.create_task(process_request(i)) for i in range(len(prompts))]
-            
+
             for future in tqdm(asyncio.as_completed(main_tasks), total=len(main_tasks), desc="Processing Requests"):
                 await future
 
         latency = time.perf_counter() - start_time
-        
+
         if migration_task_src:
             self._logger.info("All main tasks are done. Stopping migration task src...")
             stop_event.set()
@@ -459,14 +459,14 @@ class BenchmarkRunner:
 
         self._logger.info("Evaluating results...")
         metrics = self._evaluator.evaluate(predictions, labels)
-        
+
         self._result_logger.dump_raw_output(predictions)
         self._result_logger.log_final_results(metrics, latency)
 
 
 if __name__ == "__main__":
     try:
-        config = parse_args() 
+        config = parse_args()
         runner = BenchmarkRunner(config)
         asyncio.run(runner.run())
     except Exception as e:

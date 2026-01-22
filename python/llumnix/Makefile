@@ -1,3 +1,5 @@
+CPU_CORES := $(shell nproc --all 2>/dev/null || echo 4)
+
 .PHONY: vllm_install
 vllm_install: proto
 	@pip install -e .[vllm]
@@ -6,20 +8,16 @@ vllm_install: proto
 lint: check_pylint_installed
 	@err=0; \
 	targets=$$(find llumnix -name "*.py" -not -path "*/\.*"); \
-	echo "$$targets" | xargs pylint --rcfile=.pylintrc -s n --jobs=128 || err=1; \
-	pylint --rcfile=.pylintrc -s n --jobs=128 setup.py || err=1; \
+	echo "$$targets" | xargs pylint --rcfile=.pylintrc -s n --jobs=$(CPU_CORES) || err=1; \
+	pylint --rcfile=.pylintrc -s n --jobs=$(CPU_CORES) setup.py || err=1; \
 	if [ "$$err" -ne "0" ]; then exit 1; fi
 
 ##################################### pylint begin ######################################
 
 PYLINT_VERSION = 2.12.2
-PYLINT_REQUIRED_PYTHON_VERSION = 3.10
 
 .PHONY: check_pylint_installed
 check_pylint_installed:
-	@python3 -c "import sys; version = f'{sys.version_info.major}.{sys.version_info.minor}'; \
-		assert version == '$(PYLINT_REQUIRED_PYTHON_VERSION)', \
-		f'Python version must be $(PYLINT_REQUIRED_PYTHON_VERSION), but current version is {version}'"
 	@python3 -c "import pylint; assert pylint.__version__ == '$(PYLINT_VERSION)'" 2>/dev/null || { \
 		echo "pylint is not installed or version does not match $(PYLINT_VERSION). Installing..."; \
 		python3 -m pip install --force-reinstall pylint==$(PYLINT_VERSION); }
@@ -52,7 +50,6 @@ proto:
 proto-clean:
 	@find . -name "*_pb2_grpc.py" | xargs rm -f
 	@find . -name "*_pb2.py" | xargs rm -f
-	@find . -name "*_pb2.pyi" | xargs rm -f
 
 ####################################### proto end #######################################
 

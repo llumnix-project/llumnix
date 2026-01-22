@@ -72,7 +72,7 @@ type invertedSingleInstanceFilterWrapper struct {
 func (r *invertedSingleInstanceFilterWrapper) instanceFilteredOut(instance *instanceViewScheduling) bool {
 	result := !r.innerFilter.instanceFilteredOut(instance)
 	if result {
-		klog.V(3).Infof("Inverted filter applied, instance %s filtered out.", instance.GetInstanceId())
+		klog.V(3).Infof("Inverted filter (%T) applied, instance %s filtered out.", r.innerFilter, instance.GetInstanceId())
 	}
 	return result
 }

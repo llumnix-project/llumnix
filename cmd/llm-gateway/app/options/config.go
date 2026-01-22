@@ -383,7 +383,7 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&c.RedisRetryTimes, "redis-retry-times", 3, "Redis retry times")
 
 	flags.IntVar(&c.RedisDiscoveryStatusTTLMs, "redis-discovery-status-ttl-ms", 10000, "Redis discovery status TTL milliseconds")
-	flags.IntVar(&c.RedisDiscoveryRefreshIntervalMs, "redis-discovery-refresh-interval-ms", 5000, "Redis discovery refresh interval milliseconds")
+	flags.IntVar(&c.RedisDiscoveryRefreshIntervalMs, "redis-discovery-refresh-interval-ms", 1000, "Redis discovery refresh interval milliseconds")
 
 	flags.IntVar(&c.BatchParallel, "batch-parallel", 8, "The parallel of shard process")
 	flags.IntVar(&c.BatchLinesPerShard, "batch-lines-per-shard", 1000, "The number of lines per shard file")

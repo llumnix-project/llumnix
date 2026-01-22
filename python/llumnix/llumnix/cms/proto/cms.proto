@@ -28,6 +28,11 @@ message InstanceMetadata {
 
   double utc_create = 16;
   double utc_update = 17;
+
+  string ip_kvt = 18;
+  int32 block_size = 19;
+
+  int32 max_num_batched_tokens = 20;
 }
 
 message InstanceStatus {
@@ -39,7 +44,7 @@ message InstanceStatus {
   int32 step_id = 4;
   int32 update_id = 5;
 
-  // status for updating instance status local account
+  // status for updating instance status account
   repeated string recent_waiting_requests = 6;
   repeated string waiting_requests = 7;
 

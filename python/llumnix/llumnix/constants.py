@@ -18,6 +18,7 @@ RPC_TIMEOUT: float = 5.0  # s
 # llumnix/llumlet/llumlet.py
 MAX_ENGINE_CLIENT_RETRIES: int = 3
 ENGINE_CLIENT_RETRY_INTERVAL: float = 2.0  # seconds
+PRESTOP_MIGRATION_SEND_TIMES: int = 2
 
 # llumnix/vllm_utils.py
 VLLM_MIGRATION_RETRIES: int = 2
@@ -30,3 +31,5 @@ OUTPUT_FORWARDER_CLOSE_TIMEOUT: float = 10.0
 
 # llumnix/outputs/forwarder/base_output_forwarder.py
 GRPC_TIMEOUT: float = 5.0
+MIGRATION_FRONTEND_INIT_TIMEOUT: float = 30  # seconds
+PRESTOP_TIMEOUT: float = 5 # seconds

@@ -102,7 +102,7 @@ type CompletionRequest struct {
 	Stream              bool                   `json:"stream,omitempty"`
 	StreamOptions       *StreamOptions         `json:"stream_options,omitempty"`
 	Suffix              string                 `json:"suffix,omitempty"`
-	Temperature         float32                `json:"temperature,omitempty"`
+	Temperature         float32                `json:"temperature"`
 	TopP                float32                `json:"top_p,omitempty"`
 	User                string                 `json:"user,omitempty"`
 	KvTransferParams    map[string]interface{} `json:"kv_transfer_params,omitempty"`

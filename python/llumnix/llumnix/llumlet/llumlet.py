@@ -11,7 +11,7 @@ import psutil
 
 from llumnix import envs
 from llumnix.cms.cms_client_async import CMSWriteClient
-from llumnix.constants import ENGINE_CLIENT_RETRY_INTERVAL, MAX_ENGINE_CLIENT_RETRIES
+from llumnix.constants import ENGINE_CLIENT_RETRY_INTERVAL, MAX_ENGINE_CLIENT_RETRIES, PRESTOP_MIGRATION_SEND_TIMES
 from llumnix.engine_client.base_engine_client import BaseEngineClient
 from llumnix.engine_client.utils import (
     create_engine_client,
@@ -24,9 +24,11 @@ from llumnix.llumlet.converters import to_cms_metadata, to_cms_status
 from llumnix.llumlet.instance_info import BackendType, InstanceMetaData, InstanceStatus
 from llumnix.llumlet.rpc_server import AsyncLlumletRPCServer
 from llumnix.logging.logger import init_logger
+from llumnix.outputs.queue.zmq_client import MigrationZmqClient
 from llumnix.utils import (
     MigrationLimits,
     MigrationParams,
+    MigrationType,
     NotEnoughSlotsError,
     RequestIDType,
     get_metric_push_interval,
@@ -46,6 +48,7 @@ class Llumlet:
         self,
         engine_type: str,
         engine_config: Any,
+        mig_address: Optional[str] = None,
     ):
         self.engine_type = engine_type
         self.client_addresses = get_engine_client_addresses(engine_type=engine_type)
@@ -60,6 +63,7 @@ class Llumlet:
                 "client_addresses": self.client_addresses,
                 "parent_pid": os.getpid(),
                 "rpc_port": self.rpc_port,
+                "mig_address": mig_address,
             },
             daemon=False,
         )
@@ -104,6 +108,7 @@ class LlumletProc:
         rpc_port: int,
         client_addresses: Optional[dict[str, str]] = None,
         parent_pid: Optional[int] = None,
+        mig_address: Optional[str] = None,
     ) -> None:
         logger.info("Initializing LlumletProc...")
         for key in dir(envs):
@@ -130,9 +135,12 @@ class LlumletProc:
         self.instance_status: InstanceStatus = InstanceStatus()
         self.last_report_instance_status_timestamp = None
 
-        self.mig_limits: MigrationLimits = get_migration_limits()
         self.enable_mig = envs.LLUMNIX_ENABLE_MIGRATION
         self.detailed_mig = envs.LLUMNIX_DETAILED_MIG_STATUS
+        if self.enable_mig:
+            if self.engine_type == BackendType.VLLM_V1:
+                self.mig_client = MigrationZmqClient(mig_address)
+            self.mig_limits: MigrationLimits = get_migration_limits(self.detailed_mig)
 
         self.update_instance_status_mode = envs.LLUMNIX_UPDATE_INSTANCE_STATUS_MODE
         assert self.update_instance_status_mode in [UpdateInstanceStatusMode.PUSH, UpdateInstanceStatusMode.PULL], \
@@ -144,7 +152,7 @@ class LlumletProc:
         def __init__(self, llumlet_proc_instance: "LlumletProc"):
             self.llumlet = llumlet_proc_instance
 
-        async def migrate(self, dst_engine_ip: str, dst_engine_port: str, migration_params: MigrationParams) -> bool:
+        async def migrate(self, dst_engine_ip: str, dst_engine_port: int, migration_params: MigrationParams) -> bool:
             return await self.llumlet.migrate(dst_engine_ip, dst_engine_port, migration_params)
 
         async def abort(self, request_ids: List[RequestIDType]) -> None:
@@ -166,6 +174,7 @@ class LlumletProc:
         rpc_port: int,
         client_addresses: Optional[dict[str, str]] = None,
         parent_pid: Optional[int] = None,
+        mig_address: Optional[str] = None,
     ):
         # Signal handler used for graceful termination.
         # SystemExit exception is only raised once to allow this and worker
@@ -196,6 +205,7 @@ class LlumletProc:
                 client_addresses=client_addresses,
                 parent_pid=parent_pid,
                 rpc_port=rpc_port,
+                mig_address=mig_address,
             )
         # pylint: disable=broad-except
         except Exception:
@@ -242,12 +252,13 @@ class LlumletProc:
         llumlet_specific_meta = {
             "utc_create": utc_now,
             "utc_update": utc_now,
-            "node_id": 0,  # TODO(jiangjiemin): get from env variables
+            "node_id": 0,  # TODO(jiangjiemin): get from eas env variables
             "llumlet_port": self.rpc_port,
             "backend_type": engine_type,
         }
         engine_specific_meta = get_specific_instance_meta_data(engine_type, engine_config)
-        if engine_type == BackendType.SGLANG: # set ip/port for migration
+        if engine_type in [BackendType.SGLANG, BackendType.VLLM_V1_CE]:
+            # set ip/port for migration
             engine_specific_meta["ip_kvs"] = engine_specific_meta["ip"]
             engine_specific_meta["kvt_port"] = self.rpc_port
         all_metadata_dict = {**engine_specific_meta, **llumlet_specific_meta}
@@ -411,7 +422,7 @@ class LlumletProc:
             self.last_report_instance_status_timestamp = time.time()
             logger.debug("instance_status: {}".format(instance_status))
 
-    async def migrate(self, dst_engine_host: str, dst_engine_port: str, migration_params: MigrationParams) -> bool:
+    async def migrate(self, dst_engine_host: str, dst_engine_port: int, migration_params: MigrationParams) -> bool:
         """Send migration request to engine core"""
         if migration_params.num_reqs > self.instance_status.num_available_migrate_out_slots:
             raise NotEnoughSlotsError(f"Number of migration requests exceeds engine migration limits. Max_migrate_out_reqs: "
@@ -422,19 +433,46 @@ class LlumletProc:
         if self.detailed_mig and migration_params.block_ratio > self.instance_status.available_block_ratio_migrate_out:
             raise NotEnoughSlotsError(f"Block ratio of migration request exceeds engine migration limits. Max_migrate_out_block_ratio: "
                                       f"{self.instance_status.available_block_ratio_migrate_out} , got {migration_params.block_ratio}")
-        success, res = await self._execute_with_timeout(
-            lambda: self.engine_client.migrate_out(
-                dst_engine_host=dst_engine_host,
-                dst_engine_port=dst_engine_port,
-                migration_params = migration_params
-            ),
-            "migrate",
-            envs.LLUMNIX_ENGINE_MIGRATE_TIMEOUT,
-        )
-        if success:
-            return res
+        if  self.engine_type !=BackendType.VLLM_V1 or \
+            (migration_params.migration_type == MigrationType.NUM_REQ and migration_params.num_reqs == -1):
+            # Pre-stop migration, attempting twice to drain most of requests.
+            # This is necessary because some requests maybe not in running or waiting lists.
+            any_req_migrated = False
+            any_success = False
+            send_time = 1
+            if migration_params.migration_type == MigrationType.NUM_REQ and migration_params.num_reqs == -1:
+                logger.info("Starting pre-stop migration to %s:%s for all requests.", dst_engine_host, dst_engine_port)
+                send_time = PRESTOP_MIGRATION_SEND_TIMES
+            for _ in range(send_time):
+                success, res = await self._execute_with_timeout(
+                lambda: self.engine_client.migrate_out(
+                    dst_engine_host=dst_engine_host,
+                    dst_engine_port=dst_engine_port,
+                    migration_params = migration_params
+                ),
+                "migrate",
+                envs.LLUMNIX_ENGINE_MIGRATE_TIMEOUT,
+                )
+                if success:
+                    any_req_migrated = any_req_migrated or res
+                    any_success = True
+            if any_success:
+                return any_req_migrated
+        else:
+            success, res = await self._execute_with_timeout(
+                lambda: self.mig_client.migrate(
+                    dst_host=dst_engine_host,
+                    dst_port=dst_engine_port,
+                    migration_params = migration_params
+                ),
+                "migrate",
+                envs.LLUMNIX_ENGINE_MIGRATE_TIMEOUT,
+                )
+            if success:
+                return res
+        raise RuntimeError("Llumlet failed to finish sending Migrate request(s).")
 
-        raise RuntimeError("Engine client failed to send Migrate request.")
+
 
     async def abort(self, request_ids: List[RequestIDType]) -> None:
         success, _ = await self._execute_with_timeout(

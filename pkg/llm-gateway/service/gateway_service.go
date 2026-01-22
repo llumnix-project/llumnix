@@ -323,6 +323,7 @@ func (h *balancerLifecycleHandler) ScheduleDecode(req *types.RequestContext) (ty
 		return nil, err
 	}
 	schResult := req.ScheduleCtx.ScheduleResults
+	klog.V(3).Infof("decode request [%s] scheduled to %s", req.Id, results.String())
 	req.ScheduleCtx.ScheduleResults = append(schResult, results...)
 	return results, nil
 }

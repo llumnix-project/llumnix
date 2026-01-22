@@ -12,10 +12,7 @@ from vllm.config import VllmConfig
 from vllm.v1.engine import (EngineCoreOutputs, UtilityOutput)
 from vllm.v1.engine.core_client import AsyncMPClient
 from vllm.version import __version__ as VLLM_VERSION
-try:
-    from vllm.utils.network_utils import get_open_zmq_ipc_path
-except ImportError:
-    from vllm.utils import get_open_zmq_ipc_path
+from llumnix.compat.vllm_compat import get_ip, get_open_zmq_ipc_path
 
 from llumnix.engine_client.base_engine_client import BaseEngineClient
 from llumnix.llumlet.instance_info import InstanceType, InstanceStatus
@@ -118,7 +115,7 @@ class VLLMEngineClient(BaseEngineClient, AsyncMPClient):
             instance_status = res.result
         return instance_status
 
-    async def migrate_out(self, dst_engine_host: str, dst_engine_port: str, migration_params: MigrationParams) -> bool:
+    async def migrate_out(self, dst_engine_host: str, dst_engine_port: int, migration_params: MigrationParams) -> bool:
         """Send migration request to engine core"""
         res = await self.call_utility_async("migrate_out", dst_engine_host, dst_engine_port, migration_params)
         if llumnix_envs.LLUMNIX_VLLM_BRANCH == "kvs-dev" or VLLM_VERSION.startswith("0.9"):
@@ -157,15 +154,6 @@ def _llumnix_process_utility_output(output: UtilityOutput,
         except asyncio.InvalidStateError:
             logger.error("Failed to set result on future (call_id: %s).", output.call_id)
 
-def get_host_ip_by_instance_type(instance_type: InstanceType) -> str:
-    if_name = ""
-    if instance_type == InstanceType.PREFILL and llumnix_envs.LLUMNIX_PREFILL_NETWORK_INTERFACE != "":
-        if_name = llumnix_envs.LLUMNIX_PREFILL_NETWORK_INTERFACE
-    if instance_type == InstanceType.DECODE and llumnix_envs.LLUMNIX_DECODE_NETWORK_INTERFACE != "":
-        if_name = llumnix_envs.LLUMNIX_DECODE_NETWORK_INTERFACE
-    if instance_type == InstanceType.NEUTRAL and llumnix_envs.LLUMNIX_NEUTRAL_NETWORK_INTERFACE != "":
-        if_name = llumnix_envs.LLUMNIX_NEUTRAL_NETWORK_INTERFACE
-    return get_ip_address(ifname=if_name)
 
 def get_host_ip(ifname: str = None) -> str:
     return get_ip_address(ifname=ifname)
@@ -210,17 +198,24 @@ def vllm_get_instance_meta_data(cfg: VllmConfig) -> dict:
         raise SystemExit() from e
     metadata = {
         "instance_id": instance_id,
-        "ip": get_host_ip_by_instance_type(instance_type),
+        "ip": get_ip_address("eth0"), # Use the IP of eth0 to ensure that llm-gateway can reach the API server.
         "ip_kvs": get_host_ip(),
         "instance_type": instance_type,
         "unit_id": unit_id,
         "api_server_port": api_server_port,
+        "max_num_batched_tokens": cfg.scheduler_config.max_num_batched_tokens,
+        "block_size": cfg.cache_config.block_size,
     }
     if cfg.kv_transfer_config:
         if cfg.kv_transfer_config.kv_connector=='HybridConnector':
             metadata["kvt_port"] = get_kvt_port(cfg)
+            ip_kvt = get_ip()
+            if isinstance(ip_kvt, tuple):
+                ip_kvt = ip_kvt[0]
+            metadata['ip_kvt'] = ip_kvt
         else:
             metadata["kvt_port"] = -1
+            metadata['ip_kvt'] = ''
     if cfg.parallel_config.data_parallel_rank:
         metadata["dp_rank"] = cfg.parallel_config.data_parallel_rank
     if cfg.parallel_config.data_parallel_rank_local:
@@ -231,6 +226,9 @@ def vllm_get_instance_meta_data(cfg: VllmConfig) -> dict:
             instance_id = instance_id+'_dp'+str(cfg.parallel_config.data_parallel_rank)
     metadata["instance_id"] = instance_id
     metadata["tensor_parallel_size"] = cfg.parallel_config.tensor_parallel_size
+
+    logger.info("Llumnix Instance metadata: %s", metadata)
+
     return metadata
 
 

@@ -72,19 +72,16 @@ func (p *decodeLoadBalanceReschedule) getMigrationReqSelectPolicy() migrationReq
 }
 
 /*
-DecodeLoadBalanceReschedule enables load balancing among Decode-type instances by redistributing
+LoadBalanceReschedule enables load balancing among instances by redistributing
 workload from overloaded instances to underutilized ones.
 
-Conditions:
-  - Enable PDD
-
 Instance Type:
-  - Source: Decode
-  - Destination: Decode
+  - Source: Any
+  - Destination: Same to Source
 
 Filters:
-  - Source: A schedulable, healthy Decode instance with excessive load and non-expired instance information.
-  - Destination: A schedulable, healthy, less-loaded Decode instance with non-expired instance information.
+  - Source: A schedulable, healthy instance with excessive load and non-expired instance information.
+  - Destination: A schedulable, healthy, less-loaded instance with non-expired instance information.
 
 Selector:
   - Source instances with high load are preferentially paired with destination instances with low load.
@@ -112,7 +109,7 @@ func newLoadBalanceReschedule(p *options.LlumnixConfig, inferMode string) *decod
 	r := &decodeLoadBalanceReschedule{
 		baseReschedulePolicy: baseReschedulePolicy{
 			metrics: map[string]func() instanceSchedulingMetric{
-				p.RescheduleDecodeLoadMetric: getSchedulingMetric(p, targetLoadMetric),
+				targetLoadMetric: getSchedulingMetric(p, targetLoadMetric),
 			},
 			srcSingleInstanceFilters: []singleInstanceFilter{
 				&inferModeFilter{targetInferMode: inferMode},

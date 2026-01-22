@@ -18,6 +18,10 @@ import (
 	"easgo/pkg/llm-gateway/utils"
 )
 
+const (
+	LOG_INTERVAL_S = 10
+)
+
 var (
 	client *CMSReadClient
 	mu     sync.RWMutex // to protect client
@@ -230,11 +234,15 @@ func (c *CMSReadClient) refreshMetadataLoop() {
 		return
 	}
 	metricRecordIndex := int32(0)
+	lastLogTime := time.Now()
 	for {
 		start := time.Now()
 		c.refreshInstanceMetadata()
 		elapsed := time.Since(start)
-		klog.V(4).Infof("[refreshMetadataLoop] refreshInstanceMetadata took %v", elapsed)
+		if time.Since(lastLogTime) > LOG_INTERVAL_S*time.Second {
+			klog.V(3).Infof("[refreshMetadataLoop] refreshInstanceMetadata took %v", elapsed)
+			lastLogTime = time.Now()
+		}
 		if c.recordMetricsInterval > 0 && metricRecordIndex == 0 {
 			metrics.AddLlumnixLatency(metrics.LlumnixMetricCmsRefreshInstanceMetadataLatencyMicroseconds, metrics.Labels{}, elapsed.Microseconds())
 			metricRecordIndex = (metricRecordIndex + 1) % c.recordMetricsInterval
@@ -258,6 +266,7 @@ func (c *CMSReadClient) refreshStatusLoop() {
 		return
 	}
 	metricRecordIndex := int32(0)
+	lastLogTime := time.Now()
 	for {
 		start := time.Now()
 		needRecordMetrics := false
@@ -267,7 +276,10 @@ func (c *CMSReadClient) refreshStatusLoop() {
 		}
 		c.refreshInstanceStatus(needRecordMetrics)
 		elapsed := time.Since(start)
-		klog.V(4).Infof("[refreshStatusLoop] refreshInstanceStatus took %v", elapsed)
+		if time.Since(lastLogTime) > LOG_INTERVAL_S*time.Second {
+			klog.V(4).Infof("[refreshStatusLoop] refreshInstanceStatus took %v", elapsed)
+			lastLogTime = time.Now()
+		}
 		if needRecordMetrics {
 			metrics.AddLlumnixLatency(metrics.LlumnixMetricCmsRefreshInstanceStatusLatencyMicroseconds, metrics.Labels{}, elapsed.Microseconds())
 		}
@@ -362,6 +374,8 @@ func (c *CMSReadClient) refreshInstanceMetadata() {
 
 		if metadata, exists := c.instanceMetadatas[instanceID]; !exists || metadata == nil {
 			c.instanceMetadatas[instanceID] = &InstanceMetadata{}
+			klog.V(4).Infof("[refreshInstanceMetadata] instanceID=%s, metadata=%+v",
+				instanceID, c.instanceMetadatas[instanceID])
 		}
 		instanceMetadata := c.instanceMetadatas[instanceID]
 
@@ -371,9 +385,6 @@ func (c *CMSReadClient) refreshInstanceMetadata() {
 				err, instanceID)
 			continue
 		}
-
-		klog.V(4).Infof("[refreshInstanceMetadata] instanceID=%s, metadata=%+v",
-			instanceID, c.instanceMetadatas[instanceID])
 
 		newIP := instanceMetadata.GetIpKvs()
 		if newIP != oldIP {
@@ -455,9 +466,7 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 			delete(c.instanceStatuses, instanceID)
 			delete(c.instanceViews, instanceID)
 			for inferMode, instanceViews := range c.groupedInstanceViews {
-				if _, exists := instanceViews[instanceID]; exists {
-					delete(instanceViews, instanceID)
-				}
+				delete(instanceViews, instanceID)
 				if len(instanceViews) == 0 {
 					delete(c.groupedInstanceViews, inferMode)
 				}
@@ -471,9 +480,7 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 			delete(c.instanceStatuses, instanceID)
 			delete(c.instanceViews, instanceID)
 			for inferMode, instanceViews := range c.groupedInstanceViews {
-				if _, exists := instanceViews[instanceID]; !exists {
-					delete(instanceViews, instanceID)
-				}
+				delete(instanceViews, instanceID)
 				if len(instanceViews) == 0 {
 					delete(c.groupedInstanceViews, inferMode)
 				}
@@ -529,18 +536,18 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 		updateInstanceStatus := true
 		updateTTFTPredictor := true
 		if c.statusUnmarshalBuffer.TimestampMs <= c.instanceStatuses[instanceID].TimestampMs {
-			klog.V(4).Infof("[refreshInstanceStatus] Not newer timestamp, skip update instance status, "+
+			klog.V(5).Infof("[refreshInstanceStatus] Not newer timestamp, skip update instance status, "+
 				"instanceID=%s", instanceID)
 			continue
 		}
 		if c.statusUnmarshalBuffer.UpdateId <= c.instanceStatuses[instanceID].UpdateId {
-			klog.V(4).Infof("[refreshInstanceStatus] Not newer update id, skip update instance status, "+
+			klog.V(5).Infof("[refreshInstanceStatus] Not newer update id, skip update instance status, "+
 				"instanceID=%s", instanceID)
 			updateInstanceStatus = false
 		}
 		if c.statusUnmarshalBuffer.ProfilingId == -1 ||
 			c.statusUnmarshalBuffer.ProfilingId <= c.instanceStatuses[instanceID].ProfilingId {
-			klog.V(4).Infof("[refreshInstanceStatus] Not newer profiling id, skip update ttft predictor, "+
+			klog.V(5).Infof("[refreshInstanceStatus] Not newer profiling id, skip update ttft predictor, "+
 				"instanceID=%s", instanceID)
 			updateTTFTPredictor = false
 		}

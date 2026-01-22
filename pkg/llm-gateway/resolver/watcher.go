@@ -48,8 +48,8 @@ func (w *Watcher) Watch(ctx context.Context, getCurrentWorkers func() (types.LLM
 
 	// Register the observer
 	w.obsMu.Lock()
+	defer w.obsMu.Unlock()
 	w.observers[pair] = struct{}{}
-	w.obsMu.Unlock()
 
 	// Get current state using the provided function
 	currentSlice, err := getCurrentWorkers()

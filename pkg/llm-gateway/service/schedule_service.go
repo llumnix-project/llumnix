@@ -198,7 +198,8 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 	}
 
 	if err != nil {
-		metrics.IncrLlumnixCounterByOne(metrics.LlumnixMetricScheduleFailedCount, metrics.Labels{{"error_type", err.Error()}})
+		metrics.IncrLlumnixCounterByOne(
+			metrics.LlumnixMetricScheduleFailedCount, metrics.Labels{{"error_type", err.Error()}})
 		w.WriteHeader(statusCode)
 		w.Write([]byte(err.Error()))
 		if ss.config.EnableAccessLog {
@@ -208,11 +209,13 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 	}
 
 	// record realtime stats for the acquired token
-	for _, worker := range schReq.ScheduleResult {
-		reqState := lrs.NewRequestState(schReq.Id, int64(schReq.PromptNumTokens), worker.Id(), schReq.GatewayId)
-		err := ss.lrsClient.AllocateRequestState(worker.Role.String(), reqState)
-		if err != nil {
-			klog.Errorf("Acquire %s resource request failed: %v", worker.Role, err)
+	if !ss.config.LlumnixConfig.EnableFullModeScheduling {
+		for _, worker := range schReq.ScheduleResult {
+			reqState := lrs.NewRequestState(schReq.Id, int64(schReq.PromptNumTokens), worker.Id(), schReq.GatewayId)
+			err := ss.lrsClient.AllocateRequestState(worker.Role.String(), reqState)
+			if err != nil {
+				klog.Errorf("Acquire %s resource request failed: %v", worker.Role, err)
+			}
 		}
 	}
 

@@ -38,7 +38,7 @@ spec:
       - name: aliyun-registry-secret
       containers:
       - name: scheduler
-        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:gateway-20260106-191316
+        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:gateway-20260116-001948
         imagePullPolicy: Always
         command: ["/usr/local/bin/llm-gateway"]
         args:
@@ -48,6 +48,8 @@ spec:
         - "4"
         - "--host"
         - "0.0.0.0"
+        - "--use-discovery"
+        - "redis"
         - "--schedule-mode"
         - "--schedule-policy"
         - "load-balance"

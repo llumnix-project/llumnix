@@ -37,8 +37,8 @@ class LlumletClient:
             dst_engine_port=dst_port,
             migration_req_policy=RequestMigrationPolicy.SR,
             migration_type=MigrationType.NUM_REQ,
-            num_reqs=-1,
-            trigger_policy="NEUTRAL_LOAD",   
+            num_reqs=1,
+            trigger_policy="NEUTRAL_LOAD",
         )
         try:
             response = await self.stub.Migrate(request)
@@ -74,7 +74,7 @@ async def async_run_stream_generate(num_requests: int, host: str, port: int):
             "top_p": 0.5,
             "top_k": 10,
             "max_tokens": 2000,
-            # "kv_transfer_params": {"ali_llumnix_disagg": False},
+            "kv_transfer_params": {"ali_llumnix_disagg": False},
         }
 
         response = requests.post(

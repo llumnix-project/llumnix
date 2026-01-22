@@ -1,0 +1,1168 @@
+"""
+Usage:
+Adding the following params to vllm command:
+Prefill: --kv-transfer-config '{"kv_connector":"MooncakeConnector","kv_role":"kv_producer", "kv_connector_module_path":"mooncake.mooncake_connector_v1"}'
+Decode: --kv-transfer-config '{"kv_connector":"MooncakeConnector","kv_role":"kv_consumer", "kv_connector_module_path":"mooncake.mooncake_connector_v1"}'
+Proxy: Running vllm_v1_proxy_server.py
+"""
+
+import contextlib
+import threading
+import time
+import importlib.metadata
+
+from collections import defaultdict
+from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from queue import Queue
+from os import getenv
+from typing import TYPE_CHECKING, Any, Optional, List, Tuple, Callable, Type
+import msgspec
+import numpy as np
+import torch
+import zmq
+import random
+
+
+from vllm.attention.selector import get_attn_backend
+from vllm.config import VllmConfig
+from vllm.distributed.kv_transfer.kv_connector.v1.base import (
+    KVConnectorBase_V1, KVConnectorMetadata, KVConnectorRole)
+from vllm.distributed.parallel_state import (get_tensor_model_parallel_rank,
+                                             get_tp_group)
+from vllm.forward_context import ForwardContext
+from vllm.logger import init_logger
+try:
+    from vllm.utils import get_ip, make_zmq_path, make_zmq_socket
+except ImportError:
+    from vllm.utils.network_utils import get_ip, make_zmq_path, make_zmq_socket
+from vllm.v1.attention.backends.utils import get_kv_cache_layout
+from vllm.v1.core.sched.output import SchedulerOutput
+from vllm.v1.request import RequestStatus, Request
+
+if TYPE_CHECKING:
+    from vllm.attention.backends.abstract import AttentionMetadata
+    from vllm.v1.core.kv_cache_manager import KVCacheBlocks
+    from vllm.v1.request import Request
+
+EngineId = str
+ReqId = str
+
+TRANS_DONE = b"trans_done"
+
+g_migrate_out_reqs: set[str] = set()
+g_migrate_in_reqs: set[str] = set()
+g_migrate_out_tokens: dict[str, int] = {}
+g_migrate_in_tokens: dict[str, int] = {}
+g_migrate_in_req_info_lock = threading.Lock()
+g_migrate_out_req_info_lock = threading.Lock()
+
+logger = init_logger(__name__)
+VLLM_MOONCAKE_SIDE_CHANNEL_PORT = int(getenv("VLLM_MOONCAKE_SIDE_CHANNEL_PORT", 6557))
+VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT = int(getenv("VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT", 10))
+VLLM_MOONCAKE_MIGRATION_BASE_PORT = int(getenv("VLLM_MOONCAKE_MIGRATION_BASE_PORT", 7557))
+LLUMNIX_DETAILED_MIG_STATUS = bool(int(getenv("LLUMNIX_DETAILED_MIG_STATUS", "0")))
+
+
+from enum import Enum
+
+class MigrationMessageType(Enum):
+    REGISTER_MIGRATION_ZMQ_PATH = "REGISTER"
+    ABORT_MIGRATE_IN = "ABORT"
+    UPDATE_SUCCESS_MIGRATE_IN = "UPDATE"
+
+class TypeBasedDispatcher:
+    def __init__(self, mapping: List[Tuple[Type, Callable]]):
+        self._mapping = mapping
+        self._fallback_fn = None
+
+    def add_fallback_fn(self, fallback_fn: Callable):
+        self._fallback_fn = fallback_fn
+
+    def __iadd__(self, other: "TypeBasedDispatcher"):
+        self._mapping.extend(other._mapping)
+        return self
+
+    def __call__(self, obj: Any):
+        for ty, fn in self._mapping:
+            if isinstance(obj, ty):
+                return fn(obj)
+
+        if self._fallback_fn is not None:
+            return self._fallback_fn(obj)
+        raise ValueError(f"Invalid object: {obj}")
+
+class MooncakeAgentMetadata(
+        msgspec.Struct,
+        omit_defaults=True,  # type: ignore[call-arg]
+        # required for @cached_property.
+        dict=True):
+    remote_hostname: str
+    remote_port: int
+    request_ids: list[ReqId]
+    kv_caches_base_addr: list[int]
+    block_ids: list[list[int]]
+
+
+
+@dataclass
+class RecvReqMeta:
+    local_block_ids: list[int]
+    remote_host: str
+    remote_port: int
+    is_migrating: bool
+
+@dataclass
+class SendReqMeta:
+    local_block_ids: list[int]
+    is_migrating: bool
+
+
+@dataclass
+class SendBlockMeta:
+    local_block_ids: list[int]
+    ready: threading.Event
+    expire_time: float = float("inf")
+    is_migrating: bool = False
+
+
+@dataclass
+class WorkerSendReqMeta:
+    reqs: dict[ReqId, SendBlockMeta]
+    lock: threading.Lock
+
+
+@dataclass
+class FinishedReqSet:
+    set: set[ReqId]
+    lock: threading.Lock
+
+
+class MooncakeConnectorMetadata(KVConnectorMetadata):
+
+    def __init__(self):
+        self.reqs_to_recv: dict[ReqId, RecvReqMeta] = {}
+        self.reqs_to_send: dict[ReqId, SendReqMeta] = {}
+
+    def add_new_req(self,
+                    request_id: ReqId,
+                    local_block_ids: list[int],
+                    kv_transfer_params: dict[str, Any],
+                    load_remote_cache: bool = True,
+                    is_migrating: bool = False):
+        if load_remote_cache:
+            self.reqs_to_recv[request_id] = RecvReqMeta(
+                local_block_ids=local_block_ids,
+                remote_host=kv_transfer_params["remote_host"],
+                remote_port=kv_transfer_params["remote_port"],
+                is_migrating=is_migrating)
+        else:
+            self.reqs_to_send[request_id] = SendReqMeta(
+                local_block_ids=local_block_ids,
+                is_migrating=is_migrating)
+
+
+class MooncakeConnector(KVConnectorBase_V1):
+
+    def __init__(self, vllm_config: VllmConfig, role: KVConnectorRole):
+        assert vllm_config.kv_transfer_config is not None
+        assert vllm_config.kv_transfer_config.engine_id is not None
+        super().__init__(vllm_config, role)
+        self.engine_id: EngineId = vllm_config.kv_transfer_config.engine_id
+
+        if role == KVConnectorRole.SCHEDULER:
+            self.connector_scheduler: Optional[MooncakeConnectorScheduler] = \
+                MooncakeConnectorScheduler(vllm_config, self.engine_id)
+            self.connector_worker: Optional[MooncakeConnectorWorker] = None
+        elif role == KVConnectorRole.WORKER:
+            self.connector_scheduler = None
+            self.connector_worker = MooncakeConnectorWorker(
+                vllm_config, self.engine_id)
+
+    ############################################################
+    # Scheduler Side Methods
+    ############################################################
+
+    def get_num_new_matched_tokens(
+            self, request: "Request",
+            num_computed_tokens: int) -> tuple[int, bool]:
+        assert self.connector_scheduler is not None
+        return self.connector_scheduler.get_num_new_matched_tokens(
+            request, num_computed_tokens)
+
+    def update_state_after_alloc(self, request: "Request",
+                                 blocks: "KVCacheBlocks",
+                                 num_external_tokens: int):
+        assert self.connector_scheduler is not None
+        return self.connector_scheduler.update_state_after_alloc(
+            request, blocks, num_external_tokens)
+
+    def build_connector_meta(
+        self,
+        scheduler_output: SchedulerOutput,
+    ) -> KVConnectorMetadata:
+        assert self.connector_scheduler is not None
+        return self.connector_scheduler.build_connector_meta(scheduler_output)
+
+    def request_finished(
+        self,
+        request: "Request",
+        block_ids: list[int],
+    ) -> tuple[bool, Optional[dict[str, Any]]]:
+        assert self.connector_scheduler is not None
+        return self.connector_scheduler.request_finished(request, block_ids)
+    
+    def update_connector_output(self, connector_output):
+        assert self.connector_scheduler is not None
+        return self.connector_scheduler.update_connector_output(connector_output)
+
+    ############################################################
+    # Worker Side Methods
+    ############################################################
+    def register_kv_caches(self, kv_caches: dict[str, torch.Tensor]):
+        assert self.connector_worker is not None
+        self.connector_worker.register_kv_caches(kv_caches)
+
+    def get_finished(
+        self, finished_req_ids: set[str]
+    ) -> tuple[Optional[set[str]], Optional[set[str]]]:
+        """Get the finished recving and sending requests."""
+        assert self.connector_worker is not None
+        return self.connector_worker.get_finished()
+
+    def start_load_kv(self, forward_context: "ForwardContext",
+                      **kwargs) -> None:
+        assert self.connector_worker is not None
+        assert isinstance(self._connector_metadata, MooncakeConnectorMetadata)
+        self.connector_worker.start_load_kv(self._connector_metadata)
+
+    def wait_for_layer_load(self, layer_name: str) -> None:
+        """MooncakeConnector does not do layerwise saving."""
+        pass
+
+    def save_kv_layer(self, layer_name: str, kv_layer: torch.Tensor,
+                      attn_metadata: "AttentionMetadata", **kwargs) -> None:
+        """MooncakeConnector does not save explicitly."""
+        pass
+
+    def wait_for_save(self):
+        pass
+
+    def migrate_out_request(self, reqs: List[Request], zmq_path: str):
+        return self.connector_scheduler.migrate_out_request(reqs, zmq_path)
+    
+    def handle_migrate_in_request(self, reqs: List[Request]):
+        return self.connector_scheduler.handle_migrate_in_request(reqs)
+
+@dataclass
+class MigrateReqList:
+    reqs: List[Request]
+    paths: List[str]
+    lock: threading.Lock
+
+@dataclass
+class MigrationRpcList:
+    recv_rpc_list: List[Any]
+    lock: threading.Lock
+
+@dataclass
+class AbortMigrateInReqInput:
+    req_id: str
+
+@dataclass
+class RegisterMigrationZmqPath:
+    req_id_list: List[str]
+    migration_zmq_path: str
+
+@dataclass
+class UpdateSuceessMigrateInReq:
+    req_id: str
+    output_token_ids: list[int]
+
+class MooncakeConnectorScheduler:
+    """Implementation of Scheduler side methods"""
+
+    def __init__(self, vllm_config: VllmConfig, engine_id: str):
+        self.vllm_config = vllm_config
+        self.engine_id: EngineId = engine_id
+        self.side_channel_host = get_ip()
+        self.side_channel_port = (
+            VLLM_MOONCAKE_SIDE_CHANNEL_PORT +
+            vllm_config.parallel_config.data_parallel_rank *
+            vllm_config.parallel_config.tensor_parallel_size)
+
+        assert vllm_config.kv_transfer_config
+        self.kv_role = vllm_config.kv_transfer_config.kv_role
+        logger.info("Initializing Mooncake Transfer Engine Scheduler %s",
+                    engine_id)
+
+        # Requests that need to start recv/send.
+        # New requests are added by update_state_after_alloc in
+        # the scheduler. Used to make metadata passed to Worker.
+        self._reqs_need_recv: dict[ReqId, tuple[Request, list[int]]] = {}
+        self._reqs_need_send: dict[ReqId, list[int]] = {}
+        self._migration_listener_t = None
+        self.enable_llumnix = False
+        
+        # ZMQ socket for receiving migration messages
+        self._zmq_context = None
+        self._zmq_socket = None
+
+        # Migration status
+        self.enable_detailed_mig = LLUMNIX_DETAILED_MIG_STATUS
+
+    def init_migration(self, scheduler):
+        # Migration args
+        self.enable_llumnix = True
+        self.migration_zmq_path = make_zmq_path("tcp", get_ip(), VLLM_MOONCAKE_MIGRATION_BASE_PORT)
+        self.scheduler = scheduler
+        self._request_dispatcher = TypeBasedDispatcher(
+            [
+                (AbortMigrateInReqInput, self.handle_abort_migrate_in_request),
+                (RegisterMigrationZmqPath, self.handle_register_migration_zmq_path),
+                (UpdateSuceessMigrateInReq, self.handle_update_success_migrate_in_request)
+            ]
+        )
+        self.reqs_need_migrate_in = MigrateReqList(
+            reqs=[],
+            paths=[],
+            lock=threading.Lock(),
+        )
+        self.reqs_need_migrate_out = MigrateReqList(
+            reqs=[],
+            paths=[],
+            lock=threading.Lock(),
+        )
+        self.migration_rpc_list = MigrationRpcList(
+            recv_rpc_list=[],
+            lock=threading.Lock(),
+        )
+        self.ready_to_call_remote_migrate_in = {}
+        self.migration_success_queue = []
+        self.migration_failed_queue = []
+        self.migration_zmq_path_dict = {}
+        logger.info("migration_zmq_path %s", self.migration_zmq_path)
+        
+        # Initialize ZMQ context and socket
+        self._zmq_context = zmq.Context()
+        self._zmq_socket = self._zmq_context.socket(zmq.PULL)
+        self._zmq_socket.bind(self.migration_zmq_path)
+        
+        # Start migration listener thread
+        self._migration_listener_t = threading.Thread(
+            target=self._migration_listener,
+            args=(),
+            daemon=True,
+            name="mooncake_migration_listener")
+        self._migration_listener_t.start()
+
+    def __del__(self):
+        """Cleanup background threads and ZMQ resources on destruction."""
+        if self._migration_listener_t:
+            self._migration_listener_t.join(timeout=0)
+            
+        # Clean up ZMQ resources
+        if self._zmq_socket:
+            self._zmq_socket.close()
+        if self._zmq_context:
+            self._zmq_context.term()
+
+    def _migration_listener(self):
+        """Background thread for receiving migration messages."""
+        while True:
+            try:
+                # Non-blocking receive with timeout
+                recv_rpc = self._zmq_socket.recv_pyobj(zmq.NOBLOCK)
+                logger.info("Received migration RPC: %s", recv_rpc)
+                
+                # Add to processing queue
+                with self.migration_rpc_list.lock:
+                    self.migration_rpc_list.recv_rpc_list.append(recv_rpc)
+                    
+            except zmq.Again:
+                # No message available, continue loop
+                time.sleep(0.001)  # Small sleep to prevent busy waiting
+                continue
+            except zmq.ZMQError as e:
+                logger.warning("ZMQ Error in migration listener: %s", e)
+                time.sleep(0.01)  # Sleep longer on error
+                continue
+            except Exception as e:
+                logger.error("Unexpected error in migration listener: %s", e)
+                time.sleep(0.01)
+                continue
+
+    def has_requests(self) -> bool:
+        """Returns true if there are requests to be processed."""
+        return self.migration_rpc_list.recv_rpc_list or self.migration_success_queue or self.migration_failed_queue or self.reqs_need_migrate_in.reqs or self.reqs_need_migrate_out.reqs
+    def update_connector_output(self, connector_output):
+        if not self.enable_llumnix:
+            return
+        finished_sending_wo_migration = []
+        for req_id in connector_output.finished_sending or ():
+            if req_id not in self.scheduler.requests or (self.scheduler.requests[req_id].is_finished() and self.scheduler.requests[req_id].kv_transfer_params.get("do_migrate_out")):
+                self.migration_failed_queue.append(req_id)
+            elif self.scheduler.requests[req_id].kv_transfer_params.get("do_migrate_out"):
+                self.migration_success_queue.append(req_id)
+            else:
+                finished_sending_wo_migration.append(req_id)
+        for req_id in connector_output.failed_sending or ():
+            self.migration_failed_queue.append(req_id)
+
+        connector_output.finished_sending = finished_sending_wo_migration
+        connector_output.finished_recving = [
+            req_id for req_id in connector_output.finished_recving or ()
+            if (req_id in self.scheduler.requests and \
+                not self.scheduler.requests[req_id].kv_transfer_params.get("is_migrating"))
+        ]
+
+    def handle_migrate_in_request(self, reqs: List[Request]):
+        for req in reqs:
+            req.kv_transfer_params["do_remote_prefill"] = False
+            req.kv_transfer_params["do_remote_decode"] = False
+            req.kv_transfer_params["do_migrate_in"] = True
+            req.kv_transfer_params["do_migrate_out"] = False
+            req.num_computed_tokens = 0
+            logger.info("request kv_transfer_params %s", req.kv_transfer_params)
+        with self.reqs_need_migrate_in.lock:
+            self.reqs_need_migrate_in.reqs.extend(reqs)
+        zmq_path = req.kv_transfer_params["migration_zmq_path"]
+        with zmq_ctx(zmq.PUSH, zmq_path, use_term=True) as sock:
+            send_obj = RegisterMigrationZmqPath([req.request_id for req in reqs], self.migration_zmq_path)
+            logger.info("Sending Register request to %s", zmq_path)
+            msg_type = MigrationMessageType.REGISTER_MIGRATION_ZMQ_PATH
+            encoder = msgspec.msgpack.Encoder()
+            encoded_data = encoder.encode(send_obj)
+            sock.send_pyobj(send_obj)
+        
+    def migrate_out_request(self, reqs: List[Request], zmq_path: str):
+        for req in reqs:
+            req.kv_transfer_params["do_remote_prefill"] = False
+            req.kv_transfer_params["do_remote_decode"] = False
+            req.kv_transfer_params["do_migrate_out"] = True
+            req.kv_transfer_params["do_migrate_in"] = False
+            req.kv_transfer_params["migration_zmq_path"] = self.migration_zmq_path
+            logger.info("request zmq_path %s, kv_transfer_params %s", zmq_path, req.kv_transfer_params)
+        
+        with self.reqs_need_migrate_out.lock:
+            self.reqs_need_migrate_out.reqs.extend(reqs)
+            self.reqs_need_migrate_out.paths.extend([zmq_path]*len(reqs))
+    def handle_abort_migrate_in_request(self, zmq_req: AbortMigrateInReqInput):
+        req_id = zmq_req.req_id
+        if req_id not in self.scheduler.requests:
+            return
+        request = self.scheduler.requests[req_id]
+        self.scheduler.kv_cache_manager.free(request)
+        del self.scheduler.requests[req_id]
+        self.scheduler.waiting.remove_requests([request])
+        g_migrate_in_reqs.discard(req_id)
+        if self.enable_detailed_mig:
+            with g_migrate_in_req_info_lock:
+                g_migrate_in_tokens.pop(req_id, None)
+
+    def handle_register_migration_zmq_path(self, zmq_req: RegisterMigrationZmqPath):
+        logger.info("register migration zmq path %s", zmq_req.req_id_list)
+        for req_id in zmq_req.req_id_list:
+            self.migration_zmq_path_dict[req_id] = zmq_req.migration_zmq_path
+
+    def handle_update_success_migrate_in_request(self, zmq_req: UpdateSuceessMigrateInReq):
+        request = self.scheduler.requests[zmq_req.req_id]
+        extra_tokens = zmq_req.output_token_ids[request.num_output_tokens:]
+        logger.info(f"{extra_tokens=}")
+        request.num_computed_tokens = request.num_tokens - 2
+        request.append_output_token_ids(extra_tokens)
+        assert request.status == RequestStatus.WAITING_FOR_REMOTE_KVS, f"{request.status}"
+        request.status = RequestStatus.WAITING
+        logger.info("update success migrate in request %s, %s, %s", zmq_req.req_id, request.num_tokens, request.num_computed_tokens)
+        clear_migrate_in_req_status(zmq_req.req_id)
+        
+
+    def process_input_requests(self):
+        with self.migration_rpc_list.lock:
+            for recv_req in self.migration_rpc_list.recv_rpc_list:
+                output = self._request_dispatcher(recv_req)
+            self.migration_rpc_list.recv_rpc_list.clear()
+
+    def process_need_migrate_in_queue(self):
+        with self.reqs_need_migrate_in.lock:
+            reqs = self.reqs_need_migrate_in.reqs
+            for req in reqs:
+                self.scheduler.add_request(req)
+            self.reqs_need_migrate_in.reqs.clear()
+    
+    def process_need_migrate_out_queue(self):
+        for req, dst_engine_address in zip(self.reqs_need_migrate_out.reqs, self.reqs_need_migrate_out.paths):
+            if req.is_finished():
+                continue
+            if dst_engine_address not in self.ready_to_call_remote_migrate_in:
+                self.ready_to_call_remote_migrate_in[dst_engine_address] = [req]
+            else:
+                self.ready_to_call_remote_migrate_in[dst_engine_address].append(req)
+
+        with self.reqs_need_migrate_out.lock:
+            reqs = self.reqs_need_migrate_out.reqs
+            for req in reqs:
+                if req.is_finished():
+                    clear_migrate_out_req_status(req.request_id)
+                    continue
+                block_ids = self.scheduler.kv_cache_manager.get_block_ids(req.request_id)
+                self._reqs_need_send[req.request_id] = block_ids[0]
+                logger.info("set _reqs_need_send: %s, %s", req.request_id, block_ids)
+            self.reqs_need_migrate_out.reqs.clear()
+            self.reqs_need_migrate_out.paths.clear()
+    
+    def process_migrate_out_success_queue(self):
+        migration_success_queue = []
+        for req_id in self.migration_success_queue:
+            if req_id not in self.migration_zmq_path_dict:
+                migration_success_queue.append(req_id)
+                continue
+            if req_id not in self.scheduler.requests or self.scheduler.requests[req_id].is_finished():
+                self.migration_failed_queue.append(req_id)
+                continue
+            logger.info("Migration %s suceess", req_id)
+            request = self.scheduler.requests[req_id]
+            output_tokens = request._output_token_ids
+            zmq_path = self.migration_zmq_path_dict.pop(req_id)
+            send_obj = UpdateSuceessMigrateInReq(req_id, output_tokens)
+            self.scheduler.kv_cache_manager.free(request)
+            self.scheduler.running.remove(request)
+            del self.scheduler.requests[req_id]
+            with zmq_ctx(zmq.PUSH, zmq_path, use_term=True) as sock:
+                sock.send_pyobj(send_obj)
+            logger.info("send_multipart %s suceess", req_id)
+            clear_migrate_out_req_status(req_id)
+        self.migration_success_queue = migration_success_queue
+
+    def process_migrate_out_failed_queue(self):
+        migration_failed_queue = []
+        for req_id in self.migration_failed_queue:
+            if req_id not in self.migration_zmq_path_dict:
+                migration_failed_queue.append(req_id)
+                continue
+            logger.info("Migration %s failed by finished", req_id)
+            zmq_path = self.migration_zmq_path_dict.pop(req_id)
+            send_obj = AbortMigrateInReqInput(req_id)
+            with zmq_ctx(zmq.PUSH, zmq_path, use_term=True) as sock:
+                sock.send_pyobj(send_obj)
+            clear_migrate_out_req_status(req_id)
+        self.migration_failed_queue = migration_failed_queue
+
+    def step(self):
+        self.process_input_requests()
+        self.process_need_migrate_in_queue()
+        self.process_need_migrate_out_queue()
+        self.process_migrate_out_success_queue()
+        self.process_migrate_out_failed_queue()
+
+    def get_num_new_matched_tokens(
+            self, request: "Request",
+            num_computed_tokens: int) -> tuple[int, bool]:
+        """
+        For remote prefill, pull all prompt blocks from remote
+        asynchronously relative to engine execution.
+
+        Args:
+            request (Request): the request object.
+            num_computed_tokens (int): the number of locally
+                computed tokens for this request
+        Returns:
+            * the number of tokens that can be loaded from the
+              external KV cache beyond what is already computed.
+            * true if the external KV cache tokens will be loaded
+              asynchronously (between scheduler steps).
+        """
+
+        params = request.kv_transfer_params
+        logger.info(
+            "MooncakeConnector get_num_new_matched_tokens: "
+            "num_computed_tokens=%s, kv_transfer_params=%s",
+            num_computed_tokens, params)
+
+        if params is not None and params.get("do_remote_prefill"):
+            # Remote prefill: get all prompt blocks from remote.
+            count = len(request.prompt_token_ids) - num_computed_tokens
+            if count > 0:
+                return count, True
+        if params is not None and params.get("do_migrate_in"):
+            count = max(len(request.all_token_ids) - num_computed_tokens - 2, 0)
+            logger.info("get_num_new_matched_tokens request %s, count=%s", request, count)
+            if count > 0:
+                return count, True
+            else:
+                return 0, True
+        # No remote prefill for this request.
+        return 0, False
+
+    def update_state_after_alloc(self, request: "Request",
+                                 blocks: "KVCacheBlocks",
+                                 num_external_tokens: int):
+
+        params = request.kv_transfer_params
+        logger.info(
+            "MooncakeConnector update_state_after_alloc: "
+            "num_external_tokens=%s, kv_transfer_params=%s",
+            num_external_tokens, params)
+
+        if not params:
+            return
+
+        if params.get("do_remote_prefill") or params.get("do_migrate_in"):
+            if all(p in params for p in ("remote_host", "remote_port")):
+                # If remote_blocks and num_external_tokens = 0, we have
+                # a full prefix cache hit on the D worker. We need to call
+                # send_notif in _read_blocks to free the memory on the P.
+                local_block_ids = (blocks.get_unhashed_block_ids()
+                                   if num_external_tokens > 0 else [])
+                # Get unhashed blocks to pull from remote.
+                logger.info("update_state_after_alloc:local_block_ids=%s, blocks=%s", local_block_ids, blocks)
+                self._reqs_need_recv[request.request_id] = (request,
+                                                            local_block_ids)
+            else:
+                logger.warning(
+                    "Got invalid KVTransferParams: %s. This "
+                    "request will not utilize KVTransfer", params)
+            # Only trigger 1 KV transfer per request.
+            params["do_remote_prefill"] = False
+            params["do_migrate_in"] = False
+
+        elif params.get("do_remote_decode"):
+            # Add an empty list to worker to create event.
+            self._reqs_need_send[request.request_id] = []
+
+    def build_connector_meta(
+        self,
+        scheduler_output: SchedulerOutput,
+    ) -> KVConnectorMetadata:
+        meta = MooncakeConnectorMetadata()
+
+        # Loop through scheduled reqs and convert to RecvReqMeta.
+        for req_id, (req, block_ids) in self._reqs_need_recv.items():
+            assert req.kv_transfer_params is not None
+            is_migrating = req.kv_transfer_params.get("is_migrating")
+            meta.add_new_req(request_id=req_id,
+                                local_block_ids=block_ids,
+                                kv_transfer_params=req.kv_transfer_params,
+                                is_migrating=is_migrating)
+        self._reqs_need_recv.clear()
+
+        for req_id, block_ids in self._reqs_need_send.items():
+            is_migrating = False
+            if self.enable_llumnix:
+                req = self.scheduler.requests[req_id]
+                is_migrating = req.kv_transfer_params.get("is_migrating")
+            meta.add_new_req(request_id=req_id,
+                                local_block_ids=block_ids,
+                                kv_transfer_params={},
+                                load_remote_cache=False,
+                                is_migrating=is_migrating)
+        self._reqs_need_send.clear()
+
+        return meta
+
+    def request_finished(
+        self,
+        request: "Request",
+        block_ids: list[int],
+    ) -> tuple[bool, Optional[dict[str, Any]]]:
+        """
+        Once a request is finished, determine whether request blocks
+        should be freed now or will be sent asynchronously and freed later.
+        """
+
+        params = request.kv_transfer_params
+        logger.debug(
+            "MooncakeConnector request_finished, request_status=%s, "
+            "kv_transfer_params=%s", request.status, params)
+        if not params:
+            return False, None
+
+        if params.get("do_remote_prefill"):
+            # If do_remote_prefill is still True when the request is finished,
+            # update_state_after_alloc must not have been called (the request
+            # must have been aborted before it was scheduled).
+            # To avoid stranding the prefill blocks in the prefill instance,
+            # we must add empty block_ids to _reqs_need_recv so that our
+            # worker side will notify and free blocks in the prefill instance.
+            self._reqs_need_recv[request.request_id] = (request, [])
+            params["do_remote_prefill"] = False
+            return False, None
+
+        if (not params.get("do_remote_decode")
+                or request.status != RequestStatus.FINISHED_LENGTH_CAPPED):
+            return False, None
+
+        # TODO: check whether block_ids actually ever be 0. If not we could
+        # remove the conditional below
+        delay_free_blocks = len(block_ids) > 0
+
+        if delay_free_blocks:
+            self._reqs_need_send[request.request_id] = block_ids
+
+        return delay_free_blocks, dict(do_remote_prefill=True,
+                                       do_remote_decode=False,
+                                       remote_host=self.side_channel_host,
+                                       remote_port=self.side_channel_port)
+
+
+class MooncakeConnectorWorker:
+    """Implementation of Worker side methods"""
+
+    def __init__(self, vllm_config: VllmConfig, engine_id: str):
+        try:
+            from mooncake.engine import TransferEngine
+        except ImportError as e:
+            raise ImportError(
+                "Please install mooncake by following the instructions at "
+                "https://github.com/kvcache-ai/Mooncake/blob/main/doc/en/build.md "  # noqa: E501
+                "to run VLLM with MooncakeTransferEngine.") from e
+        logger.info("Initializing Mooncake Transfer Engine worker %s",
+                    engine_id)
+
+        self.vllm_config = vllm_config
+
+        self.engine = TransferEngine()
+        self.hostname = get_ip()
+        ret_value = self.engine.initialize(self.hostname, "P2PHANDSHAKE",
+                                           "rdma", "")
+        if ret_value != 0:
+            raise RuntimeError(
+                "Mooncake Transfer Engine initialization failed.")
+
+        self.rpc_port = self.engine.get_rpc_port()
+
+        logger.debug("Mooncake Transfer Engine initialized at %s:%d",
+                     self.hostname, self.rpc_port)
+
+        # Mooncake handshake port.
+        self.side_channel_port: int = (
+            VLLM_MOONCAKE_SIDE_CHANNEL_PORT +
+            vllm_config.parallel_config.data_parallel_rank *
+            vllm_config.parallel_config.tensor_parallel_size)
+
+        self.engine_id: EngineId = engine_id
+        self.tp_rank = get_tensor_model_parallel_rank()
+        self.tp_group = get_tp_group()
+        self.num_blocks = 0
+
+        assert vllm_config.kv_transfer_config
+        self.kv_role = vllm_config.kv_transfer_config.kv_role
+
+        self.kv_caches_base_addr: list[int] = []
+        self.device_kv_caches: dict[str, torch.Tensor] = {}
+        self.reqs_need_send: WorkerSendReqMeta = WorkerSendReqMeta(reqs={},
+                                                       lock=threading.Lock())
+
+        # Background thread for handling new handshake requests.
+        self._mooncake_handshake_listener_t: Optional[
+            threading.Thread] = None
+        # Background thread for processing new Mooncake handshakes.
+        self._handshake_executor = ThreadPoolExecutor(
+            max_workers=10, thread_name_prefix="vllm-mooncake-handshake")
+
+        self.finished_sending_reqs: FinishedReqSet = FinishedReqSet(
+            set(), threading.Lock())
+        self.finished_recving_reqs: FinishedReqSet = FinishedReqSet(
+            set(), threading.Lock())
+        self.failed_sending_reqs: FinishedReqSet = FinishedReqSet(
+            set(), threading.Lock())
+
+        self.block_size = vllm_config.cache_config.block_size
+        self.model_config = vllm_config.model_config
+        self.cache_config = vllm_config.cache_config
+        self.use_mla = self.model_config.use_mla
+
+        backend = get_attn_backend(self.model_config.get_head_size(),
+                                   self.model_config.dtype,
+                                   self.cache_config.cache_dtype,
+                                   self.block_size,
+                                   use_mla=self.use_mla)
+        self.backend_name = backend.get_name()
+        vllm_version = importlib.metadata.version("vllm")
+        if vllm_version.startswith("0.11.1") or vllm_version.startswith("0.11.2") or vllm_version.startswith("0.12"):
+            from vllm.attention.selector import AttentionBackendEnum
+            attn_backend = AttentionBackendEnum[self.backend_name]
+            self._use_flashinfer = attn_backend in [AttentionBackendEnum.FLASHINFER, AttentionBackendEnum.FLASHINFER_MLA]
+            self._use_pallas_v1 = attn_backend == AttentionBackendEnum.PALLAS
+        else:
+            from vllm.attention.selector import backend_name_to_enum
+            from vllm.platforms import _Backend
+            attn_backend = backend_name_to_enum(self.backend_name)
+            self._use_flashinfer = attn_backend == _Backend.FLASHINFER_VLLM_V1
+            self._use_pallas_v1 = attn_backend == _Backend.PALLAS_VLLM_V1
+        self.kv_cache_layout = get_kv_cache_layout()
+        logger.debug("Detected attention backend %s", self.backend_name)
+        logger.debug("Detected kv cache layout %s", self.kv_cache_layout)
+
+        self.detailed_mig = LLUMNIX_DETAILED_MIG_STATUS
+
+    def __del__(self):
+        """Cleanup background threads on destruction."""
+        self._handshake_executor.shutdown(wait=False)
+        if self._mooncake_handshake_listener_t:
+            self._mooncake_handshake_listener_t.join(timeout=0)
+
+    @staticmethod
+    def _mooncake_handshake_ack(sock: zmq.Socket,
+                                mooncake_handshake_ack_queue: Queue):
+        while True:
+            identity = mooncake_handshake_ack_queue.get()
+            sock.send_multipart((identity, b"", TRANS_DONE))
+
+    def _mooncake_handshake_listener(self, ready_event: threading.Event,
+                                     base_port: int, tp_rank: int):
+        """Background thread for getting new Mooncake handshakes."""
+
+        # Listen for new requests for metadata.
+        path = make_zmq_path("tcp", self.hostname, base_port + tp_rank)
+        logger.info(
+            "Mooncake handshake & sender starting listening on path: %s", path)
+        mooncake_handshake_ack_queue = Queue()
+
+        with zmq_ctx(zmq.ROUTER, path) as sock:
+            mooncake_handshake_ack_t = threading.Thread(
+                target=self._mooncake_handshake_ack,
+                args=(sock, mooncake_handshake_ack_queue),
+                daemon=True,
+                name="mooncake_handshake_ack")
+            mooncake_handshake_ack_t.start()
+            ready_event.set()
+            while True:
+                identity, _, metadata_bytes = sock.recv_multipart()
+                self._handshake_executor.submit(self._handle_handshake,
+                                                identity,
+                                                mooncake_handshake_ack_queue,
+                                                metadata_bytes)
+
+    def _handle_handshake(self, identity: bytes,
+                          mooncake_handshake_ack_queue: Queue,
+                          metadata_bytes: bytes):
+        decoder = msgspec.msgpack.Decoder(MooncakeAgentMetadata)
+        metadata = decoder.decode(metadata_bytes)
+        self.send_kv_to_decode(metadata)
+        mooncake_handshake_ack_queue.put(identity)
+
+    def send_kv_to_decode(self, meta: MooncakeAgentMetadata):
+        logger.info("send_kv_to_decode: %s", meta)
+        send_reqs: list[tuple[ReqId, SendBlockMeta]] = []
+        with self.reqs_need_send.lock:
+            for req_id in meta.request_ids:
+                send_meta = self.reqs_need_send.reqs.get(req_id)
+                if send_meta is None:
+                    logger.warning("Request %s not found in reqs_need_send",
+                                   req_id)
+                    return
+                # Mark it as not expired. We will send it now.
+                send_meta.expire_time = float("inf")
+                send_reqs.append((req_id, send_meta))
+        try:
+            self._send_blocks(send_reqs, meta)
+        except Exception as e:
+            logger.error("Send blocks failed: %s, send_reqs: %s, meta: %s",e , send_reqs, meta)
+            with self.reqs_need_send.lock:
+                for req_id in meta.request_ids:
+                    del self.reqs_need_send.reqs[req_id]
+            with self.failed_sending_reqs.lock:
+                self.failed_sending_reqs.set.update(meta.request_ids)
+            return
+
+        with self.reqs_need_send.lock:
+            for req_id in meta.request_ids:
+                del self.reqs_need_send.reqs[req_id]
+
+        with self.finished_sending_reqs.lock:
+            self.finished_sending_reqs.set.update(meta.request_ids)
+
+    def _send_blocks(self, send_reqs: list[tuple[ReqId, SendBlockMeta]],
+                     agentmeta: MooncakeAgentMetadata):
+        src_ptrs = []
+        dst_ptrs = []
+        lengths = []
+        local_base_addr = self.kv_caches_base_addr
+        remote_base_addr = agentmeta.kv_caches_base_addr
+        block_len = self.block_len
+        remote_session = f"{agentmeta.remote_hostname}:{agentmeta.remote_port}"
+        logger.info("Sending blocks %s, %s", send_reqs, agentmeta)
+
+        assert len(send_reqs) == len(agentmeta.block_ids)
+        for (req_id,
+             send_meta), remote_block_ids in zip(send_reqs,
+                                                 agentmeta.block_ids):
+            logger.info("waiting for ready")
+            send_meta.ready.wait()
+            logger.info("waiting for ready done")
+            num_remote_blocks = len(remote_block_ids)
+            if num_remote_blocks == 0:
+                logger.info("zero num_remote_blocks")
+                continue
+
+            local_block_ids = send_meta.local_block_ids
+            # Partial prefix cache hit: just read uncomputed blocks.
+            num_local_blocks = len(local_block_ids)
+            if num_remote_blocks != num_local_blocks:
+                logger.warning(f"{num_remote_blocks=}, {num_local_blocks=}")
+            if num_local_blocks > num_remote_blocks:
+                local_block_ids = local_block_ids[-num_remote_blocks:]
+
+            # Group by indices
+            group_local_block_ids, group_remote_block_ids = group_concurrent_contiguous(
+                local_block_ids, remote_block_ids)
+
+            for local_layer_addr, remote_layer_addr in zip(
+                    local_base_addr, remote_base_addr):
+                for group_local_block_id, group_remote_block_id in zip(
+                        group_local_block_ids, group_remote_block_ids):
+                    src_ptrs.append(local_layer_addr +
+                                    group_local_block_id[0] * block_len)
+                    dst_ptrs.append(remote_layer_addr +
+                                    group_remote_block_id[0] * block_len)
+                    lengths.append(block_len * len(group_local_block_id))
+
+            logger.info("Sending kv_caches for request %s (%d blocks) to %s",
+                         req_id, num_remote_blocks, remote_session)
+
+        ret_value = self.engine.batch_transfer_sync_write(
+            remote_session, src_ptrs, dst_ptrs, lengths)
+        if ret_value != 0:
+            raise RuntimeError(
+                f"Error in batch_transfer_sync_write: {ret_value}")
+
+        logger.info("Sending to %s done", remote_session)
+
+    def register_kv_caches(self, kv_caches: dict[str, torch.Tensor]):
+        """Register the KV Cache data in mooncake."""
+
+        logger.info("Registering KV_Caches. use_mla: %s", self.use_mla)
+
+        kv_data_ptrs = []
+        kv_data_lens = []
+        seen_base_addresses = []
+
+        self.split_k_and_v = not (self.use_mla or self._use_pallas_v1
+                                  or self._use_flashinfer)
+        tensor_size_bytes = None
+        for layer_name, cache_or_caches in kv_caches.items():
+            logger.debug("registering layer %s with shape %s", layer_name,
+                         cache_or_caches.shape)
+            cache_list = cache_or_caches if self.split_k_and_v else [
+                cache_or_caches
+            ]
+
+            for cache in cache_list:
+                base_addr = cache.data_ptr()
+                if base_addr in seen_base_addresses:
+                    continue
+
+                seen_base_addresses.append(base_addr)
+                curr_tensor_size_bytes = cache.nbytes
+
+                if tensor_size_bytes is None:
+                    tensor_size_bytes = curr_tensor_size_bytes
+                    self.num_blocks = cache.shape[0]
+
+                assert tensor_size_bytes == curr_tensor_size_bytes, \
+                    "All kv cache tensors must have the same size"
+                kv_data_ptrs.append(base_addr)
+                kv_data_lens.append(tensor_size_bytes)
+
+        self.kv_caches_base_addr = seen_base_addresses
+
+        ret_value = self.engine.batch_register_memory(kv_data_ptrs,
+                                                      kv_data_lens)
+        if ret_value != 0:
+            raise RuntimeError("Mooncake batch memory registration failed.")
+
+        assert tensor_size_bytes is not None
+        assert self.num_blocks != 0
+        assert tensor_size_bytes % self.num_blocks == 0
+        self.block_len = tensor_size_bytes // self.num_blocks
+        self.device_kv_caches = kv_caches
+        logger.debug("regiestered num_blocks=%d block_len=%d", self.num_blocks,
+                     self.block_len)
+
+        ready_event = threading.Event()
+        self._mooncake_handshake_listener_t = threading.Thread(
+            target=self._mooncake_handshake_listener,
+            args=(ready_event, self.side_channel_port, self.tp_rank),
+            daemon=True,
+            name="mooncake_handshake_listener")
+        self._mooncake_handshake_listener_t.start()
+        ready_event.wait()  # Wait for listener ZMQ socket to be ready.
+
+    def get_finished(self) -> tuple[Optional[set[str]], Optional[set[str]], Optional[set[str]]]:
+        """
+        Get requests that are done sending or recving on this specific worker.
+        The scheduler process (via the MultiprocExecutor) will use this output
+        to track which workers are done.
+        """
+        with self.finished_recving_reqs.lock:
+            finished_recving_reqs = self.finished_recving_reqs.set
+            self.finished_recving_reqs.set = set()
+
+        with self.finished_sending_reqs.lock:
+            finished_sending_reqs = self.finished_sending_reqs.set
+            self.finished_sending_reqs.set = set()
+
+        if finished_sending_reqs or finished_recving_reqs:
+            logger.debug(
+                "Rank %s, get_finished: %s requests done sending "
+                "and %s requests done recving", self.tp_rank,
+                len(finished_sending_reqs), len(finished_recving_reqs))
+
+        with self.failed_sending_reqs.lock:
+            failed_sending_reqs = self.failed_sending_reqs.set
+            self.failed_sending_reqs.set = set()
+
+        # Handle timeout to avoid stranding blocks on remote.
+        now = time.perf_counter()
+        with self.reqs_need_send.lock:
+            expired_reqs = [
+                req_id
+                for req_id, send_meta in self.reqs_need_send.reqs.items()
+                if not send_meta.is_migrating and send_meta.expire_time < now
+            ]
+            for req_id in expired_reqs:
+                logger.warning(
+                    "Request %s timed out after %d seconds without "
+                    "being sent. Freeing its blocks on the producer side.",
+                    req_id, VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT)
+                del self.reqs_need_send.reqs[req_id]
+            if expired_reqs:
+                finished_sending_reqs.update(expired_reqs)
+
+        return finished_sending_reqs or None, finished_recving_reqs or None, failed_sending_reqs or None
+
+    def receive_kv(self, path: str, req_blocks: list[tuple[str, list[int]]]):
+        req_ids, block_ids = map(list, zip(*req_blocks))
+        metadata = MooncakeAgentMetadata(
+            remote_hostname=self.hostname,
+            remote_port=self.rpc_port,
+            request_ids=req_ids,
+            kv_caches_base_addr=self.kv_caches_base_addr,
+            block_ids=block_ids,
+        )
+
+        encoder = msgspec.msgpack.Encoder()
+        encoded_data = encoder.encode(metadata)
+        size_in_bytes = len(encoded_data)
+        logger.debug("Size of encoded MooncakeAgentMetadata: %s bytes",
+                     str(size_in_bytes))
+
+        logger.info("Sending pull request for %s on path: %s", req_ids, path)
+        # Send query for the request.
+        with zmq_ctx(zmq.REQ, path) as sock:
+            sock.send(encoded_data)
+            ret_msg = sock.recv()
+            assert ret_msg == TRANS_DONE
+
+        with self.finished_recving_reqs.lock:
+            self.finished_recving_reqs.set.update(req_ids)
+
+        logger.info("pulling kv_caches for %s finished", req_ids)
+
+    def group_kv_pull(self, metadata: MooncakeConnectorMetadata):
+        kv_pulls = defaultdict(list)
+        for req_id, meta in metadata.reqs_to_recv.items():
+            logger.info(
+                "start_load_kv for request %s from remote engine. "
+                "Num local_block_ids: %s.", req_id, len(meta.local_block_ids))
+            path = make_zmq_path("tcp", meta.remote_host,
+                                 meta.remote_port + self.tp_rank)
+            kv_pulls[path].append((req_id, meta.local_block_ids))
+
+        return kv_pulls
+
+    def start_load_kv(self, metadata: MooncakeConnectorMetadata):
+        # if self.kv_role != "kv_producer":
+        kv_pulls = self.group_kv_pull(metadata)
+        for path, req_blocks in kv_pulls.items():
+            receive_kv_thread = threading.Thread(target=self.receive_kv,
+                                                    args=(path, req_blocks),
+                                                    name="receive_kv")
+            receive_kv_thread.start()
+
+        with self.reqs_need_send.lock:
+            for req_id, req_meta in metadata.reqs_to_send.items():
+                if req_meta.local_block_ids:
+                    if req_meta.is_migrating:
+                        self.reqs_need_send.reqs[req_id] = SendBlockMeta(
+                        local_block_ids=[], ready=threading.Event(), is_migrating=True)
+                    # Already gone through request_finished()
+                    send_meta = self.reqs_need_send.reqs[req_id]
+                    send_meta.local_block_ids = req_meta.local_block_ids
+                    send_meta.ready.set()
+                    send_meta.expire_time = time.perf_counter(
+                    ) + VLLM_MOONCAKE_ABORT_REQUEST_TIMEOUT
+                else:
+                    # From update_state_after_alloc(),
+                    # but not reach request_finished() yet
+                    self.reqs_need_send.reqs[req_id] = SendBlockMeta(
+                        local_block_ids=[], ready=threading.Event(), is_migrating=req_meta.is_migrating)
+
+
+@contextlib.contextmanager
+def zmq_ctx(socket_type: Any, addr: str, use_term=False) -> Iterator[zmq.Socket]:
+    """Context manager for a ZMQ socket"""
+
+    if socket_type not in (zmq.ROUTER, zmq.REQ, zmq.PUSH, zmq.PULL):
+        raise ValueError(f"Unexpected socket type: {socket_type}")
+
+    ctx: Optional[zmq.Context] = None
+    try:
+        ctx = zmq.Context()  # type: ignore[attr-defined]
+        yield make_zmq_socket(ctx=ctx,
+                              path=addr,
+                              socket_type=socket_type,
+                              bind=socket_type == zmq.ROUTER)
+    finally:
+        if ctx is not None:
+            if use_term:
+                pass
+                logger.info("ZMQ context termed")
+            else:
+                ctx.destroy(linger=0)
+
+
+def group_concurrent_contiguous(
+        src_indices: list[int],
+        dst_indices: list[int]) -> tuple[list[list[int]], list[list[int]]]:
+    """Vectorised NumPy implementation."""
+    if len(src_indices) == 0:
+        return [], []
+
+    brk = np.where((np.diff(src_indices) != 1)
+                   | (np.diff(dst_indices) != 1))[0] + 1
+    src_groups = np.split(src_indices, brk)
+    dst_groups = np.split(dst_indices, brk)
+
+    src_groups = [g.tolist() for g in src_groups]
+    dst_groups = [g.tolist() for g in dst_groups]
+
+    return src_groups, dst_groups
+
+def clear_migrate_out_req_status(req_ids: List[str] | str):
+    if not isinstance(req_ids, list):
+        req_ids = [req_ids]
+    if LLUMNIX_DETAILED_MIG_STATUS:
+        for req_id in req_ids:
+            g_migrate_out_reqs.discard(req_id)
+            if LLUMNIX_DETAILED_MIG_STATUS:
+                with g_migrate_out_req_info_lock:
+                    g_migrate_out_tokens.pop(req_id, None)
+    else:
+        for req_id in req_ids:
+            g_migrate_out_reqs.discard(req_id)
+
+def clear_migrate_in_req_status(req_ids: List[str] | str):
+    if not isinstance(req_ids, list):
+        req_ids = [req_ids]
+    if LLUMNIX_DETAILED_MIG_STATUS:
+        for req_id in req_ids:
+            g_migrate_in_reqs.discard(req_id)
+            if LLUMNIX_DETAILED_MIG_STATUS:
+                with g_migrate_in_req_info_lock:
+                    g_migrate_in_tokens.pop(req_id, None)
+    else:
+        for req_id in req_ids:
+            g_migrate_in_reqs.discard(req_id)

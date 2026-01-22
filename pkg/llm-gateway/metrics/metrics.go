@@ -75,6 +75,7 @@ func (m *MetricContext) run() {
 }
 
 func init() {
-	metricContext := newMetricContext()
-	go metricContext.run()
+	// TODO: enable metric collect
+	// metricContext := newMetricContext()
+	// go metricContext.run()
 }

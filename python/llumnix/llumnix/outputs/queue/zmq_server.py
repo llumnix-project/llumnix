@@ -1,6 +1,8 @@
 import asyncio
+import tempfile
 import time
 from typing import Coroutine, Any
+from uuid import uuid4
 from typing_extensions import Never
 
 import zmq
@@ -9,7 +11,11 @@ import cloudpickle
 
 from llumnix.outputs.queue.base_queue_server import BaseQueueServer
 from llumnix.outputs.queue.zmq_utils import (
+    MIGRATION_FAILURE_STR,
+    MIGRATION_SUCCESS_STR,
     RPC_SUCCESS_STR,
+    LlumletMigrateRequest,
+    LlumletRequestType,
     RPCPutNoWaitQueueRequest,
     RPCPutNoWaitBatchQueueRequest,
     RPCRequestType,
@@ -201,3 +207,88 @@ class ZmqServer(BaseQueueServer):
     @property
     def qsize(self):
         return self.queue.qsize()
+
+
+class MigrationZmqServer():
+
+    def __init__(self, handler):
+        super().__init__()
+        base_path = tempfile.gettempdir()
+        self.address = f"ipc://{base_path}/{uuid4()}"
+
+        self.context: zmq.asyncio.Context = zmq.asyncio.Context.instance()
+        self.socket: zmq.asyncio.Socket = self.context.socket(zmq.ROUTER)
+        self.socket.set_hwm(RPC_ZMQ_HWM)
+
+        self._running_tasks = set()
+        self._is_running = False
+
+        self.handler = handler
+
+    async def run_server_loop(self):
+        if self._is_running:
+            logger.warning("Server at %s is already running.", self.address)
+            return
+        try:
+            self.socket.bind(self.address)
+            logger.info("MigrationZmqServer bind to: %s", self.address)
+        except zmq.error.ZMQError as e:
+            logger.error("Failed to bind MigrationZmqServer to %s: %s", self.address, e)
+            raise
+
+        self._is_running = True
+        logger.info("MigrationZmqServer loop started at %s.", self.address)
+        try:
+            while self._is_running:
+                try:
+                    identity, request_type, request = await self.socket.recv_multipart()
+
+                    task = asyncio.create_task(
+                        self._handle_request(identity, request_type, request)
+                    )
+                    self._running_tasks.add(task)
+                    task.add_done_callback(self._running_tasks.discard)
+
+                except zmq.error.ZMQError as e:
+                    if self._is_running:
+                        logger.error("ZMQ error in server loop at %s: %s", self.address, e)
+                    else:
+                        break
+        finally:
+            self._is_running = False
+            logger.info("MigrationZmqServer loop at %s has stopped.", self.address)
+            self.socket.unbind(self.address)
+
+    def stop(self):
+        if not self._is_running:
+            return
+        logger.info("Stopping MigrationZmqServer at %s...", self.address)
+        self._is_running = False
+        if not self.socket.closed:
+            self.socket.close()
+
+    async def _handle_request(self, identity, request_type, request):
+        try:
+            if request_type == LlumletRequestType.MIGRATE.value:
+                request: LlumletMigrateRequest = cloudpickle.loads(request)
+                res = await self.handler.migrate_out(migration_params=request.migration_params,
+                                        dst_engine_host=request.dst_host,
+                                        dst_engine_port=request.dst_port)
+            else:
+                raise ValueError(f"Unknown or unsupported request type: {request_type}")
+            if res:
+                await self._send_response(identity, MIGRATION_SUCCESS_STR)
+            else:
+                await self._send_response(identity, MIGRATION_FAILURE_STR)
+        # pylint: disable=broad-except
+        except Exception as e:
+            logger.exception("Error handling request from client %s: %s", identity.hex(), e)
+            await self._send_response(identity, e)
+
+    async def _send_response(self, identity, payload: Any):
+        try:
+            response_bytes = cloudpickle.dumps(payload)
+            await self.socket.send_multipart([identity, response_bytes])
+        # pylint: disable=broad-except
+        except Exception as e:
+            logger.error("Failed to send response to client %s: %s", identity.hex(), e)

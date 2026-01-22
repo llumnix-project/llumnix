@@ -28,6 +28,9 @@ echo ""
 echo "--- Services ---"
 kubectl get services -n "$GROUP_NAME" 2>/dev/null || echo "None"
 echo ""
+echo "--- PVCs ---"
+kubectl get pvc -n "$GROUP_NAME" 2>/dev/null || echo "None"
+echo ""
 
 # Confirmation prompt
 read -p "Confirm deletion of group '$GROUP_NAME' and all its resources? (yes/no): " CONFIRM
@@ -38,17 +41,29 @@ fi
 
 echo "==> Deleting service group: $GROUP_NAME"
 
-# Delete resources in proper order
+# Helper function to delete resources
 delete_resource() {
   local resource_type=$1
-  local resource_name=${2:-"--all"}
   echo "==> Deleting $resource_type"
-  kubectl delete "$resource_type" $resource_name -n "$GROUP_NAME" --grace-period=0 --force 2>/dev/null || true
+  kubectl delete "$resource_type" --all -n "$GROUP_NAME" --ignore-not-found=true --timeout=10s 2>/dev/null || true
+}
+
+# Helper function to remove finalizers
+remove_finalizers() {
+  local resource_type=$1
+  local resources=$(kubectl get "$resource_type" -n "$GROUP_NAME" -o name 2>/dev/null || true)
+  if [ -n "$resources" ]; then
+    echo "==> Removing $resource_type finalizers"
+    for resource in $resources; do
+      kubectl patch "$resource" -n "$GROUP_NAME" -p '{"metadata":{"finalizers":null}}' --type=merge 2>/dev/null || true
+    done
+  fi
 }
 
 # 1. Delete workloads
 delete_resource "statefulsets"
 delete_resource "deployments"
+delete_resource "daemonsets"
 
 # 2. Delete pods
 delete_resource "pods"
@@ -56,31 +71,22 @@ delete_resource "pods"
 # 3. Delete services
 delete_resource "services"
 
-# 4. Delete PVCs first
+# 4. Remove PVC finalizers and delete
+remove_finalizers "pvc"
 delete_resource "pvc"
 
-sleep 1
-
-# 5. Delete namespace
-echo "==> Deleting namespace"
-kubectl delete namespace "$GROUP_NAME" --grace-period=0 --force 2>/dev/null || true
-
-sleep 2
-
-# 6. Delete associated PVs
-delete_pv() {
-  local pv_name=$1
-  echo "==> Deleting PV: $pv_name"
+# 5. Delete and cleanup PVs
+echo "==> Cleaning up PVs"
+for pv_name in "$GROUP_NAME-oss-llm-cache" "$GROUP_NAME-nas"; do
   if kubectl get pv "$pv_name" &> /dev/null; then
-    kubectl delete pv "$pv_name" --grace-period=0 --force
-    echo "✓ PV deleted"
-  else
-    echo "⚠ PV '$pv_name' not found, skipping"
+    kubectl patch pv "$pv_name" -p '{"metadata":{"finalizers":null}}' 2>/dev/null || true
+    kubectl delete pv "$pv_name" --timeout=10s 2>/dev/null || true
   fi
-}
+done
 
-delete_pv "$GROUP_NAME-oss-llm-cache"
-delete_pv "$GROUP_NAME-nas"
+# 6. Delete namespace
+echo "==> Deleting namespace"
+kubectl delete namespace "$GROUP_NAME" --timeout=10s 2>/dev/null || true
 
 echo ""
 echo "✓ Service group '$GROUP_NAME' deleted successfully"

@@ -5,8 +5,8 @@ RUN apt-get update && apt-get install -y ca-certificates git curl wget vim \
 
 COPY ./bin/* /usr/local/bin/
 
-COPY ./lib/tokenizers/resources /tokenizers
+COPY ./lib/resources /tokenizers
 
-COPY ./lib/tokenizers/libtokenizers_rs.a /usr/lib
+COPY ./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release/*.a /usr/lib
 
 WORKDIR /app

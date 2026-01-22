@@ -20,7 +20,7 @@ type redisResolver struct {
 
 	mu                sync.RWMutex
 	workers           types.LLMWorkerSlice
-	podDiscoveryInfos map[string]PodDiscoveryInfo
+	podDiscoveryInfos map[string]*PodDiscoveryInfo
 
 	watcher *Watcher
 
@@ -59,16 +59,16 @@ func newRedisResolver(
 }
 
 func (r *redisResolver) GetLLMWorkers() (types.LLMWorkerSlice, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	workers := make(types.LLMWorkerSlice, 0, len(r.workers))
-	for idx, _ := range r.workers {
+	for idx := range r.workers {
 		workers = append(workers, r.workers[idx])
 	}
 	return workers, nil
 }
 
 func (r *redisResolver) Watch(ctx context.Context) (<-chan types.LLMWorkerSlice, <-chan types.LLMWorkerSlice, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
 	return r.watcher.Watch(ctx, r.GetLLMWorkers)
 }
 
@@ -82,12 +82,8 @@ func (r *redisResolver) refreshLoop() {
 	ticker := time.NewTicker(time.Millisecond * time.Duration(r.refreshIntervalMs))
 	defer ticker.Stop()
 
-	// Then run on every tick
-	for {
-		select {
-		case <-ticker.C:
-			r.refresh()
-		}
+	for range ticker.C {
+		r.refresh()
 	}
 }
 
@@ -104,7 +100,7 @@ func (r *redisResolver) refresh() {
 		return
 	}
 
-	newPodDiscoveryInfos := make(map[string]PodDiscoveryInfo)
+	newPodDiscoveryInfos := make(map[string]*PodDiscoveryInfo)
 	newWorkers := types.LLMWorkerSlice{}
 	for idx, PodInfoBytes := range PodInfos {
 		if PodInfoBytes == nil {
@@ -112,8 +108,8 @@ func (r *redisResolver) refresh() {
 			continue
 		}
 
-		var podInfo PodDiscoveryInfo
-		if err := proto.Unmarshal(PodInfoBytes, &podInfo); err != nil {
+		podInfo := &PodDiscoveryInfo{}
+		if err := proto.Unmarshal(PodInfoBytes, podInfo); err != nil {
 			klog.Errorf("Error unmarshaling pod info for key %s: %v", PodInRedis[idx], err)
 			continue
 		}
@@ -126,14 +122,14 @@ func (r *redisResolver) refresh() {
 
 		var filteredInstances []*InstanceDiscoveryInfo
 		for _, instance := range podInfo.Instances {
-			// all dp ranks in a pod should be in the same role
-			if instance.Role != r.role {
+			if instance.Role != r.role && r.role != types.InferRoleAll.String() {
+				// all dp ranks in a pod should be in the same role
 				continue
 			}
 
 			newWorkers = append(newWorkers, types.LLMWorker{
 				Version: instance.Version,
-				ID:      podInfo.PodName + "_dp" + string(instance.DpRank),
+				ID:      fmt.Sprintf("%s_dp%d", podInfo.PodName, instance.DpRank),
 				Model:   instance.Model,
 				Role:    types.InferRole(instance.Role),
 				Endpoint: types.Endpoint{
@@ -150,9 +146,6 @@ func (r *redisResolver) refresh() {
 		if len(filteredInstances) > 0 {
 			podInfo.Instances = filteredInstances
 			newPodDiscoveryInfos[podInfo.PodName] = podInfo
-
-			klog.V(4).Infof("Refreshed discovery info: pod %s, %d endpoints",
-				podInfo.PodName, len(filteredInstances))
 		}
 	}
 
@@ -161,7 +154,8 @@ func (r *redisResolver) refresh() {
 		return w.Id()
 	})
 	if len(added) > 0 || len(removed) > 0 {
-		klog.V(4).Infof("redis resolover: Added: %d, Removed: %d", len(added), len(removed))
+		klog.V(4).Infof("redis resolover (role=%s): Added: %d, Removed: %d, Total: %d",
+			r.role, len(added), len(removed), len(newWorkers))
 	}
 	r.podDiscoveryInfos = newPodDiscoveryInfos
 	r.workers = newWorkers
@@ -209,7 +203,7 @@ func (r *RedisResolverBuilder) Build(uri string, args BuildArgs) (LLMResolver, e
 	}
 
 	password, ok := args["redis_password"].(string)
-	if !ok || password == "" {
+	if !ok {
 		return nil, fmt.Errorf("missing password or invalid password build args: %v", password)
 	}
 

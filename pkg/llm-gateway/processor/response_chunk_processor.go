@@ -29,8 +29,6 @@ type ResponseChunkProcessor struct {
 
 	reasoningParser string
 	toolParser      string
-
-	cmplResp *protocol.CompletionResponse
 }
 
 func NewResponseChunkProcessor(config *options.Config) *ResponseChunkProcessor {
@@ -309,7 +307,7 @@ func (rp *ResponseChunkProcessor) completionStreamProcess(req *types.RequestCont
 
 func (rp *ResponseChunkProcessor) completionProcess(req *types.RequestContext, done bool) error {
 	if done {
-		req.LLMRequest.CompletionResponse = rp.cmplResp
+		req.LLMRequest.CompletionResponse = req.LLMRequest.BufferCompletionResponse
 		return nil
 	}
 
@@ -324,9 +322,9 @@ func (rp *ResponseChunkProcessor) completionProcess(req *types.RequestContext, d
 		return fmt.Errorf("completion response has more than one choice")
 	}
 
-	if rp.cmplResp == nil {
+	if req.LLMRequest.BufferCompletionResponse == nil {
 		cmpStreamResp := req.LLMRequest.CompletionResponse
-		rp.cmplResp = &protocol.CompletionResponse{
+		req.LLMRequest.BufferCompletionResponse = &protocol.CompletionResponse{
 			ID:      strings.ReplaceAll(cmpStreamResp.ID, completionsIdPrefix, chatPrefix),
 			Object:  cmpStreamResp.Object,
 			Created: cmpStreamResp.Created,
@@ -351,11 +349,11 @@ func (rp *ResponseChunkProcessor) completionProcess(req *types.RequestContext, d
 			} else {
 				req.RequestStats.OutputTokensLen += uint64(len(tokens))
 			}
-			rp.cmplResp.Choices[0].Text += choice.Text
+			req.LLMRequest.BufferCompletionResponse.Choices[0].Text += choice.Text
 		}
-		rp.cmplResp.Choices[0].FinishReason = choice.FinishReason
+		req.LLMRequest.BufferCompletionResponse.Choices[0].FinishReason = choice.FinishReason
 	}
-	rp.cmplResp.Usage = cmpStreamResp.Usage
+	req.LLMRequest.BufferCompletionResponse.Usage = cmpStreamResp.Usage
 
 	req.LLMRequest.CompletionResponse = nil
 	return nil

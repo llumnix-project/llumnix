@@ -56,6 +56,15 @@ def to_cms_metadata(llumlet_metadata: LlumletInstanceMetaData) -> CMSInstanceMet
     if llumlet_metadata.utc_update != -1:
         cms_metadata.utc_update = llumlet_metadata.utc_update
 
+    if llumlet_metadata.ip_kvt:
+        cms_metadata.ip_kvt = llumlet_metadata.ip_kvt
+
+    if llumlet_metadata.block_size != -1:
+        cms_metadata.block_size = llumlet_metadata.block_size
+
+    if llumlet_metadata.max_num_batched_tokens != -1:
+        cms_metadata.max_num_batched_tokens = llumlet_metadata.max_num_batched_tokens
+
     return cms_metadata
 
 
@@ -76,7 +85,7 @@ def to_cms_status(llumlet_status: LlumletInstanceStatus) -> CMSInstanceStatus:  
     if llumlet_status.update_id is not None:
         cms_status.update_id = llumlet_status.update_id
 
-    # status for updating scheduling account
+    # status for updating instance status local account
     if llumlet_status.recent_waiting_requests is not None:
         cms_status.ClearField('recent_waiting_requests')
         cms_status.recent_waiting_requests.extend(llumlet_status.recent_waiting_requests)
@@ -151,5 +160,12 @@ def to_cms_status(llumlet_status: LlumletInstanceStatus) -> CMSInstanceStatus:  
         cms_status.available_block_ratio_migrate_in = llumlet_status.available_block_ratio_migrate_in
     if llumlet_status.available_block_ratio_migrate_out is not None:
         cms_status.available_block_ratio_migrate_out = llumlet_status.available_block_ratio_migrate_out
+
+    if llumlet_status.profiling_id is not None:
+        cms_status.profiling_id = llumlet_status.profiling_id
+    if llumlet_status.step_duration is not None:
+        cms_status.step_duration = llumlet_status.step_duration
+    if llumlet_status.num_scheduled_prefill_tokens is not None:
+        cms_status.num_scheduled_prefill_tokens = llumlet_status.num_scheduled_prefill_tokens
 
     return cms_status

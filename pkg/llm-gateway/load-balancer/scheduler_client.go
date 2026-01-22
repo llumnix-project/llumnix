@@ -88,7 +88,7 @@ func (cb *SchedulerClient) handleResponse(body []byte) (types.ScheduledResult, e
 		klog.Warningf("do schedule: content format error: %s", string(body))
 		return nil, err
 	}
-	if schReq.ScheduleResult == nil || len(schReq.ScheduleResult) == 0 {
+	if len(schReq.ScheduleResult) == 0 {
 		klog.Warningf("get next endpoint: no available endpoint")
 		return nil, consts.ErrorNoAvailableEndpoint
 	}

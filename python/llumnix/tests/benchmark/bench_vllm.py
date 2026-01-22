@@ -35,7 +35,7 @@ class KVTInfo:
     id: str = "src"
     kvt_host: str = ""
     kvt_port: int = 28000
-    llumlet_port: int = 50001
+    llumlet_url: str = ""
 
 @dataclass
 class BenchmarkConfig:
@@ -57,10 +57,11 @@ class BenchmarkConfig:
     # migration
     send_migration: bool = False
     mutual_mig: bool = False
-    kvt_host: str = ""
+    src_kvt_host: str = ""
+    dst_kvt_host: str = ""
     dst_port: int = 29876
-    src_llumlet_port: int = 50051
-    dst_llumlet_port: int = 50052
+    src_llumlet_url: str = ""
+    dst_llumlet_url: int = ""
     src_kvt_port: int = 28000
     dst_kvt_port: int = 29876
     
@@ -80,7 +81,8 @@ class BenchmarkConfig:
 def parse_args() -> BenchmarkConfig:
     parser = argparse.ArgumentParser(description="LLM Benchmark Script")
     parser.add_argument("--url", type=str, default="http://127.0.0.1:8000", help="url for service")
-    parser.add_argument("--kvt-host", type=str, help="kvt host ip (net0)")
+    parser.add_argument("--src-kvt-host", type=str, help="kvt host ip (net0)")
+    parser.add_argument("--dst-kvt-host", type=str, help="kvt host ip (net0)")
     parser.add_argument("--n-ctx", type=int, default=4096)
     parser.add_argument("--result-file", type=str, default="result.jsonl")
     parser.add_argument("--mode", type=str, default='cnt', choices=['gsm8k', 'cnt'])
@@ -88,8 +90,8 @@ def parse_args() -> BenchmarkConfig:
     parser.add_argument("--parallel", type=int, default=64)
     parser.add_argument("--send-migration", action='store_true')
     parser.add_argument("--mutual-mig", action='store_true')
-    parser.add_argument("--src-llumlet-port", type=int)
-    parser.add_argument("--dst-llumlet-port", type=int)
+    parser.add_argument("--src-llumlet-url", type=str)
+    parser.add_argument("--dst-llumlet-url", type=str)
     parser.add_argument("--max-tokens", type=int, default=3000)
     parser.add_argument("--src-kvt-port", type=int)
     parser.add_argument("--dst-kvt-port", type=int)
@@ -97,9 +99,9 @@ def parse_args() -> BenchmarkConfig:
     args = parser.parse_args()
     if args.send_migration:
         required_for_migration = [
-            'src_llumlet_port',
+            'src_llumlet_url',
             'dst_kvt_port',
-            'kvt_host',
+            'dst_kvt_host',
         ]
         missing_args = []
         for arg_name in required_for_migration:
@@ -111,8 +113,9 @@ def parse_args() -> BenchmarkConfig:
     if args.mutual_mig:
         required_for_migration = [
             'send_migration',
-            'dst_llumlet_port',
+            'dst_llumlet_url',
             'src_kvt_port',
+            'src_kvt_host'
         ]
         for arg_name in required_for_migration:
             if getattr(args, arg_name) is None:
@@ -124,15 +127,15 @@ def parse_args() -> BenchmarkConfig:
 
 
 class LlumletClient:
-    def __init__(self, port: int):
-        self._port = port
+    def __init__(self, url: str):
+        self._url = url
         self._channel: Optional[grpc.aio.Channel] = None
         self._stub: Optional[llumlet_server_pb2_grpc.LlumletStub] = None
         self._logger = logging.getLogger(self.__class__.__name__)
 
     async def connect(self):
-        self._logger.info(f"Connecting to llumlet server at localhost:{self._port}...")
-        self._channel = grpc.aio.insecure_channel(f'localhost:{self._port}')
+        self._logger.info(f"Connecting to llumlet server at {self._url}...")
+        self._channel = grpc.aio.insecure_channel(f'{self._url}')
         self._stub = llumlet_server_pb2_grpc.LlumletStub(self._channel)
 
     async def close(self):
@@ -151,7 +154,7 @@ class LlumletClient:
             dst_engine_ip=dst.kvt_host,
             dst_engine_port=dst.kvt_port,
             migration_type=MigrationType.NUM_REQ,
-            num_reqs=10
+            num_reqs=5,
         )
         try:
             response = await self._stub.Migrate(request)
@@ -367,8 +370,8 @@ class BenchmarkRunner:
         self._evaluator: Evaluator = self._create_evaluator()
         self._result_logger = ResultLogger(config)
         self._grpc_client: Optional[LlumletClient] = None
-        self.src = KVTInfo(id="src", kvt_host=self._config.kvt_host, kvt_port=self._config.src_kvt_port, llumlet_port=self._config.src_llumlet_port)
-        self.dst = KVTInfo(id="dst", kvt_host=self._config.kvt_host, kvt_port=self._config.dst_kvt_port, llumlet_port=self._config.dst_llumlet_port)
+        self.src = KVTInfo(id="src", kvt_host=self._config.src_kvt_host, kvt_port=self._config.src_kvt_port, llumlet_url=self._config.src_llumlet_url)
+        self.dst = KVTInfo(id="dst", kvt_host=self._config.dst_kvt_host, kvt_port=self._config.dst_kvt_port, llumlet_url=self._config.dst_llumlet_url)
 
     def _create_dataset(self) -> Dataset:
         if self._config.mode == 'gsm8k':
@@ -395,7 +398,7 @@ class BenchmarkRunner:
         self._logger.info("Background migration task started.")
         while not stop_event.is_set():
             try:
-                await asyncio.wait_for(stop_event.wait(), timeout=random.randint(20,50)*0.001)
+                await asyncio.wait_for(stop_event.wait(), timeout=random.randint(200,500)*0.001)
             except asyncio.TimeoutError:
                 if grpc_client:
                     await grpc_client.send_migrate(src, dst)
@@ -414,11 +417,11 @@ class BenchmarkRunner:
         migration_task_dst = None
 
         if self._config.send_migration:
-            self._grpc_client_src = LlumletClient(self._config.src_llumlet_port)
+            self._grpc_client_src = LlumletClient(self._config.src_llumlet_url)
             await self._grpc_client_src.connect()
             migration_task_src = asyncio.create_task(self._run_migration_task(stop_event, self._grpc_client_src, self.src, self.dst))
             if self._config.mutual_mig:
-                self._grpc_client_dst = LlumletClient(self._config.dst_llumlet_port)
+                self._grpc_client_dst = LlumletClient(self._config.dst_llumlet_url)
                 await self._grpc_client_dst.connect()
                 migration_task_dst = asyncio.create_task(self._run_migration_task(stop_event, self._grpc_client_dst, self.dst, self.src))
 

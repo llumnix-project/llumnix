@@ -6,6 +6,7 @@ import (
 	"easgo/pkg/llm-gateway/types"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"sync/atomic"
 	"time"
@@ -69,6 +70,10 @@ func (kac *KeepAliveClient) tryConnect(address string, accessToken string) (wsCo
 	}
 
 	dialer := websocket.DefaultDialer
+	// use ipv4
+	dialer.NetDial = func(network, addr string) (net.Conn, error) {
+		return net.Dial("tcp4", addr)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
 	defer cancel()
 

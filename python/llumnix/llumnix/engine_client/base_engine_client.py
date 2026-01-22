@@ -14,7 +14,7 @@ class BaseEngineClient(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    async def migrate_out(self, dst_engine_host: str, dst_engine_port: str, migration_params: MigrationParams) -> bool:
+    async def migrate_out(self, dst_engine_host: str, dst_engine_port: int, migration_params: MigrationParams) -> bool:
         """Send migration request to the engine core."""
         raise NotImplementedError
 

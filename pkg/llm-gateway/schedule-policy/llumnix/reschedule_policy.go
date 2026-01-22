@@ -116,6 +116,7 @@ func (p *ReschedulePolicy) reschedule() []*reschedulePair {
 	klog.V(4).Infof("Retrieved cluster instances, count: %d", len(clusterViewScheduling.instanceViews))
 
 	reschedulePairs := p.getMigrationPairs(clusterViewScheduling.instanceViews)
+	klog.V(4).Infof("Generate reschedule pairs, count: %d", len(reschedulePairs))
 	return reschedulePairs
 }
 
