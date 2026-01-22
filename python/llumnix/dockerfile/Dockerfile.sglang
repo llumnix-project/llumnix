@@ -30,7 +30,7 @@ WORKDIR /app
 RUN git clone -b v0.5.2 https://github.com/sgl-project/sglang.git
 
 RUN cd sglang && \
-    git apply ../llumnix/patches/sglang/sglang.patch && \
+    git apply ../llumnix/sglang.patch && \
     pip install -e "python[all]" -i https://mirrors.aliyun.com/pypi/simple
 
 RUN rm -rf /app/llumnix

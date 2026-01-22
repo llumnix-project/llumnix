@@ -45,7 +45,16 @@ class AsyncLlumletRPCServer:
             self, request: llumlet_server_pb2.MigrateRequest, context: grpc.aio.ServicerContext
         ) -> llumlet_server_pb2.MigrateResponse:
             dst_engine_ip = request.dst_engine_ip
-            dst_engine_port = request.dst_engine_port
+            try:
+                dst_engine_port = int(request.dst_engine_port)
+            except TypeError as e:
+                logger.error("Can not convert port to int type: %s", e, exc_info=True)
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details("Migration failed due to invalid argument: {}".format(e))
+                return llumlet_server_pb2.MigrateResponse(
+                    message="Migration failed due to invalid argument {}.".format(str(e)),
+                    success=False
+                )
             try:
                 validate_migration_type(request.migration_type)
                 mig_params = generate_migration_params(request)
@@ -130,7 +139,6 @@ class AsyncLlumletRPCServer:
             serialization_format = request.serialization_format
             if serialization_format:
                 logger.info("Received MigrateIn request with format: %s", serialization_format)
-
             try:
                 res = await asyncio.wait_for(
                     self.handler.migrate_in(request.serialized_migrate_req, serialization_format),

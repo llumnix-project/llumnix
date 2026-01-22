@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -15,6 +16,7 @@ import (
 	"easgo/pkg/llm-gateway/consts"
 	kvs "easgo/pkg/llm-gateway/kvs"
 	"easgo/pkg/llm-gateway/structs"
+	"easgo/pkg/llm-gateway/types"
 )
 
 type MockRedisClient struct {
@@ -271,10 +273,10 @@ func TestDispatchPolicyScheduleNeutral(t *testing.T) {
 		groupedInstanceViews: groupedInstanceViews,
 		instanceViews:        instanceViews,
 	}
-	result := policy.schedule(clusterViewScheduling, "", nil)
+	result := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling)
 	assert.Len(t, result, 1)
 	assert.Len(t, result[0], 1)
-	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.Host)
 	assert.Equal(t, 8000, result[0][0].GetInstance().Endpoint.Port)
 }
 
@@ -348,7 +350,7 @@ func TestDispatchPolicySchedulePD(t *testing.T) {
 		instanceViews:        instanceViews,
 	}
 
-	result := policy.schedule(clusterViewScheduling, "", nil)
+	result := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling)
 	assert.Len(t, result, 2)
 	assert.Len(t, result[0], 1)
 	assert.Len(t, result[1], 1)
@@ -400,7 +402,7 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 		instanceViews:        instanceViews1,
 	}
 
-	result := policy.schedule(clusterViewScheduling1, "", nil)
+	result := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling1)
 	assert.Empty(t, result)
 
 	// Test with only decode instance (should return nil)
@@ -441,7 +443,7 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 		instanceViews:        instanceViews2,
 	}
 
-	result2 := policy.schedule(clusterViewScheduling2, "", nil)
+	result2 := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling2)
 	assert.Empty(t, result2)
 }
 
@@ -516,7 +518,7 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 		instanceViews:        instanceViews1,
 	}
 
-	result := policy.schedule(clusterViewScheduling1, "", nil)
+	result := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling1)
 	assert.Len(t, result, 2)
 	assert.Len(t, result[0], 1)
 	assert.Len(t, result[1], 1)
@@ -592,7 +594,7 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 		instanceViews:        instanceViews2,
 	}
 
-	result = policy.schedule(clusterViewScheduling2, "", nil)
+	result = policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling2)
 	assert.Len(t, result, 2)
 	assert.Len(t, result[0], 1)
 	assert.Len(t, result[1], 1)
@@ -667,7 +669,7 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 		instanceViews:        instanceViews3,
 	}
 
-	result = policy.schedule(clusterViewScheduling3, "", nil)
+	result = policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling3)
 	assert.Len(t, result, 2)
 	assert.Len(t, result[0], 1)
 	assert.Len(t, result[1], 1)
@@ -794,9 +796,8 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 		instanceViews:        instanceViews,
 	}
 
-	promptTokenIds := []int64{0, 1}
 	policy.cmsClient.Lock()
-	result := policy.schedule(clusterViewScheduling, "", promptTokenIds)
+	result := policy.schedule(&types.ScheduleRequest{PromptTokenIds: []uint32{0, 1}}, clusterViewScheduling)
 	policy.cmsClient.Unlock()
 	assert.Len(t, result, 2)
 	assert.Len(t, result[0], 1)
@@ -948,13 +949,13 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 		instanceViews:        instanceViews,
 	}
 
-	promptTokenIds := []int64{0, 1}
+	req := &types.ScheduleRequest{PromptTokenIds: []uint32{0, 1}}
 	selections := make(map[int]int)
 	numIterations := 100
 
 	for i := 0; i < numIterations; i++ {
 		policy.cmsClient.Lock()
-		result := policy.schedule(clusterViewScheduling, "", promptTokenIds)
+		result := policy.schedule(req, clusterViewScheduling)
 		policy.cmsClient.Unlock()
 		assert.Len(t, result, 2)
 		assert.Len(t, result[0], 1)
@@ -1062,9 +1063,9 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 		instanceViews:        instanceViews,
 	}
 
-	promptTokenIds := []int64{0, 1}
+	req := &types.ScheduleRequest{PromptTokenIds: []uint32{0, 1}}
 	policy.cmsClient.Lock()
-	result := policy.schedule(clusterViewScheduling, "", promptTokenIds)
+	result := policy.schedule(req, clusterViewScheduling)
 	policy.cmsClient.Unlock()
 	assert.Len(t, result, 1)
 	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.IP)
@@ -1210,11 +1211,11 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 		instanceViews:        instanceViews,
 	}
 
-	result1 := policy.schedule(clusterViewScheduling, "", nil)
+	result1 := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling)
 	assert.Len(t, result1, 1)
 	assert.Len(t, result1[0], 1)
 
-	result2 := policy.schedule(clusterViewScheduling, "", nil)
+	result2 := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling)
 	assert.Len(t, result2, 1)
 	assert.Len(t, result2[0], 1)
 
@@ -1494,14 +1495,14 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		instanceViews:        instanceViews,
 	}
 
-	result1 := policy.schedule(clusterViewScheduling, "", nil)
+	result1 := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling)
 	assert.Len(t, result1, 2)
 	assert.Len(t, result1[0], 1)
 	assert.Len(t, result1[1], 1)
 	assert.Equal(t, consts.PrefillInferMode, result1[0][0].GetInferMode())
 	assert.Equal(t, consts.DecodeInferMode, result1[1][0].GetInferMode())
 
-	result2 := policy.schedule(clusterViewScheduling, "", nil)
+	result2 := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling)
 	assert.Len(t, result2, 2)
 	assert.Len(t, result2[0], 1)
 	assert.Len(t, result2[1], 1)
@@ -1588,9 +1589,10 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 		instanceViews:        instanceViews,
 	}
 
-	promptTokenIds := []int64{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	promptTokenIds := []uint32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	req := &types.ScheduleRequest{PromptTokenIds: promptTokenIds}
 
-	result1 := policy.schedule(clusterViewScheduling, "", promptTokenIds)
+	result1 := policy.schedule(req, clusterViewScheduling)
 	assert.Equal(t, int32(1), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(10), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(0), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
@@ -1601,7 +1603,7 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 	instanceViews["instance-neutral-1"].metrics = map[string]instanceSchedulingMetric{}
 	instanceViews["instance-neutral-2"].metrics = map[string]instanceSchedulingMetric{}
 
-	result2 := policy.schedule(clusterViewScheduling, "", promptTokenIds)
+	result2 := policy.schedule(req, clusterViewScheduling)
 	assert.Equal(t, int32(2), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(20), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(0), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
@@ -1612,7 +1614,7 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 	instanceViews["instance-neutral-1"].metrics = map[string]instanceSchedulingMetric{}
 	instanceViews["instance-neutral-2"].metrics = map[string]instanceSchedulingMetric{}
 
-	result3 := policy.schedule(clusterViewScheduling, "", promptTokenIds)
+	result3 := policy.schedule(req, clusterViewScheduling)
 	assert.Equal(t, int32(2), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(20), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(1), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)

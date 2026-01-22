@@ -2,6 +2,7 @@ package balancer
 
 import (
 	"context"
+	"easgo/pkg/llm-gateway/consts"
 	"easgo/pkg/llm-gateway/resolver"
 	"easgo/pkg/llm-gateway/types"
 	"sync"
@@ -62,6 +63,11 @@ func NewRoundRobinBalancer(r resolver.LLMResolver) *RoundRobinBalancer {
 func (rrb *RoundRobinBalancer) Get(*types.RequestContext) (types.ScheduledResult, error) {
 	rrb.mu.Lock()
 	defer rrb.mu.Unlock()
+
+	if len(rrb.workers) == 0 {
+		return nil, consts.ErrorNoAvailableEndpoint
+	}
+
 	rrb.currentIndex++
 	index := rrb.currentIndex % uint64(len(rrb.workers))
 	return types.ScheduledResult{rrb.workers[index]}, nil

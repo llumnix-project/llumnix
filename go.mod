@@ -52,6 +52,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/go-redis/redismock/v9 v9.2.0
 	github.com/tmaxmax/go-sse v0.11.0
+	golang.org/x/sync v0.10.0
 	gonum.org/v1/gonum v0.13.0
 	google.golang.org/grpc v1.69.2
 )

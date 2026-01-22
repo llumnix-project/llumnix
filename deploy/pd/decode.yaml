@@ -63,7 +63,7 @@ spec:
 #            emptyDir: {}
         containers:
         - name: vllm
-          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260106-150956
+          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260115-160850
           securityContext:
             capabilities:
               add:
@@ -127,12 +127,6 @@ spec:
                 #                 "num_redundant_experts":"32",
                 #                 "log_balancedness":"False"}' \
           env:
-          # enable cpu infer
-#          - name: VLLM_CPU_KVCACHE_SPACE
-#            value: "8"
-#          - name: VLLM_CPU_NUM_OF_RESERVED_CPU
-#            value: "1"
-
           # configuration for Llumnix
           - name: LLUMNIX_CMS_REDIS_ADDRESS
             value: "redis"
@@ -256,3 +250,31 @@ spec:
             - name: model-storage
               mountPath: /models
               readOnly: true
+        # - name: runtime
+        #   image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260115-160850
+        #   command:
+        #     - /bin/bash
+        #     - -c
+        #   args:
+        #     - |-
+        #       cd /app && \
+        #       exec python3 -m runtime.discovery \
+        #       --role normal \
+        #       --dp_size_local 4 \
+        #       --entrypoint_port 8000 \
+        #       --kv_transfer_port 28000 \
+        #       --pod_name $(POD_NAME) \
+        #       --pod_ip $(POD_IP) \
+        #       --redis_address redis \
+        #       --redis_port 6379 \
+        #       --redis_username default
+        #   env:
+        #     - name: POD_NAME
+        #       valueFrom:
+        #         fieldRef:
+        #           fieldPath: metadata.name
+        #     - name: POD_IP
+        #       valueFrom:
+        #         fieldRef:
+        #           fieldPath: status.podIP
+  

@@ -2,8 +2,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Any
 
-RPC_SUCCESS_STR = "SUCCESS"
+from llumnix.utils import MigrationParams
 
+RPC_SUCCESS_STR = "SUCCESS"
+MIGRATION_SUCCESS_STR = "SUCCESS"
+MIGRATION_FAILURE_STR = "FAILURE"
 
 @dataclass
 class RPCPutNoWaitQueueRequest:
@@ -25,6 +28,17 @@ class RPCRequestType(Enum):
     HANDSHAKE = b'\x00'
     PUT_NOWAIT = b'\x01'
     PUT_NOWAIT_BATCH = b'\x02'
+
+
+@dataclass
+class LlumletMigrateRequest:
+    dst_host: str = field(default=None)
+    dst_port: int = field(default=None)
+    migration_params:MigrationParams = field(default=None)
+
+
+class LlumletRequestType(Enum):
+    MIGRATE = b'\x03'
 
 
 # ================== RPC exceptions ==================

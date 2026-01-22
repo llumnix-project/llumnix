@@ -81,15 +81,15 @@ class MigrationLimits:
     max_block_ratio_mig_in:float = 0.3
     max_block_ratio_mig_out:float = 0.3
 
-
-def get_migration_limits() -> MigrationLimits:
+def get_migration_limits(detailed: bool) -> MigrationLimits:
     mig_limits = MigrationLimits()
     mig_limits.max_req_mig_in = envs.LLUMNIX_MAX_REQ_MIG_IN
     mig_limits.max_req_mig_out = envs.LLUMNIX_MAX_REQ_MIG_OUT
-    mig_limits.max_token_mig_in = envs.LLUMNIX_MAX_TOKEN_MIG_IN
-    mig_limits.max_token_mig_out = envs.LLUMNIX_MAX_TOKEN_MIG_OUT
-    mig_limits.max_block_ratio_mig_in = envs.LLUMNIX_MAX_BLOCK_RATIO_MIG_IN
-    mig_limits.max_block_ratio_mig_out = envs.LLUMNIX_MAX_BLOCK_RATIO_MIG_OUT
+    if detailed:
+        mig_limits.max_token_mig_in = envs.LLUMNIX_MAX_TOKEN_MIG_IN
+        mig_limits.max_token_mig_out = envs.LLUMNIX_MAX_TOKEN_MIG_OUT
+        mig_limits.max_block_ratio_mig_in = envs.LLUMNIX_MAX_BLOCK_RATIO_MIG_IN
+        mig_limits.max_block_ratio_mig_out = envs.LLUMNIX_MAX_BLOCK_RATIO_MIG_OUT
     return mig_limits
 
 def get_rpc_port() -> int:

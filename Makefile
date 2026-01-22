@@ -1,13 +1,18 @@
 .PHONY: llm-gateway-proto-build
 llm-gateway-proto-build:
 	protoc --go_out=./pkg/llm-gateway/cms/ \
-        --proto_path="./pkg" \
-        ./pkg/llm-gateway/cms/proto/cms.proto
+    	--proto_path="./pkg" \
+    	./pkg/llm-gateway/cms/proto/cms.proto
 
 	protoc --go_out=./pkg/llm-gateway/llumlet/ \
        --go-grpc_out=./pkg/llm-gateway/llumlet/ \
        --proto_path="./pkg" \
-    	./pkg/llm-gateway/llumlet/proto/llumlet_server.proto
+		./pkg/llm-gateway/llumlet/proto/llumlet_server.proto
+
+	protoc --go_out=./pkg/llm-gateway/resolver/ \
+       --go-grpc_out=./pkg/llm-gateway/resolver/ \
+       --proto_path="./pkg" \
+    	./pkg/llm-gateway/resolver/proto/redis_discovery.proto
 
 .PHONY: llm-gateway-build
 llm-gateway-build: llm-gateway-proto-build

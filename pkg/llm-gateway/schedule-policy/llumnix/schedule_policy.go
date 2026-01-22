@@ -195,7 +195,7 @@ func (p *DispatchPolicy) Schedule(request *types.ScheduleRequest) error {
 	clusterViewScheduling := toClusterViewScheduling(p.clusterView)
 	klog.V(4).Infof("Retrieved cluster instances, count: %d", len(clusterViewScheduling.instanceViews))
 
-	selectedInstances := p.schedule(clusterViewScheduling, request.Id, Uint32ToInt64(request.PromptTokenIds))
+	selectedInstances := p.schedule(request, clusterViewScheduling)
 	if len(selectedInstances) == 0 {
 		klog.Warningf("No instances selected, return ErrorNoAvailableEndpoint")
 		return consts.ErrorNoAvailableEndpoint
@@ -203,12 +203,20 @@ func (p *DispatchPolicy) Schedule(request *types.ScheduleRequest) error {
 
 	var schResults types.ScheduledResult
 	for _, instance := range selectedInstances[0] {
+		if instance == nil {
+			continue
+		}
+
 		schResults = append(schResults, *instance.GetInstance())
 		klog.V(4).Infof("Added token from instance: %s", instance.GetInstanceId())
 		logSelectedInstance(instance, request.Id, consts.PrefillInferMode, p.c.LlumnixConfig.EnableFullModeScheduling)
 	}
 	if len(selectedInstances) > 1 {
 		for _, instance := range selectedInstances[1] {
+			if instance == nil {
+				continue
+			}
+
 			schResults = append(schResults, *instance.GetInstance())
 			klog.V(4).Infof("Added token2 from instance: %s", instance.GetInstanceId())
 			logSelectedInstance(instance, request.Id, consts.DecodeInferMode, p.c.LlumnixConfig.EnableFullModeScheduling)
@@ -219,9 +227,10 @@ func (p *DispatchPolicy) Schedule(request *types.ScheduleRequest) error {
 }
 
 func (p *DispatchPolicy) schedule(
-	clusterView clusterViewScheduling,
-	requestId string,
-	promptTokenIds []int64) (selectedInstances [][]*instanceViewScheduling) {
+	request *types.ScheduleRequest,
+	clusterView clusterViewScheduling) (selectedInstances [][]*instanceViewScheduling) {
+	requestId := request.Id
+	promptTokenIds := Uint32ToInt64(request.PromptTokenIds)
 	selectedInstances = [][]*instanceViewScheduling{}
 	if p.c.LlumnixConfig.EnableCacheAwareScheduling {
 		// NOTE(sunbiao.sun): Calculating instance prompt cache hit len has ms-level latency, but it does not r/w
@@ -255,19 +264,21 @@ func (p *DispatchPolicy) schedule(
 		p.policyInternal.calculateMetrics(inferMode, instanceViews)
 	}
 
-	if _, exists := clusterView.groupedInstanceViews[consts.NormalInferMode]; exists {
-		normal := p.executeSchedulePipeline(
-			p.schedulePipelines[consts.NormalInferMode], clusterView.groupedInstanceViews)
-		if normal != nil {
-			klog.V(4).Infof("Normal instance selected: %s", normal.GetInstanceId())
-			selectedInstances = append(selectedInstances, []*instanceViewScheduling{normal})
-			if p.c.LlumnixConfig.EnableInstanceStatusLocalAccount {
-				p.cmsClient.AddRequestLocalAccount(
-					normal.cmsView, consts.NormalInferMode, numBlocks,
-					int32(normal.schedulingCtx.prefixHitNumBlocks), requestId, true)
+	if request.ScheduleMode == types.ScheduleModeNormal {
+		if _, exists := clusterView.groupedInstanceViews[consts.NormalInferMode]; exists {
+			normal := p.executeSchedulePipeline(
+				p.schedulePipelines[consts.NormalInferMode], clusterView.groupedInstanceViews)
+			if normal != nil {
+				klog.V(4).Infof("Normal instance selected: %s", normal.GetInstanceId())
+				selectedInstances = append(selectedInstances, []*instanceViewScheduling{normal})
+				if p.c.LlumnixConfig.EnableInstanceStatusLocalAccount {
+					p.cmsClient.AddRequestLocalAccount(
+						normal.cmsView, consts.NormalInferMode, numBlocks,
+						int32(normal.schedulingCtx.prefixHitNumBlocks), requestId, true)
+				}
+			} else {
+				klog.V(4).Info("No normal instance selected")
 			}
-		} else {
-			klog.V(4).Info("No normal instance selected")
 		}
 		return
 	}
@@ -278,32 +289,38 @@ func (p *DispatchPolicy) schedule(
 		return
 	}
 
-	prefill := p.executeSchedulePipeline(p.schedulePipelines[consts.PrefillInferMode], clusterView.groupedInstanceViews)
-	if prefill == nil {
-		klog.V(4).Info("No prefill instance selected, return")
-		return
-	}
-
-	if p.c.LlumnixConfig.EnableInstanceStatusLocalAccount {
-		p.cmsClient.AddRequestLocalAccount(
-			prefill.cmsView, consts.PrefillInferMode, numBlocks,
-			int32(prefill.schedulingCtx.prefixHitNumBlocks), requestId, true)
-	}
-
-	decode := p.executeSchedulePipeline(p.schedulePipelines[consts.DecodeInferMode], clusterView.groupedInstanceViews)
-	if decode == nil {
-		klog.V(4).Info("No decode instance selected, return")
-		if p.c.LlumnixConfig.EnableInstanceStatusLocalAccount {
-			p.cmsClient.RevertRequestPrefillLocalAccount(
-				prefill.cmsView, numBlocks, int32(prefill.schedulingCtx.prefixHitNumBlocks), requestId)
+	var prefill *instanceViewScheduling
+	needPrefill := request.ScheduleMode == types.ScheduleModePDBatch || (request.ScheduleMode == types.ScheduleModePDStaged && request.InferStage == types.InferStagePrefill)
+	if needPrefill {
+		prefill = p.executeSchedulePipeline(p.schedulePipelines[consts.PrefillInferMode], clusterView.groupedInstanceViews)
+		if prefill == nil {
+			klog.V(4).Info("No prefill instance selected, return")
+		} else {
+			if p.c.LlumnixConfig.EnableInstanceStatusLocalAccount {
+				p.cmsClient.AddRequestLocalAccount(
+					prefill.cmsView, consts.PrefillInferMode, numBlocks,
+					int32(prefill.schedulingCtx.prefixHitNumBlocks), requestId, true)
+			}
 		}
-		return
 	}
 
-	if p.c.LlumnixConfig.EnableInstanceStatusLocalAccount {
-		p.cmsClient.AddRequestLocalAccount(
-			decode.cmsView, consts.DecodeInferMode, numBlocks, int32(decode.schedulingCtx.prefixHitNumBlocks),
-			requestId, decode != prefill)
+	var decode *instanceViewScheduling
+	needDecode := request.ScheduleMode == types.ScheduleModePDBatch || (request.ScheduleMode == types.ScheduleModePDStaged && request.InferStage == types.InferStageDecode)
+	if needDecode {
+		decode = p.executeSchedulePipeline(p.schedulePipelines[consts.DecodeInferMode], clusterView.groupedInstanceViews)
+		if decode == nil {
+			klog.V(4).Info("No decode instance selected, return")
+			if p.c.LlumnixConfig.EnableInstanceStatusLocalAccount && prefill != nil {
+				p.cmsClient.RevertRequestPrefillLocalAccount(
+					prefill.cmsView, numBlocks, int32(prefill.schedulingCtx.prefixHitNumBlocks), requestId)
+			}
+		} else {
+			if p.c.LlumnixConfig.EnableInstanceStatusLocalAccount {
+				p.cmsClient.AddRequestLocalAccount(
+					decode.cmsView, consts.DecodeInferMode, numBlocks, int32(decode.schedulingCtx.prefixHitNumBlocks),
+					requestId, decode != prefill)
+			}
+		}
 	}
 
 	selectedInstances = append(selectedInstances, []*instanceViewScheduling{prefill}, []*instanceViewScheduling{decode})

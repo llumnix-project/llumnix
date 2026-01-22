@@ -1,3 +1,7 @@
+# logs
+logs
+*.out
+
 # binary
 bin
 target

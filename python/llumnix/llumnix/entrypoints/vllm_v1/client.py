@@ -2,6 +2,7 @@ import asyncio
 from collections import defaultdict
 from typing import Dict, List, Tuple, Optional
 
+import msgspec
 from vllm.config import VllmConfig
 from vllm.v1.engine import (
     EngineCoreRequestType,
@@ -10,7 +11,7 @@ from vllm.v1.engine import (
     EngineCoreOutputs,
     FinishReason,
 )
-from vllm.v1.engine.core_client import AsyncMPClient, DPAsyncMPClient
+from vllm.v1.engine.core_client import AsyncMPClient, DPAsyncMPClient, DPLBAsyncMPClient
 from vllm.v1.engine.output_processor import OutputProcessor
 from vllm.v1.executor.abstract import Executor
 
@@ -27,35 +28,18 @@ def get_num_output_tokens(core_output: EngineCoreOutput) -> Optional[int]:
         num_output_tokens = core_output.kv_transfer_params.get("num_output_tokens", None)
     return num_output_tokens
 
-
-class VLLMV1LlumnixClient(BaseLlumnixClient, AsyncMPClient):
+class LlumnixClient(BaseLlumnixClient):
     # pylint: disable=unused-argument
     def __init__(
         self,
         loop: asyncio.AbstractEventLoop,
         output_processor: OutputProcessor,
-        vllm_config: VllmConfig,
-        executor_class: type[Executor],
-        log_stats: bool,
-        client_addresses: Optional[Dict[str, str]],
         *args,
         **kwargs
     ):
         BaseLlumnixClient.__init__(self, loop)
-
-        client_count, client_index = args
-        AsyncMPClient.__init__(self, vllm_config, executor_class, log_stats,
-                                client_addresses, client_count, client_index)
-
         self.output_processor = output_processor
         self.core_output_stash: Dict[str, Tuple[List[EngineCoreOutput]]] = defaultdict(list)
-
-# ================== overriding from AsyncMPClient ==================
-    async def add_request_async(self, request: EngineCoreRequest) -> None:
-        request.client_index = self.client_index
-        request.queue_server_address = self.output_queue_server.server_address
-        await self._send_input(EngineCoreRequestType.ADD, request)
-        self._ensure_output_queue_task()
 
     async def abort_requests_async(self, request_ids: list[str]) -> None:
         for request_id in request_ids:
@@ -164,9 +148,123 @@ class VLLMV1LlumnixClient(BaseLlumnixClient, AsyncMPClient):
         super()._clear_client_request_states(request_id)
         self.core_output_stash.pop(request_id, None)
 
+class VLLMV1LlumnixClient(LlumnixClient, AsyncMPClient):
+    # pylint: disable=unused-argument
+    def __init__(
+        self,
+        loop: asyncio.AbstractEventLoop,
+        output_processor: OutputProcessor,
+        vllm_config: VllmConfig,
+        executor_class: type[Executor],
+        log_stats: bool,
+        client_addresses: Optional[Dict[str, str]],
+        *args,
+        **kwargs
+    ):
+        LlumnixClient.__init__(self, loop, output_processor)
+
+        client_count, client_index, driver_tensor_queue_union = args
+        AsyncMPClient.__init__(self, vllm_config, executor_class, log_stats,
+                                client_addresses, client_count, client_index, driver_tensor_queue_union)
+
+# ================== overriding from AsyncMPClient ==================
+    async def add_request_async(self, request: EngineCoreRequest) -> None:
+        request.client_index = self.client_index
+        request.queue_server_address = self.output_queue_server.server_address
+        await self._send_input(EngineCoreRequestType.ADD, request)
+        self._ensure_output_queue_task()
 
 class VLLMV1DPLlumnixClient(VLLMV1LlumnixClient, DPAsyncMPClient):
     def __init__(self, *args, **kwargs):
         self.current_wave = 0
 
         VLLMV1LlumnixClient.__init__(self, *args, **kwargs)
+
+class VLLMV1CELlumnixClient(LlumnixClient, AsyncMPClient):
+    def __init__(
+        self,
+        loop: asyncio.AbstractEventLoop,
+        output_processor: OutputProcessor,
+        vllm_config: VllmConfig,
+        executor_class: type[Executor],
+        log_stats: bool,
+        client_addresses: Optional[Dict[str, str]],
+        *args,
+        **kwargs
+    ):
+        LlumnixClient.__init__(self, loop, output_processor)
+        client_count, client_index = args
+        AsyncMPClient.__init__(self, vllm_config, executor_class, log_stats,
+                                client_addresses, client_count, client_index)
+    # ================== overriding from AsyncMPClient ==================
+    async def add_request_async(self, request: EngineCoreRequest) -> None:
+        request.client_index = self.client_index
+        request.queue_server_address = self.output_queue_server.server_address
+        await self._send_input(EngineCoreRequestType.ADD, request)
+        self._ensure_output_queue_task()
+
+class VLLMV1DPCELlumnixClient(LlumnixClient, DPAsyncMPClient):
+    def __init__(
+        self,
+        loop: asyncio.AbstractEventLoop,
+        output_processor: OutputProcessor,
+        vllm_config: VllmConfig,
+        executor_class: type[Executor],
+        log_stats: bool,
+        client_addresses: Optional[Dict[str, str]],
+        *args,
+        **kwargs
+    ):
+        LlumnixClient.__init__(self, loop, output_processor)
+        client_count, client_index = args
+        DPAsyncMPClient.__init__(self, vllm_config, executor_class, log_stats,
+                                client_addresses, client_count, client_index)
+    # ================== overriding from DPAsyncMPClient ==================
+    async def add_request_async(self, request: EngineCoreRequest) -> None:
+        self._ensure_stats_update_task()
+        request.current_wave = self.current_wave
+        request.client_index = self.client_index
+        chosen_engine = self.get_core_engine_for_request(request)
+        request.queue_server_address = self.output_queue_server.server_address
+        to_await = self._send_input(EngineCoreRequestType.ADD, request, chosen_engine)
+        if not self.engines_running:
+            # Notify coordinator that we're sending a request
+            req_msg = msgspec.msgpack.encode(("FIRST_REQ", chosen_engine))
+            await self.first_req_send_socket.send(req_msg)
+        await to_await
+        self._ensure_output_queue_task()
+
+class VLLMV1CEDPLBLlumnixClient(LlumnixClient, DPLBAsyncMPClient):
+    def __init__(
+        self,
+        loop: asyncio.AbstractEventLoop,
+        output_processor: OutputProcessor,
+        vllm_config: VllmConfig,
+        executor_class: type[Executor],
+        log_stats: bool,
+        client_addresses: Optional[Dict[str, str]],
+        *args,
+        **kwargs
+    ):
+        LlumnixClient.__init__(self, loop, output_processor)
+        client_count, client_index = args
+        DPLBAsyncMPClient.__init__(self, vllm_config, executor_class, log_stats,
+                                client_addresses, client_count, client_index)
+
+    # ================== overriding from DPLBAsyncMPClient ==================
+    async def add_request_async(self, request: EngineCoreRequest) -> None:
+        self._ensure_stats_update_task()
+
+        request.current_wave = self.current_wave
+        request.client_index = self.client_index
+
+        chosen_engine = self.get_core_engine_for_request(request)
+        request.queue_server_address = self.output_queue_server.server_address
+        to_await = self._send_input(EngineCoreRequestType.ADD, request, chosen_engine)
+        if not self.engines_running:
+            # Notify coordinator that we're sending a request
+            req_msg = msgspec.msgpack.encode(("FIRST_REQ", chosen_engine))
+            await self.first_req_send_socket.send(req_msg)
+        await to_await
+
+        self._ensure_output_queue_task()

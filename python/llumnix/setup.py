@@ -55,7 +55,6 @@ setup(
     install_requires=get_llumnix_requirements(),
     extras_require={
         "vllm": get_engine_requirements("vllm"),
-        "vllm_ce": get_engine_requirements("vllm_ce"),
         "sglang": get_engine_requirements("sglang"),
     },
     cmdclass={

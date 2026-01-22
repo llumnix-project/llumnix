@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package resolver;
+
+option go_package = "./;resolver";
+
+message PodDiscoveryInfo {
+  string pod_name = 1;
+  int64 timestamp_ms = 3;
+  repeated InstanceDiscoveryInfo instances = 4;
+}
+
+message InstanceDiscoveryInfo {
+  string role = 1; // prefill, decode or normal
+  string entrypoint_ip = 2;
+  int32 entrypoint_port = 3;
+  string kv_transfer_ip = 4;
+  int32 kv_transfer_port = 5;
+  int32 dp_rank = 6;
+  int32 dp_size = 7;
+  string model = 8;
+  int64 version = 9;
+}

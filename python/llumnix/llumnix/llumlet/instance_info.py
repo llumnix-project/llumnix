@@ -46,6 +46,11 @@ class InstanceMetaData:
     utc_create: float = -1
     utc_update: float = -1
 
+    ip_kvt: str = ""
+    block_size: int = -1
+
+    max_num_batched_tokens: int = -1
+
     def __hash__(self):
         return hash(self.instance_id)
 
@@ -66,7 +71,7 @@ class InstanceStatus:
     step_id: int = None
     update_id: int = None
 
-    # status for updating scheduling account
+    # status for updating instance status local account
     recent_waiting_requests: List[str] = field(default_factory=list)
     waiting_requests: List[str] = field(default_factory=list)
 
@@ -107,3 +112,8 @@ class InstanceStatus:
     block_ratio_migrate_out: float = 0
     available_block_ratio_migrate_in: float = 0
     available_block_ratio_migrate_out: float = 0
+
+    # profiling status
+    profiling_id: int = -1
+    step_duration: float = 0.0
+    num_scheduled_prefill_tokens: int = 0

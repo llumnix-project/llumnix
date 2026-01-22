@@ -161,6 +161,8 @@ type LLMRequest struct {
 	BufferChatResp *protocol.ChatCompletionResponse
 	// The last chunk of the streaming response, only include finish reason and not include content.
 	LastChatStreamResp *protocol.ChatCompletionStreamResponse
+
+	BufferCompletionResponse *protocol.CompletionResponse
 }
 
 func (req *LLMRequest) GetPromptTokens() ([]uint32, bool) {
