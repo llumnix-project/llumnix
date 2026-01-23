@@ -1,4 +1,4 @@
-package kvs
+package redis
 
 import (
 	"encoding/json"
@@ -39,8 +39,8 @@ type LogConfig struct {
 	MaxBackups int    `json:"max_backups"`
 }
 
-// newRedisClusterClient Modified from MetaService src/go/redis_wrapper.go Initialize.
-func newRedisClusterClient(
+// NewRedisClusterClient Modified from MetadataService src/go/redis_wrapper.go Initialize.
+func NewRedisClusterClient(
 	configPath string,
 	redisClusterHosts string,
 	redisClusterPassword string) (*redis.ClusterClient, *Config, error) {

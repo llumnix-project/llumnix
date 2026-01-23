@@ -36,6 +36,11 @@ const (
 )
 
 const (
+	LlumnixKvsBackendV6d      = "v6d"
+	LlumnixKvsBackendMooncake = "mooncake"
+)
+
+const (
 	LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills         = "kv_blocks_ratio_with_all_prefills"
 	LlumnixSchedulingMetricDecodeBatchSize                      = "decode_batch_size"
 	LlumnixSchedulingMetricNumWaitingRequests                   = "num_waiting_requests"
@@ -119,17 +124,20 @@ const (
 	DefaultLlumnixCmsRecordMetricsInterval  = 0
 
 	// KvsMetaService defaults
-	DefaultLlumnixEnableCacheAwareScheduling         = false
-	DefaultLlumnixKvsMetaServiceConfigPath           = ""
-	DefaultLlumnixKvsChunkSize                       = 256
-	DefaultLlumnixKvsEnableSaveUnfullChunk           = false
-	DefaultLlumnixKvsIrisMetaPrefix                  = "iris."
-	DefaultLlumnixKvsVLLMBlockPrefix                 = "block.hash.key."
-	DefaultLlumnixKvsRetryIntervalMs                 = 100
-	DefaultLlumnixKvsRetryTimes                      = 5
-	DefaultLlumnixKvsMetaServiceDownDurationS        = 30
-	DefaultLlumnixKvsMetaServiceRedisClusterHosts    = ""
-	DefaultLlumnixKvsMetaServiceRedisClusterPassword = ""
+	DefaultLlumnixEnableCacheAwareScheduling             = false
+	DefaultLlumnixKvsBackend                             = "mooncake"
+	DefaultLlumnixKvsMetadataServiceConfigPath           = ""
+	DefaultLlumnixKvsChunkSize                           = 256
+	DefaultLlumnixKvsEnableSaveUnfullChunk               = false
+	DefaultLlumnixKvsIrisMetaPrefix                      = "iris."
+	DefaultLlumnixKvsVLLMBlockPrefix                     = "block.hash.key."
+	DefaultLlumnixKvsRetryIntervalMs                     = 100
+	DefaultLlumnixKvsRetryTimes                          = 5
+	DefaultLlumnixKvsMetadataServiceDownDurationS        = 30
+	DefaultLlumnixKvsMetadataServiceRedisClusterHosts    = ""
+	DefaultLlumnixKvsMetadataServiceRedisClusterPassword = ""
+	DefaultLlumnixKvsMetadataServiceHttpServerHost       = "0.0.0.0"
+	DefaultLlumnixKvsMetadataServiceHttpServerPort       = "9003"
 
 	// Schedule defaults
 	DefaultLlumnixDispatchTopK                        = 1

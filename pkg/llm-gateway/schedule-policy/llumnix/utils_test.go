@@ -11,7 +11,7 @@ import (
 
 	"easgo/pkg/llm-gateway/cms"
 	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/structs"
+	"easgo/pkg/llm-gateway/types"
 )
 
 func TestCalculateMetrics(t *testing.T) {
@@ -124,9 +124,9 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 			instanceViews: map[string]*instanceViewScheduling{
 				"instance1": {
 					cmsView: &cms.InstanceView{
-						Token: &structs.Token{
-							Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-							InferMode: consts.NormalInferMode,
+						Worker: &types.LLMWorker{
+							Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+							Role:     consts.NormalInferMode,
 						},
 						Status: &cms.InstanceStatus{
 							NumTotalGpuBlocks:                     100,
@@ -143,9 +143,9 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 				},
 				"instance2": {
 					cmsView: &cms.InstanceView{
-						Token: &structs.Token{
-							Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-							InferMode: consts.NormalInferMode,
+						Worker: &types.LLMWorker{
+							Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+							Role:     consts.NormalInferMode,
 						},
 						Status: &cms.InstanceStatus{
 							NumTotalGpuBlocks:                     100,
@@ -177,9 +177,9 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 			instanceViews: map[string]*instanceViewScheduling{
 				"instance1": {
 					cmsView: &cms.InstanceView{
-						Token: &structs.Token{
-							Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-							InferMode: consts.NormalInferMode,
+						Worker: &types.LLMWorker{
+							Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+							Role:     consts.NormalInferMode,
 						},
 						Status: &cms.InstanceStatus{
 							NumTotalGpuBlocks:                     100,
@@ -213,9 +213,9 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 			instanceViews: map[string]*instanceViewScheduling{
 				"instance1": {
 					cmsView: &cms.InstanceView{
-						Token: &structs.Token{
-							Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-							InferMode: consts.NormalInferMode,
+						Worker: &types.LLMWorker{
+							Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+							Role:     consts.NormalInferMode,
 						},
 						Status: &cms.InstanceStatus{
 							NumTotalGpuBlocks:                     100,
@@ -267,18 +267,17 @@ func TestKVSClient_ConvertToPrefixHashHitInstances(t *testing.T) {
 			"192.168.1.3": {"instance1"},
 		},
 	}
-	mockKVSClient := &MockKVSClient{}
 
 	tests := []struct {
-		name                    string
-		prefixHashHitKVSWorkers map[string][]string
-		expectedInstances       map[string]sets.String
+		name                      string
+		prefixHashHitKVSInstances map[string][]string
+		expectedInstances         map[string]sets.String
 	}{
 		{
 			name: "normal case",
-			prefixHashHitKVSWorkers: map[string][]string{
-				"hash1": {"192.168.1.1:8080", "192.168.1.2:8081"},
-				"hash2": {"192.168.1.2:8081", "192.168.1.3:8082"},
+			prefixHashHitKVSInstances: map[string][]string{
+				"hash1": {"192.168.1.1", "192.168.1.2"},
+				"hash2": {"192.168.1.2", "192.168.1.3"},
 			},
 			expectedInstances: map[string]sets.String{
 				"hash1": sets.NewString("instance1", "instance2", "instance3"),
@@ -287,7 +286,7 @@ func TestKVSClient_ConvertToPrefixHashHitInstances(t *testing.T) {
 		},
 		{
 			name: "empty ips",
-			prefixHashHitKVSWorkers: map[string][]string{
+			prefixHashHitKVSInstances: map[string][]string{
 				"hash1": {},
 			},
 			expectedInstances: map[string]sets.String{
@@ -295,15 +294,15 @@ func TestKVSClient_ConvertToPrefixHashHitInstances(t *testing.T) {
 			},
 		},
 		{
-			name:                    "empty input",
-			prefixHashHitKVSWorkers: map[string][]string{},
-			expectedInstances:       map[string]sets.String{},
+			name:                      "empty input",
+			prefixHashHitKVSInstances: map[string][]string{},
+			expectedInstances:         map[string]sets.String{},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := convertToPrefixHashHitInstances(mockCMSReadClient, mockKVSClient, tt.prefixHashHitKVSWorkers)
+			result := convertToCacheHitInstances(mockCMSReadClient, tt.prefixHashHitKVSInstances)
 
 			if len(result) != len(tt.expectedInstances) {
 				t.Errorf("Expected %d entries, got %d", len(tt.expectedInstances), len(result))
@@ -337,12 +336,12 @@ func (m *MockKVSClient) PrefixHash(tokens []int64) []string {
 	return m.prefixHashes
 }
 
-func (m *MockKVSClient) BatchQueryCacheHitKVSWorkers(prefixHashes []string) map[string][]string {
+func (m *MockKVSClient) BatchQueryCacheHitKVSInstances(prefixHashes []string) map[string][]string {
 	return m.prefixHashHitIps
 }
 
-func (m *MockKVSClient) ConvertKVSWorkerToIp(kvsWorker string) string {
-	return strings.Split(kvsWorker, ":")[0]
+func (m *MockKVSClient) ConvertKVSInstanceToIp(kvsInstance string) string {
+	return strings.Split(kvsInstance, ":")[0]
 }
 
 func (m *MockKVSClient) CalcInstancesCacheHitLen(
@@ -350,7 +349,7 @@ func (m *MockKVSClient) CalcInstancesCacheHitLen(
 	return m.instancesCacheHitLenResp
 }
 
-func (c *MockKVSClient) IsKVSMetaServiceDown() bool {
+func (c *MockKVSClient) IsKVSMetadataServiceDown() bool {
 	return false
 }
 

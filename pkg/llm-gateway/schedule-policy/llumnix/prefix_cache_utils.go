@@ -1,25 +1,26 @@
 package llumnix
 
 import (
-	"easgo/pkg/llm-gateway/cms"
-	"easgo/pkg/llm-gateway/kvs"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
+
+	"easgo/pkg/llm-gateway/cms"
+	"easgo/pkg/llm-gateway/kvs"
 )
 
 // calcInstancesPrefixCacheHitLen calculates the prefix hit length of prompt tokens in instance cache.
-// It uses the kvs meta service cache client to:
+// It uses the kvs metadata service cache client to:
 // 1. Chunk the prompt token IDs into smaller pieces
 // 2. Calculate prefix hashes for these chunks
-// 3. Query which kvs workers have cached content matching these prefix hashes
-// 4. Convert kvs workers to instance id set
+// 3. Query which kvs instances have cached content matching these prefix hashes
+// 4. Convert kvs instances to instance id set
 // 5. Calculate how many tokens each instance has cached (prefix hit length)
 // The result is stored in each instance's scheduling context for later use in scheduling decisions.
-// If KVS meta service is down (marked after multiple query failures), returns immediately.
-// KVS meta service status will automatically recover to healthy after a configured duration.
-// NOTE(sunbiao.sun): This function writes to instance view, so it is not placed in the kvs meta service client.
+// If KVS metadata service is down (marked after multiple query failures), returns immediately.
+// KVS metadata service status will automatically recover to healthy after a configured duration.
+// NOTE(sunbiao.sun): This function writes to instance view, so it is not placed in the kvs metadata service client.
 func calcInstancesPrefixCacheHitLen(
 	kvsClient kvs.KVSClientInterface,
 	cmsClient cms.CMSReadClientInterface,
@@ -34,8 +35,8 @@ func calcInstancesPrefixCacheHitLen(
 			time.Since(totalStart).Seconds()*1000, len(promptTokenIds))
 	}()
 
-	if kvsClient.IsKVSMetaServiceDown() {
-		klog.Warning("KVS meta service is down")
+	if kvsClient.IsKVSMetadataServiceDown() {
+		klog.Warning("KVS metadata service is down")
 		return
 	}
 
@@ -48,14 +49,14 @@ func calcInstancesPrefixCacheHitLen(
 	klog.V(5).Infof("PrefixHash result: %v", prefixHashes)
 
 	start = time.Now()
-	prefixHashHitKVSWorkers := kvsClient.BatchQueryCacheHitKVSWorkers(prefixHashes)
-	klog.V(3).Infof("BatchQueryCacheHitKVSWorkers took: %.2fms", time.Since(start).Seconds()*1e3)
-	klog.V(5).Infof("BatchQueryCacheHitKVSWorkers result: %+v", prefixHashHitKVSWorkers)
+	prefixHashHitKVSInstances := kvsClient.BatchQueryCacheHitKVSInstances(prefixHashes)
+	klog.V(3).Infof("BatchQueryCacheHitKVSInstances took: %.2fms", time.Since(start).Seconds()*1e3)
+	klog.V(5).Infof("BatchQueryCacheHitKVSInstances result: %+v", prefixHashHitKVSInstances)
 
 	start = time.Now()
-	prefixHashHitInstances := convertToPrefixHashHitInstances(cmsClient, kvsClient, prefixHashHitKVSWorkers)
-	klog.V(3).Infof("convertToPrefixHashHitInstances took: %.2fms", time.Since(start).Seconds()*1e3)
-	klog.V(5).Infof("convertToPrefixHashHitInstances result: %+v", prefixHashHitInstances)
+	prefixHashHitInstances := convertToCacheHitInstances(cmsClient, prefixHashHitKVSInstances)
+	klog.V(3).Infof("convertToCacheHitInstances took: %.2fms", time.Since(start).Seconds()*1e3)
+	klog.V(5).Infof("convertToCacheHitInstances result: %+v", prefixHashHitInstances)
 
 	start = time.Now()
 	instancePrefixHitLen := kvsClient.CalcInstancesCacheHitLen(prefixHashes, prefixHashHitInstances)
@@ -85,22 +86,16 @@ func calcInstancesPrefixCacheHitLen(
 	klog.V(3).Infof("Update instanceViews took: %.2fms", time.Since(start).Seconds()*1e3)
 }
 
-func convertToPrefixHashHitInstances(
+func convertToCacheHitInstances(
 	cmsClient cms.CMSReadClientInterface,
-	kvsClient kvs.KVSClientInterface,
-	prefixHashHitKVSWorkers map[string][]string) map[string]sets.String {
-	if len(prefixHashHitKVSWorkers) == 0 {
+	prefixHashHitKVSInstances map[string][]string) map[string]sets.String {
+	if len(prefixHashHitKVSInstances) == 0 {
 		return nil
 	}
 
-	prefixHashHitInstances := make(map[string]sets.String, len(prefixHashHitKVSWorkers))
-	for prefixHash, hitKVSWorkers := range prefixHashHitKVSWorkers {
-		ips := make([]string, len(hitKVSWorkers))
-		for i, hitKVSWorker := range hitKVSWorkers {
-			ips[i] = kvsClient.ConvertKVSWorkerToIp(hitKVSWorker)
-		}
-		klog.V(5).Infof("Convert kvs workers to ips: %v", ips)
-		prefixHashHitInstances[prefixHash] = cmsClient.GetInstanceIDsByIPs(ips)
+	prefixHashHitInstances := make(map[string]sets.String, len(prefixHashHitKVSInstances))
+	for prefixHash, hitKVSInstances := range prefixHashHitKVSInstances {
+		prefixHashHitInstances[prefixHash] = cmsClient.GetInstanceIDsByIPs(hitKVSInstances)
 	}
 	return prefixHashHitInstances
 }

@@ -50,6 +50,8 @@ type Config struct {
 	WaitScheduleTimeout int
 	// retry interval of waiting schedule results, unit is milliseconds
 	WaitScheduleRetryInterval int
+	// request token state report (report to llm scheduler) interval (seconds)
+	RequestReportInterval int
 
 	// enable access log
 	EnableAccessLog bool
@@ -65,28 +67,8 @@ type Config struct {
 
 	PDSplitConfig
 	LlumnixConfig
-	RequestReporterConfig
 
 	BatchServiceConfig
-}
-
-type PDSplitConfig struct {
-	// The configuration of pd split
-	// LLM Gateway currently supports a variety of separate implementations of the prefill
-	// and decode phases, which can be distinguished by this configuration
-	PDSplitMode string
-	// separate scheduling for p and d or not
-	SeparatePDSchedule bool
-}
-
-type RequestReporterConfig struct {
-	// request token state report (report to llm scheduler) interval (seconds)
-	RequestReportInterval int
-}
-
-type RouteConfig struct {
-	RoutePolicy    string
-	RouteConfigRaw string
 }
 
 type DiscoveryConfig struct {
@@ -110,6 +92,20 @@ type ProcessorConfig struct {
 	ReasoningParser string
 }
 
+type RouteConfig struct {
+	RoutePolicy    string
+	RouteConfigRaw string
+}
+
+type PDSplitConfig struct {
+	// The configuration of pd split
+	// LLM Gateway currently supports a variety of separate implementations of the prefill
+	// and decode phases, which can be distinguished by this configuration
+	PDSplitMode string
+	// separate scheduling for p and d or not
+	SeparatePDSchedule bool
+}
+
 type BatchServiceConfig struct {
 	BatchOSSPath           string
 	BatchOSSEndpoint       string
@@ -125,6 +121,14 @@ type BatchServiceConfig struct {
 }
 
 type LlumnixConfig struct {
+	// lite-mode scheduling: When not enabling full mode scheduling (lite-mode scheduling), llumnix does not
+	// intrusively modify inference engine, and only support basic load balance scheduling.
+	// In lite mode scheduling, LLM gateway collect update realtime request token states and report these data to
+	// LLM scheduler periodically. LLM scheduler perform load balance scheduling based on these local realtime states,
+	// supporting num-requests and num-tokens scheduling metric.
+	// full-mode scheduling: When enable full mode scheduling, llumnix intrusively modifies inference engine to
+	// collect accurate  load information from inference engine and support kv cache migration, and therefore can
+	// support advanced scheduling feature like rescheduling, adaptive pd, etc.
 	EnableFullModeScheduling bool
 
 	// cms
@@ -137,18 +141,21 @@ type LlumnixConfig struct {
 	CmsPullStatusIntervalMs   int32
 	CmsPullMetadataIntervalMs int32
 
-	// KvsMetaService
-	EnableCacheAwareScheduling         bool
-	KvsMetaServiceConfigPath           string
-	KvsChunkSize                       int
-	KvsEnableSaveUnfullChunk           bool
-	KvsIrisMetaPrefix                  string
-	KvsVLLMBlockPrefix                 string
-	KvsRetryTimes                      int
-	KvsRetryIntervalMs                 int
-	KvsMetaServiceDownDurationS        int
-	KvsMetaServiceRedisClusterHosts    string
-	KvsMetaServiceRedisClusterPassword string
+	// KvsMetadataService
+	EnableCacheAwareScheduling             bool
+	KvsBackend                             string
+	KvsMetadataServiceConfigPath           string
+	KvsChunkSize                           int
+	KvsEnableSaveUnfullChunk               bool
+	KvsIrisMetaPrefix                      string
+	KvsVLLMBlockPrefix                     string
+	KvsRetryTimes                          int
+	KvsRetryIntervalMs                     int
+	KvsMetadataServiceDownDurationS        int
+	KvsMetadataServiceRedisClusterHosts    string
+	KvsMetadataServiceRedisClusterPassword string
+	KvsMetadataServiceHttpServerHost       string
+	KvsMetadataServiceHttpServerPort       string
 
 	// schedule
 	DispatchTopK                        int
@@ -261,16 +268,19 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.Int32Var(&c.LlumnixConfig.CmsRecordMetricsInterval, "llumnix-cms-record-metrics-interval", consts.DefaultLlumnixCmsRecordMetricsInterval, "Llumnix CMS record metrics interval")
 
 	flags.BoolVar(&c.LlumnixConfig.EnableCacheAwareScheduling, "llumnix-enable-cache-aware-scheduling", consts.DefaultLlumnixEnableCacheAwareScheduling, "Llumnix enable cache aware scheduling")
-	flags.StringVar(&c.LlumnixConfig.KvsMetaServiceConfigPath, "llumnix-kvs-meta-service-config-path", consts.DefaultLlumnixKvsMetaServiceConfigPath, "Llumnix KVS MetaService config path")
+	flags.StringVar(&c.LlumnixConfig.KvsBackend, "llumnix-kvs-backend", consts.DefaultLlumnixKvsBackend, "Llumnix KVS backend")
+	flags.StringVar(&c.LlumnixConfig.KvsMetadataServiceConfigPath, "llumnix-kvs-metadata-service-config-path", consts.DefaultLlumnixKvsMetadataServiceConfigPath, "Llumnix KVS MetadataService config path")
 	flags.IntVar(&c.LlumnixConfig.KvsChunkSize, "llumnix-kvs-chunk-size", consts.DefaultLlumnixKvsChunkSize, "Llumnix KVS chunk size")
 	flags.BoolVar(&c.LlumnixConfig.KvsEnableSaveUnfullChunk, "llumnix-kvs-enable-save-unfull-chunk", consts.DefaultLlumnixKvsEnableSaveUnfullChunk, "Llumnix KVS enable save unfull chunk")
 	flags.StringVar(&c.LlumnixConfig.KvsIrisMetaPrefix, "llumnix-kvs-iris-meta-prefix", consts.DefaultLlumnixKvsIrisMetaPrefix, "Llumnix KVS iris meta prefix")
 	flags.StringVar(&c.LlumnixConfig.KvsVLLMBlockPrefix, "llumnix-kvs-vllm-block-prefix", consts.DefaultLlumnixKvsVLLMBlockPrefix, "Llumnix KVS vllm block prefix")
 	flags.IntVar(&c.LlumnixConfig.KvsRetryIntervalMs, "llumnix-kvs-retry-interval-ms", consts.DefaultLlumnixKvsRetryIntervalMs, "Llumnix KVS retry interval in milliseconds")
 	flags.IntVar(&c.LlumnixConfig.KvsRetryTimes, "llumnix-kvs-retry-times", consts.DefaultLlumnixKvsRetryTimes, "Llumnix KVS retry times")
-	flags.IntVar(&c.LlumnixConfig.KvsMetaServiceDownDurationS, "llumnix-kvs-meta-service-down-duration-s", consts.DefaultLlumnixKvsMetaServiceDownDurationS, "Llumnix KVS meta service down duration in seconds")
-	flags.StringVar(&c.LlumnixConfig.KvsMetaServiceRedisClusterHosts, "llumnix-kvs-meta-service-redis-cluster-hosts", consts.DefaultLlumnixKvsMetaServiceRedisClusterHosts, "Llumnix KVS meta service redis cluster hosts")
-	flags.StringVar(&c.LlumnixConfig.KvsMetaServiceRedisClusterPassword, "llumnix-kvs-meta-service-redis-cluster-password", consts.DefaultLlumnixKvsMetaServiceRedisClusterPassword, "Llumnix KVS meta service redis cluster password")
+	flags.IntVar(&c.LlumnixConfig.KvsMetadataServiceDownDurationS, "llumnix-kvs-metadata-service-down-duration-s", consts.DefaultLlumnixKvsMetadataServiceDownDurationS, "Llumnix KVS metadata service down duration in seconds")
+	flags.StringVar(&c.LlumnixConfig.KvsMetadataServiceRedisClusterHosts, "llumnix-kvs-metadata-service-redis-cluster-hosts", consts.DefaultLlumnixKvsMetadataServiceRedisClusterHosts, "Llumnix KVS metadata service redis cluster hosts")
+	flags.StringVar(&c.LlumnixConfig.KvsMetadataServiceRedisClusterPassword, "llumnix-kvs-metadata-service-redis-cluster-password", consts.DefaultLlumnixKvsMetadataServiceRedisClusterPassword, "Llumnix KVS metadata service redis cluster password")
+	flags.StringVar(&c.LlumnixConfig.KvsMetadataServiceHttpServerHost, "llumnix-kvs-metadata-service-http-server-host", consts.DefaultLlumnixKvsMetadataServiceHttpServerHost, "Llumnix KVS metadata service http server host")
+	flags.StringVar(&c.LlumnixConfig.KvsMetadataServiceHttpServerPort, "llumnix-kvs-metadata-service-http-server-port", consts.DefaultLlumnixKvsMetadataServiceHttpServerPort, "Llumnix KVS metadata service http server port")
 
 	flags.IntVar(&c.LlumnixConfig.DispatchTopK, "llumnix-dispatch-top-k", consts.DefaultLlumnixDispatchTopK, "Llumnix dispatch top K")
 	flags.StringVar(&c.LlumnixConfig.DispatchNeutralLoadMetric, "llumnix-dispatch-neutral-load-metric", consts.DefaultLlumnixDispatchNeutralLoadMetric, "Llumnix dispatch neutral load metric")
