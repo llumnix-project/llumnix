@@ -31,6 +31,10 @@ llm-gateway-build: llm-gateway-proto-build
 llumlet-install:
 	cd ./python/llumnix && make vllm_install && make proto
 
+.PHONY: runtime-proto-build
+runtime-proto-build:
+	cd ./python/runtime && make proto
+
 .PHONY: simple-test
 simple-test:
 	pytest -x -v -s /mnt/eas/cuikuilong/llumnix/tests/local/vllm_e2e.py::test_simple_requests
@@ -40,7 +44,7 @@ migration-test:
 	pytest -x -v -s /mnt/eas/cuikuilong/llumnix/tests/local/vllm_e2e.py::test_migration
 
 .PHONY: test
-test: llm-gateway-build simple-test migration-test
+test: runtime-proto-build llm-gateway-build simple-test migration-test
 
 # not ready
 .PHONY: llumnix-unit-test
