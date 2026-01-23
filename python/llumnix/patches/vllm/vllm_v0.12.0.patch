@@ -1,4 +1,4 @@
-From 7d5c1924f67124c16f3d213347b1552a4371dca2 Mon Sep 17 00:00:00 2001
+From 397b5941537999967bd95d616b80635ec0212c43 Mon Sep 17 00:00:00 2001
 From: "jiangjiemin.jjm" <jiangjiemin.jjm@alibaba-inc.com>
 Date: Tue, 16 Dec 2025 18:36:53 +0800
 Subject: [PATCH] feat: enable_llumnix
@@ -209,7 +209,7 @@ index ec5d6e95c..f1c8979ce 100644
  
          # Loggers.
 diff --git a/vllm/v1/engine/core.py b/vllm/v1/engine/core.py
-index 61b8422dd..78afaff28 100644
+index 61b8422dd..3829264b4 100644
 --- a/vllm/v1/engine/core.py
 +++ b/vllm/v1/engine/core.py
 @@ -18,6 +18,7 @@ import zmq
@@ -392,7 +392,7 @@ index 61b8422dd..78afaff28 100644
 +            
 +            if envs.VLLM_ENABLE_LLUMNIX:
 +                self.llumlet_proxy = LlumletProxy(vllm_config, self.scheduler,
-+                                                  engine_index, "vLLM v1 ce")
++                                                  engine_index)
 +                addresses = self.llumlet_proxy.add_llumlet_address(addresses)
  
              # Background Threads and Queues for IO. These enable us to

@@ -11,7 +11,7 @@ def create_engine_client(
     """
     Factory function to create an engine client based on the engine type.
     """
-    if engine_type in (BackendType.VLLM_V1, BackendType.VLLM_V1_CE):
+    if engine_type in (BackendType.VLLM_V1):
         # pylint: disable=import-outside-toplevel
         from vllm.config import VllmConfig
         from llumnix.engine_client.vllm_engine_client import VLLMEngineClient
@@ -31,13 +31,13 @@ def create_engine_client(
 
 
 def get_engine_mp_context(engine_type: str):
-    if engine_type in (BackendType.VLLM_V1, BackendType.VLLM_V1_CE):
+    if engine_type in (BackendType.VLLM_V1):
         return multiprocessing.get_context("fork")
     return multiprocessing.get_context("spawn")
 
 
 def get_engine_client_addresses(engine_type: str) -> dict[str, str]:
-    if engine_type in (BackendType.VLLM_V1, BackendType.VLLM_V1_CE):
+    if engine_type in (BackendType.VLLM_V1):
         # pylint: disable=import-outside-toplevel
         from llumnix.engine_client.vllm_engine_client import vllm_get_addresses
         return vllm_get_addresses()
@@ -51,7 +51,7 @@ def get_engine_client_addresses(engine_type: str) -> dict[str, str]:
 
 
 def get_specific_instance_meta_data(engine_type: str, cfg: Any) -> dict:
-    if engine_type in (BackendType.VLLM_V1, BackendType.VLLM_V1_CE):
+    if engine_type == BackendType.VLLM_V1:
         # pylint: disable=import-outside-toplevel
         from llumnix.engine_client.vllm_engine_client import vllm_get_instance_meta_data
         return vllm_get_instance_meta_data(cfg)
@@ -70,7 +70,7 @@ def add_llumlet_addresses(
     llumlet_addresses: dict[str, str]
 ) -> dict[str, str]:
     """Add llumlet rpc address to the front of addresses list."""
-    if engine_type in (BackendType.VLLM_V1, BackendType.VLLM_V1_CE):
+    if engine_type in (BackendType.VLLM_V1):
         assert addresses is not None
         addresses.inputs.append(llumlet_addresses["input_address"])
         addresses.outputs.append(llumlet_addresses["output_address"])
@@ -82,3 +82,11 @@ def add_llumlet_addresses(
         return addresses
 
     raise NotImplementedError
+
+
+def get_connector_type(engine_type: str, cfg: Any) -> Optional[str]:
+    if engine_type == BackendType.VLLM_V1:
+        # pylint: disable=import-outside-toplevel
+        from llumnix.engine_client.vllm_engine_client import vllm_get_connector_type
+        return vllm_get_connector_type(cfg)
+    return None

@@ -15,7 +15,7 @@ from vllm.version import __version__ as VLLM_VERSION
 from llumnix.compat.vllm_compat import get_ip, get_open_zmq_ipc_path
 
 from llumnix.engine_client.base_engine_client import BaseEngineClient
-from llumnix.llumlet.instance_info import InstanceType, InstanceStatus
+from llumnix.llumlet.instance_info import ConnectorType, InstanceType, InstanceStatus
 from llumnix.logging.logger import init_logger
 from llumnix.utils import MigrationParams, RequestIDType, get_ip_address
 from llumnix import envs as llumnix_envs
@@ -240,3 +240,12 @@ def vllm_get_addresses() -> dict[str, str]:
         "output_address": output_addresses
     }
     return client_addresses
+
+def vllm_get_connector_type(cfg: VllmConfig) -> str:
+    if not cfg.kv_transfer_config:
+        return None
+    if cfg.kv_transfer_config.kv_connector == "MooncakeConnector":
+        return ConnectorType("mooncake")
+    if cfg.kv_transfer_config.kv_connector == "HybridConnector":
+        return ConnectorType("hybrid")
+    raise ValueError(f"Unknown kv_connector type: {cfg.kv_transfer_config.kv_connector}")

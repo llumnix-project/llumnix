@@ -5,7 +5,6 @@ from vllm.v1.core.sched.output import SchedulerOutput
 
 from llumnix.status_collector.base_connector_metric_collector import BaseConnectorMetricsCollector
 
-
 class MooncakeConnectorMetricsCollector(BaseConnectorMetricsCollector):
 
     def get_connector_waiting_reqs(self) -> List[Request]:

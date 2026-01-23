@@ -1,0 +1,17 @@
+pyzmq
+cloudpickle
+uvloop
+httpx
+requests
+
+# cms
+protobuf<5.0dev
+grpcio
+grpcio-tools
+redis
+readerwriterlock
+
+# llumlet
+psutil
+netifaces2
+overrides
