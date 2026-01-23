@@ -14,7 +14,7 @@ import (
 	"easgo/cmd/llm-gateway/app/options"
 	"easgo/pkg/llm-gateway/cms"
 	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/structs"
+	"easgo/pkg/llm-gateway/types"
 )
 
 func NewReschedulePolicyPartial(c *options.Config) *ReschedulePolicy {
@@ -151,9 +151,9 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-neutral-1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral-1",
@@ -175,9 +175,9 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-neutral-2": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral-2",
@@ -199,9 +199,9 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-neutral-3": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral-3",
@@ -223,9 +223,9 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-neutral-4": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral-4",
@@ -247,9 +247,9 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-neutral-x": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral-x",
@@ -271,9 +271,9 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-prefill-1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-1",
@@ -295,9 +295,9 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-prefill-2": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-2",
@@ -319,9 +319,9 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-prefill-3": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-3",
@@ -343,9 +343,9 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-prefill-4": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-4",
@@ -367,9 +367,9 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-decode-1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-1",
@@ -391,9 +391,9 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-decode-2": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-2",
@@ -415,9 +415,9 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-decode-3": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-3",
@@ -439,9 +439,9 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-decode-4": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-4",
@@ -463,9 +463,9 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-decode-5": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-5",
@@ -487,9 +487,9 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-decode-6": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-6",
@@ -511,9 +511,9 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-decode-x": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-x",
@@ -655,9 +655,9 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-prefill-1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-1",
@@ -680,9 +680,9 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-2": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-2",
@@ -705,9 +705,9 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-3": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-3",
@@ -730,9 +730,9 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-4": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-4",
@@ -755,9 +755,9 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-x1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-x1",
@@ -780,9 +780,9 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-1",
@@ -805,9 +805,9 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-2": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-2",
@@ -830,9 +830,9 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-3": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-3",
@@ -855,9 +855,9 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-4": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-4",
@@ -880,9 +880,9 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-x1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-x1",
@@ -935,9 +935,9 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-prefill-1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-1",
@@ -960,9 +960,9 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-2": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-2",
@@ -985,9 +985,9 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-3": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-3",
@@ -1010,9 +1010,9 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-4": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-4",
@@ -1035,9 +1035,9 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-5": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-5",
@@ -1060,9 +1060,9 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-6": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-6",
@@ -1085,9 +1085,9 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-x1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-x1",
@@ -1110,9 +1110,9 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-x2": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-x2",
@@ -1135,9 +1135,9 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-1",
@@ -1194,9 +1194,9 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-prefill-1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:         "instance-prefill-1",
@@ -1217,9 +1217,9 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-2": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:         "instance-prefill-2",
@@ -1240,9 +1240,9 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-3": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:         "instance-prefill-3",
@@ -1263,9 +1263,9 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-4": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:         "instance-prefill-4",
@@ -1286,9 +1286,9 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-x1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:         "instance-prefill-x1",
@@ -1309,9 +1309,9 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-1",
@@ -1334,9 +1334,9 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-2": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-2",
@@ -1359,9 +1359,9 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-3": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-3",
@@ -1384,9 +1384,9 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-4": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-4",
@@ -1409,9 +1409,9 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-5": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-5",
@@ -1434,9 +1434,9 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-x1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-x1",

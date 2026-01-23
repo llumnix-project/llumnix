@@ -46,7 +46,13 @@ migration-test:
 .PHONY: test
 test: runtime-proto-build llm-gateway-build simple-test migration-test
 
-# not ready
 .PHONY: llumnix-unit-test
 llumnix-unit-test: llm-gateway-proto-build
-	go test -v -failfast -cover ./pkg/llm-gateway/cms ./pkg/llm-gateway/llumlet ./pkg/llm-gateway/schedule-policy/llumnix ./pkg/llm-gateway/kvs ./pkg/llm-gateway/load-balancer
+	CGO_ENABLED=1 \
+	CGO_LDFLAGS="-L$(CURDIR)/lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release" \
+	go test -v -failfast -cover \
+		./pkg/llm-gateway/cms \
+		./pkg/llm-gateway/llumlet \
+		./pkg/llm-gateway/schedule-policy/llumnix \
+		./pkg/llm-gateway/kvs \
+		./pkg/llm-gateway/load-balancer
