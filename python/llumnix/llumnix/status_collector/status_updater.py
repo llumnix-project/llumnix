@@ -6,7 +6,7 @@ from vllm.v1.core.sched.output import SchedulerOutput
 from vllm.v1.outputs import ModelRunnerOutput
 
 from llumnix import envs
-from llumnix.llumlet.instance_info import BackendType, InstanceStatus
+from llumnix.llumlet.instance_info import BackendType, ConnectorType, InstanceStatus
 from llumnix.logging.logger import init_logger
 from llumnix.migration_frontend.base_migration_frontend import BaseMigrationFrontend
 from llumnix.outputs.forwarder.thread_output_forwarder import ThreadOutputForwarder
@@ -40,6 +40,7 @@ class StatusUpdater:
                  engine_type: BackendType,
                  vllm_config: VllmConfig,
                  mig_async: bool,
+                 connector_type: ConnectorType,
                  migration_frontend: BaseMigrationFrontend=None,
                  metric_forwarder: ThreadOutputForwarder=None):
         self.engine_type: BackendType = BackendType.VLLM_V1
@@ -64,7 +65,7 @@ class StatusUpdater:
         self.migration_frontend = migration_frontend
         self.running_ref = None
         self.waiting_ref = None
-        self.metric_collector = InstanceStatusCollector(scheduler, vllm_config, engine_type)
+        self.metric_collector = InstanceStatusCollector(scheduler, vllm_config, connector_type)
         self.metric_forwarder = metric_forwarder
 
     def update_instance_status(
@@ -169,7 +170,6 @@ class StatusUpdater:
                 waiting_snapshot.append((self.migration_frontend.get_enginecore_request(req), 0))
             self.waiting_ref = waiting_snapshot
         instance_status.waiting_requests = [req.request_id for req in all_waitings]
-
         self.metric_collector.get_waiting_status(self._WAITING_STATUSES, instance_status, all_waitings)
 
     def _update_running_status(

@@ -5,7 +5,7 @@ from vllm.v1.core.sched.output import SchedulerOutput
 from vllm.v1.request import Request
 from vllm.config import VllmConfig
 
-from llumnix.llumlet.instance_info import BackendType, InstanceStatus
+from llumnix.llumlet.instance_info import ConnectorType, InstanceStatus
 from llumnix.logging.logger import init_logger
 from llumnix.metrics import generate_instance_status_mask, parse_used_metrics_from_env
 from llumnix.status_collector.base_connector_metric_collector import BaseConnectorMetricsCollector
@@ -28,28 +28,30 @@ def register(status_name: str):
     return decorator
 
 class InstanceStatusCollector:
-    def __init__(self, scheduler: "Scheduler", vllm_config: VllmConfig, engine_type: str) -> None:
+    def __init__(self, scheduler: "Scheduler", vllm_config: VllmConfig, connector_type: ConnectorType) -> None:
         self.scheduler = scheduler
         self.async_scheduling = vllm_config.scheduler_config.async_scheduling
         self.last_num_scheduled_tokens = None
-        self.connector_metric_collector = self.create_connector_metrics_collector(engine_type, scheduler)
+        self.connector_metric_collector = self.create_connector_metrics_collector(connector_type, scheduler)
         self.instance_status_mask = generate_instance_status_mask(parse_used_metrics_from_env())
         logger.debug("instance_status_mask: {}".format(self.instance_status_mask))
 
     def create_connector_metrics_collector(
         self,
-        backend_type: BackendType,
+        connector_type: ConnectorType,
         scheduler: "Scheduler"
     ) -> BaseConnectorMetricsCollector:
-        if backend_type == BackendType.VLLM_V1_CE:
+        if not connector_type:
+            return None
+        if connector_type == ConnectorType.MOONCAKE:
             # pylint: disable=import-outside-toplevel
             from llumnix.status_collector.mooncake_connector_metric_collector import MooncakeConnectorMetricsCollector
             return MooncakeConnectorMetricsCollector(scheduler)
-        if backend_type == BackendType.VLLM_V1:
+        if connector_type == ConnectorType.HYBRID:
             # pylint: disable=import-outside-toplevel
             from llumnix.status_collector.hybrid_connector_metric_collector import HybridConnectorMetricsCollector
             return HybridConnectorMetricsCollector(scheduler)
-        raise ValueError("Unsupported backend type: {}".format(backend_type))
+        raise ValueError("Unsupported connector type: {}".format(connector_type))
 
     def collect_by_name(self, status_name: str, instance_status: InstanceStatus, *args, **kwargs):
         if status_name not in _REGISTERED_STATUS_COLLECTORS:
@@ -62,7 +64,6 @@ class InstanceStatusCollector:
             if self.instance_status_mask.get(status_name, False):
                 if status_name in _REGISTERED_STATUS_COLLECTORS:
                     if status_name == "num_waiting_requests":
-                        all_waitings = self.get_all_waiting_reqs()
                         self.collect_by_name(status_name, instance_status, all_waitings)
                     else:
                         self.collect_by_name(status_name, instance_status)
@@ -90,15 +91,20 @@ class InstanceStatusCollector:
 
     def get_all_waiting_reqs(self) -> List[Request]:
         all_waitings = list(self.scheduler.waiting)
-        all_waitings.extend(self.connector_metric_collector.get_connector_waiting_reqs())
+        if self.connector_metric_collector:
+            all_waitings.extend(self.connector_metric_collector.get_connector_waiting_reqs())
         return all_waitings
 
     @register("hybrid_scheduler_waiting_to_decode_requests_num")
     def _collect_hybrid_scheduler_waiting_to_decode_requests_num(self, instance_status: InstanceStatus) -> None:
+        if not self.connector_metric_collector:
+            return
         instance_status.hybrid_scheduler_waiting_to_decode_requests_num = self.connector_metric_collector.get_connector_waiting_to_decode_reqs_num()
 
     @register("num_uncomputed_blocks_hybrid_scheduler_waiting_prefills")
     def _collect_num_uncomputed_blocks_hybrid_scheduler_waiting_prefills(self, instance_status: InstanceStatus) -> int:
+        if not self.connector_metric_collector:
+            return 0
         num_uncomputed_tokens_hybrid_scheduler_waiting_prefills = \
             self.connector_metric_collector.get_connector_num_uncomputed_blocks_waiting_prefills()
         num_uncomputed_blocks_hybrid_scheduler_waiting_prefills = \
@@ -109,11 +115,15 @@ class InstanceStatusCollector:
 
     @register("num_unallocated_blocks_hybrid_scheduler_waiting_decodes")
     def _collect_num_unallocated_blocks_hybrid_scheduler_waiting_decodes(self, instance_status: InstanceStatus) -> None:
+        if not self.connector_metric_collector:
+            return
         instance_status.num_unallocated_blocks_hybrid_scheduler_waiting_decodes = \
             self.connector_metric_collector.get_connector_num_unallocated_blocks_waiting_decodes()
 
     @register("hybrid_scheduler_waiting_to_decode_blocks_num")
     def _collect_hybrid_scheduler_waiting_to_decode_blocks_num(self, instance_status: InstanceStatus) -> None:
+        if not self.connector_metric_collector:
+            return
         instance_status.hybrid_scheduler_waiting_to_decode_blocks_num = self.connector_metric_collector.get_connector_waiting_to_decode_blocks_num()
 
     @register("num_uncomputed_blocks_scheduler_waiting_prefills")
@@ -223,8 +233,9 @@ class InstanceStatusCollector:
         # pylint: disable=too-many-nested-blocks
         if self.scheduler.running:
             for req in self.scheduler.running:
-                if req.sampling_params is not None and req.sampling_params.max_tokens > 1 \
-                    and not self.connector_metric_collector.is_migrating(req):
+                if req.sampling_params is not None and req.sampling_params.max_tokens > 1:
+                    if self.connector_metric_collector and self.connector_metric_collector.is_migrating(req):
+                        continue
                     scheduler_running_to_decode_requests_num += 1
         instance_status.scheduler_running_to_decode_requests_num = scheduler_running_to_decode_requests_num
 
@@ -234,18 +245,23 @@ class InstanceStatusCollector:
         # pylint: disable=too-many-nested-blocks
         if self.scheduler.running:
             for req in self.scheduler.running:
-                if req.sampling_params is not None and req.sampling_params.max_tokens > 1 \
-                    and not self.connector_metric_collector.is_migrating(req):
+                if req.sampling_params is not None and req.sampling_params.max_tokens > 1:
+                    if self.connector_metric_collector and self.connector_metric_collector.is_migrating(req):
+                        continue
                     scheduler_running_to_decode_tokens_num += req.num_tokens
         scheduler_running_to_decode_blocks_num = cdiv(scheduler_running_to_decode_tokens_num, self.scheduler.cache_config.block_size)
         instance_status.scheduler_running_to_decode_blocks_num = scheduler_running_to_decode_blocks_num
 
     @register("num_loading_requests")
     def _collect_num_loading_requests(self, instance_status: InstanceStatus, scheduler_output: SchedulerOutput) -> None:
+        if self.connector_metric_collector is None:
+            return
         instance_status.num_loading_requests = self.connector_metric_collector.get_connector_loading_requests_num(scheduler_output)
 
     @register("num_blocks_loading_requests")
     def _collect_num_blocks_loading_requests(self, instance_status: InstanceStatus, scheduler_output: SchedulerOutput) -> None:
+        if self.connector_metric_collector is None:
+            return
         instance_status.num_blocks_loading_requests = self.connector_metric_collector.get_connector_num_blocks_loading_requests(scheduler_output)
 
     @register("num_running_requests")

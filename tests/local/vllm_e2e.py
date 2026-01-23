@@ -213,13 +213,11 @@ def generate_e2e_config():
             update_configs.append(tmp_config)
     base_configs = update_configs
 
-
-    base_configs = [{'schedule_policy': 'load-balance', 'enable_full_mode_scheduling': True, 'enable_pd': True, 'separate_pd_schedule': False}]
     return base_configs
 
 @pytest.mark.parametrize("test_config", generate_e2e_config(), indirect=True)
-def test_completion_request(setup_services):
-    for stream in [True]:
+def test_simple_requests(setup_services):
+    for stream in [False, True]:
         for max_tokens in [1, 5]:
             completions_payload = {
                 "prompt": "Hello, my name is",
@@ -252,9 +250,12 @@ def test_completion_request(setup_services):
 def check_migration_logs():
     migrate_in_pattern = r"update success migrate in request.*"
     migrate_out_pattern = r"Migration .* suceess"
+    traceback_pattern = r"Traceback"
     
     migrate_in_count = 0
     migrate_out_count = 0
+    traceback_count = 0
+    traceback_files = []
     
     log_files = list(LOG_DIR.glob('vllm_*.log'))
     assert len(log_files) > 0
@@ -269,17 +270,27 @@ def check_migration_logs():
                 migrate_out_matches = re.findall(migrate_out_pattern, content)
                 migrate_out_count += len(migrate_out_matches)
                 
-                print(f"File {log_file.name}: migrate_in={len(migrate_in_matches)}, migrate_out={len(migrate_out_matches)}")
+                traceback_matches = re.findall(traceback_pattern, content)
+                if len(traceback_matches) > 0:
+                    traceback_count += len(traceback_matches)
+                    traceback_files.append(log_file.name)
+                
+                print(f"File {log_file.name}: migrate_in={len(migrate_in_matches)}, migrate_out={len(migrate_out_matches)}, traceback={len(traceback_matches)}")
         except Exception as e:
             print(f"Error reading {log_file}: {e}")
     
     print(f"\nTotal - Migrate in count: {migrate_in_count}")
     print(f"Total - Migrate out count: {migrate_out_count}")
+    print(f"Total - Traceback count: {traceback_count}")
     
     assert migrate_in_count == migrate_out_count, \
         f"Migration count mismatch! Migrate in: {migrate_in_count}, Migrate out: {migrate_out_count}"
     
+    assert traceback_count == 0, \
+        f"Found {traceback_count} traceback(s) in log files: {', '.join(traceback_files)}"
+    
     print("✓ Migration log check passed!")
+    print("✓ No tracebacks found!")
     return migrate_in_count, migrate_out_count
 
 

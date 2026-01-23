@@ -21,7 +21,7 @@ from llumnix.engine_client.utils import (
     add_llumlet_addresses,
 )
 from llumnix.llumlet.converters import to_cms_metadata, to_cms_status
-from llumnix.llumlet.instance_info import BackendType, InstanceMetaData, InstanceStatus
+from llumnix.llumlet.instance_info import BackendType, ConnectorType, InstanceMetaData, InstanceStatus
 from llumnix.llumlet.rpc_server import AsyncLlumletRPCServer
 from llumnix.logging.logger import init_logger
 from llumnix.outputs.queue.zmq_client import MigrationZmqClient
@@ -49,6 +49,7 @@ class Llumlet:
         engine_type: str,
         engine_config: Any,
         mig_address: Optional[str] = None,
+        connector_type: Optional[str] = None,
     ):
         self.engine_type = engine_type
         self.client_addresses = get_engine_client_addresses(engine_type=engine_type)
@@ -64,6 +65,7 @@ class Llumlet:
                 "parent_pid": os.getpid(),
                 "rpc_port": self.rpc_port,
                 "mig_address": mig_address,
+                "connector_type": connector_type,
             },
             daemon=False,
         )
@@ -109,6 +111,7 @@ class LlumletProc:
         client_addresses: Optional[dict[str, str]] = None,
         parent_pid: Optional[int] = None,
         mig_address: Optional[str] = None,
+        connector_type: Optional[ConnectorType] = None,
     ) -> None:
         logger.info("Initializing LlumletProc...")
         for key in dir(envs):
@@ -130,7 +133,8 @@ class LlumletProc:
         self.rpc_server: Optional[AsyncLlumletRPCServer] = None
         self.rpc_port = rpc_port
 
-        self.instance_metadata: InstanceMetaData = self.get_instance_meta_data(engine_type, self.engine_config)
+        self.connector_type = connector_type
+        self.instance_metadata: InstanceMetaData = self.get_instance_meta_data(engine_type, connector_type, self.engine_config)
         self.instance_id = self.instance_metadata.instance_id
         self.instance_status: InstanceStatus = InstanceStatus()
         self.last_report_instance_status_timestamp = None
@@ -138,7 +142,7 @@ class LlumletProc:
         self.enable_mig = envs.LLUMNIX_ENABLE_MIGRATION
         self.detailed_mig = envs.LLUMNIX_DETAILED_MIG_STATUS
         if self.enable_mig:
-            if self.engine_type == BackendType.VLLM_V1:
+            if self.engine_type == BackendType.VLLM_V1 and self.connector_type == ConnectorType.HYBRID:
                 self.mig_client = MigrationZmqClient(mig_address)
             self.mig_limits: MigrationLimits = get_migration_limits(self.detailed_mig)
 
@@ -175,6 +179,7 @@ class LlumletProc:
         client_addresses: Optional[dict[str, str]] = None,
         parent_pid: Optional[int] = None,
         mig_address: Optional[str] = None,
+        connector_type: Optional[ConnectorType] = None,
     ):
         # Signal handler used for graceful termination.
         # SystemExit exception is only raised once to allow this and worker
@@ -206,6 +211,7 @@ class LlumletProc:
                 parent_pid=parent_pid,
                 rpc_port=rpc_port,
                 mig_address=mig_address,
+                connector_type=connector_type
             )
         # pylint: disable=broad-except
         except Exception:
@@ -247,7 +253,7 @@ class LlumletProc:
                 self.push_task.cancel()
             await self.rpc_server.stop()
 
-    def get_instance_meta_data(self, engine_type: str, engine_config: Any):
+    def get_instance_meta_data(self, engine_type: str, connector_type: Optional[ConnectorType], engine_config: Any):
         utc_now = time.time()
         llumlet_specific_meta = {
             "utc_create": utc_now,
@@ -257,7 +263,8 @@ class LlumletProc:
             "backend_type": engine_type,
         }
         engine_specific_meta = get_specific_instance_meta_data(engine_type, engine_config)
-        if engine_type in [BackendType.SGLANG, BackendType.VLLM_V1_CE]:
+        if engine_type == BackendType.SGLANG or \
+            (engine_type == BackendType.VLLM_V1 and connector_type == ConnectorType.MOONCAKE):
             # set ip/port for migration
             engine_specific_meta["ip_kvs"] = engine_specific_meta["ip"]
             engine_specific_meta["kvt_port"] = self.rpc_port
@@ -433,7 +440,7 @@ class LlumletProc:
         if self.detailed_mig and migration_params.block_ratio > self.instance_status.available_block_ratio_migrate_out:
             raise NotEnoughSlotsError(f"Block ratio of migration request exceeds engine migration limits. Max_migrate_out_block_ratio: "
                                       f"{self.instance_status.available_block_ratio_migrate_out} , got {migration_params.block_ratio}")
-        if  self.engine_type !=BackendType.VLLM_V1 or \
+        if  self.engine_type !=BackendType.VLLM_V1 or self.connector_type != ConnectorType.HYBRID or \
             (migration_params.migration_type == MigrationType.NUM_REQ and migration_params.num_reqs == -1):
             # Pre-stop migration, attempting twice to drain most of requests.
             # This is necessary because some requests maybe not in running or waiting lists.
