@@ -25,6 +25,7 @@ After setting up the Docker environment:
 Local testing runs test cases on your local machine. For development convenience, you can install llumlet in development mode using `make llumlet-install`. Each test starts gateway, scheduler, redis, and vllm (colocated with llumlet), then sends requests to the gateway and verifies results. Run all tests with `make test`.
 
 **Simple Requests Test** (make simple-test)
+
 After all components are launched, requests are sent to the gateway to verify the results.
 
 * Tests schedule policies, PD, and separate PD configurations.
@@ -32,6 +33,7 @@ After all components are launched, requests are sent to the gateway to verify th
 * Tests both /v1/completions and /v1/chat/completions endpoints.
 
 **Migration Test** (make migration-test)
+
 All requests are sent to one engine under the flood schedule policy; then Reschedule detects the imbalance and triggers migration.
 
 * Tests load balance migration triggering without errors.
