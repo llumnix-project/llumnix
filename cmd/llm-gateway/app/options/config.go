@@ -227,6 +227,7 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.PDSplitMode, "pdsplit-mode", "", "pd split mode, this configuration only takes effect under the pd-split policy, now support vllm-vineyard, vllm-kvt, sglang-mooncake")
 
 	flags.BoolVar(&c.EnableAccessLog, "enable-access-log", true, "enable access log or not")
+	flags.BoolVar(&c.EnableLogInput, "enable-log-input", false, "enable log input or not")
 	flags.BoolVar(&c.ServerlessMode, "serverless-mode", false, "run on serverless")
 
 	flags.IntVar(&c.WaitQueueThreads, "wait-queue-threads", 5, "number of coroutines which read the requests from queue")

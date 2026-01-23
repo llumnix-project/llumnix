@@ -14,8 +14,10 @@ class BackendType(str, Enum):
     VLLM_V1 = "vLLM v1"
     BLADELLM = "BladeLLM"
     SGLANG = "SGLang"
-    VLLM_V1_CE = "vLLM v1 ce"
 
+class ConnectorType(str, Enum):
+    MOONCAKE = "mooncake"
+    HYBRID = "hybrid"
 
 @dataclass
 class InstanceMetaData:

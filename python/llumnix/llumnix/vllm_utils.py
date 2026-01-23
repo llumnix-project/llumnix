@@ -1,3 +1,4 @@
+import os
 import time
 import queue
 from typing import List
@@ -12,7 +13,8 @@ from vllm.v1.outputs import ModelRunnerOutput
 from llumnix import envs
 from llumnix.constants import MIGRATION_FRONTEND_INIT_TIMEOUT
 from llumnix.compat.vllm_compat import get_ip
-from llumnix.llumlet.instance_info import InstanceStatus
+from llumnix.engine_client.utils import get_connector_type
+from llumnix.llumlet.instance_info import ConnectorType, InstanceStatus
 from llumnix.llumlet.llumlet import Llumlet
 from llumnix.logging.logger import init_logger
 from llumnix.outputs.forwarder.thread_output_forwarder import ThreadOutputForwarder
@@ -44,11 +46,13 @@ class VLLMLlumletProxy:
         self.mig_server_address = None
         # vllm does not support enable kvt and kvs simultaneously
         self.migration_frontend = None
+        self.connector_type = get_connector_type(engine_type, vllm_config)
         if self.enable_migration:
-            if not vllm_config.kv_transfer_config:
+            if not self.connector_type:
                 logger.warning("Migration enabled but no kv_transfer_config found. Migration will be disabled.")
                 self.enable_migration = False
-            if vllm_config.kv_transfer_config.kv_connector == "HybridConnector":
+                os.environ["LLUMNIX_ENABLE_MIGRATION"] = "0"
+            elif self.connector_type == ConnectorType.HYBRID:
                 # pylint: disable=import-outside-toplevel
                 from llumnix.migration_frontend.kvt_migration_frontend import KVTMigrationFrontend
                 self.migration_frontend = KVTMigrationFrontend(vllm_config=vllm_config,
@@ -57,7 +61,7 @@ class VLLMLlumletProxy:
                 self.mig_async = True
                 self.migration_frontend.mig_server_ready_event.wait(timeout=MIGRATION_FRONTEND_INIT_TIMEOUT)
                 self.mig_server_address = self.migration_frontend.mig_server.address
-            elif vllm_config.kv_transfer_config.kv_connector == "MooncakeConnector":
+            elif self.connector_type == ConnectorType.MOONCAKE:
                 # pylint: disable=import-outside-toplevel
                 from llumnix.migration_frontend.mooncake_migration_frontend import MooncakeMigrationFrontend
                 self.migration_frontend = MooncakeMigrationFrontend(vllm_config=vllm_config,
@@ -65,10 +69,10 @@ class VLLMLlumletProxy:
                                                                     scheduler=scheduler)
             else:
                 raise NotImplementedError(f"Failed to initialize migration frontend. kv_transfer_config:{vllm_config.kv_transfer_config}")
-
         self.llumlet = Llumlet(engine_type=engine_type,
                                engine_config=vllm_config,
-                               mig_address=self.mig_server_address)
+                               mig_address=self.mig_server_address,
+                               connector_type = self.connector_type)
         self.llumlet.start()
 
         self.rpc_port = self.llumlet.rpc_port
@@ -78,7 +82,8 @@ class VLLMLlumletProxy:
             self.llumlet_grpc_address,
             engine_index
         )
-        self.status_updater = StatusUpdater(scheduler, engine_type, vllm_config, self.mig_async, self.migration_frontend, self.output_forwarder)
+        self.status_updater = StatusUpdater(scheduler, engine_type, vllm_config, self.mig_async, \
+            self.connector_type, self.migration_frontend, self.output_forwarder)
         self.scheduler = scheduler
 
     def add_llumlet_address(self, addresses: dict[str, str]) -> dict[str, str]:
