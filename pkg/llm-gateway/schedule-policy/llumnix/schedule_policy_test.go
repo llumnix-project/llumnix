@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"unicode"
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -15,7 +14,6 @@ import (
 	"easgo/pkg/llm-gateway/cms"
 	"easgo/pkg/llm-gateway/consts"
 	kvs "easgo/pkg/llm-gateway/kvs"
-	"easgo/pkg/llm-gateway/structs"
 	"easgo/pkg/llm-gateway/types"
 )
 
@@ -241,9 +239,9 @@ func TestDispatchPolicyScheduleNeutral(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8000},
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
+					Role:     consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					NumTotalGpuBlocks:                     100,
@@ -273,7 +271,7 @@ func TestDispatchPolicyScheduleNeutral(t *testing.T) {
 		groupedInstanceViews: groupedInstanceViews,
 		instanceViews:        instanceViews,
 	}
-	result := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling)
+	result := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModeNormal}, clusterViewScheduling)
 	assert.Len(t, result, 1)
 	assert.Len(t, result[0], 1)
 	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.Host)
@@ -288,9 +286,9 @@ func TestDispatchPolicySchedulePD(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-prefill": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8001},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill",
@@ -311,9 +309,9 @@ func TestDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-decode": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8002},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
@@ -350,13 +348,13 @@ func TestDispatchPolicySchedulePD(t *testing.T) {
 		instanceViews:        instanceViews,
 	}
 
-	result := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling)
+	result := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch}, clusterViewScheduling)
 	assert.Len(t, result, 2)
 	assert.Len(t, result[0], 1)
 	assert.Len(t, result[1], 1)
-	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.Host)
 	assert.Equal(t, 8001, result[0][0].GetInstance().Endpoint.Port)
-	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.Host)
 	assert.Equal(t, 8002, result[1][0].GetInstance().Endpoint.Port)
 }
 
@@ -368,8 +366,8 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 	instanceViews1 := map[string]*instanceViewScheduling{
 		"instance-prefill": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Role: consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill",
@@ -402,15 +400,15 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 		instanceViews:        instanceViews1,
 	}
 
-	result := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling1)
+	result := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch}, clusterViewScheduling1)
 	assert.Empty(t, result)
 
 	// Test with only decode instance (should return nil)
 	instanceViews2 := map[string]*instanceViewScheduling{
 		"instance-decode": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Role: consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
@@ -443,7 +441,7 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 		instanceViews:        instanceViews2,
 	}
 
-	result2 := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling2)
+	result2 := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch}, clusterViewScheduling2)
 	assert.Empty(t, result2)
 }
 
@@ -456,9 +454,9 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 	instanceViews1 := map[string]*instanceViewScheduling{
 		"instance-prefill": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8001},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill",
@@ -479,9 +477,9 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 		},
 		"instance-decode": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8002},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
@@ -518,13 +516,13 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 		instanceViews:        instanceViews1,
 	}
 
-	result := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling1)
+	result := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch}, clusterViewScheduling1)
 	assert.Len(t, result, 2)
 	assert.Len(t, result[0], 1)
 	assert.Len(t, result[1], 1)
-	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.Host)
 	assert.Equal(t, 8002, result[0][0].GetInstance().Endpoint.Port) // Choose D for prefill
-	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.Host)
 	assert.Equal(t, 8002, result[1][0].GetInstance().Endpoint.Port) // Choose D for decode
 
 	// No available P instances, No available D instances, fallback to P for prefill
@@ -532,9 +530,9 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 	instanceViews2 := map[string]*instanceViewScheduling{
 		"instance-prefill": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8001},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill",
@@ -555,9 +553,9 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 		},
 		"instance-decode": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8002},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
@@ -594,22 +592,22 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 		instanceViews:        instanceViews2,
 	}
 
-	result = policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling2)
+	result = policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch}, clusterViewScheduling2)
 	assert.Len(t, result, 2)
 	assert.Len(t, result[0], 1)
 	assert.Len(t, result[1], 1)
-	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.Host)
 	assert.Equal(t, 8001, result[0][0].GetInstance().Endpoint.Port) // Fallback to P for prefill
-	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.Host)
 	assert.Equal(t, 8002, result[1][0].GetInstance().Endpoint.Port) // Fallback to D for decode
 
 	// No available D instances, choose P for decode
 	instanceViews3 := map[string]*instanceViewScheduling{
 		"instance-prefill": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8001},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill",
@@ -630,9 +628,9 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 		},
 		"instance-decode": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8002},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
@@ -669,13 +667,13 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 		instanceViews:        instanceViews3,
 	}
 
-	result = policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling3)
+	result = policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch}, clusterViewScheduling3)
 	assert.Len(t, result, 2)
 	assert.Len(t, result[0], 1)
 	assert.Len(t, result[1], 1)
-	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.Host)
 	assert.Equal(t, 8001, result[0][0].GetInstance().Endpoint.Port) // Choose P for prefill
-	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.Host)
 	assert.Equal(t, 8001, result[1][0].GetInstance().Endpoint.Port) // Choose P for decode
 }
 
@@ -689,9 +687,9 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-prefill-1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8001},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-1",
@@ -711,9 +709,9 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 		},
 		"instance-prefill-2": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8002},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-2",
@@ -733,9 +731,9 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 		},
 		"instance-prefill-3": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8003},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8003},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-3",
@@ -755,9 +753,9 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 		},
 		"instance-decode": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8004},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8004},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
@@ -797,14 +795,14 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 	}
 
 	policy.cmsClient.Lock()
-	result := policy.schedule(&types.ScheduleRequest{PromptTokenIds: []uint32{0, 1}}, clusterViewScheduling)
+	result := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch, PromptTokenIds: []uint32{0, 1}}, clusterViewScheduling)
 	policy.cmsClient.Unlock()
 	assert.Len(t, result, 2)
 	assert.Len(t, result[0], 1)
 	assert.Len(t, result[1], 1)
-	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.Host)
 	assert.Equal(t, 8003, result[0][0].GetInstance().Endpoint.Port)
-	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.Host)
 	assert.Equal(t, 8004, result[1][0].GetInstance().Endpoint.Port)
 }
 
@@ -819,9 +817,9 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-prefill-1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8001},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-1",
@@ -841,9 +839,9 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 		},
 		"instance-prefill-2": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8002},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-2",
@@ -863,9 +861,9 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 		},
 		"instance-prefill-3": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8003},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8003},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-3",
@@ -885,9 +883,9 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 		},
 		"instance-prefill-4": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8004},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8004},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-4",
@@ -907,9 +905,9 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 		},
 		"instance-decode": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8005},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8005},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
@@ -949,7 +947,7 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 		instanceViews:        instanceViews,
 	}
 
-	req := &types.ScheduleRequest{PromptTokenIds: []uint32{0, 1}}
+	req := &types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch, PromptTokenIds: []uint32{0, 1}}
 	selections := make(map[int]int)
 	numIterations := 100
 
@@ -964,8 +962,8 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 		port := result[0][0].GetInstance().Endpoint.Port
 		selections[port]++
 
-		assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.IP)
-		assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.IP)
+		assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.Host)
+		assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.Host)
 		assert.Equal(t, 8005, result[1][0].GetInstance().Endpoint.Port)
 	}
 
@@ -986,9 +984,9 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-neutral-1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8001},
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
+					Role:     consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-neutral-1",
@@ -1008,9 +1006,9 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 		},
 		"instance-neutral-2": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8002},
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
+					Role:     consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-neutral-2",
@@ -1030,9 +1028,9 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 		},
 		"instance-neutral-3": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8003},
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8003},
+					Role:     consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-neutral-3",
@@ -1063,12 +1061,12 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 		instanceViews:        instanceViews,
 	}
 
-	req := &types.ScheduleRequest{PromptTokenIds: []uint32{0, 1}}
+	req := &types.ScheduleRequest{ScheduleMode: types.ScheduleModeNormal, PromptTokenIds: []uint32{0, 1}}
 	policy.cmsClient.Lock()
 	result := policy.schedule(req, clusterViewScheduling)
 	policy.cmsClient.Unlock()
 	assert.Len(t, result, 1)
-	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.IP)
+	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.Host)
 	assert.Equal(t, 8003, result[0][0].GetInstance().Endpoint.Port)
 }
 
@@ -1080,9 +1078,9 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-neutral1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8001},
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
+					Role:     consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral1",
@@ -1104,9 +1102,9 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 		},
 		"instance-neutral2": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8002},
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
+					Role:     consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral2",
@@ -1128,9 +1126,9 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 		},
 		"instance-neutral3": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8003},
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8003},
+					Role:     consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral3",
@@ -1152,9 +1150,9 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 		},
 		"instance-neutral4": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8004},
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8004},
+					Role:     consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral4",
@@ -1176,9 +1174,9 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 		},
 		"instance-neutral5": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8005},
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8005},
+					Role:     consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral5",
@@ -1211,11 +1209,11 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 		instanceViews:        instanceViews,
 	}
 
-	result1 := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling)
+	result1 := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModeNormal}, clusterViewScheduling)
 	assert.Len(t, result1, 1)
 	assert.Len(t, result1[0], 1)
 
-	result2 := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling)
+	result2 := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModeNormal}, clusterViewScheduling)
 	assert.Len(t, result2, 1)
 	assert.Len(t, result2[0], 1)
 
@@ -1231,9 +1229,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-prefill1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8001},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill1",
@@ -1255,9 +1253,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-prefill2": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8001},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill2",
@@ -1279,9 +1277,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-prefill3": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8001},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill3",
@@ -1303,9 +1301,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-prefill4": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8001},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill4",
@@ -1327,9 +1325,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-prefill5": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8001},
-					InferMode: consts.PrefillInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
+					Role:     consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill5",
@@ -1351,9 +1349,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-decode1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8002},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode1",
@@ -1375,9 +1373,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-decode2": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8002},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode2",
@@ -1399,9 +1397,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-decode3": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8002},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode3",
@@ -1423,9 +1421,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-decode4": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8002},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode4",
@@ -1447,9 +1445,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-decode5": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8002},
-					InferMode: consts.DecodeInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
+					Role:     consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode5",
@@ -1495,14 +1493,14 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		instanceViews:        instanceViews,
 	}
 
-	result1 := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling)
+	result1 := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch}, clusterViewScheduling)
 	assert.Len(t, result1, 2)
 	assert.Len(t, result1[0], 1)
 	assert.Len(t, result1[1], 1)
 	assert.Equal(t, consts.PrefillInferMode, result1[0][0].GetInferMode())
 	assert.Equal(t, consts.DecodeInferMode, result1[1][0].GetInferMode())
 
-	result2 := policy.schedule(&types.ScheduleRequest{}, clusterViewScheduling)
+	result2 := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch}, clusterViewScheduling)
 	assert.Len(t, result2, 2)
 	assert.Len(t, result2[0], 1)
 	assert.Len(t, result2[1], 1)
@@ -1522,9 +1520,9 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-neutral-1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8001},
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
+					Role:     consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-neutral-1",
@@ -1550,9 +1548,9 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 		},
 		"instance-neutral-2": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					Endpoint:  structs.Endpoint{IP: "127.0.0.1", Port: 8002},
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
+					Role:     consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-neutral-2",
@@ -1590,7 +1588,7 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 	}
 
 	promptTokenIds := []uint32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	req := &types.ScheduleRequest{PromptTokenIds: promptTokenIds}
+	req := &types.ScheduleRequest{ScheduleMode: types.ScheduleModeNormal, PromptTokenIds: promptTokenIds}
 
 	result1 := policy.schedule(req, clusterViewScheduling)
 	assert.Equal(t, int32(1), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)

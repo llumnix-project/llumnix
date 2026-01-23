@@ -9,7 +9,7 @@ import (
 
 	"easgo/pkg/llm-gateway/cms"
 	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/structs"
+	"easgo/pkg/llm-gateway/types"
 )
 
 func TestSchedulabilityFilter(t *testing.T) {
@@ -287,8 +287,8 @@ func TestInferModeFilter(t *testing.T) {
 				Status: &cms.InstanceStatus{
 					InstanceId: instanceId,
 				},
-				Token: &structs.Token{
-					InferMode: inferMode,
+				Worker: &types.LLMWorker{
+					Role: types.InferRole(inferMode),
 				},
 				Metadata: &cms.InstanceMetadata{
 					InstanceId: instanceId,

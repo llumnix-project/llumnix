@@ -7,15 +7,15 @@ import (
 
 	"easgo/pkg/llm-gateway/cms"
 	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/structs"
+	"easgo/pkg/llm-gateway/types"
 )
 
 func genInstanceViewInternals() map[string]*instanceViewScheduling {
 	instances := map[string]*instanceViewScheduling{
 		"instance-1": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Role: consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId: "instance-1",
@@ -38,8 +38,8 @@ func genInstanceViewInternals() map[string]*instanceViewScheduling {
 		},
 		"instance-2": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Role: consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId: "instance-2",
@@ -62,8 +62,8 @@ func genInstanceViewInternals() map[string]*instanceViewScheduling {
 		},
 		"instance-3": {
 			cmsView: &cms.InstanceView{
-				Token: &structs.Token{
-					InferMode: consts.NormalInferMode,
+				Worker: &types.LLMWorker{
+					Role: consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId: "instance-3",
