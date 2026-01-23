@@ -13,7 +13,7 @@ type SchedulePolicy interface {
 	// Name schedule policy name
 	Name() string
 
-	// GetToken attempts to acquire a token for processing a new request.
+	// Schedule attempts to acquire an instance for processing a new request.
 	Schedule(*types.ScheduleRequest) error
 }
 

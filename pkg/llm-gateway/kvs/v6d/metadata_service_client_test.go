@@ -1,10 +1,11 @@
 //go:build exclude
 // +build exclude
 
-package kvs
+package v6d
 
 import (
 	"context"
+	redis2 "easgo/pkg/llm-gateway/redis"
 	"errors"
 	"fmt"
 	"io"
@@ -16,13 +17,13 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestKVSMetaServiceClient(t *testing.T) {
+func TestV6dMetadataServiceClient(t *testing.T) {
 	// Create mock client
 	db, mock := redismock.NewClusterMock()
-	client := &KVSMetaServiceClient{
-		clusterClient: db,
-		config: &Config{
-			RedisCluster: RedisClusterConfig{
+	client := &MetadataServiceClient{
+		redisClient: db,
+		config: &redis2.Config{
+			RedisCluster: redis2.RedisClusterConfig{
 				QueryTimeout:         5,
 				MaxBatchSize:         500,
 				MaxConcurrentBatches: 10,
@@ -225,7 +226,7 @@ func TestKVSMetaServiceClient(t *testing.T) {
 	}
 }
 
-func TestKVSMetaServiceClientBatch(t *testing.T) {
+func TestV6dMetadataServiceClientBatch(t *testing.T) {
 	// Helper function to generate test data
 	gen := func(n int) ([]string, []string, []float64) {
 		keys := make([]string, n)
@@ -244,10 +245,10 @@ func TestKVSMetaServiceClientBatch(t *testing.T) {
 		db, mock := redismock.NewClusterMock()
 		mock.MatchExpectationsInOrder(false)
 
-		client := &KVSMetaServiceClient{
-			clusterClient: db,
-			config: &Config{
-				RedisCluster: RedisClusterConfig{
+		client := &MetadataServiceClient{
+			redisClient: db,
+			config: &redis2.Config{
+				RedisCluster: redis2.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -324,10 +325,10 @@ func TestKVSMetaServiceClientBatch(t *testing.T) {
 		db, mock := redismock.NewClusterMock()
 		mock.MatchExpectationsInOrder(false)
 
-		client := &KVSMetaServiceClient{
-			clusterClient: db,
-			config: &Config{
-				RedisCluster: RedisClusterConfig{
+		client := &MetadataServiceClient{
+			redisClient: db,
+			config: &redis2.Config{
+				RedisCluster: redis2.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -395,10 +396,10 @@ func TestKVSMetaServiceClientBatch(t *testing.T) {
 		db, mock := redismock.NewClusterMock()
 		mock.MatchExpectationsInOrder(false)
 
-		client := &KVSMetaServiceClient{
-			clusterClient: db,
-			config: &Config{
-				RedisCluster: RedisClusterConfig{
+		client := &MetadataServiceClient{
+			redisClient: db,
+			config: &redis2.Config{
+				RedisCluster: redis2.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -467,10 +468,10 @@ func TestKVSMetaServiceClientBatch(t *testing.T) {
 		db, mock := redismock.NewClusterMock()
 		mock.MatchExpectationsInOrder(false)
 
-		client := &KVSMetaServiceClient{
-			clusterClient: db,
-			config: &Config{
-				RedisCluster: RedisClusterConfig{
+		client := &MetadataServiceClient{
+			redisClient: db,
+			config: &redis2.Config{
+				RedisCluster: redis2.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -505,10 +506,10 @@ func TestKVSMetaServiceClientBatch(t *testing.T) {
 		db, mock := redismock.NewClusterMock()
 		mock.MatchExpectationsInOrder(false)
 
-		client := &KVSMetaServiceClient{
-			clusterClient: db,
-			config: &Config{
-				RedisCluster: RedisClusterConfig{
+		client := &MetadataServiceClient{
+			redisClient: db,
+			config: &redis2.Config{
+				RedisCluster: redis2.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -542,10 +543,10 @@ func TestKVSMetaServiceClientBatch(t *testing.T) {
 		db, mock := redismock.NewClusterMock()
 		mock.MatchExpectationsInOrder(false)
 
-		client := &KVSMetaServiceClient{
-			clusterClient: db,
-			config: &Config{
-				RedisCluster: RedisClusterConfig{
+		client := &MetadataServiceClient{
+			redisClient: db,
+			config: &redis2.Config{
+				RedisCluster: redis2.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -602,10 +603,10 @@ func TestKVSMetaServiceClientBatch(t *testing.T) {
 		db, mock := redismock.NewClusterMock()
 		mock.MatchExpectationsInOrder(false)
 
-		client := &KVSMetaServiceClient{
-			clusterClient: db,
-			config: &Config{
-				RedisCluster: RedisClusterConfig{
+		client := &MetadataServiceClient{
+			redisClient: db,
+			config: &redis2.Config{
+				RedisCluster: redis2.RedisClusterConfig{
 					QueryTimeout:         1, // Short timeout
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -645,10 +646,10 @@ func TestKVSMetaServiceClientBatch(t *testing.T) {
 		db, mock := redismock.NewClusterMock()
 		mock.MatchExpectationsInOrder(false)
 
-		client := &KVSMetaServiceClient{
-			clusterClient: db,
-			config: &Config{
-				RedisCluster: RedisClusterConfig{
+		client := &MetadataServiceClient{
+			redisClient: db,
+			config: &redis2.Config{
+				RedisCluster: redis2.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         2, // Small batch size to force multiple batches
 					MaxConcurrentBatches: 2,
@@ -693,10 +694,10 @@ func TestKVSMetaServiceClientBatch(t *testing.T) {
 		db, mock := redismock.NewClusterMock()
 		mock.MatchExpectationsInOrder(false)
 
-		client := &KVSMetaServiceClient{
-			clusterClient: db,
-			config: &Config{
-				RedisCluster: RedisClusterConfig{
+		client := &MetadataServiceClient{
+			redisClient: db,
+			config: &redis2.Config{
+				RedisCluster: redis2.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         2,
 					MaxConcurrentBatches: 1,
@@ -756,10 +757,10 @@ func TestKVSMetaServiceClientBatch(t *testing.T) {
 		db, mock := redismock.NewClusterMock()
 		mock.MatchExpectationsInOrder(false)
 
-		client := &KVSMetaServiceClient{
-			clusterClient: db,
-			config: &Config{
-				RedisCluster: RedisClusterConfig{
+		client := &MetadataServiceClient{
+			redisClient: db,
+			config: &redis2.Config{
+				RedisCluster: redis2.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -826,10 +827,10 @@ func TestKVSMetaServiceClientBatch(t *testing.T) {
 		db, mock := redismock.NewClusterMock()
 		mock.MatchExpectationsInOrder(false)
 
-		client := &KVSMetaServiceClient{
-			clusterClient: db,
-			config: &Config{
-				RedisCluster: RedisClusterConfig{
+		client := &MetadataServiceClient{
+			redisClient: db,
+			config: &redis2.Config{
+				RedisCluster: redis2.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         2,
 					MaxConcurrentBatches: 1, // Test with single concurrent batch
@@ -861,10 +862,10 @@ func TestKVSMetaServiceClientBatch(t *testing.T) {
 		db, mock := redismock.NewClusterMock()
 		mock.MatchExpectationsInOrder(false)
 
-		client := &KVSMetaServiceClient{
-			clusterClient: db,
-			config: &Config{
-				RedisCluster: RedisClusterConfig{
+		client := &MetadataServiceClient{
+			redisClient: db,
+			config: &redis2.Config{
+				RedisCluster: redis2.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -901,10 +902,10 @@ func TestKVSMetaServiceClientBatch(t *testing.T) {
 		db, mock := redismock.NewClusterMock()
 		mock.MatchExpectationsInOrder(false)
 
-		client := &KVSMetaServiceClient{
-			clusterClient: db,
-			config: &Config{
-				RedisCluster: RedisClusterConfig{
+		client := &MetadataServiceClient{
+			redisClient: db,
+			config: &redis2.Config{
+				RedisCluster: redis2.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         2,
 					MaxConcurrentBatches: 2,
@@ -946,4 +947,158 @@ func TestKVSMetaServiceClientBatch(t *testing.T) {
 
 		assert.NoError(t, mock.ExpectationsWereMet())
 	})
+}
+
+func TestMetadataServiceClient_HashTokens(t *testing.T) {
+	c := &MetadataServiceClient{}
+
+	t.Run("invalid input", func(t *testing.T) {
+		_, err := c.HashTokens(nil, 4, true, "iris_", "vllm_")
+		assert.Error(t, err)
+
+		_, err = c.HashTokens([]int64{1, 2, 3}, 0, true, "iris_", "vllm_")
+		assert.Error(t, err)
+	})
+
+	t.Run("chunking and saveUnfullChunk", func(t *testing.T) {
+		tokens := []int64{1, 2, 3, 4, 5} // chunkSize=4 => 1 full + 1 remainder
+
+		hs1, err := c.HashTokens(tokens, 4, true, "iris_", "vllm_")
+		assert.NoError(t, err)
+		assert.Len(t, hs1, 2)
+
+		hs2, err := c.HashTokens(tokens, 4, false, "iris_", "vllm_")
+		assert.NoError(t, err)
+		assert.Len(t, hs2, 1)
+
+		// same input should be deterministic
+		hs1Again, err := c.HashTokens(tokens, 4, true, "iris_", "vllm_")
+		assert.NoError(t, err)
+		assert.Equal(t, hs1, hs1Again)
+	})
+
+	t.Run("prefix formatting", func(t *testing.T) {
+		hs, err := c.HashTokens([]int64{1, 2, 3, 4}, 4, true, "iris_meta_", "vllm_block_")
+		assert.NoError(t, err)
+		assert.Len(t, hs, 1)
+		assert.Contains(t, hs[0], "iris_meta_"+"vllm_block_")
+	})
+}
+
+func TestMetadataServiceClient_QueryPrefixHashHitKVSInstances_ParseIP(t *testing.T) {
+	db, mock := redismock.NewClusterMock()
+	client := &MetadataServiceClient{
+		redisClient: db,
+		config: &redis2.Config{
+			RedisCluster: redis2.RedisClusterConfig{
+				QueryTimeout:         5,
+				MaxBatchSize:         500,
+				MaxConcurrentBatches: 10,
+			},
+		},
+	}
+	defer client.close()
+
+	hashKey := "hash_1"
+
+	// QueryPrefixHashHitKVSInstances -> zReadRange(hashKey, 0) -> ZRangeWithScores
+	mock.ExpectZRangeWithScores(hashKey, 0, -1).SetVal([]redis.Z{
+		{Member: "192.168.1.100:8080", Score: 0},
+		{Member: "10.0.0.2:9999", Score: 0},
+	})
+
+	ips, err := client.QueryPrefixHashHitKVSInstances(hashKey)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"192.168.1.100", "10.0.0.2"}, ips)
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMetadataServiceClient_BatchQueryPrefixHashHitKVSInstances_ParseIPAndMissingKey(t *testing.T) {
+	db, mock := redismock.NewClusterMock()
+	mock.MatchExpectationsInOrder(false)
+
+	client := &MetadataServiceClient{
+		redisClient: db,
+		config: &redis2.Config{
+			RedisCluster: redis2.RedisClusterConfig{
+				QueryTimeout:         5,
+				MaxBatchSize:         500,
+				MaxConcurrentBatches: 10,
+			},
+		},
+	}
+	defer client.close()
+
+	keys := []string{"hash_1", "hash_2"}
+
+	// BatchQueryPrefixHashHitKVSInstances -> safeBatchZReadRange(keys, 0)
+	mock.ExpectZRangeWithScores("hash_1", 0, -1).SetVal([]redis.Z{
+		{Member: "127.0.0.1:1234", Score: 0},
+	})
+	// hash_2 not exists => redis.Nil
+	mock.ExpectZRangeWithScores("hash_2", 0, -1).SetErr(redis.Nil)
+
+	got, err := client.BatchQueryPrefixHashHitKVSInstances(keys)
+	assert.NoError(t, err)
+
+	// hash_1 -> ip:port => ip
+	assert.Equal(t, []string{"127.0.0.1"}, got["hash_1"])
+	// hash_2 missing -> should be empty slice (not nil is also ok; here check len==0)
+	assert.True(t, got["hash_2"] == nil || len(got["hash_2"]) == 0)
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMetadataServiceClient_BatchQueryPrefixHashHitKVSInstances_TopN(t *testing.T) {
+	db, mock := redismock.NewClusterMock()
+	mock.MatchExpectationsInOrder(false)
+
+	client := &MetadataServiceClient{
+		redisClient: db,
+		config: &redis2.Config{
+			RedisCluster: redis2.RedisClusterConfig{
+				QueryTimeout:         5,
+				MaxBatchSize:         500,
+				MaxConcurrentBatches: 10,
+			},
+		},
+	}
+	defer client.close()
+
+	hashKey := "hash_topn"
+	mock.ExpectZRangeWithScores(hashKey, 0, -1).SetVal([]redis.Z{
+		{Member: "1.1.1.1:1111", Score: 3},
+		{Member: "2.2.2.2:2222", Score: 2},
+	})
+
+	ips, err := client.QueryPrefixHashHitKVSInstances(hashKey)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"1.1.1.1", "2.2.2.2"}, ips)
+
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestMetadataServiceClient_QueryPrefixHashHitKVSInstances_MissingKey(t *testing.T) {
+	db, mock := redismock.NewClusterMock()
+	client := &MetadataServiceClient{
+		redisClient: db,
+		config: &redis2.Config{
+			RedisCluster: redis2.RedisClusterConfig{
+				QueryTimeout:         5,
+				MaxBatchSize:         500,
+				MaxConcurrentBatches: 10,
+			},
+		},
+	}
+	defer client.close()
+
+	hashKey := "missing_hash"
+	mock.ExpectZRangeWithScores(hashKey, 0, -1).SetErr(redis.Nil)
+
+	ips, err := client.QueryPrefixHashHitKVSInstances(hashKey)
+	assert.NoError(t, err)
+	assert.Len(t, ips, 0)
+
+	assert.NoError(t, mock.ExpectationsWereMet())
 }

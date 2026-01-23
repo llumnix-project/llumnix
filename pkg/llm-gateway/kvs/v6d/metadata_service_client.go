@@ -1,19 +1,25 @@
-package kvs
+package v6d
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/redis/go-redis/v9"
 	"k8s.io/klog/v2"
+
+	redis2 "easgo/pkg/llm-gateway/redis"
 )
 
 // Only safeBatchZReadRange is actually used, other methods are only used in test.
 
-type KVSMetaServiceClientInterface interface {
+type MetadataServiceClientInterface interface {
 	// ZReadRange retrieves members from a Redis sorted set.
 	//
 	// Parameters:
@@ -168,35 +174,135 @@ type KVSMetaServiceClientInterface interface {
 	close() error
 }
 
-type KVSMetaServiceClient struct {
-	clusterClient *redis.ClusterClient
-	config        *Config
+type MetadataServiceClient struct {
+	redisClient *redis.ClusterClient
+	config      *redis2.Config
 }
 
-func newKVSMetaServiceClient(
+func NewMetadataServiceClient(
 	configPath string,
-	kvsMetaServiceRedisClusterHosts string,
-	kvsMetaServiceRedisClusterPassword string) (*KVSMetaServiceClient, error) {
-	clusterClient, cfg, err := newRedisClusterClient(
-		configPath, kvsMetaServiceRedisClusterHosts, kvsMetaServiceRedisClusterPassword)
+	v6dMetadataServiceRedisClusterHosts string,
+	v6dMetadataServiceRedisClusterPassword string) (*MetadataServiceClient, error) {
+	clusterClient, cfg, err := redis2.NewRedisClusterClient(
+		configPath, v6dMetadataServiceRedisClusterHosts, v6dMetadataServiceRedisClusterPassword)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Redis cluster client: %w", err)
 	}
-	kvsMetaServiceClient := &KVSMetaServiceClient{
-		clusterClient: clusterClient,
-		config:        cfg,
+	v6dMetadataServiceClient := &MetadataServiceClient{
+		redisClient: clusterClient,
+		config:      cfg,
 	}
-	klog.Info("KVSMetaServiceClient initialized")
+	klog.Info("MetadataServiceClient initialized")
 
-	return kvsMetaServiceClient, nil
+	return v6dMetadataServiceClient, nil
 }
+
+func (c *MetadataServiceClient) HashTokens(
+	tokens []int64, chunkSize int, saveUnfullChunk bool,
+	irisMetaPrefix string, vLLMBlockPrefix string) ([]string, error) {
+	if len(tokens) == 0 || chunkSize <= 0 {
+		return nil, fmt.Errorf("invalid hash input")
+	}
+
+	numCompleteBlocks := len(tokens) / chunkSize
+	totalBlocks := numCompleteBlocks
+	remainder := len(tokens) % chunkSize
+	if remainder > 0 {
+		totalBlocks++
+	}
+
+	// Core prefix hash computation using XXHash64 streaming
+	blockHashes := make([]string, 0, totalBlocks)
+	hasher := xxhash.NewWithSeed(0)
+	defer hasher.Reset()
+
+	// Process complete blocks
+	for i := 0; i < numCompleteBlocks; i++ {
+		if err := binary.Write(hasher, binary.LittleEndian, tokens[i*chunkSize:(i+1)*chunkSize]); err != nil {
+			return nil, fmt.Errorf("failed to write complete block %d: %w", i, err)
+		}
+		blockHashes = append(blockHashes, c.buildBlockName(hasher.Sum64(), irisMetaPrefix, vLLMBlockPrefix))
+	}
+
+	// Process last incomplete block if it exists
+	if saveUnfullChunk && remainder > 0 {
+		if err := binary.Write(hasher, binary.LittleEndian, tokens[numCompleteBlocks*chunkSize:]); err != nil {
+			return nil, fmt.Errorf("failed to write remainder block: %w", err)
+		}
+
+		// Pad with zeros to match original behavior
+		padding := make([]int64, chunkSize-remainder)
+		if err := binary.Write(hasher, binary.LittleEndian, padding); err != nil {
+			return nil, fmt.Errorf("failed to write padding: %w", err)
+		}
+
+		blockHashes = append(blockHashes, c.buildBlockName(hasher.Sum64(), irisMetaPrefix, vLLMBlockPrefix))
+	}
+
+	return blockHashes, nil
+}
+
+func (c *MetadataServiceClient) buildBlockName(hash uint64, irisMetaPrefix string, vLLMBlockPrefix string) string {
+	return irisMetaPrefix + vLLMBlockPrefix + strconv.FormatUint(hash, 10)
+}
+
+func (c *MetadataServiceClient) BatchQueryPrefixHashHitKVSInstances(hashKeys []string) (map[string][]string, error) {
+	results, err := c.safeBatchZReadRange(hashKeys, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query hit kvs instances for %d hash key: %w", len(hashKeys), err)
+	}
+
+	hitKVSInstances := c.parseResultsToHitMap(results)
+
+	return hitKVSInstances, nil
+}
+
+func (c *MetadataServiceClient) QueryPrefixHashHitKVSInstances(hashKey string) ([]string, error) {
+	result, err := c.zReadRange(hashKey, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query hit kvs instances for hash key %s: %w", hashKey, err)
+	}
+
+	hitKVSInstances := make([]string, len(result))
+	for i, item := range result {
+		hitKVSInstances[i] = c.parseToKVSInstanceIp(item.Member)
+	}
+
+	return hitKVSInstances, nil
+}
+
+func (c *MetadataServiceClient) parseResultsToHitMap(results map[string][]ZMember) map[string][]string {
+	hitKVSInstances := make(map[string][]string, len(results))
+	for hashKey, result := range results {
+		hitKVSInstances[hashKey] = make([]string, len(result))
+		for i, item := range result {
+			hitKVSInstances[hashKey][i] = c.parseToKVSInstanceIp(item.Member)
+		}
+	}
+
+	return hitKVSInstances
+}
+
+func (c *MetadataServiceClient) parseToKVSInstanceIp(kvsInstance string) string {
+	return strings.Split(kvsInstance, ":")[0]
+}
+
+func (c *MetadataServiceClient) InsertPrefixHashHitKVSInstance(hashKey string, kvsInstance string) error {
+	if err := c.zWrite(hashKey, kvsInstance, 0, ""); err != nil {
+		return fmt.Errorf("failed to insert hit kvs worker for hash key %s: %v", hashKey, err)
+	}
+	return nil
+}
+
+// NOTE(sunbiao.sun): All functions below return empty results instead of nil when encountering invalid inputs or errors.
+// This design ensures safe chaining of subsequent function calls by preventing nil pointer exceptions.
 
 type ZMember struct {
 	Member string  `json:"member"`
 	Score  float64 `json:"score"`
 }
 
-func (c *KVSMetaServiceClient) zReadRange(zsetKey string, topN int) ([]ZMember, error) {
+func (c *MetadataServiceClient) zReadRange(zsetKey string, topN int) ([]ZMember, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.config.RedisCluster.QueryTimeout*time.Second)
 	defer cancel()
 
@@ -204,9 +310,9 @@ func (c *KVSMetaServiceClient) zReadRange(zsetKey string, topN int) ([]ZMember, 
 	var err error
 
 	if topN > 0 {
-		redisMembers, err = c.clusterClient.ZRevRangeWithScores(ctx, zsetKey, 0, int64(topN-1)).Result()
+		redisMembers, err = c.redisClient.ZRevRangeWithScores(ctx, zsetKey, 0, int64(topN-1)).Result()
 	} else {
-		redisMembers, err = c.clusterClient.ZRangeWithScores(ctx, zsetKey, 0, -1).Result()
+		redisMembers, err = c.redisClient.ZRangeWithScores(ctx, zsetKey, 0, -1).Result()
 	}
 
 	if err != nil {
@@ -229,7 +335,7 @@ func (c *KVSMetaServiceClient) zReadRange(zsetKey string, topN int) ([]ZMember, 
 	return jsonMembers, nil
 }
 
-func (c *KVSMetaServiceClient) safeBatchZReadRange(zsetKeys []string, topN int) (map[string][]ZMember, error) {
+func (c *MetadataServiceClient) safeBatchZReadRange(zsetKeys []string, topN int) (map[string][]ZMember, error) {
 	if len(zsetKeys) == 0 {
 		return nil, nil
 	}
@@ -294,7 +400,7 @@ batchLoop:
 	return result, nil
 }
 
-func (c *KVSMetaServiceClient) batchZReadRange(zsetKeys []string, topN int) (map[string][]ZMember, error) {
+func (c *MetadataServiceClient) batchZReadRange(zsetKeys []string, topN int) (map[string][]ZMember, error) {
 	if len(zsetKeys) == 0 {
 		return nil, nil
 	}
@@ -302,7 +408,7 @@ func (c *KVSMetaServiceClient) batchZReadRange(zsetKeys []string, topN int) (map
 	ctx, cancel := context.WithTimeout(context.Background(), c.config.RedisCluster.QueryTimeout*time.Second)
 	defer cancel()
 
-	pipe := c.clusterClient.Pipeline()
+	pipe := c.redisClient.Pipeline()
 	cmds := make(map[string]*redis.ZSliceCmd, len(zsetKeys))
 
 	for _, key := range zsetKeys {
@@ -338,16 +444,16 @@ func (c *KVSMetaServiceClient) batchZReadRange(zsetKeys []string, topN int) (map
 	return results, nil
 }
 
-func (c *KVSMetaServiceClient) zWrite(zsetKey, member string, score float64, withSetName string) error {
+func (c *MetadataServiceClient) zWrite(zsetKey, member string, score float64, withSetName string) error {
 	return c.zWriteWithTTL(zsetKey, member, score, withSetName, 0)
 }
 
-func (c *KVSMetaServiceClient) zWriteWithTTL(
+func (c *MetadataServiceClient) zWriteWithTTL(
 	zsetKey, member string, score float64, withSetName string, ttl time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.config.RedisCluster.QueryTimeout*time.Second)
 	defer cancel()
 
-	err := c.clusterClient.ZAdd(ctx, zsetKey, redis.Z{
+	err := c.redisClient.ZAdd(ctx, zsetKey, redis.Z{
 		Score:  score,
 		Member: member,
 	}).Err()
@@ -356,13 +462,13 @@ func (c *KVSMetaServiceClient) zWriteWithTTL(
 	}
 
 	if ttl > 0 {
-		if err := c.clusterClient.Expire(ctx, zsetKey, ttl).Err(); err != nil {
+		if err := c.redisClient.Expire(ctx, zsetKey, ttl).Err(); err != nil {
 			return fmt.Errorf("failed to set TTL for zset %s: %w", zsetKey, err)
 		}
 	}
 
 	if withSetName != "" {
-		if err := c.clusterClient.SAdd(ctx, withSetName, zsetKey).Err(); err != nil {
+		if err := c.redisClient.SAdd(ctx, withSetName, zsetKey).Err(); err != nil {
 			return fmt.Errorf("failed to add key %s to set %s: %w", zsetKey, withSetName, err)
 		}
 	}
@@ -370,11 +476,11 @@ func (c *KVSMetaServiceClient) zWriteWithTTL(
 	return nil
 }
 
-func (c *KVSMetaServiceClient) safeBatchZWrite(zsetKeys []string, members []string, scores []float64) error {
+func (c *MetadataServiceClient) safeBatchZWrite(zsetKeys []string, members []string, scores []float64) error {
 	return c.safeBatchZWriteWithTTL(zsetKeys, members, scores, 0)
 }
 
-func (c *KVSMetaServiceClient) safeBatchZWriteWithTTL(zsetKeys []string, members []string, scores []float64, ttl time.Duration) error {
+func (c *MetadataServiceClient) safeBatchZWriteWithTTL(zsetKeys []string, members []string, scores []float64, ttl time.Duration) error {
 	if len(zsetKeys) == 0 {
 		return nil
 	}
@@ -449,7 +555,7 @@ batchLoop:
 	return nil
 }
 
-func (c *KVSMetaServiceClient) batchZWriteWithTTL(zsetKeys []string, members []string, scores []float64, ttl time.Duration) error {
+func (c *MetadataServiceClient) batchZWriteWithTTL(zsetKeys []string, members []string, scores []float64, ttl time.Duration) error {
 	if len(zsetKeys) == 0 {
 		return nil
 	}
@@ -461,7 +567,7 @@ func (c *KVSMetaServiceClient) batchZWriteWithTTL(zsetKeys []string, members []s
 	ctx, cancel := context.WithTimeout(context.Background(), c.config.RedisCluster.QueryTimeout*time.Second)
 	defer cancel()
 
-	pipe := c.clusterClient.Pipeline()
+	pipe := c.redisClient.Pipeline()
 
 	for i := range zsetKeys {
 		pipe.ZAdd(ctx, zsetKeys[i], redis.Z{
@@ -482,16 +588,16 @@ func (c *KVSMetaServiceClient) batchZWriteWithTTL(zsetKeys []string, members []s
 	return nil
 }
 
-func (c *KVSMetaServiceClient) batchZWrite(zsetKeys []string, members []string, scores []float64) error {
+func (c *MetadataServiceClient) batchZWrite(zsetKeys []string, members []string, scores []float64) error {
 	return c.batchZWriteWithTTL(zsetKeys, members, scores, 0)
 }
 
-func (c *KVSMetaServiceClient) zDelete(zsetKey, member string) error {
+func (c *MetadataServiceClient) zDelete(zsetKey, member string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.config.RedisCluster.QueryTimeout*time.Second)
 	defer cancel()
 
 	// remove a specific member from zset
-	err := c.clusterClient.ZRem(ctx, zsetKey, member).Err()
+	err := c.redisClient.ZRem(ctx, zsetKey, member).Err()
 	if err != nil {
 		return fmt.Errorf("ZRem failed for zset %s member %s: %w", zsetKey, member, err)
 	}
@@ -499,7 +605,7 @@ func (c *KVSMetaServiceClient) zDelete(zsetKey, member string) error {
 	return nil
 }
 
-func (c *KVSMetaServiceClient) safeBatchZDelete(zsetKeys []string, members []string) error {
+func (c *MetadataServiceClient) safeBatchZDelete(zsetKeys []string, members []string) error {
 	if len(zsetKeys) == 0 {
 		return nil
 	}
@@ -557,7 +663,7 @@ batchLoop:
 	return nil
 }
 
-func (c *KVSMetaServiceClient) batchZDelete(zsetKeys []string, members []string) error {
+func (c *MetadataServiceClient) batchZDelete(zsetKeys []string, members []string) error {
 	if len(zsetKeys) == 0 {
 		return nil
 	}
@@ -568,7 +674,7 @@ func (c *KVSMetaServiceClient) batchZDelete(zsetKeys []string, members []string)
 	ctx, cancel := context.WithTimeout(context.Background(), c.config.RedisCluster.QueryTimeout*time.Second)
 	defer cancel()
 
-	pipe := c.clusterClient.Pipeline()
+	pipe := c.redisClient.Pipeline()
 	for i := range zsetKeys {
 		pipe.ZRem(ctx, zsetKeys[i], members[i])
 	}
@@ -581,11 +687,11 @@ func (c *KVSMetaServiceClient) batchZDelete(zsetKeys []string, members []string)
 	return nil
 }
 
-func (c *KVSMetaServiceClient) delete(key string) error {
+func (c *MetadataServiceClient) delete(key string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.config.RedisCluster.QueryTimeout*time.Second)
 	defer cancel()
 
-	err := c.clusterClient.Del(ctx, key).Err()
+	err := c.redisClient.Del(ctx, key).Err()
 	if err != nil {
 		return fmt.Errorf("delete key %s failed: %w", key, err)
 	}
@@ -593,7 +699,7 @@ func (c *KVSMetaServiceClient) delete(key string) error {
 	return nil
 }
 
-func (c *KVSMetaServiceClient) safeBatchDelete(keys []string) error {
+func (c *MetadataServiceClient) safeBatchDelete(keys []string) error {
 	if len(keys) == 0 {
 		return nil
 	}
@@ -647,7 +753,7 @@ batchLoop:
 	return nil
 }
 
-func (c *KVSMetaServiceClient) batchDelete(keys []string) error {
+func (c *MetadataServiceClient) batchDelete(keys []string) error {
 	if len(keys) == 0 {
 		return nil
 	}
@@ -655,7 +761,7 @@ func (c *KVSMetaServiceClient) batchDelete(keys []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.config.RedisCluster.QueryTimeout*time.Second)
 	defer cancel()
 
-	pipe := c.clusterClient.Pipeline()
+	pipe := c.redisClient.Pipeline()
 	for _, key := range keys {
 		pipe.Del(ctx, key)
 	}
@@ -667,9 +773,9 @@ func (c *KVSMetaServiceClient) batchDelete(keys []string) error {
 	return nil
 }
 
-func (c *KVSMetaServiceClient) close() error {
-	if c.clusterClient != nil {
-		if err := c.clusterClient.Close(); err != nil {
+func (c *MetadataServiceClient) close() error {
+	if c.redisClient != nil {
+		if err := c.redisClient.Close(); err != nil {
 			return fmt.Errorf("failed to close Redis cluster client: %w", err)
 		}
 	}

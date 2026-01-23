@@ -1,57 +1,13 @@
 //go:build cgo && xxhash
 // +build cgo,xxhash
 
-package kvs
+package v6d
 
 import (
-	"encoding/binary"
 	"testing"
 
-	"github.com/cespare/xxhash/v2"
 	"github.com/stretchr/testify/assert"
 )
-
-// GoHashV6d is the Go implementation without buildBlockName
-func GoHashV6d(tokens []int64, chunkSize int, saveUnfullChunk bool) ([]uint64, error) {
-	if len(tokens) == 0 || chunkSize <= 0 {
-		return []uint64{}, nil
-	}
-
-	numCompleteBlocks := len(tokens) / chunkSize
-	totalBlocks := numCompleteBlocks
-	remainder := len(tokens) % chunkSize
-	if remainder > 0 {
-		totalBlocks++
-	}
-
-	blockHashes := make([]uint64, 0, totalBlocks)
-	hasher := xxhash.NewWithSeed(0)
-	defer hasher.Reset()
-
-	// Process complete blocks
-	for i := 0; i < numCompleteBlocks; i++ {
-		if err := binary.Write(hasher, binary.LittleEndian, tokens[i*chunkSize:(i+1)*chunkSize]); err != nil {
-			return nil, err
-		}
-		blockHashes = append(blockHashes, hasher.Sum64())
-	}
-
-	// Process last incomplete block if it exists
-	if saveUnfullChunk && remainder > 0 {
-		if err := binary.Write(hasher, binary.LittleEndian, tokens[numCompleteBlocks*chunkSize:]); err != nil {
-			return nil, err
-		}
-
-		padding := make([]int64, chunkSize-remainder)
-		if err := binary.Write(hasher, binary.LittleEndian, padding); err != nil {
-			return nil, err
-		}
-
-		blockHashes = append(blockHashes, hasher.Sum64())
-	}
-
-	return blockHashes, nil
-}
 
 func TestHashImplementations(t *testing.T) {
 	testCases := []struct {

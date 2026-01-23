@@ -110,16 +110,19 @@ func NewDispatchPolicy(
 	var kvsClient kvs.KVSClientInterface
 	if c.LlumnixConfig.EnableCacheAwareScheduling {
 		client, err := kvs.CreateOrGetClient(
-			c.LlumnixConfig.KvsMetaServiceConfigPath,
+			c.LlumnixConfig.KvsBackend,
+			c.LlumnixConfig.KvsMetadataServiceConfigPath,
 			c.LlumnixConfig.KvsChunkSize,
 			c.LlumnixConfig.KvsEnableSaveUnfullChunk,
 			c.LlumnixConfig.KvsIrisMetaPrefix,
 			c.LlumnixConfig.KvsVLLMBlockPrefix,
 			c.LlumnixConfig.KvsRetryTimes,
 			c.LlumnixConfig.KvsRetryIntervalMs,
-			c.LlumnixConfig.KvsMetaServiceDownDurationS,
-			c.LlumnixConfig.KvsMetaServiceRedisClusterHosts,
-			c.LlumnixConfig.KvsMetaServiceRedisClusterPassword)
+			c.LlumnixConfig.KvsMetadataServiceDownDurationS,
+			c.LlumnixConfig.KvsMetadataServiceRedisClusterHosts,
+			c.LlumnixConfig.KvsMetadataServiceRedisClusterPassword,
+			c.LlumnixConfig.KvsMetadataServiceHttpServerHost,
+			c.LlumnixConfig.KvsMetadataServiceHttpServerPort)
 		if err != nil {
 			panic(err)
 		}

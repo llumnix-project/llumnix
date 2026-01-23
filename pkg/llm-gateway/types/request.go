@@ -168,6 +168,7 @@ type LLMRequest struct {
 func (req *LLMRequest) GetPromptTokens() ([]uint32, bool) {
 	return req.CompletionRequest.Prompt.GetUint32Slice()
 }
+
 func (req *LLMRequest) GetPromptString() (string, bool) {
 	return req.CompletionRequest.Prompt.GetString()
 }
@@ -289,6 +290,10 @@ func NewRequestContext(ctx context.Context, r *http.Request, w http.ResponseWrit
 	id := r.Header.Get("x-request-id")
 	if len(id) == 0 {
 		id = uuid.New().String()
+		// NOTE(sunbiao.sun): The inference engine uses the request ID from the request header if present.
+		// Set it here to keep the request ID consistent between the gateway and the inference engine.
+		// The instance-status local accounting depends on this.
+		r.Header.Set("x-request-id", id)
 	}
 	klog.Infof("Received request: %s", id)
 
