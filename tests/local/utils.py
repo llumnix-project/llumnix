@@ -29,26 +29,30 @@ def get_gateway_command(
 ) -> str:
     command = (
         f"./bin/llm-gateway "
-        f"--port {GATEWAY_PORT} "
-        f"--llm-scheduler llumnix-scheduler "
+        f"--port={GATEWAY_PORT} "
+        f"--llm-scheduler=llumnix-scheduler "
         f"--enable-log-input "
-        f"--use-discovery redis "
-        f"--llumnix-cms-redis-host 127.0.0.1 "
-        f"--llumnix-cms-redis-port 6379 "
-        f"--schedule-policy {schedule_policy} "
-        f"--local-test-scheduler-ip localhost:{SCHEDULER_PORT} "
-        f"--tokenizer-path {tokenizer_path} "
-        f"-v 4 "
+        f"--use-discovery=redis "
+        f"--llumnix-cms-redis-host=127.0.0.1 "
+        f"--llumnix-cms-redis-port=6379 "
+        f"--schedule-policy={schedule_policy} "
+        f"--local-test-scheduler-ip=localhost:{SCHEDULER_PORT} "
+        f"--tokenizer-path={tokenizer_path} "
+        f"-v=4 "
     )
 
     if enable_full_mode_scheduling:
         command += "--enable-full-mode-scheduling "
+    else:
+        command += "--enable-full-mode-scheduling=false "
 
     if enable_pd:
-        command += "--pdsplit-mode vllm-mooncake "
+        command += "--pdsplit-mode=vllm-mooncake "
 
     if separate_pd_schedule:
         command += "--separate-pd-schedule "
+    else:
+        command += "--separate-pd-schedule=false "
 
     print(f"gateway command: {command}")
 
@@ -64,29 +68,34 @@ def get_scheduler_command(
     command = (
         f"./bin/llm-gateway "
         f"--schedule-mode "
-        f"--port {SCHEDULER_PORT} "
-        f"--host 0.0.0.0 "
-        f"--use-discovery redis "
-        f"--schedule-policy {schedule_policy} "
-        f"--llumnix-cms-redis-host 127.0.0.1 "
-        f"--llumnix-cms-redis-port 6379 "
-        f"--llumnix-cms-pull-status-interval-ms 100 "
-        f"--llumnix-cms-pull-metadata-interval-ms 100 "
+        f"--port={SCHEDULER_PORT} "
+        f"--host=0.0.0.0 "
+        f"--use-discovery=redis "
+        f"--schedule-policy={schedule_policy} "
+        f"--llumnix-cms-redis-host=127.0.0.1 "
+        f"--llumnix-cms-redis-port=6379 "
+        f"--llumnix-cms-pull-status-interval-ms=100 "
+        f"--llumnix-cms-pull-metadata-interval-ms=100 "
         f"-v 4 "
     )
 
     if enable_full_mode_scheduling:
         command += "--enable-full-mode-scheduling "
+    else:
+        command += "--enable-full-mode-scheduling=false "
 
     if enable_migration:
         reschedule_policy = "decode_load" if enable_pd else "neutral_load"
         command += "--colocated-reschedule-mode "
         command += "--llumnix-enable-rescheduling "
-        command += f"--llumnix-reschedule-policies {reschedule_policy} "
-        command += "--llumnix-reschedule-load-balance-threshold 0 "
-        command += "--llumnix-reschedule-neutral-load-threshold 0 "
-        command += "--llumnix-reschedule-decode-load-threshold 0 "
-        command += "--llumnix-reschedule-req-select-rule NUM_REQ "
+        command += f"--llumnix-reschedule-policies={reschedule_policy} "
+        command += "--llumnix-reschedule-load-balance-threshold=0 "
+        command += "--llumnix-reschedule-neutral-load-threshold=0 "
+        command += "--llumnix-reschedule-decode-load-threshold=0 "
+        command += "--llumnix-reschedule-req-select-rule=NUM_REQ "
+    else:
+        command += "--colocated-reschedule-mode=false "
+        command += "--llumnix-enable-rescheduling=false "
 
     print(f"scheduler command: {command}")
 

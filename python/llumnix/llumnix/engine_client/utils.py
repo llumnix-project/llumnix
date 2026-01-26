@@ -47,7 +47,7 @@ def get_engine_client_addresses(engine_type: str) -> dict[str, str]:
         from llumnix.engine_client.sglang_engine_client import sglang_get_addresses
         return sglang_get_addresses()
 
-    raise NotImplementedError
+    raise ValueError(f"engine_type {engine_type} not supported")
 
 
 def get_specific_instance_meta_data(engine_type: str, cfg: Any) -> dict:
@@ -81,7 +81,7 @@ def add_llumlet_addresses(
         addresses["scheduler_to_llumlet_ipc_name"] = llumlet_addresses["scheduler_to_llumlet_ipc_name"]
         return addresses
 
-    raise NotImplementedError
+    raise ValueError(f"engine_type {engine_type} not supported")
 
 
 def get_connector_type(engine_type: str, cfg: Any) -> Optional[str]:

@@ -12,7 +12,8 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 REPOSITORY="beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev"
-IMAGE_TAG="llumnix-vllm-dev-latest"
+TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
+IMAGE_TAG="llumnix-vllm-dev-${TIMESTAMP}"
 
 DOCKER_BUILDKIT=1 docker build \
     -t ${REPOSITORY}:${IMAGE_TAG} \
