@@ -50,6 +50,7 @@ require (
 require (
 	dario.cat/mergo v1.0.1
 	github.com/cespare/xxhash/v2 v2.3.0
+	github.com/fxamacker/cbor/v2 v2.7.0
 	github.com/go-redis/redismock/v9 v9.2.0
 	github.com/tmaxmax/go-sse v0.11.0
 	golang.org/x/sync v0.10.0
@@ -60,7 +61,6 @@ require (
 require (
 	github.com/alibabacloud-go/debug v1.0.1 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
-	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect

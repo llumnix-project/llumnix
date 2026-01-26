@@ -106,6 +106,7 @@ def vllm_servers(test_config: Dict[str, Any]) -> Generator[List[subprocess.Popen
             launch_vllm_process("normal", VLLM_BASE_PORT + cuda, cuda)
             all_available_ports.append(VLLM_BASE_PORT + cuda)
 
+    print("test_config:", test_config)
     for port in all_available_ports:
         print("Waiting for vllm services...")
         vllm_health_url = f"http://localhost:{port}/health"
@@ -120,7 +121,6 @@ def vllm_servers(test_config: Dict[str, Any]) -> Generator[List[subprocess.Popen
 @pytest.fixture
 def setup_services(redis_server, scheduler_server, gateway_server, vllm_servers, test_config):
     """Setup all services - this combines all previous fixtures"""
-    print("test_config:", test_config)
     time.sleep(20)
     yield
     # Cleanup handled by individual fixtures

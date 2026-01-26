@@ -233,7 +233,7 @@ func (lrs *LocalRealtimeState) AddInstance(worker *types.LLMWorker) {
 		}
 	}
 
-	klog.Infof("add new instance %s, version: %d", id, worker.Version)
+	klog.Infof("add new instance %s", worker)
 	newInstanceView := NewInstanceView(worker)
 	lrs.instanceViews[id] = newInstanceView
 }
