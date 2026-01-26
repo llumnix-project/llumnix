@@ -1,7 +1,7 @@
 ARG BASE_IMAGE=vllm/vllm-openai:v0.12.0
 FROM ${BASE_IMAGE}
 
-RUN apt-get update && apt-get install -y git curl wget protobuf-compiler vim pkg-config libssl-dev apt-transport-https ca-certificates redis-server
+RUN apt-get update && apt-get install -y git curl wget protobuf-compiler vim pkg-config libssl-dev apt-transport-https ca-certificates redis-server net-tools
 
 RUN pip3 config set global.index-url https://mirrors.aliyun.com/pypi/simple/
 

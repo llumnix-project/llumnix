@@ -1,3 +1,22 @@
+.PHONY: vllm-install
+vllm-install:
+	@echo "==> Cloning vllm repository (branch: releases/v0.12.0)..."
+	rm -rf /tmp/vllm
+	git clone -b releases/v0.12.0 https://github.com/vllm-project/vllm.git /tmp/vllm
+	
+	@echo "==> Copying patch file..."
+	cp ./python/llumnix/patches/vllm/vllm_v0.12.0.patch /tmp/vllm_v0.12.0.patch
+	
+	@echo "==> Building and installing vllm..."
+	cd /tmp/vllm && \
+	export VLLM_PRECOMPILED_WHEEL_COMMIT=$$(git rev-parse HEAD) && \
+	export VLLM_USE_PRECOMPILED=1 && \
+	patch -p1 < /tmp/vllm_v0.12.0.patch && \
+	pip install . --no-deps --no-build-isolation -v
+
+	rm -rf /tmp/vllm
+	rm -f /tmp/vllm_v0.12.0.patch
+
 .PHONY: lib-tokenizers-build
 lib-tokenizers-build:
 	cd ./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang && make build
@@ -35,16 +54,16 @@ llumlet-install:
 runtime-proto-build:
 	cd ./python/runtime && make proto
 
-.PHONY: simple-test
-simple-test:
+.PHONY: simple-tests
+simple-tests: runtime-proto-build llm-gateway-build
 	pytest -x -v -s /mnt/eas/cuikuilong/llumnix/tests/local/vllm_e2e.py::test_simple_requests
 
-.PHONY: migration-test
-migration-test:
+.PHONY: migration-tests
+migration-tests: llm-gateway-build
 	pytest -x -v -s /mnt/eas/cuikuilong/llumnix/tests/local/vllm_e2e.py::test_migration
 
-.PHONY: test
-test: runtime-proto-build llm-gateway-build simple-test migration-test
+.PHONY: tests
+tests: runtime-proto-build llm-gateway-build simple-tests migration-tests
 
 .PHONY: llumnix-unit-test
 llumnix-unit-test: llm-gateway-proto-build

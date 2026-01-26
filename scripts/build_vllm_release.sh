@@ -16,6 +16,8 @@ TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
 IMAGE_TAG="llumnix-vllm-${TIMESTAMP}"
 BASE_IMAGE="vllm/vllm-openai:v0.12.0"
 
+make runtime-proto-build
+
 DOCKER_BUILDKIT=1 docker build \
     --build-arg BASE_IMAGE=${BASE_IMAGE} \
     -t ${REPOSITORY}:${IMAGE_TAG} \
