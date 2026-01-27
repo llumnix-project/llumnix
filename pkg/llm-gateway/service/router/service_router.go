@@ -103,6 +103,10 @@ func (sr *ServiceRouter) setupFallbackConfigs(routingConfigs []RouteConfig) {
 
 // selectByWeight selects a routing config based on weight distribution
 func (sr *ServiceRouter) selectByWeight() (*RouteConfig, RouteType) {
+	if len(sr.routingConfigs) == 0 {
+		return nil, RouteUnknown
+	}
+
 	totalWeight := 0
 	for _, config := range sr.routingConfigs {
 		totalWeight += config.Weight
@@ -190,7 +194,7 @@ func (sr *ServiceRouter) Route(req *types.RequestContext) (*RouteEndpoint, Route
 func (sr *ServiceRouter) Fallback(req *types.RequestContext) (*RouteEndpoint, error) {
 	fallbackAttempt := req.RequestStats.FallbackAttempt
 	if len(sr.fallbackConfigs) == 0 || fallbackAttempt >= len(sr.fallbackConfigs) {
-		return nil, fmt.Errorf("no available fallback endpoint")
+		return nil, consts.ErrorNoAvailableEndpoint
 	}
 
 	fallbackConfig := sr.fallbackConfigs[fallbackAttempt]

@@ -127,7 +127,7 @@ type LlumnixConfig struct {
 	// LLM scheduler periodically. LLM scheduler perform load balance scheduling based on these local realtime states,
 	// supporting num-requests and num-tokens scheduling metric.
 	// full-mode scheduling: When enable full mode scheduling, llumnix intrusively modifies inference engine to
-	// collect accurate  load information from inference engine and support kv cache migration, and therefore can
+	// collect accurate load information from inference engine and support kv cache migration, and therefore can
 	// support advanced scheduling feature like rescheduling, adaptive pd, etc.
 	EnableFullModeScheduling bool
 
@@ -360,47 +360,6 @@ func (c *Config) IsPDSplitMode() bool {
 	return c.PDSplitMode != ""
 }
 
-func ProcessLlumnixConfig(flags *pflag.FlagSet) {
-	// use a deprecated args to hack
-	hackArgs := flags.Lookup("prefill-policy")
-	if hackArgs != nil && strings.HasPrefix(hackArgs.Value.String(), "llumnix-") {
-		parts := strings.SplitN(hackArgs.Value.String(), ",", 2)
-
-		fullPolicyName := parts[0]
-		realPolicyName := strings.TrimPrefix(fullPolicyName, "llumnix-")
-		schedulePolicy := flags.Lookup("schedule-policy")
-		err := schedulePolicy.Value.Set(realPolicyName)
-		if err != nil {
-			klog.Errorf("Failed to set schedule-policy to %s: %v", realPolicyName, err)
-			return
-		}
-		klog.Infof("Set schedule-policy to %s", realPolicyName)
-
-		if len(parts) == 2 {
-			llumnixArgs := strings.Split(parts[1], ",")
-			for _, arg := range llumnixArgs {
-				kv := strings.SplitN(strings.TrimSpace(arg), "=", 2)
-				if len(kv) == 2 {
-					key := strings.TrimSpace(kv[0])
-					value := strings.TrimSpace(kv[1])
-
-					flag := flags.Lookup(key)
-					if flag != nil {
-						klog.Infof("Set flag %s with value %s", key, value)
-						err := flag.Value.Set(value)
-						if err != nil {
-							klog.Errorf("Failed to set flag %s to value %s: %v", key, value, err)
-						}
-					} else {
-						flags.String(key, value, "Auto-generated flag from schedule-policy")
-						klog.Infof("Created new flag %s with value %s", key, value)
-					}
-				}
-			}
-		}
-	}
-}
-
 func (c *Config) IsPDRoundRobin() bool {
 	return c.IsPDSplitMode() && c.SchedulePolicy == consts.SchedulePolicyRoundRobin
 }
@@ -456,7 +415,7 @@ type Properties struct {
 var prePropertyByte []byte
 
 func (c *Config) LoadCfgFromProperties() {
-	const propertyFile = "/etc/eas/override.properties"
+	const propertyFile = "/etc/override.properties"
 	var err error
 	prePropertyByte, err = os.ReadFile(propertyFile)
 	if err != nil {
@@ -541,7 +500,7 @@ func (c *Config) LoadCfgFromProperties() {
 
 	// Scheduling policies
 	logIfNotEmpty("schedule policy: %s", c.SchedulePolicy)
-	logIfNotEmpty("pd split mode: %s", c.PDSplitMode)
+	logIfNotEmpty("pd split mode: %+v", c.PDSplitMode)
 	logIfNotEmpty("request report interval: %d", c.RequestReportInterval)
 
 	// Feature flags

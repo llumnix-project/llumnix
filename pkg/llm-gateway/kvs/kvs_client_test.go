@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
@@ -145,9 +146,7 @@ func TestKVSClient_PrefixHash_HashError(t *testing.T) {
 		vLLMBlockPrefix:          "vllm_",
 	}
 
-	if got := kvsClient.PrefixHash([]int64{1, 2, 3}); got != nil {
-		t.Fatalf("expected nil on hash error, got=%v", got)
-	}
+	assert.Nil(t, kvsClient.PrefixHash([]int64{1, 2, 3}))
 }
 
 // --- (c *KVSClient) BatchQueryCacheHitKVSInstances(prefixHashes []string) map[string][]string ---

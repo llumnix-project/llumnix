@@ -1,7 +1,7 @@
 package lrs
 
 import (
-	"easgo/pkg/llm-gateway/structs"
+	"easgo/pkg/llm-gateway/types"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -25,11 +25,11 @@ func (b *benchmarkGateway) Id() string {
 	return b.id
 }
 
-func createBenchmarkInstance(id int) *structs.Token {
-	return &structs.Token{
+func createBenchmarkInstance(id int) *types.LLMWorker {
+	return &types.LLMWorker{
 		Version: 1,
-		Endpoint: structs.Endpoint{
-			IP:   fmt.Sprintf("worker-%d.test", id),
+		Endpoint: types.Endpoint{
+			Host: fmt.Sprintf("worker-%d.test", id),
 			Port: 8080,
 		},
 	}
@@ -40,7 +40,7 @@ func BenchmarkLocalRealtimeState(b *testing.B) {
 	lrs := NewLocalRealtimeState()
 
 	// Create and register instances
-	instances := make([]*structs.Token, numInstances)
+	instances := make([]*types.LLMWorker, numInstances)
 	for i := 0; i < numInstances; i++ {
 		instances[i] = createBenchmarkInstance(i)
 		lrs.AddInstance(instances[i])
@@ -49,8 +49,7 @@ func BenchmarkLocalRealtimeState(b *testing.B) {
 	// Create and register gateways
 	gateways := make([]*benchmarkGateway, numGateways)
 	for i := 0; i < numGateways; i++ {
-		gateways[i] = &benchmarkGateway{id: string(fmt.Sprintf("gateway-%d", i))}
-		lrs.AddGateway(gateways[i])
+		lrs.AddGateway(fmt.Sprintf("gateway-%d", i))
 	}
 
 	b.ResetTimer()

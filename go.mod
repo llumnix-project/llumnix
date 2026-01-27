@@ -32,13 +32,9 @@ require (
 	golang.org/x/text v0.21.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	google.golang.org/protobuf v1.36.5
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gotest.tools v2.2.0+incompatible
-	k8s.io/api v0.26.0
 	k8s.io/apimachinery v0.31.0
 	k8s.io/klog/v2 v2.130.1
-	// k8s.io/metrics v0.0.0-00010101000000-000000000000
-	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8 // indirect
 )
 
 require (
@@ -77,10 +73,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.35.0 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
-	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
-	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
 
 replace github.com/sglang/sglang-go-grpc-sdk => ./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang

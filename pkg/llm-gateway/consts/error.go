@@ -15,6 +15,7 @@ var (
 	ErrorGatewayNotFound        = errors.New("gateway not found")
 	ErrorRequestExits           = errors.New("request state exists")
 	ErrorRequestNotExits        = errors.New("request state not exists")
+	ErrorRequestGatewayChanged  = errors.New("request gateway changed")
 	ErrorReadTimeout            = errors.New("read timeout")
 	ErrorUnitLimitExceeded      = errors.New("unit limit exceeded") // the unit resource is not enough, and the limit is reached
 	ErrorRequestTooLong         = errors.New("request too long")    // the request is too long, and the limit is reached

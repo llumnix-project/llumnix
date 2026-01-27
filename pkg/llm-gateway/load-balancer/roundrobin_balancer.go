@@ -70,6 +70,8 @@ func (rrb *RoundRobinBalancer) Get(*types.RequestContext) (types.ScheduledResult
 
 	rrb.currentIndex++
 	index := rrb.currentIndex % uint64(len(rrb.workers))
+	klog.V(4).Infof("round-robin balancer: selected worker %s", rrb.workers[index].Id())
+
 	return types.ScheduledResult{rrb.workers[index]}, nil
 }
 

@@ -116,14 +116,14 @@ func (iv *InstanceView) AllocateRequestState(reqState *RequestState) {
 		reqState.instanceId, reqState.reqId, reqState.numTokens, iv.numTokens)
 }
 
-func (iv *InstanceView) UpdateRequestState(reqState *RequestState) {
-	innerReqState := iv.requestStates[reqState.reqId]
-	if innerReqState == nil {
-		return
+func (iv *InstanceView) UpdateRequestState(reqState *RequestState) error {
+	innerReqState, exist := iv.requestStates[reqState.reqId]
+	if !exist {
+		return consts.ErrorRequestNotExits
 	}
 	if reqState.gatewayId != innerReqState.gatewayId {
 		klog.Errorf("request %s gateway changed: %s -> %s", reqState.reqId, innerReqState.gatewayId, reqState.gatewayId)
-		return
+		return consts.ErrorRequestGatewayChanged
 	}
 	addedNum := reqState.numTokens - innerReqState.numTokens
 	if addedNum >= 0 {
@@ -138,6 +138,7 @@ func (iv *InstanceView) UpdateRequestState(reqState *RequestState) {
 			"request add tokens: %d, instance num tokens: %d",
 			reqState.reqId, reqState.instanceId, innerReqState.numTokens, addedNum, iv.numTokens)
 	}
+	return nil
 }
 
 func (iv *InstanceView) ReleaseRequestState(reqId string) {
@@ -291,8 +292,8 @@ func (lrs *LocalRealtimeState) PrintInstanceViews() {
 }
 
 func (lrs *LocalRealtimeState) AllocateRequestState(reqState *RequestState) error {
-	req := lrs.requestStates[reqState.reqId]
-	if req != nil {
+	_, exist := lrs.requestStates[reqState.reqId]
+	if exist {
 		klog.Errorf("allocate request %s already exists.", reqState.reqId)
 		return consts.ErrorRequestExits
 	}
@@ -345,8 +346,7 @@ func (lrs *LocalRealtimeState) UpdateRequestState(reqState *RequestState) error 
 		return consts.ErrorGatewayNotFound
 	}
 
-	lrs.instanceViews[reqState.instanceId].UpdateRequestState(reqState)
-	return nil
+	return lrs.instanceViews[reqState.instanceId].UpdateRequestState(reqState)
 }
 
 func (lrs *LocalRealtimeState) ReleaseRequestState(reqState *RequestState) {

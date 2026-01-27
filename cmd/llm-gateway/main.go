@@ -52,8 +52,7 @@ func NewCommand() *cobra.Command {
 				}()
 			}
 			cfg.LoadCfgFromProperties()
-			// Process llumnix config after flags are parsed
-			options.ProcessLlumnixConfig(cmd.Flags())
+			cfg.ParseLlumnixExtraArgs(cmd.Flags())
 			klog.Infof("llm-gateway config: %+v", cfg)
 			if cfg.ScheduleMode {
 				cs := service.NewScheduleService(cfg)
