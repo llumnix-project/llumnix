@@ -65,12 +65,6 @@ func CreateBackendServiceResolver(config *options.Config, role types.InferRole) 
 	buildArgs := BuildArgs{"role": role.String()}
 
 	switch config.UseDiscovery {
-	case consts.DiscoveryMessageBus:
-		r, err := BuildLlmResolver(MsgBusURI, buildArgs)
-		if err != nil {
-			klog.Fatalf("create msgbus resolver failed: %v", err)
-		}
-		return r
 	case consts.DiscoveryRedis:
 		uri := RedisUriPrefix + fmt.Sprintf("%s:%s",
 			config.LlumnixConfig.CmsRedisHost, config.LlumnixConfig.CmsRedisPort)

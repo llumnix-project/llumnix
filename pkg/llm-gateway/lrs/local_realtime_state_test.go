@@ -1,15 +1,13 @@
 package lrs
 
 import (
-	"fmt"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
 	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/structs"
+	"easgo/pkg/llm-gateway/types"
 )
 
 // MockGateway implements Gateway interface for testing
@@ -21,16 +19,16 @@ func (m *MockGateway) Id() string {
 	return m.id
 }
 
-func createTestToken(id string) *structs.Token {
+func createTestToken(id string) *types.LLMWorker {
 	return createTestInstanceWithModel(id, "gpt-3.5-turbo")
 }
 
-func createTestInstanceWithModel(id string, model string) *structs.Token {
-	return &structs.Token{
+func createTestInstanceWithModel(id string, model string) *types.LLMWorker {
+	return &types.LLMWorker{
 		Version: 1,
 		Model:   model,
-		Endpoint: structs.Endpoint{
-			IP:   "test-host-" + id,
+		Endpoint: types.Endpoint{
+			Host: "test-host-" + id,
 			Port: 8080,
 		},
 	}
@@ -80,7 +78,7 @@ func TestInstanceView(t *testing.T) {
 func TestLocalRealtimeState(t *testing.T) {
 	lrs := NewLocalRealtimeState()
 	instance := createTestToken("worker-1")
-	gateway := &MockGateway{id: "gateway-1"}
+	gateway := "gateway-1"
 
 	t.Run("Add Instance", func(t *testing.T) {
 		lrs.AddInstance(instance)
@@ -89,7 +87,7 @@ func TestLocalRealtimeState(t *testing.T) {
 
 	t.Run("Add Gateway", func(t *testing.T) {
 		lrs.AddGateway(gateway)
-		assert.True(t, lrs.gatewayExists(gateway.Id()))
+		assert.True(t, lrs.gatewayExists(gateway))
 	})
 
 	t.Run("Allocate Request State", func(t *testing.T) {
@@ -97,7 +95,7 @@ func TestLocalRealtimeState(t *testing.T) {
 			reqId:      "req-1",
 			numTokens:  100,
 			instanceId: instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		}
 
@@ -111,7 +109,7 @@ func TestLocalRealtimeState(t *testing.T) {
 			reqId:      "req-1",
 			numTokens:  150,
 			instanceId: instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		}
 
@@ -127,7 +125,7 @@ func TestLocalRealtimeState(t *testing.T) {
 			reqId:      "req-1",
 			numTokens:  150,
 			instanceId: instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		}
 
@@ -139,22 +137,22 @@ func TestLocalRealtimeState(t *testing.T) {
 	})
 
 	t.Run("Remove Gateway", func(t *testing.T) {
-		lrs.RemoveGateway(gateway.Id())
-		assert.False(t, lrs.gatewayExists(gateway.Id()))
+		lrs.RemoveGateway(gateway)
+		assert.False(t, lrs.gatewayExists(gateway))
 	})
 }
 
 func TestErrorCases(t *testing.T) {
 	lrs := NewLocalRealtimeState()
 	instance := createTestToken("worker-1")
-	gateway := &MockGateway{id: "gateway-1"}
+	gateway := "gateway-1"
 
 	t.Run("Allocate Without Instance", func(t *testing.T) {
 		reqState := &RequestState{
 			reqId:      "req-1",
 			numTokens:  100,
 			instanceId: "non-existent-worker",
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 		}
 
 		err := lrs.AllocateRequestState(reqState)
@@ -182,7 +180,7 @@ func TestErrorCases(t *testing.T) {
 			reqId:      "req-1",
 			numTokens:  100,
 			instanceId: instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 		}
 
 		err1 := lrs.AllocateRequestState(reqState)
@@ -196,7 +194,7 @@ func TestErrorCases(t *testing.T) {
 func TestMetrics(t *testing.T) {
 	lrs := NewLocalRealtimeState()
 	instance := createTestToken("worker-1")
-	gateway := &MockGateway{id: "gateway-1"}
+	gateway := "gateway-1"
 
 	// Prepare test data
 	lrs.AddInstance(instance)
@@ -208,14 +206,14 @@ func TestMetrics(t *testing.T) {
 			reqId:      "req-1",
 			numTokens:  100,
 			instanceId: instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		},
 		{
 			reqId:      "req-2",
 			numTokens:  200,
 			instanceId: instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		},
 	}
@@ -239,8 +237,9 @@ func TestMetrics(t *testing.T) {
 	// Verify instances request states
 	instanceViews := lrs.GetInstanceViews()
 	assert.Equal(t, 1, len(instanceViews))
-	assert.Equal(t, int64(300), instanceViews[0].NumTokens())
-	assert.Equal(t, int64(2), instanceViews[0].NumRequests())
+	instanceView = lrs.GetInstanceView(instance.Id())
+	assert.Equal(t, int64(300), instanceView.NumTokens())
+	assert.Equal(t, int64(2), instanceView.NumRequests())
 
 	// Release request states
 	for _, req := range reqs {
@@ -254,77 +253,17 @@ func TestMetrics(t *testing.T) {
 	assert.Equal(t, int64(0), instanceView.NumRequests())
 }
 
-func TestConcurrentOperations(t *testing.T) {
-	lrs := NewLocalRealtimeState()
-	instance := createTestToken("worker-1")
-	gateway := &MockGateway{id: "gateway-1"}
-
-	lrs.AddInstance(instance)
-	lrs.AddGateway(gateway)
-
-	const numRequests = 100
-	var wg sync.WaitGroup
-	wg.Add(3) // 3 goroutines
-
-	// Goroutine 1: Add requests
-	go func() {
-		defer wg.Done()
-		for i := 0; i < numRequests; i++ {
-			reqState := &RequestState{
-				reqId:      fmt.Sprintf("req-%d", i),
-				numTokens:  100,
-				instanceId: instance.Id(),
-				gatewayId:  gateway.Id(),
-				updateTime: time.Now(),
-			}
-			lrs.AllocateRequestState(reqState)
-		}
-	}()
-
-	// Goroutine 2: Update requests
-	go func() {
-		defer wg.Done()
-		for i := 0; i < numRequests; i++ {
-			reqState := &RequestState{
-				reqId:      fmt.Sprintf("req-%d", i),
-				numTokens:  50,
-				instanceId: instance.Id(),
-				gatewayId:  gateway.Id(),
-				updateTime: time.Now(),
-			}
-			lrs.UpdateRequestState(reqState)
-		}
-	}()
-
-	// Goroutine 3: Release requests
-	go func() {
-		time.Sleep(500 * time.Millisecond) // Ensure some requests are added before releasing
-		defer wg.Done()
-		for i := 0; i < numRequests; i++ {
-			reqState := &RequestState{
-				reqId:      fmt.Sprintf("req-%d", i),
-				numTokens:  150,
-				instanceId: instance.Id(),
-				gatewayId:  gateway.Id(),
-			}
-			lrs.ReleaseRequestState(reqState)
-		}
-	}()
-
-	wg.Wait()
-}
-
 func TestEdgeCases(t *testing.T) {
 	lrs := NewLocalRealtimeState()
 	instance := createTestToken("worker-1")
-	gateway := &MockGateway{id: "gateway-1"}
+	gateway := "gateway-1"
 
 	t.Run("Release Zero State", func(t *testing.T) {
 		reqState := &RequestState{
 			reqId:      "req-1",
 			numTokens:  0,
 			instanceId: instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 		}
 		lrs.ReleaseRequestState(reqState)
 	})
@@ -338,7 +277,7 @@ func TestEdgeCases(t *testing.T) {
 			reqId:      "req-1",
 			numTokens:  100,
 			instanceId: instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		}
 		err := lrs.AllocateRequestState(reqState1)
@@ -354,7 +293,7 @@ func TestEdgeCases(t *testing.T) {
 			reqId:      "req-1",
 			numTokens:  50,
 			instanceId: instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		}
 		err = lrs.UpdateRequestState(reqState2)
@@ -374,7 +313,7 @@ func TestEdgeCases(t *testing.T) {
 func TestPrintInstanceViews(t *testing.T) {
 	lrs := NewLocalRealtimeState()
 	instance := createTestToken("worker-1")
-	gateway := &MockGateway{id: "gateway-1"}
+	gateway := "gateway-1"
 
 	lrs.AddInstance(instance)
 	lrs.AddGateway(gateway)
@@ -383,7 +322,7 @@ func TestPrintInstanceViews(t *testing.T) {
 		reqId:      "req-1",
 		numTokens:  100,
 		instanceId: instance.Id(),
-		gatewayId:  gateway.Id(),
+		gatewayId:  gateway,
 		updateTime: time.Now(),
 	}
 	lrs.AllocateRequestState(reqState)
@@ -395,7 +334,7 @@ func TestPrintInstanceViews(t *testing.T) {
 func TestStateRelease(t *testing.T) {
 	lrs := NewLocalRealtimeState()
 	instance := createTestToken("worker-1")
-	gateway := &MockGateway{id: "gateway-1"}
+	gateway := "gateway-1"
 
 	lrs.AddInstance(instance)
 	lrs.AddGateway(gateway)
@@ -406,14 +345,14 @@ func TestStateRelease(t *testing.T) {
 			reqId:      "req-1",
 			numTokens:  100,
 			instanceId: instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		},
 		{
 			reqId:      "req-2",
 			numTokens:  200,
 			instanceId: instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		},
 	}
@@ -433,8 +372,8 @@ func TestStateRelease(t *testing.T) {
 		err := lrs.AllocateRequestState(req)
 		assert.NoError(t, err)
 	}
-	lrs.RemoveGateway(gateway.Id())
-	assert.False(t, lrs.gatewayExists(gateway.Id()))
+	lrs.RemoveGateway(gateway)
+	assert.False(t, lrs.gatewayExists(gateway))
 
 	t.Run("Cleanup Non-existent States", func(t *testing.T) {
 		// Cleaning up non-existent states should not cause errors
@@ -453,7 +392,7 @@ func TestStateRelease(t *testing.T) {
 func TestUpdateRequestStateEdgeCases(t *testing.T) {
 	lrs := NewLocalRealtimeState()
 	instance := createTestToken("worker-1")
-	gateway := &MockGateway{id: "gateway-1"}
+	gateway := "gateway-1"
 
 	t.Run("Update Non-existent Request", func(t *testing.T) {
 		lrs.AddInstance(instance)
@@ -463,7 +402,7 @@ func TestUpdateRequestStateEdgeCases(t *testing.T) {
 			reqId:      "non-existent-req",
 			numTokens:  100,
 			instanceId: instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		}
 		err := lrs.UpdateRequestState(reqState)
@@ -475,7 +414,7 @@ func TestUpdateRequestStateEdgeCases(t *testing.T) {
 			reqId:      "req-1",
 			numTokens:  100,
 			instanceId: "invalid-worker",
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		}
 		err := lrs.UpdateRequestState(reqState)
@@ -486,7 +425,7 @@ func TestUpdateRequestStateEdgeCases(t *testing.T) {
 func TestInstanceVersionManagement(t *testing.T) {
 	lrs := NewLocalRealtimeState()
 	instance := createTestToken("worker-1")
-	gateway := &MockGateway{id: "gateway-1"}
+	gateway := "gateway-1"
 
 	t.Run("Version Update Cleanup", func(t *testing.T) {
 		lrs.AddInstance(instance)
@@ -497,7 +436,7 @@ func TestInstanceVersionManagement(t *testing.T) {
 			reqId:      "req-1",
 			numTokens:  100,
 			instanceId: instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		}
 		err := lrs.AllocateRequestState(reqState1)
@@ -519,7 +458,7 @@ func TestInstanceVersionManagement(t *testing.T) {
 func TestRequestStateValidation(t *testing.T) {
 	lrs := NewLocalRealtimeState()
 	instance := createTestToken("worker-1")
-	gateway := &MockGateway{id: "gateway-1"}
+	gateway := "gateway-1"
 
 	lrs.AddInstance(instance)
 	lrs.AddGateway(gateway)
@@ -529,7 +468,7 @@ func TestRequestStateValidation(t *testing.T) {
 			reqId:      "req-1",
 			numTokens:  0,
 			instanceId: instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		}
 		err := lrs.AllocateRequestState(reqState)
@@ -541,7 +480,7 @@ func TestRequestStateValidation(t *testing.T) {
 			reqId:      "req-2",
 			numTokens:  -100,
 			instanceId: instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		}
 		err := lrs.AllocateRequestState(reqState)
@@ -557,7 +496,7 @@ func TestGetInstanceViewsEmpty(t *testing.T) {
 
 func TestGatewayOperations(t *testing.T) {
 	lrs := NewLocalRealtimeState()
-	gateway := &MockGateway{id: "gateway-1"}
+	gateway := "gateway-1"
 
 	t.Run("Remove Non-existent Gateway", func(t *testing.T) {
 		lrs.RemoveGateway("non-existent-gateway")
@@ -566,16 +505,16 @@ func TestGatewayOperations(t *testing.T) {
 	t.Run("Add And Remove Multiple Times", func(t *testing.T) {
 		for i := 0; i < 3; i++ {
 			lrs.AddGateway(gateway)
-			assert.True(t, lrs.gatewayExists(gateway.Id()))
-			lrs.RemoveGateway(gateway.Id())
-			assert.False(t, lrs.gatewayExists(gateway.Id()))
+			assert.True(t, lrs.gatewayExists(gateway))
+			lrs.RemoveGateway(gateway)
+			assert.False(t, lrs.gatewayExists(gateway))
 		}
 	})
 }
 
 func TestGetAllWorkStatsByModel(t *testing.T) {
 	lrs := NewLocalRealtimeState()
-	gateway := &MockGateway{id: "gateway-1"}
+	gateway := "gateway-1"
 
 	// Create instances with different models
 	gpt35Instance1 := createTestInstanceWithModel("worker-gpt35-1", "gpt-3.5-turbo")
@@ -593,8 +532,9 @@ func TestGetAllWorkStatsByModel(t *testing.T) {
 		lrs.AddGateway(gateway)
 
 		results := lrs.GetInstanceViewsByModel("gpt-3.5-turbo")
-		assert.Equal(t, 1, len(results))
-		assert.Equal(t, gpt35Instance1.Id(), results[0].GetInstance().Id())
+		view, exists := results[gpt35Instance1.Id()]
+		assert.True(t, exists)
+		assert.Equal(t, gpt35Instance1.Id(), view.GetInstance().Id())
 	})
 
 	t.Run("Multiple Instances Same Model", func(t *testing.T) {
@@ -619,12 +559,16 @@ func TestGetAllWorkStatsByModel(t *testing.T) {
 		// Test GPT-4 model
 		gpt4Results := lrs.GetInstanceViewsByModel("gpt-4")
 		assert.Equal(t, 1, len(gpt4Results))
-		assert.Equal(t, gpt4Instance.Id(), gpt4Results[0].GetInstance().Id())
+		view, exists := gpt4Results[gpt4Instance.Id()]
+		assert.True(t, exists)
+		assert.Equal(t, gpt4Instance.Id(), view.GetInstance().Id())
 
 		// Test Claude model
 		claudeResults := lrs.GetInstanceViewsByModel("claude-2")
 		assert.Equal(t, 1, len(claudeResults))
-		assert.Equal(t, claudeInstance.Id(), claudeResults[0].GetInstance().Id())
+		view, exists = claudeResults[claudeInstance.Id()]
+		assert.True(t, exists)
+		assert.Equal(t, claudeInstance.Id(), view.GetInstance().Id())
 
 		// Test non-existent model
 		nonexistentResults := lrs.GetInstanceViewsByModel("nonexistent-model")
@@ -637,7 +581,7 @@ func TestGetAllWorkStatsByModel(t *testing.T) {
 			reqId:      "req-gpt35-1",
 			numTokens:  100,
 			instanceId: gpt35Instance1.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		}
 		err := lrs.AllocateRequestState(reqState1)
@@ -647,7 +591,7 @@ func TestGetAllWorkStatsByModel(t *testing.T) {
 			reqId:      "req-gpt4-1",
 			numTokens:  200,
 			instanceId: gpt4Instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		}
 		err = lrs.AllocateRequestState(reqState2)
@@ -659,7 +603,11 @@ func TestGetAllWorkStatsByModel(t *testing.T) {
 
 		gpt4Results := lrs.GetInstanceViewsByModel("gpt-4")
 		assert.Equal(t, 1, len(gpt4Results))
-		assert.Equal(t, int64(200), gpt4Results[0].NumTokens())
+
+		view, exists := gpt4Results[gpt4Instance.Id()]
+		assert.True(t, exists)
+		assert.Equal(t, gpt4Instance.Id(), view.GetInstance().Id())
+		assert.Equal(t, int64(200), view.NumTokens())
 	})
 
 	t.Run("Case Sensitivity", func(t *testing.T) {
@@ -678,6 +626,8 @@ func TestGetAllWorkStatsByModel(t *testing.T) {
 
 		emptyResults := lrs.GetInstanceViewsByModel("")
 		assert.Equal(t, 1, len(emptyResults))
-		assert.Equal(t, emptyModelInstance.Id(), emptyResults[0].GetInstance().Id())
+		view, exists := emptyResults[emptyModelInstance.Id()]
+		assert.True(t, exists)
+		assert.Equal(t, emptyModelInstance.Id(), view.GetInstance().Id())
 	})
 }

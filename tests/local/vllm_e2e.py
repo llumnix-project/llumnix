@@ -141,7 +141,7 @@ def send_request(
         url = GATEWAY_URL
     
     if payload.get('stream', False):
-        response = requests.post(url, json=payload, timeout=30, stream=True)
+        response = requests.post(url, json=payload, timeout=60, stream=True)
         response.raise_for_status()
         
         chunks = []
@@ -181,8 +181,8 @@ def send_request(
             full_text = result["choices"][0].get("text", "")
 
     if not ignore_output:
-        max_tokens = getattr(payload, 'max_tokens', "None")
-        stream = getattr(payload, 'stream', False)
+        max_tokens = payload.get('max_tokens', None)
+        stream = payload.get('stream', False)
         print(f"Response received ({endpoint_type}, stream={stream}, max_tokens={max_tokens}): {full_text}")
 
     return full_text

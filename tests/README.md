@@ -22,7 +22,7 @@ After setting up the Docker environment:
 
 ## Local Testing
 
-Local testing runs test cases on your local machine. First of all, run `make vllm-install` to ensure the latest vllm patched llumlet is installed. For development convenience, you can install llumlet in development mode using `make llumlet-install`. Each test starts gateway, scheduler, redis, and vllm (colocated with llumlet), then sends requests to the gateway and verifies results. Run all tests with `make tests`.
+Local testing runs test cases on your local machine. First of all, run `make vllm-install` to ensure the latest vllm patched llumlet is installed. For development convenience, you can install llumlet in development mode using `make llumlet-install`. Each test starts gateway, scheduler, redis, and vllm (colocated with llumlet), then sends requests to the gateway and verifies results. Run all tests with `make e2e-tests`.
 
 **Simple Requests Test** (make simple-tests)
 

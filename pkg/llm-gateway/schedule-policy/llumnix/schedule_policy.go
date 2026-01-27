@@ -345,7 +345,7 @@ func (p *DispatchPolicy) executeSchedulePipeline(
 	availableInstanceType, availableInstanceViews = p.executeScheduleSteps(
 		pipeline, groupedInstanceViews, false)
 
-	if availableInstanceViews == nil || len(availableInstanceViews) == 0 {
+	if len(availableInstanceViews) == 0 {
 		klog.V(4).Info("No instances found without fallback, executing schedule steps with fallback=true")
 		availableInstanceType, availableInstanceViews = p.executeScheduleSteps(
 			pipeline, groupedInstanceViews, true)

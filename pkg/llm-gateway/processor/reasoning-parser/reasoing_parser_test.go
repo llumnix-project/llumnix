@@ -168,7 +168,7 @@ func TestQwen3ForcedReasoning(t *testing.T) {
 
 	text = "<think>I need to think about this.</think>The answer is 42."
 	reasoningContent, content = d.DetectAndParse(text)
-	assertEqual(t, "I need to think about this step by step.", reasoningContent, "forced reasoning")
+	assertEqual(t, "I need to think about this.", reasoningContent, "forced reasoning")
 	assertEqual(t, "The answer is 42.", content, "forced reasoning normal")
 
 	// streaming forced: chunks without start token should be returned as reasoning

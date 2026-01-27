@@ -303,7 +303,9 @@ func TestOSSPathHelpers(t *testing.T) {
 func TestShardInputFile(t *testing.T) {
 	// Create a mock TaskReactor with minimal config
 	config := &options.Config{
-		BatchLinesPerShard: 2, // Small number for testing
+		BatchServiceConfig: options.BatchServiceConfig{
+			BatchLinesPerShard: 2, // Small number for testing
+		},
 	}
 	tr := &TaskReactor{
 		config: config,

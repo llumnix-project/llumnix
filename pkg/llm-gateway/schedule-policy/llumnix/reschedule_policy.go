@@ -179,8 +179,8 @@ func (p *ReschedulePolicy) executeMigrations(reschedulePairs []*reschedulePair) 
 	for _, rp := range reschedulePairs {
 		go func(pair *reschedulePair) {
 			labels := metrics.Labels{
-				{"reschedule_req_select_rule", rp.reqSelectRule},
-				{"reschedule_req_select_order", rp.reqSelectOrder},
+				{Name: "reschedule_req_select_rule", Value: rp.reqSelectRule},
+				{Name: "reschedule_req_select_order", Value: rp.reqSelectOrder},
 			}
 			metrics.IncrLlumnixCounterByOne(metrics.LlumnixMetricRescheduleCount, labels)
 			klog.V(4).Infof("Start to migrate from %s to %s, rule is %s",
@@ -203,13 +203,14 @@ func (p *ReschedulePolicy) executeMigrations(reschedulePairs []*reschedulePair) 
 				MigrationType:      rp.reqSelectRule,
 				MigrationReqPolicy: rp.reqSelectOrder,
 			}
-			if rp.reqSelectRule == consts.LlumnixMigrationReqSelectRuleNumReq {
+			switch rp.reqSelectRule {
+			case consts.LlumnixMigrationReqSelectRuleNumReq:
 				migrationRequest.MigrationValue = &llumlet.MigrateRequest_NumReqs{NumReqs: int64(rp.reqSelectValue)}
-			} else if rp.reqSelectRule == consts.LlumnixMigrationReqSelectRuleToken {
+			case consts.LlumnixMigrationReqSelectRuleToken:
 				migrationRequest.MigrationValue = &llumlet.MigrateRequest_NumTokens{NumTokens: int64(rp.reqSelectValue)}
-			} else if rp.reqSelectRule == consts.LlumnixMigrationReqSelectRuleRatio {
+			case consts.LlumnixMigrationReqSelectRuleRatio:
 				migrationRequest.MigrationValue = &llumlet.MigrateRequest_BlockRatio{BlockRatio: rp.reqSelectValue}
-			} else {
+			default:
 				klog.Errorf("unknown migration type: %s, skip", rp.reqSelectRule)
 				err = fmt.Errorf("unknown migration type: %s", rp.reqSelectRule)
 				results <- migrationResult{pair, nil, err}
@@ -236,7 +237,6 @@ func (p *ReschedulePolicy) executeMigrations(reschedulePairs []*reschedulePair) 
 				pair.srcView.cmsView.Metadata.Ip+":"+strconv.Itoa(int(pair.srcView.cmsView.Metadata.ApiServerPort)),
 				pair.dstView.cmsView.Metadata.Ip+":"+strconv.Itoa(int(pair.dstView.cmsView.Metadata.ApiServerPort)),
 				pair.reqSelectRule)
-			return
 		}(rp)
 	}
 

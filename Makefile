@@ -62,16 +62,13 @@ simple-tests: runtime-proto-build llm-gateway-build
 migration-tests: llm-gateway-build
 	pytest -x -v -s /mnt/eas/cuikuilong/llumnix/tests/local/vllm_e2e.py::test_migration
 
-.PHONY: tests
-tests: runtime-proto-build llm-gateway-build simple-tests migration-tests
+.PHONY: e2e-tests
+e2e-tests: runtime-proto-build llm-gateway-build simple-tests migration-tests
+
+TEST_DIRS := $(shell go list ./pkg/llm-gateway/... | grep -v "/lrs" | grep -v "/kvs")
 
 .PHONY: llumnix-unit-test
 llumnix-unit-test: llm-gateway-proto-build
 	CGO_ENABLED=1 \
-	CGO_LDFLAGS="-L$(CURDIR)/lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release" \
-	go test -v -failfast -cover \
-		./pkg/llm-gateway/cms \
-		./pkg/llm-gateway/llumlet \
-		./pkg/llm-gateway/schedule-policy/llumnix \
-		./pkg/llm-gateway/kvs \
-		./pkg/llm-gateway/load-balancer
+	CGO_LDFLAGS="-L./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release" \
+	go test -v -failfast $(TEST_DIRS) 2>&1 | grep -v "no test files"

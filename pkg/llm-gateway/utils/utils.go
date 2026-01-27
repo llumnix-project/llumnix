@@ -300,7 +300,7 @@ func MergeLLMReqBodyWithContent(backend string, req *http.Request, bodyBytes []b
 	var addContents strings.Builder
 	for _, bytes := range *recordedMsg {
 		if content, err := extractContent(bytes, contentPath); err != nil {
-			klog.Warning("failed to extract content from the contnet: %v", err)
+			klog.Warningf("failed to extract content from the contnet: %v", err)
 		} else {
 			addContents.WriteString(content)
 			tokensLen++
