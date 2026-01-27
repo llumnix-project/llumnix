@@ -33,6 +33,10 @@ func (r ProcessResult) String() string {
 	}
 }
 
+// IMPORTANT: All processors MUST be stateless and functional.
+// DO NOT store any state in processor implementations.
+// All request state MUST be stored in RequestContext.
+
 // PreProcessor defines the interface for pre-processing requests.
 // Pre-processors are executed before proxy processing logic.
 type PreProcessor interface {

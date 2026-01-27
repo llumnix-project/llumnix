@@ -50,7 +50,12 @@ func WriteErrorResponse(req *types.RequestContext, err error) {
 }
 
 func WriteResponse(req *types.RequestContext, chunk []byte) {
-	req.ResponseChan <- &types.ResponseMsg{Err: nil, Message: chunk}
+	// "data: " (6 bytes) + chunk + "\n\n" (2 bytes)
+	body := make([]byte, 0, 6+len(chunk)+2)
+	body = append(body, "data: "...)
+	body = append(body, chunk...)
+	body = append(body, '\n', '\n')
+	req.ResponseChan <- &types.ResponseMsg{Err: nil, Message: body}
 }
 
 // MakeNewBackendRequest creates HTTP request for backend inference

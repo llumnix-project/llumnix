@@ -38,6 +38,9 @@ type OpenAIHandler struct {
 
 	// backend handles the actual inference execution
 	backend InferenceBackend
+
+	// streamProcessor encapsulates the generic streaming mechanism
+	streamProcessor *StreamProcessor
 }
 
 // NewOpenAIHandler creates a new OpenAIHandler with configured processor chains.
@@ -60,17 +63,8 @@ func NewOpenAIHandler(config *options.Config) (RequestHandler, error) {
 	}
 	postProcessor.Register(chunkProcessor)
 
-	name := config.PDSplitMode
-	if name == "" {
-		name = "simple"
-	}
-	var scheduleMode types.ScheduleMode
-	if config.SeparatePDSchedule {
-		scheduleMode = types.ScheduleModePDStaged
-	} else {
-		scheduleMode = types.ScheduleModePDBatch
-	}
-	backend, err := BuildBackend(name, scheduleMode)
+	// Create the inference backend based on the configuration
+	backend, err := BuildBackend(config)
 	if err != nil {
 		klog.Errorf("build inference backend failed: %v", err)
 		return nil, err
@@ -82,13 +76,15 @@ func NewOpenAIHandler(config *options.Config) (RequestHandler, error) {
 		postProcessors: postProcessor,
 		backend:        backend,
 	}
+	// Inject protocol-specific strategies into the generic streaming processor
+	handler.streamProcessor = NewStreamProcessor(handler, handler)
 	return handler, nil
 }
 
-// UnmarshalRequest reads and parses the HTTP request body into the appropriate LLM request structure.
+// unmarshalRequest reads and parses the HTTP request body into the appropriate LLM request structure.
 // It validates the request schema and determines the protocol type (chat completion or text completion).
 // Returns an error if the request body cannot be read or parsed.
-func (h *OpenAIHandler) UnmarshalRequest(reqCtx *types.RequestContext) error {
+func (h *OpenAIHandler) unmarshalRequest(reqCtx *types.RequestContext) error {
 	// Read the raw request body
 	httpReq := reqCtx.HttpRequest.Request
 	data, err := io.ReadAll(httpReq.Body)
@@ -113,6 +109,7 @@ func (h *OpenAIHandler) UnmarshalRequest(reqCtx *types.RequestContext) error {
 		reqCtx.LLMRequest.Model = chatCompletion.Model
 		reqCtx.LLMRequest.Protocol = protocol.OpenAIChatCompletion
 		reqCtx.LLMRequest.ChatCompletionRequest = &chatCompletion
+		reqCtx.HttpRequest.Stream = chatCompletion.Stream
 	case protocol.IsCompletionsURL(url):
 		// Parse text completion request (e.g., /v1/completions)
 		var completionRequest protocol.CompletionRequest
@@ -124,6 +121,7 @@ func (h *OpenAIHandler) UnmarshalRequest(reqCtx *types.RequestContext) error {
 		reqCtx.LLMRequest.Model = completionRequest.Model
 		reqCtx.LLMRequest.Protocol = protocol.OpenAICompletion
 		reqCtx.LLMRequest.CompletionRequest = &completionRequest
+		reqCtx.HttpRequest.Stream = completionRequest.Stream
 	default:
 		// Unsupported URL path
 		klog.Warningf("not support URL: %s", url)
@@ -137,8 +135,11 @@ func (h *OpenAIHandler) UnmarshalRequest(reqCtx *types.RequestContext) error {
 // The preprocessing duration is recorded in request statistics.
 // Returns an error if unmarshaling or preprocessing fails.
 func (h *OpenAIHandler) ParseRequest(reqCtx *types.RequestContext) error {
+	// In the entry point of the OpenAI handler, define the structure of LLMRequest used by this handler
+	reqCtx.LLMRequest = &types.LLMRequest{}
+
 	// Unmarshal and validate the request
-	err := h.UnmarshalRequest(reqCtx)
+	err := h.unmarshalRequest(reqCtx)
 	if err != nil {
 		return err
 	}
@@ -155,10 +156,11 @@ func (h *OpenAIHandler) ParseRequest(reqCtx *types.RequestContext) error {
 	return nil
 }
 
-// parseResponse parses a raw response chunk from the backend into a CompletionResponse structure.
-// It handles the special "[DONE]" marker which indicates the end of a streaming response.
+// ParseChunk implements ChunkParser interface for OpenAI protocol.
+// It parses a raw response chunk from the backend into a CompletionResponse structure.
+// Handles the special "[DONE]" marker which indicates the end of a streaming response.
 // Returns io.EOF when encountering the done marker, or an error if parsing fails.
-func (h *OpenAIHandler) parseResponse(reqCtx *types.RequestContext, data []byte) error {
+func (h *OpenAIHandler) ParseChunk(reqCtx *types.RequestContext, data []byte) error {
 	// Check for stream end marker
 	if bytes.Equal(data, []byte("[DONE]")) {
 		return io.EOF
@@ -221,107 +223,30 @@ func (h *OpenAIHandler) marshalResponse(reqCtx *types.RequestContext) ([]byte, e
 }
 
 // Handle processes the LLM inference request and streams the response back to the client.
-// It coordinates the entire request lifecycle: inference execution, response parsing,
-// post-processing, and response writing. Timing metrics like TTFT and ITL are tracked.
-// The response channel is automatically closed when processing completes.
+// It delegates to the generic StreamProcessor which encapsulates the streaming mechanism,
+// while this handler provides OpenAI-specific parsing and writing strategies.
+// Timing metrics like TTFT and ITL are tracked by the StreamProcessor.
 func (h *OpenAIHandler) Handle(req *types.RequestContext) {
-	defer func() {
-		close(req.ResponseChan)
-		req.TriggerPostRequest()
-	}()
-
 	// Initiate streaming inference from the backend
 	chunkChan, err := h.backend.StreamInference(req)
 	if err != nil {
 		klog.Errorf("failed to stream inference: %v", err)
 		WriteErrorResponse(req, err)
+		close(req.ResponseChan)
+		req.TriggerPostRequest()
 		return
 	}
 
-	// Initialize timing metrics for TTFT (Time To First Token) and ITL (Inter-Token Latency)
-	isFirst := true
-	var lastTime time.Time
-
-	// Process each chunk from the streaming inference
-	for chunk := range chunkChan {
-		klog.V(3).Infof("received stream chunk: %s, err: %v", string(chunk.Data), chunk.err)
-
-		// Record timing metrics for performance monitoring
-		if isFirst {
-			// Record Time To First Token (TTFT)
-			lastTime = time.Now()
-			req.RequestStats.FirstTime = lastTime
-
-			// Trigger post-prefill hooks to release prefill node resource if PD mode
-			req.TriggerPostPrefill()
-
-			isFirst = false
-		} else {
-			// Record Inter-Token Latency (ITL)
-			req.RequestStats.ITLs = append(req.RequestStats.ITLs, time.Since(lastTime).Milliseconds())
-			lastTime = time.Now()
-		}
-
-		// Handle stream errors and end-of-stream conditions
-		if chunk.err != nil {
-			if chunk.err == io.EOF {
-				// Normal stream end - process any remaining data before completing
-				if len(chunk.Data) > 0 {
-					// Parse and process the final chunk that came with EOF
-					err := h.parseResponse(req, chunk.Data)
-					if err != nil && err != io.EOF {
-						klog.Errorf("failed to parse final response: %v", err)
-						WriteErrorResponse(req, err)
-						return
-					}
-					if err := h.processAndWriteChunk(req, true); err != nil {
-						klog.Errorf("failed to process final chunk: %v", err)
-						WriteErrorResponse(req, err)
-						return
-					}
-				}
-				break
-			}
-			// Handle unexpected errors during streaming
-			klog.Errorf("error during stream inference: %v", chunk.err)
-			WriteErrorResponse(req, chunk.err)
-			return
-		}
-
-		// Parse the chunk data into internal response structure
-		err := h.parseResponse(req, chunk.Data)
-		if err != nil && err != io.EOF {
-			klog.Errorf("failed to parse response: %v", err)
-			WriteErrorResponse(req, err)
-			return
-		}
-
-		// Determine if this is the final chunk in the stream
-		isStreamEnd := (err == io.EOF)
-
-		// Process through post-processor chain and write to client
-		if err := h.processAndWriteChunk(req, isStreamEnd); err != nil {
-			klog.Errorf("failed to process and write chunk: %v", err)
-			WriteErrorResponse(req, err)
-			return
-		}
-
-		// Check if maximum token limit has been reached
-		if req.RequestStats.OutputExceedMaxTokens() {
-			// Send final chunk to gracefully end the stream
-			if err := h.processAndWriteChunk(req, true); err != nil {
-				klog.Errorf("failed to write final chunk: %v", err)
-			}
-			return
-		}
-	}
+	// Delegate to the generic streaming processor with OpenAI-specific strategies
+	h.streamProcessor.ProcessStream(req, chunkChan)
 }
 
-// processAndWriteChunk processes a response chunk through post-processors and writes it to the client.
-// It handles both intermediate chunks and the final chunk (marked by done=true).
+// ProcessAndWriteChunk implements ChunkWriter interface for OpenAI protocol.
+// It processes a response chunk through post-processors and writes it to the client.
+// Handles both intermediate chunks and the final chunk (marked by done=true).
 // The processing duration is accumulated in request statistics.
 // Returns an error if post-processing, marshaling, or writing fails.
-func (h *OpenAIHandler) processAndWriteChunk(req *types.RequestContext, done bool) error {
+func (h *OpenAIHandler) ProcessAndWriteChunk(req *types.RequestContext, done bool) error {
 	// Execute post-processing chain and measure duration
 	tStart := time.Now()
 	err := h.postProcessors.Process(req, done)

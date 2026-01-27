@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"llm-gateway/cmd/llm-gateway/app/options"
 	"llm-gateway/pkg/types"
 	"sync"
 )
@@ -45,13 +46,24 @@ func RegisterBackend(backendType string, factory BackendFactory) {
 
 // BuildBackend creates an InferenceBackend instance based on the backend type and schedule mode
 // Returns an error if the backend type is not registered
-func BuildBackend(backendType string, scheduleMode types.ScheduleMode) (InferenceBackend, error) {
+func BuildBackend(config *options.Config) (InferenceBackend, error) {
+	name := "simple"
+	if config.IsPDSplitMode() {
+		name = config.PDSplitMode
+	}
+	var scheduleMode types.ScheduleMode
+	if config.SeparatePDSchedule {
+		scheduleMode = types.ScheduleModePDStaged
+	} else {
+		scheduleMode = types.ScheduleModePDBatch
+	}
+
 	registryMu.RLock()
-	factory, exists := backendRegistry[backendType]
+	factory, exists := backendRegistry[name]
 	registryMu.RUnlock()
 
 	if !exists {
-		return nil, fmt.Errorf("unknown backend type: %s", backendType)
+		return nil, fmt.Errorf("unknown backend type: %s", name)
 	}
 
 	return factory(scheduleMode)

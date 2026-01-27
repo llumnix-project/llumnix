@@ -36,7 +36,8 @@ type LlmGatewayService struct {
 	// Request buffer queue for traffic control
 	bufferQueue *queue.QueueWorkerPool
 	// Request handler for parsing and processing requests
-	reqHandler handler.RequestHandler
+	openaiHandler    handler.RequestHandler
+	anthropicHandler handler.RequestHandler
 
 	balancer balancer.Balancer
 	// Service router for request routing and load balancing
@@ -74,12 +75,8 @@ func NewGatewayService(c *options.Config) *LlmGatewayService {
 	lgs.bufferQueue = queue.NewQueueWorkerPool(c.MaxQueueSize, c.WaitQueueThreads)
 	lgs.bufferQueue.Start()
 
-	// Create request handler for parsing OpenAI format requests
-	reqHandler, handlerErr := handler.BuildHandler("openai", c)
-	if handlerErr != nil {
-		klog.Fatalf("failed to create request handler: %v", handlerErr)
-	}
-	lgs.reqHandler = reqHandler
+	// Create request handler for parsing different format requests
+	lgs.BuildHandler()
 
 	// Create load balancer and service router
 	var lb balancer.Balancer
@@ -112,6 +109,23 @@ func NewGatewayService(c *options.Config) *LlmGatewayService {
 	}
 
 	return lgs
+}
+
+// BuildHandler creates request handlers for different formats
+func (lgs *LlmGatewayService) BuildHandler() {
+	// Create request handler for parsing OpenAI format requests
+	h, err := handler.BuildHandler("openai", lgs.config)
+	if err != nil {
+		klog.Fatalf("failed to create request handler: %v", err)
+	}
+	lgs.openaiHandler = h
+
+	// Create request handler for parsing Anthropic format requests
+	h, err = handler.BuildHandler("anthropic", lgs.config)
+	if err != nil {
+		klog.Fatalf("failed to create request handler: %v", err)
+	}
+	lgs.anthropicHandler = h
 }
 
 // healthz is the health check endpoint for K8s liveness/readiness probes
@@ -150,7 +164,7 @@ func (lgs *LlmGatewayService) convertErrorResponse(msg *types.ResponseMsg) (int,
 		if msg.Err == nil {
 			return http.StatusOK, []byte(msg.Message)
 		} else {
-			return http.StatusBadRequest, []byte(msg.Err.Error())
+			return http.StatusBadRequest, []byte(fmt.Sprintf(`{"error": {"code": 400, "message": "%s"}}`, msg.Err.Error()))
 		}
 	}
 }
@@ -192,9 +206,8 @@ func (lgs *LlmGatewayService) writeStreamResponse(req *types.RequestContext, res
 	if response.Err != nil {
 		if !headerResponded {
 			code, body := lgs.convertErrorResponse(response)
-			body = []byte("data: " + string(body) + "\n\ndata: [DONE]\n\n")
 			req.HttpRequest.StatusCode = code
-			writer.Header().Set("content-type", "text/event-stream; charset=utf-8")
+			writer.Header().Set("content-type", "application/json")
 			writer.WriteHeader(code)
 			writer.Write([]byte(body))
 		}
@@ -209,8 +222,7 @@ func (lgs *LlmGatewayService) writeStreamResponse(req *types.RequestContext, res
 		writer.WriteHeader(http.StatusOK)
 	}
 
-	body := []byte("data: " + string(response.Message) + "\n\n")
-	writer.Write([]byte(body))
+	writer.Write([]byte(response.Message))
 	// Flush immediately to ensure data is sent to client in real-time
 	writer.(http.Flusher).Flush()
 
@@ -234,7 +246,7 @@ func (lgs *LlmGatewayService) writeResponseUntilDone(reqCtx *types.RequestContex
 				}
 				return
 			}
-			stream := reqCtx.LLMRequest.ClientStream
+			stream := reqCtx.HttpRequest.Stream
 			if stream {
 				needClose := lgs.writeStreamResponse(reqCtx, response, reqCtx.HttpRequest.HeaderResponded)
 				reqCtx.HttpRequest.HeaderResponded = true
@@ -267,7 +279,7 @@ func (lgs *LlmGatewayService) externalRouteRequest(reqCtx *types.RequestContext,
 //   - Internal: schedule to internal workers via balancer
 //   - External: proxy to external service
 //   - Fallback: use fallback service when no route matches
-func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext) {
+func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext, handler handler.RequestHandler) {
 	// If the router policy is enabled, the router will be used first.
 	dst, rType := lgs.router.Route(reqCtx)
 	switch rType {
@@ -280,7 +292,7 @@ func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext) {
 		}
 		klog.V(3).Infof("request [%s] scheduled to %s", reqCtx.Id, schResult.String())
 		reqCtx.ScheduleCtx.ScheduleResults = schResult
-		go lgs.reqHandler.Handle(reqCtx)
+		go handler.Handle(reqCtx)
 	case router.RouteExternal:
 		// Match external route
 		go lgs.externalRouteRequest(reqCtx, dst)
@@ -309,6 +321,8 @@ func (lgs *LlmGatewayService) scheduleMode() types.ScheduleMode {
 // balancerLifecycleHandler implements the RequestLifecycleHandler interface using a balancer
 type balancerLifecycleHandler struct {
 	balancer balancer.Balancer
+
+	lastTime time.Time
 }
 
 // ScheduleDecode schedules the request for decoding using the balancer
@@ -327,15 +341,29 @@ func (h *balancerLifecycleHandler) ScheduleDecode(req *types.RequestContext) (ty
 	return results, nil
 }
 
+func (h *balancerLifecycleHandler) OnPreRequest(req *types.RequestContext) {
+	klog.V(3).Infof("[%s] Pre-request lifecycle hook triggered", req.Id)
+
+}
+
 // OnPostPrefill is called after prefill stage completes
 // Mainly used for resource cleanup or state transition after the prefill phase is completed
 func (h *balancerLifecycleHandler) OnPostPrefill(req *types.RequestContext) {
 	klog.V(3).Infof("[%s] Post-prefill lifecycle hook triggered", req.Id)
+	h.lastTime = time.Now()
+	req.RequestStats.FirstTime = h.lastTime
+
 	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
 	if pWorker != nil {
 		h.balancer.Release(req, pWorker)
 	}
 	req.ScheduleCtx.InferStage = types.InferStageDecode
+}
+
+func (h *balancerLifecycleHandler) OnPostDecode(req *types.RequestContext) {
+	klog.V(3).Infof("[%s] Post-decode lifecycle hook triggered", req.Id)
+	req.RequestStats.ITLs = append(req.RequestStats.ITLs, time.Since(h.lastTime).Milliseconds())
+	h.lastTime = time.Now()
 }
 
 // OnPostRequest is called after the entire request completes
@@ -353,12 +381,12 @@ func (h *balancerLifecycleHandler) OnPostRequest(req *types.RequestContext) {
 	}
 }
 
-// HandleOpenAIRequest is the main entry point for handling LLM inference requests
+// HandleAPIEntry is the main entry point for handling LLM inference requests
 // It handles request parsing, queue scheduling, response processing, and logging
 // Parameters:
 //   - w: HTTP response writer
 //   - r: HTTP request
-func (lgs *LlmGatewayService) HandleOpenAIRequest(w http.ResponseWriter, r *http.Request) {
+func (lgs *LlmGatewayService) HandleAPIEntry(w http.ResponseWriter, r *http.Request, handler handler.RequestHandler) {
 	// Increment request counter for monitoring and traffic control
 	lgs.numReqs.Add(1)
 	defer lgs.numReqs.Add(-1)
@@ -372,7 +400,7 @@ func (lgs *LlmGatewayService) HandleOpenAIRequest(w http.ResponseWriter, r *http
 	reqCtx.SetLifecycleHandler(&balancerLifecycleHandler{balancer: lgs.balancer})
 
 	// Parse and validate OpenAI format request parameters
-	if err := lgs.reqHandler.ParseRequest(reqCtx); err != nil {
+	if err := handler.ParseRequest(reqCtx); err != nil {
 		logging.Logf("Received request [%s]: %v", reqCtx.Id, err)
 		http.Error(w, "Invalid OpenAI request", http.StatusBadRequest)
 		return
@@ -394,7 +422,7 @@ func (lgs *LlmGatewayService) HandleOpenAIRequest(w http.ResponseWriter, r *http
 	reqCtx.RequestStats.EnQueueTime = time.Now()
 	lgs.bufferQueue.Dispatch(func() {
 		reqCtx.RequestStats.DeQueueTime = time.Now()
-		lgs.dispatchRequest(reqCtx)
+		lgs.dispatchRequest(reqCtx, handler)
 		reqCtx.RequestStats.BalanceTime = time.Now()
 	}, false)
 
@@ -403,6 +431,14 @@ func (lgs *LlmGatewayService) HandleOpenAIRequest(w http.ResponseWriter, r *http
 
 	// Log request access logs and metrics
 	lgs.LogRequestAccess(reqCtx)
+}
+
+func (lgs *LlmGatewayService) HandleOpenAIRequest(w http.ResponseWriter, r *http.Request) {
+	lgs.HandleAPIEntry(w, r, lgs.openaiHandler)
+}
+
+func (lgs *LlmGatewayService) HandleAnthropicRequest(w http.ResponseWriter, r *http.Request) {
+	lgs.HandleAPIEntry(w, r, lgs.anthropicHandler)
 }
 
 // HandleSimpleRequest handles simple requests (e.g., /v1/models)
@@ -445,10 +481,13 @@ func (lgs *LlmGatewayService) Run() {
 	if lgs.batchService != nil {
 		lgs.batchService.RegisterRoutes(router)
 	}
-	// handle all LLM inference requests
+	// handle OpenAI inference requests
 	router.HandleFunc("/v1/chat/completions", lgs.HandleOpenAIRequest)
 	router.HandleFunc("/v1/completions", lgs.HandleOpenAIRequest)
 	router.HandleFunc("/v1/models", lgs.HandleSimpleRequest)
+
+	// handle Anthropic inference requests
+	router.HandleFunc("/v1/messages", lgs.HandleAnthropicRequest)
 
 	address := fmt.Sprintf("%s:%d", lgs.config.Host, lgs.config.Port)
 	klog.Infof("LLM Gateway start listen on %s", address)

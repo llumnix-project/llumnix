@@ -10,6 +10,7 @@ import (
 	"llm-gateway/pkg/metrics"
 	reasoning_parser "llm-gateway/pkg/processor/reasoning-parser"
 	"llm-gateway/pkg/protocol"
+	"llm-gateway/pkg/protocol/anthropic"
 
 	"github.com/google/uuid"
 	"github.com/sglang/sglang-go-grpc-sdk"
@@ -125,12 +126,13 @@ type HttpRequest struct {
 	// downstream http request information
 	Request *http.Request
 	Writer  http.ResponseWriter
+	Stream  bool // whether the response is streamed
 
 	StatusCode      int
 	HeaderResponded bool
 }
 
-// OpenAI API interface
+// OpenAI API Request
 type LLMRequest struct {
 	// model name
 	Model string
@@ -181,19 +183,49 @@ func (req *LLMRequest) Stream() bool {
 	}
 }
 
+// Anthropic API Request
+type AnthropicRequest struct {
+	// raw request body data
+	RawData string
+
+	// Anthropic Request
+	AnthropicRequest      *anthropic.Request
+	AnthropicResponseData []byte
+	// The reason Anthropic Response is not defined here is that the relevant
+	// Anthropic conversion directly converts into the returned sequence data,
+	// and it does not rely on the related data structures
+
+	// OpenAI Request
+	OpenAIRequest        *protocol.ChatCompletionRequest
+	OpenAIResponse       *protocol.ChatCompletionResponse
+	OpenAIStreamResponse *protocol.ChatCompletionStreamResponse
+
+	// record first response chunk or not
+	IsNotFirst bool // default value is false
+
+	// streaming response buffer
+	AnthropicStreamingResponseBuffer *anthropic.StreamingResponseBuffer
+}
+
 // RequestLifecycleHandler handles lifecycle events for a request.
 // It provides unified interface for scheduling and resource management across different stages.
 type RequestLifecycleHandler interface {
 	// ScheduleDecode schedules the request for decoding stage.
 	ScheduleDecode(req *RequestContext) (ScheduledResult, error)
 
-	// OnPostPrefill is called after prefill stage completes.
-	// Used for resource cleanup or state transition.
-	OnPostPrefill(req *RequestContext)
+	// OnPreRequest is called before the request is processed.
+	OnPreRequest(req *RequestContext)
 
 	// OnPostRequest is called after the entire request completes.
 	// Used for final resource cleanup.
 	OnPostRequest(req *RequestContext)
+
+	// OnPostPrefill and OnPostDecode are called when the backend inference is streaming
+	// OnPostPrefill is called after prefill stage completes.
+	OnPostPrefill(req *RequestContext)
+
+	// OnPostDecode is called after every decode chunk completes.
+	OnPostDecode(req *RequestContext)
 }
 
 type ScheduleContext struct {
@@ -231,20 +263,24 @@ type ResponseMsg struct {
 }
 
 type RequestContext struct {
-	// request context
+	// Request context
 	Context context.Context
 
-	// request id
+	// Request id
 	Id string
 
 	// request information
 	HttpRequest *HttpRequest
-	LLMRequest  *LLMRequest
 
-	// request statistics
+	// Currently, the design is that a Handler uses one data structure for communication between processors,
+	// but this may change in the future, and some processor adapters may be added for adaptation
+	LLMRequest       *LLMRequest       // OpenAI
+	AnthropicRequest *AnthropicRequest // Anthropic
+
+	// Request statistics
 	RequestStats *RequestStats
 
-	// output stream channel
+	// Output stream channel
 	ResponseChan chan *ResponseMsg
 
 	// Some information forwarded to a specific inference backend
@@ -274,6 +310,20 @@ func (req *RequestContext) TriggerPostPrefill() {
 	}
 }
 
+// TriggerPostDecode triggers the post-decode lifecycle hook.
+func (req *RequestContext) TriggerPostDecode() {
+	if req.lifecycleHandler != nil {
+		req.lifecycleHandler.OnPostDecode(req)
+	}
+}
+
+// TriggerPreRequest triggers the pre-request lifecycle hook.
+func (req *RequestContext) TriggerPreRequest() {
+	if req.lifecycleHandler != nil {
+		req.lifecycleHandler.OnPreRequest(req)
+	}
+}
+
 // TriggerPostRequest triggers the post-request lifecycle hook.
 func (req *RequestContext) TriggerPostRequest() {
 	if req.lifecycleHandler != nil {
@@ -291,7 +341,6 @@ func NewRequestContext(ctx context.Context, r *http.Request, w http.ResponseWrit
 	klog.Infof("Received request: %s", id)
 
 	httpReq := &HttpRequest{Request: r, Writer: w}
-	llmRequest := &LLMRequest{}
 	inferCtx := &ScheduleContext{}
 
 	// create a request context for the new request
@@ -299,7 +348,6 @@ func NewRequestContext(ctx context.Context, r *http.Request, w http.ResponseWrit
 		Context:      ctx,
 		Id:           id,
 		HttpRequest:  httpReq,
-		LLMRequest:   llmRequest,
 		RequestStats: stats,
 		ScheduleCtx:  inferCtx,
 	}
