@@ -10,15 +10,6 @@ import (
 	"llumnix/pkg/llm-gateway/types"
 )
 
-// MockGateway implements Gateway interface for testing
-type MockGateway struct {
-	id string
-}
-
-func (m *MockGateway) Id() string {
-	return m.id
-}
-
 func createTestToken(id string) *types.LLMWorker {
 	return createTestInstanceWithModel(id, "gpt-3.5-turbo")
 }
@@ -36,8 +27,8 @@ func createTestInstanceWithModel(id string, model string) *types.LLMWorker {
 
 func TestRequestState(t *testing.T) {
 	reqId := "test-req-1"
-	instanceId := string("worker-1")
-	gatewayId := string("gateway-1")
+	instanceId := "worker-1"
+	gatewayId := "gateway-1"
 	numTokens := int64(100)
 
 	reqState := NewRequestState(reqId, numTokens, instanceId, gatewayId)

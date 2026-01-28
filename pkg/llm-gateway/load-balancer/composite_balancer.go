@@ -1,6 +1,7 @@
 package balancer
 
 import (
+	"errors"
 	"fmt"
 
 	"k8s.io/klog/v2"
@@ -119,7 +120,7 @@ func (bp *CompositeBalancer) pDSplitLocalGet(req *types.RequestContext) (types.S
 // getWithFallback tries remote scheduler first, falls back to local balancer if scheduler is not ready.
 func (bp *CompositeBalancer) getWithFallback(req *types.RequestContext) (types.ScheduledResult, error) {
 	result, err := bp.remoteBalancer.Get(req)
-	if err != consts.ErrorSchedulerNotReady {
+	if !errors.Is(err, consts.ErrorSchedulerNotReady) {
 		return result, err
 	}
 	switch bp.balanceMode {

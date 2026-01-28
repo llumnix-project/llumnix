@@ -51,7 +51,7 @@ type Config struct {
 	// retry interval of waiting schedule results, unit is milliseconds
 	WaitScheduleRetryInterval int
 	// request token state report (report to llm scheduler) interval (seconds)
-	RequestReportInterval int
+	RequestStateReportInterval int
 
 	// enable access log
 	EnableAccessLog bool
@@ -251,7 +251,7 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.ToolCallParser, "tool-call-parser", "", "tool call parser type")
 	flags.StringVar(&c.ReasoningParser, "reasoning-parser", "", "reasoning parser type")
 
-	flags.IntVar(&c.RequestReportInterval, "requests-report-duration", 0, "Specify requests reporter duration")
+	flags.IntVar(&c.RequestStateReportInterval, "request-state-report-interval", 0, "Specify request state report (to llm-scheduler) interval (seconds)")
 
 	flags.BoolVar(&c.SeparatePDSchedule, "separate-pd-schedule", false, "Specify whether to separate pd schedule")
 
@@ -372,8 +372,13 @@ func (c *Config) GetModelName(origName string) string {
 	}
 }
 
-func (c *Config) EnableRequestReport() bool {
-	return c.RequestReportInterval > 0 && !c.LlumnixConfig.EnableFullModeScheduling
+func (c *Config) EnableRequestStateTracking() bool {
+	return !c.LlumnixConfig.EnableFullModeScheduling && c.RequestStateReportInterval > 0 && len(c.LocalTestIPs) == 0
+}
+
+func (c *Config) ScheduleNeedTokens() bool {
+	return c.LlumnixConfig.EnableFullModeScheduling &&
+		(c.LlumnixConfig.EnableCacheAwareScheduling || c.LlumnixConfig.EnableInstanceStatusLocalAccount)
 }
 
 type LlmSchedulerProperty struct {
@@ -501,7 +506,7 @@ func (c *Config) LoadCfgFromProperties() {
 	// Scheduling policies
 	logIfNotEmpty("schedule policy: %s", c.SchedulePolicy)
 	logIfNotEmpty("pd split mode: %+v", c.PDSplitMode)
-	logIfNotEmpty("request report interval: %d", c.RequestReportInterval)
+	logIfNotEmpty("request report interval: %d", c.RequestStateReportInterval)
 
 	// Feature flags
 	logIfNotEmpty("llm serverless mode: %v", c.ServerlessMode)

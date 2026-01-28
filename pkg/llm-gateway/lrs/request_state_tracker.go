@@ -17,9 +17,9 @@ import (
 	"k8s.io/klog/v2"
 )
 
-type RequestReporter struct {
+type RequestStateTracker struct {
 	mux           sync.RWMutex
-	reqTokenState map[string]*ReqTokenState
+	reqTokenState map[string]*RequestTokenState
 
 	schedulerResolver resolver.Resolver
 	client            *http.Client
@@ -27,27 +27,24 @@ type RequestReporter struct {
 }
 
 var (
-	once      sync.Once
-	gReporter *RequestReporter
+	once     sync.Once
+	gTracker *RequestStateTracker
 )
 
-func NewRequestReporter(config *options.Config) *RequestReporter {
-	if len(config.LocalTestIPs) > 0 || !config.EnableRequestReport() {
-		return nil
-	}
+func NewRequestStateTracker(config *options.Config) *RequestStateTracker {
 	once.Do(func() {
-		gReporter = &RequestReporter{
-			reqTokenState:     make(map[string]*ReqTokenState),
+		gTracker = &RequestStateTracker{
+			reqTokenState:     make(map[string]*RequestTokenState),
 			schedulerResolver: resolver.CreateSchedulerResolver(config),
 			client:            &http.Client{Timeout: 3 * time.Second},
 			config:            config,
 		}
-		go gReporter.reportLoop()
+		go gTracker.reportLoop()
 	})
-	return gReporter
+	return gTracker
 }
 
-func (r *RequestReporter) AddReqTokenState(rs *ReqTokenState) {
+func (r *RequestStateTracker) AddRequestState(rs *RequestTokenState) {
 	r.mux.Lock()
 	defer r.mux.Unlock()
 
@@ -59,13 +56,13 @@ func (r *RequestReporter) AddReqTokenState(rs *ReqTokenState) {
 	r.reqTokenState[id] = rs
 }
 
-func (r *RequestReporter) DeleteReqTokenState(id string) {
+func (r *RequestStateTracker) DeleteRequestState(id string) {
 	r.mux.Lock()
 	defer r.mux.Unlock()
 	delete(r.reqTokenState, id)
 }
 
-type ReqReportData struct {
+type RequestReportData struct {
 	Id         string `json:"id"`
 	Model      string `json:"model"`
 	InferMode  string `json:"infer_mode"`
@@ -74,13 +71,13 @@ type ReqReportData struct {
 	NumTokens  uint64 `json:"num_tokens"`
 }
 
-type ReqReportDataArray = []ReqReportData
+type RequestReportDataArray = []RequestReportData
 
-func (r *RequestReporter) report() {
-	reportDatas := make(ReqReportDataArray, 0, 32)
+func (r *RequestStateTracker) report() {
+	reportDatas := make(RequestReportDataArray, 0, 32)
 	r.mux.RLock()
 	for _, rs := range r.reqTokenState {
-		reportDatas = append(reportDatas, ReqReportData{
+		reportDatas = append(reportDatas, RequestReportData{
 			Id:         rs.req.Id,
 			Model:      rs.req.LLMRequest.Model,
 			InferMode:  rs.InferMode,
@@ -99,7 +96,7 @@ func (r *RequestReporter) report() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	url := fmt.Sprintf("http://%s/request_report", endpoint[0].String())
+	url := fmt.Sprintf("http://%s/report", endpoint[0].String())
 	data, _ := json.Marshal(reportDatas)
 	klog.V(3).Infof("report request data: %s", string(data))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
@@ -124,7 +121,7 @@ func (r *RequestReporter) report() {
 	}
 }
 
-func (r *RequestReporter) reportLoop() {
+func (r *RequestStateTracker) reportLoop() {
 	defer func() {
 		if e := recover(); e != nil {
 			klog.Warningf("request report loop crashed , err: %s\ntrace:%s", e, string(debug.Stack()))
@@ -133,14 +130,14 @@ func (r *RequestReporter) reportLoop() {
 	}()
 	// report every 5 seconds
 	for {
-		time.Sleep(time.Duration(r.config.RequestReportInterval) * time.Second)
+		time.Sleep(time.Duration(r.config.RequestStateReportInterval) * time.Second)
 		r.report()
 	}
 }
 
-// ReqTokenState indicates the token length of the current request processing
+// RequestTokenState indicates the token length of the current request processing
 // it record token length when enable tokenizer, otherwise it records message text count
-type ReqTokenState struct {
+type RequestTokenState struct {
 	req        *types.RequestContext
 	Model      string
 	InferMode  string
@@ -154,15 +151,15 @@ type ReqTokenState struct {
 	ResponseText  string // current response text
 }
 
-func NewReqTokenState(
-	req *types.RequestContext, model string, inferMode string, instanceId string, gatewayId string) *ReqTokenState {
+func NewRequestTokenState(
+	req *types.RequestContext, model string, inferMode string, instanceId string, gatewayId string) *RequestTokenState {
 	promptTokens, ok := req.LLMRequest.GetPromptTokens()
 	if !ok {
 		klog.Errorf("Failed to get prompt tokens.")
 		return nil
 	}
 
-	return &ReqTokenState{
+	return &RequestTokenState{
 		req:           req,
 		lastNumTokens: uint64(len(promptTokens)),
 		Model:         model,
@@ -172,19 +169,19 @@ func NewReqTokenState(
 	}
 }
 
-func (rs *ReqTokenState) UpdateNumTokens(num uint64) {
+func (rs *RequestTokenState) UpdateNumTokens(num uint64) {
 	rs.mx.Lock()
 	defer rs.mx.Unlock()
 	rs.numTokens = num
 }
 
-func (rs *ReqTokenState) AppendResponseText(text string) {
+func (rs *RequestTokenState) AppendResponseText(text string) {
 	rs.mx.Lock()
 	defer rs.mx.Unlock()
 	rs.ResponseText += text
 }
 
-func (rs *ReqTokenState) GetNumTokens() uint64 {
+func (rs *RequestTokenState) GetNumTokens() uint64 {
 	rs.mx.Lock()
 	defer rs.mx.Unlock()
 	count := rs.numTokens
