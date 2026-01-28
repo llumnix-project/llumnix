@@ -18,6 +18,7 @@ import (
 	"llumnix/pkg/llm-gateway/consts"
 	balancer "llumnix/pkg/llm-gateway/load-balancer"
 	"llumnix/pkg/llm-gateway/logging"
+	"llumnix/pkg/llm-gateway/lrs"
 	"llumnix/pkg/llm-gateway/metrics"
 	"llumnix/pkg/llm-gateway/resolver"
 	"llumnix/pkg/llm-gateway/service/handler"
@@ -25,6 +26,7 @@ import (
 	"llumnix/pkg/llm-gateway/service/queue"
 	"llumnix/pkg/llm-gateway/service/router"
 	"llumnix/pkg/llm-gateway/types"
+	"llumnix/pkg/llm-gateway/utils"
 )
 
 // LlmGatewayService is the main service for LLM gateway that handles all inference requests
@@ -43,6 +45,9 @@ type LlmGatewayService struct {
 	router *router.ServiceRouter
 	// Batch service for handling batch inference tasks
 	batchService *batch.BatchService
+
+	// Real-time request state tracking, periodically reported to llm scheduler
+	requestStateTracker *lrs.RequestStateTracker
 
 	// Traffic mirror component
 	mirror *mirror.Mirror
@@ -68,6 +73,10 @@ func NewGatewayService(c *options.Config) *LlmGatewayService {
 		config:          c,
 		logInputEnabled: c.EnableLogInput,
 		simpleClient:    &http.Client{Timeout: 30 * time.Second},
+	}
+
+	if c.EnableRequestStateTracking() {
+		lgs.requestStateTracker = lrs.NewRequestStateTracker(c)
 	}
 
 	// Create request buffer queue for traffic control and request scheduling
@@ -306,54 +315,6 @@ func (lgs *LlmGatewayService) scheduleMode() types.ScheduleMode {
 	}
 }
 
-// balancerLifecycleHandler implements the RequestLifecycleHandler interface using a balancer
-type balancerLifecycleHandler struct {
-	balancer balancer.Balancer
-}
-
-// ScheduleDecode schedules the request for decoding using the balancer
-func (h *balancerLifecycleHandler) ScheduleDecode(req *types.RequestContext) (types.ScheduledResult, error) {
-	if req.ScheduleCtx.ScheduleMode != types.ScheduleModePDStaged {
-		klog.Warningf("request %s is not in staged schedule mode, decode does not need to be scheduled separately.", req.Id)
-		return nil, fmt.Errorf("not in staged schedule mode")
-	}
-	req.ScheduleCtx.InferStage = types.InferStageDecode
-	results, err := h.balancer.Get(req)
-	if err != nil {
-		return nil, err
-	}
-	schResult := req.ScheduleCtx.ScheduleResults
-	klog.V(3).Infof("decode request [%s] scheduled to %s", req.Id, results.String())
-	req.ScheduleCtx.ScheduleResults = append(schResult, results...)
-	return results, nil
-}
-
-// OnPostPrefill is called after prefill stage completes
-// Mainly used for resource cleanup or state transition after the prefill phase is completed
-func (h *balancerLifecycleHandler) OnPostPrefill(req *types.RequestContext) {
-	klog.V(3).Infof("[%s] Post-prefill lifecycle hook triggered", req.Id)
-	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
-	if pWorker != nil {
-		h.balancer.Release(req, pWorker)
-	}
-	req.ScheduleCtx.InferStage = types.InferStageDecode
-}
-
-// OnPostRequest is called after the entire request completes
-func (h *balancerLifecycleHandler) OnPostRequest(req *types.RequestContext) {
-	klog.V(3).Infof("[%s] Post-request lifecycle hook triggered", req.Id)
-	// For non-PD mode, resources also need to be released at the end of the request.
-	nWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleNormal)
-	if nWorker != nil {
-		h.balancer.Release(req, nWorker)
-	}
-	// For PD separated mode, only decode resources need to be released
-	dWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode)
-	if dWorker != nil {
-		h.balancer.Release(req, dWorker)
-	}
-}
-
 // HandleOpenAIRequest is the main entry point for handling LLM inference requests
 // It handles request parsing, queue scheduling, response processing, and logging
 // Parameters:
@@ -370,7 +331,8 @@ func (lgs *LlmGatewayService) HandleOpenAIRequest(w http.ResponseWriter, r *http
 	scheduleMode := lgs.scheduleMode()
 	reqCtx.ScheduleCtx.ScheduleMode = scheduleMode
 	reqCtx.ScheduleCtx.InferStage = types.InferStagePrefill
-	reqCtx.SetLifecycleHandler(&balancerLifecycleHandler{balancer: lgs.balancer})
+	reqCtx.SetPDSeparateScheduleHooks(&PDSeparateScheduleHooks{balancer: lgs.balancer})
+	reqCtx.SetRequestStateManagementHooks(&RequestStateManagementHooks{gateway: lgs, balancer: lgs.balancer})
 
 	// Parse and validate OpenAI format request parameters
 	if err := lgs.reqHandler.ParseRequest(reqCtx); err != nil {
@@ -547,4 +509,84 @@ func (lgs *LlmGatewayService) LogRequestAccess(req *types.RequestContext) {
 		workSize,
 		stats.RetryCount,
 		req.LLMRequest.Model)
+}
+
+type PDSeparateScheduleHooks struct {
+	balancer balancer.Balancer
+}
+
+func (h *PDSeparateScheduleHooks) ScheduleDecode(req *types.RequestContext) (types.ScheduledResult, error) {
+	if req.ScheduleCtx.ScheduleMode != types.ScheduleModePDStaged {
+		klog.Warningf("request %s is not in staged schedule mode, decode does not need to be scheduled separately.", req.Id)
+		return nil, fmt.Errorf("not in staged schedule mode")
+	}
+	req.ScheduleCtx.InferStage = types.InferStageDecode
+	results, err := h.balancer.Get(req)
+	if err != nil {
+		return nil, err
+	}
+	schResult := req.ScheduleCtx.ScheduleResults
+	klog.V(3).Infof("decode request [%s] scheduled to %s", req.Id, results.String())
+	req.ScheduleCtx.ScheduleResults = append(schResult, results...)
+	return results, nil
+}
+
+type RequestStateManagementHooks struct {
+	balancer balancer.Balancer
+	gateway  *LlmGatewayService
+}
+
+func (h *RequestStateManagementHooks) OnPostPrefill(req *types.RequestContext) {
+	klog.V(3).Infof("[%s] Post-prefill hook triggered", req.Id)
+	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
+	if pWorker != nil {
+		h.balancer.Release(req, pWorker)
+	}
+	req.ScheduleCtx.InferStage = types.InferStageDecode
+}
+
+func (h *RequestStateManagementHooks) OnPostRequest(req *types.RequestContext) {
+	klog.V(3).Infof("[%s] Post-request hook triggered", req.Id)
+	nWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleNormal)
+	if nWorker != nil {
+		h.balancer.Release(req, nWorker)
+	}
+	dWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode)
+	if dWorker != nil {
+		h.balancer.Release(req, dWorker)
+	}
+}
+
+func (h *RequestStateManagementHooks) OnPostDecodeFirstStreamResponse(req *types.RequestContext) {
+	klog.V(3).Infof("[%s] Post-decode-first-stream-response hook triggered", req.Id)
+
+	if h.gateway.config.EnableRequestStateTracking() && req.LLMRequest.ClientStream {
+		var inferMode string
+		var instanceID string
+		if worker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode); worker != nil {
+			inferMode = consts.DecodeInferMode
+			instanceID = worker.Id()
+		} else if worker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleNormal); worker != nil {
+			inferMode = consts.NormalInferMode
+			instanceID = worker.Id()
+		}
+		reqTokenState := lrs.NewRequestTokenState(req, req.LLMRequest.Model, inferMode, instanceID, req.ScheduleCtx.GatewayId)
+		h.gateway.requestStateTracker.AddRequestState(reqTokenState)
+		req.RequestTokenState = reqTokenState
+		defer h.gateway.requestStateTracker.DeleteRequestState(req.Id)
+	}
+}
+
+func (h *RequestStateManagementHooks) OnPostDecodeEachStreamResponse(req *types.RequestContext) {
+	klog.V(3).Infof("[%s] Post-decode-each-stream-response hook triggered", req.Id)
+
+	if h.gateway.config.EnableRequestStateTracking() && req.LLMRequest.ClientStream {
+		usage := utils.GetResponseUsage(req)
+		if usage != nil {
+			req.RequestTokenState.UpdateNumTokens(usage.TotalTokens)
+		} else {
+			text := utils.GetResponseText(req)
+			req.RequestTokenState.AppendResponseText(text)
+		}
+	}
 }

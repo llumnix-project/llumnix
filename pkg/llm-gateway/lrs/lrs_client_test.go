@@ -99,8 +99,8 @@ func TestLocalRealtimeStateClientConcurrency(t *testing.T) {
 
 			instanceState := scsClient.GetInstanceView(tc.inferMode, instance.Id())
 			assert.NotNil(t, instanceState)
-			assert.Equal(t, 0, instanceState.NumRequests())
-			assert.Equal(t, 0, instanceState.NumTokens())
+			assert.Equal(t, int64(0), instanceState.NumRequests())
+			assert.Equal(t, int64(0), instanceState.NumTokens())
 		})
 	}
 }

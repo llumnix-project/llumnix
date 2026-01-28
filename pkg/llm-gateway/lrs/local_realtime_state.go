@@ -212,6 +212,7 @@ func (lrs *LocalRealtimeState) removeInstance(instanceId string) {
 			for _, requestSet := range lrs.gatewayRequestSet {
 				delete(requestSet, reqId)
 			}
+			delete(lrs.requestStates, reqId)
 			klog.V(4).Infof("delete request %s of instance %s", reqId, instanceId)
 		}
 		instanceViews.ClearStates()

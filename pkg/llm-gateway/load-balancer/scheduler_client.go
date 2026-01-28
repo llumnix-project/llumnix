@@ -66,8 +66,7 @@ func (cb *SchedulerClient) createScheduleRequest(req *types.RequestContext) *typ
 	}
 
 	if tokenIds, ok := req.LLMRequest.GetPromptTokens(); ok {
-		if cb.config.LlumnixConfig.EnableFullModeScheduling &&
-			(cb.config.LlumnixConfig.EnableCacheAwareScheduling || cb.config.LlumnixConfig.EnableInstanceStatusLocalAccount) {
+		if cb.config.ScheduleNeedTokens() {
 			schRequest.PromptTokenIds = tokenIds
 		} else {
 			schRequest.PromptNumTokens = len(tokenIds)

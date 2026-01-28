@@ -261,25 +261,28 @@ func (ss *ScheduleService) handleRelease(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 }
 
-// func (ss *ScheduleService) handleRequestReport(w http.ResponseWriter, r *http.Request) {
-// 	body, err := io.ReadAll(r.Body)
-// 	if err != nil {
-// 		klog.Errorf("io read err: %v", err)
-// 		return
-// 	}
+func (ss *ScheduleService) handleReport(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		klog.Errorf("io read err: %v", err)
+		return
+	}
 
-// 	var reqDatas realtime_stats.ReqReportDataArray
-// 	if err := json.Unmarshal(body, &reqDatas); err != nil {
-// 		klog.Warningf("invalid return token: %s", body)
-// 		http.Error(w, "invalid return token", http.StatusBadRequest)
-// 		return
-// 	}
+	var reqDatas lrs.RequestReportDataArray
+	if err := json.Unmarshal(body, &reqDatas); err != nil {
+		klog.Warningf("invalid return token: %s", body)
+		http.Error(w, "invalid return token", http.StatusBadRequest)
+		return
+	}
 
-// 	for _, reqData := range reqDatas {
-// 		resourceReq := realtime_stats.NewResourceRequest(reqData.Id, int64(reqData.TotalTokens), string(reqData.WorkerId), string(reqData.BorrowerId))
-// 		ss.realtimeStats.UpdateResourceRequest(reqData.InferMode, resourceReq)
-// 	}
-// }
+	for _, reqData := range reqDatas {
+		resourceReq := lrs.NewRequestState(reqData.Id, int64(reqData.NumTokens), reqData.InstanceId, reqData.GatewayId)
+		err := ss.lrsClient.UpdateRequestState(reqData.InferMode, resourceReq)
+		if err != nil {
+			klog.Errorf("update request state failed: %v", err)
+		}
+	}
+}
 
 func (ss *ScheduleService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
@@ -289,8 +292,8 @@ func (ss *ScheduleService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ss.handleRelease(w, r)
 	case "/keepalive":
 		ss.handleKeepalive(w, r)
-	// case "/request_report":
-	// 	ss.handleRequestReport(w, r)
+	case "/report":
+		ss.handleReport(w, r)
 	case "/healthz":
 		w.WriteHeader(http.StatusOK)
 	default:

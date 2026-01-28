@@ -70,7 +70,7 @@ migration-tests: gateway-build
 .PHONY: e2e-tests
 e2e-tests: discovery-proto-build gateway-build simple-tests migration-tests
 
-TEST_DIRS := $(shell go list ./pkg/llm-gateway/... | grep -v "/lrs" | grep -v "/kvs")
+TEST_DIRS := $(shell go list ./pkg/llm-gateway/... | grep -v "/kvs/v6d")
 
 .PHONY: llumnix-unit-test
 llumnix-unit-test: llm-gateway-proto-build

@@ -58,7 +58,6 @@ uint64_t* GetBlockHashesFromTokens_PrefixHash(int block_size, int64_t* tokens, s
 import "C"
 import (
 	"encoding/binary"
-	"fmt"
 	"unsafe"
 
 	"github.com/cespare/xxhash/v2"
@@ -109,7 +108,7 @@ func GoHashV6d(tokens []int64, chunkSize int, saveUnfullChunk bool) ([]uint64, e
 // CHashV6d wraps the C implementation
 func CHashV6d(tokens []int64, chunkSize int) ([]uint64, error) {
 	if len(tokens) == 0 || chunkSize <= 0 {
-		return []uint64{}, fmt.Errorf("invalid hash input")
+		return []uint64{}, nil
 	}
 
 	var outSize C.size_t

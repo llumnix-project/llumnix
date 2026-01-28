@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"llumnix/cmd/llm-gateway/app/options"
-	"llumnix/pkg/llm-gateway/processor"
-	"llumnix/pkg/llm-gateway/protocol"
-	"llumnix/pkg/llm-gateway/types"
 	"net/http"
 	"time"
 
 	"k8s.io/klog/v2"
+
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/processor"
+	"llumnix/pkg/llm-gateway/protocol"
+	"llumnix/pkg/llm-gateway/types"
 )
 
 // init registers the OpenAI handler factory function with the handler registry.
@@ -135,7 +136,7 @@ func (h *OpenAIHandler) UnmarshalRequest(reqCtx *types.RequestContext) error {
 // ParseRequest performs LLM request prompt schema validation and unmarshals the request body.
 // It first unmarshals the request, then runs it through the pre-processor chain for transformation.
 // The preprocessing duration is recorded in request statistics.
-// Returns an error if unmarshaling or preprocessing fails.
+// Returns an error if unmarshalling or preprocessing fails.
 func (h *OpenAIHandler) ParseRequest(reqCtx *types.RequestContext) error {
 	// Unmarshal and validate the request
 	err := h.UnmarshalRequest(reqCtx)
@@ -216,7 +217,7 @@ func (h *OpenAIHandler) marshalResponse(reqCtx *types.RequestContext) ([]byte, e
 		reqCtx.LLMRequest.CompletionResponse = nil
 		return data, err
 	default:
-		return nil, fmt.Errorf("Unsupported protocol: %s", reqCtx.LLMRequest.Protocol)
+		return nil, fmt.Errorf("unsupported protocol: %s", reqCtx.LLMRequest.Protocol)
 	}
 }
 
@@ -240,6 +241,7 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 
 	// Initialize timing metrics for TTFT (Time To First Token) and ITL (Inter-Token Latency)
 	isFirst := true
+	isFirstDecode := true
 	var lastTime time.Time
 
 	// Process each chunk from the streaming inference
@@ -252,7 +254,7 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 			lastTime = time.Now()
 			req.RequestStats.FirstTime = lastTime
 
-			// Trigger post-prefill hooks to release prefill node resource if PD mode
+			// Trigger post-prefill hook to release prefill node resource if PD mode
 			req.TriggerPostPrefill()
 
 			isFirst = false
@@ -260,6 +262,12 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 			// Record Inter-Token Latency (ITL)
 			req.RequestStats.ITLs = append(req.RequestStats.ITLs, time.Since(lastTime).Milliseconds())
 			lastTime = time.Now()
+
+			// Trigger post-decode-first-stream-response hook to add request state of decode instance
+			if isFirstDecode {
+				req.TriggerPostDecodeFirstStreamResponse()
+			}
+			isFirstDecode = false
 		}
 
 		// Handle stream errors and end-of-stream conditions
@@ -296,8 +304,13 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 			return
 		}
 
+		// Trigger post-decode-each-stream-response hook to update request state of decode instance
+		if len(req.RequestStats.ITLs) > 0 {
+			req.TriggerPostDecodeEachStreamResponse()
+		}
+
 		// Determine if this is the final chunk in the stream
-		isStreamEnd := (err == io.EOF)
+		isStreamEnd := err == io.EOF
 
 		// Process through post-processor chain and write to client
 		if err := h.processAndWriteChunk(req, isStreamEnd); err != nil {

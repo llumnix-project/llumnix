@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"llumnix/pkg/llm-gateway/metrics"
-	reasoning_parser "llumnix/pkg/llm-gateway/processor/reasoning-parser"
-	"llumnix/pkg/llm-gateway/protocol"
-
 	"github.com/google/uuid"
 	"github.com/sglang/sglang-go-grpc-sdk"
 	"k8s.io/klog/v2"
+
+	"llumnix/pkg/llm-gateway/metrics"
+	reasoning_parser "llumnix/pkg/llm-gateway/processor/reasoning-parser"
+	"llumnix/pkg/llm-gateway/protocol"
 )
 
 type RequestStats struct {
@@ -184,21 +184,6 @@ func (req *LLMRequest) Stream() bool {
 	}
 }
 
-// RequestLifecycleHandler handles lifecycle events for a request.
-// It provides unified interface for scheduling and resource management across different stages.
-type RequestLifecycleHandler interface {
-	// ScheduleDecode schedules the request for decoding stage.
-	ScheduleDecode(req *RequestContext) (ScheduledResult, error)
-
-	// OnPostPrefill is called after prefill stage completes.
-	// Used for resource cleanup or state transition.
-	OnPostPrefill(req *RequestContext)
-
-	// OnPostRequest is called after the entire request completes.
-	// Used for final resource cleanup.
-	OnPostRequest(req *RequestContext)
-}
-
 type ScheduleContext struct {
 	// forward target worker
 	ScheduleResults ScheduledResult
@@ -233,6 +218,12 @@ type ResponseMsg struct {
 	Message []byte
 }
 
+type RequestTokenState interface {
+	UpdateNumTokens(num uint64)
+	AppendResponseText(text string)
+	GetNumTokens() uint64
+}
+
 type RequestContext struct {
 	// request context
 	Context context.Context
@@ -247,40 +238,88 @@ type RequestContext struct {
 	// request statistics
 	RequestStats *RequestStats
 
+	// request token state
+	RequestTokenState RequestTokenState
+
 	// output stream channel
 	ResponseChan chan *ResponseMsg
 
 	// Some information forwarded to a specific inference backend
 	ScheduleCtx *ScheduleContext
 
-	// Lifecycle handler for scheduling and resource management
-	lifecycleHandler RequestLifecycleHandler
+	// hooks for pd separate schedule
+	pdSeparateScheduleHooks PDSeparateScheduleHooks
+
+	// hooks for realtime state management
+	requestStateManagementHooks RequestStateManagementHooks
 }
 
-// SetLifecycleHandler sets the lifecycle handler for the request.
-func (req *RequestContext) SetLifecycleHandler(handler RequestLifecycleHandler) {
-	req.lifecycleHandler = handler
+// PDSeparateScheduleHooks implements the hooks for pd separate schedule
+type PDSeparateScheduleHooks interface {
+	// ScheduleDecode schedules the request for decoding using the balancer
+	ScheduleDecode(req *RequestContext) (ScheduledResult, error)
+}
+
+// RequestStateManagementHooks implements the hooks for request state management
+type RequestStateManagementHooks interface {
+	// OnPostPrefill is called after prefill stage completes.
+	// Used for scheduler prefill instance request state cleanup.
+	OnPostPrefill(req *RequestContext)
+
+	// OnPostRequest is called after the entire request completes.
+	// Used for scheduler normal/decode instance request state cleanup.
+	OnPostRequest(req *RequestContext)
+
+	// OnPostDecodeFirstStreamResponse is called after first decode stream response.
+	// Used for decode request realtime token state creation.
+	OnPostDecodeFirstStreamResponse(req *RequestContext)
+
+	// OnPostDecodeEachStreamResponse is called after each decode stream response.
+	// Used for decode request realtime token state update.
+	OnPostDecodeEachStreamResponse(req *RequestContext)
+}
+
+func (req *RequestContext) SetPDSeparateScheduleHooks(hooks PDSeparateScheduleHooks) {
+	req.pdSeparateScheduleHooks = hooks
+}
+
+func (req *RequestContext) SetRequestStateManagementHooks(hooks RequestStateManagementHooks) {
+	req.requestStateManagementHooks = hooks
 }
 
 // ScheduleDecode schedules the request for decoding stage.
 func (req *RequestContext) ScheduleDecode() (ScheduledResult, error) {
-	if req.lifecycleHandler != nil {
-		return req.lifecycleHandler.ScheduleDecode(req)
+	if req.pdSeparateScheduleHooks != nil {
+		return req.pdSeparateScheduleHooks.ScheduleDecode(req)
 	}
 	return nil, nil
 }
 
-// TriggerPostPrefill triggers the post-prefill lifecycle hook.
+// TriggerPostPrefill triggers the post-prefill hook.
 func (req *RequestContext) TriggerPostPrefill() {
-	if req.lifecycleHandler != nil {
-		req.lifecycleHandler.OnPostPrefill(req)
+	if req.requestStateManagementHooks != nil {
+		req.requestStateManagementHooks.OnPostPrefill(req)
 	}
 }
 
-// TriggerPostRequest triggers the post-request lifecycle hook.
+// TriggerPostRequest triggers the post-request hook.
 func (req *RequestContext) TriggerPostRequest() {
-	if req.lifecycleHandler != nil {
-		req.lifecycleHandler.OnPostRequest(req)
+	if req.requestStateManagementHooks != nil {
+		req.requestStateManagementHooks.OnPostRequest(req)
+	}
+}
+
+// TriggerPostDecodeFirstStreamResponse triggers the post-decode-first-stream-response hook.
+func (req *RequestContext) TriggerPostDecodeFirstStreamResponse() {
+	if req.requestStateManagementHooks != nil {
+		req.requestStateManagementHooks.OnPostDecodeFirstStreamResponse(req)
+	}
+}
+
+// TriggerPostDecodeEachStreamResponse triggers the post-decode-each-stream-response hook.
+func (req *RequestContext) TriggerPostDecodeEachStreamResponse() {
+	if req.requestStateManagementHooks != nil {
+		req.requestStateManagementHooks.OnPostDecodeEachStreamResponse(req)
 	}
 }
 
@@ -299,7 +338,7 @@ func NewRequestContext(ctx context.Context, r *http.Request, w http.ResponseWrit
 
 	httpReq := &HttpRequest{Request: r, Writer: w}
 	llmRequest := &LLMRequest{}
-	inferCtx := &ScheduleContext{}
+	scheduleCtx := &ScheduleContext{}
 
 	// create a request context for the new request
 	req := &RequestContext{
@@ -308,7 +347,7 @@ func NewRequestContext(ctx context.Context, r *http.Request, w http.ResponseWrit
 		HttpRequest:  httpReq,
 		LLMRequest:   llmRequest,
 		RequestStats: stats,
-		ScheduleCtx:  inferCtx,
+		ScheduleCtx:  scheduleCtx,
 	}
 	return req
 }

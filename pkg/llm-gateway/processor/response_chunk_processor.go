@@ -111,7 +111,7 @@ func (rp *ResponseChunkProcessor) ChatCompletionStreamProcess(req *types.Request
 		stats.OutputTokensLen += (reasoningTokensLen + capacity)
 	} else {
 		// if contentTokensLen < capacity, it means the content is not truncated, so we keep the finish reason from backend
-		stats.OutputTokensLen += (reasoningTokensLen + rawContentTokensLen)
+		stats.OutputTokensLen += reasoningTokensLen + rawContentTokensLen
 		if parseResult != nil && len(parseResult.ToolCalls) > 0 {
 			stats.HasToolCalls = true
 			toolCalls, _ := json.Marshal(parseResult.ToolCalls)
