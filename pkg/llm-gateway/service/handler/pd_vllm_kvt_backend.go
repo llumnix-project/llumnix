@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/types"
 	"encoding/json"
 	"fmt"
 	"io"
+	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/types"
 	"net/http"
 
 	"k8s.io/klog/v2"

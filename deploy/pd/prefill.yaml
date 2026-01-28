@@ -20,21 +20,12 @@ spec:
           - name: aliyun-registry-secret
         terminationGracePeriodSeconds: 30
         volumes:
-#          - name: dshm
-#            emptyDir:
-#              medium: Memory
-#              sizeLimit: 2Gi # roughly 32MB per local DP plus scratch space
-#          - name: hf-cache
-#            emptyDir: {}
-#          - name: jit-cache
-#            emptyDir: {}
           - name: model-storage
             persistentVolumeClaim:
               claimName: nas-llumnix
-              # claimName: oss-llm-cache
         containers:
         - name: vllm
-          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260115-160850
+          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260127-164441
           securityContext:
             capabilities:
               add:
@@ -47,16 +38,6 @@ spec:
           command:
             - /bin/bash
             - -c
-          # sample
-          # args:
-          #   - |
-          #     exec vllm serve \
-          #       /models/Qwen2___5-0___5B-Instruct \
-          #       --port 8000 \
-          #       --trust-remote-code \
-          #       --host 0.0.0.0 \
-          #       --kv-transfer-config '{"kv_connector":"MooncakeConnector","kv_role":"kv_both", "kv_connector_module_path":"mooncake.mooncake_connector_v1"}'
-
           args:
             - |-
              # Clear /dev/shm on start to prevent running out of space when crashes occur
@@ -90,11 +71,6 @@ spec:
                 --gpu-memory-utilization 0.8
 
           env:
-          # enable cpu infer
-#          - name: VLLM_CPU_KVCACHE_SPACE
-#            value: "8"
-#          - name: VLLM_CPU_NUM_OF_RESERVED_CPU
-#            value: "1"
           # Redis configuration for Llumnix
           - name: LLUMNIX_CMS_REDIS_ADDRESS
             value: "redis"
@@ -191,39 +167,33 @@ spec:
               memory: 512Gi
               nvidia.com/gpu: "4"
           volumeMounts:
-#            - name: dshm
-#              mountPath: /dev/shm
-#            - name: hf-cache
-#              mountPath: /var/cache/huggingface
-#            - name: jit-cache
-#              mountPath: /var/cache/vllm
             - name: model-storage
               mountPath: /models
               readOnly: true
-        # - name: runtime
-        #   image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260115-160850
-        #   command:
-        #     - /bin/bash
-        #     - -c
-        #   args:
-        #     - |-
-        #       cd /app && \
-        #       exec python3 -m runtime.discovery \
-        #       --role normal \
-        #       --dp_size_local 4 \
-        #       --entrypoint_port 8000 \
-        #       --kv_transfer_port 28000 \
-        #       --pod_name $(POD_NAME) \
-        #       --pod_ip $(POD_IP) \
-        #       --redis_address redis \
-        #       --redis_port 6379 \
-        #       --redis_username default
-        #   env:
-        #     - name: POD_NAME
-        #       valueFrom:
-        #         fieldRef:
-        #           fieldPath: metadata.name
-        #     - name: POD_IP
-        #       valueFrom:
-        #         fieldRef:
-        #           fieldPath: status.podIP
+        - name: runtime
+          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260127-164441
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - |-
+              cd /app && \
+              exec python3 -m runtime.discovery \
+              --role prefill \
+              --pod_name $(POD_NAME) \
+              --entrypoint_ip $(POD_IP) \
+              --entrypoint_port 8000 \
+              --kv_transfer_ip $(POD_IP) \
+              --kv_transfer_port 28000 \
+              --dp_size_local 4 \
+              --redis_address redis \
+              --redis_port 6379
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP

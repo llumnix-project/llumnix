@@ -11,11 +11,11 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
-	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/metrics"
-	"easgo/pkg/llm-gateway/predictor"
-	"easgo/pkg/llm-gateway/types"
-	"easgo/pkg/llm-gateway/utils"
+	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/metrics"
+	"llumnix/pkg/llm-gateway/predictor"
+	"llumnix/pkg/llm-gateway/types"
+	"llumnix/pkg/llm-gateway/utils"
 )
 
 const (

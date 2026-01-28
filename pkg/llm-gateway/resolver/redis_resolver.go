@@ -2,9 +2,9 @@ package resolver
 
 import (
 	"context"
-	"easgo/pkg/llm-gateway/cms"
-	"easgo/pkg/llm-gateway/types"
 	"fmt"
+	"llumnix/pkg/llm-gateway/cms"
+	"llumnix/pkg/llm-gateway/types"
 	"runtime/debug"
 	"strings"
 	"sync"

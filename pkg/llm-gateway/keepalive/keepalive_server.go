@@ -1,8 +1,8 @@
 package keepalive
 
 import (
-	"easgo/pkg/llm-gateway/types"
 	"encoding/json"
+	"llumnix/pkg/llm-gateway/types"
 	"sync/atomic"
 	"time"
 

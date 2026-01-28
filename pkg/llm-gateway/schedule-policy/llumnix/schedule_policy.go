@@ -6,14 +6,14 @@ import (
 	"golang.org/x/exp/maps"
 	"k8s.io/klog/v2"
 
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/cms"
-	"easgo/pkg/llm-gateway/consts"
-	kvs "easgo/pkg/llm-gateway/kvs"
-	"easgo/pkg/llm-gateway/lrs"
-	"easgo/pkg/llm-gateway/metrics"
-	"easgo/pkg/llm-gateway/types"
-	"easgo/pkg/llm-gateway/utils"
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/cms"
+	"llumnix/pkg/llm-gateway/consts"
+	kvs "llumnix/pkg/llm-gateway/kvs"
+	"llumnix/pkg/llm-gateway/lrs"
+	"llumnix/pkg/llm-gateway/metrics"
+	"llumnix/pkg/llm-gateway/types"
+	"llumnix/pkg/llm-gateway/utils"
 )
 
 type InstanceViewInterface interface {

@@ -20,50 +20,12 @@ spec:
           - name: aliyun-registry-secret
         terminationGracePeriodSeconds: 30
         volumes:
-#          - name: dshm
-#            emptyDir:
-#              medium: Memory
-#              sizeLimit: 2Gi
-#          - name: hf-cache
-#            emptyDir: {}
-#          - name: jit-cache
-#            emptyDir: {}
           - name: model-storage
             persistentVolumeClaim:
               claimName: nas-llumnix
-              # claimName: oss-llm-cache
-#        initContainers:
-#          - name: routing-proxy
-#            args:
-#              - --port=8000
-#              - --vllm-port=8200
-#              - --connector=nixlv2
-#              - --zap-log-level=1
-#              - --secure-proxy=false
-#              - --enable-prefiller-sampling
-#            image: registry-cn-hangzhou.ack.aliyuncs.com/dev/llm-d-routing-sidecar:v0.4.0-rc.1
-#            imagePullPolicy: IfNotPresent
-#            ports:
-#              - containerPort: 8000
-#                name: sidecar
-#                protocol: TCP
-#            resources: {}
-#            restartPolicy: Always
-#            securityContext:
-#              allowPrivilegeEscalation: false
-#              runAsNonRoot: true
-#        volumes:
-#          - name: dshm
-#            emptyDir:
-#              medium: Memory
-#              sizeLimit: 2Gi # roughly 32MB per local DP plus scratch space
-#          - name: hf-cache
-#            emptyDir: {}
-#          - name: jit-cache
-#            emptyDir: {}
         containers:
         - name: vllm
-          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260115-160850
+          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260127-164441
           securityContext:
             capabilities:
               add:
@@ -72,21 +34,11 @@ spec:
             runAsGroup: 0
             runAsUser: 0
           imagePullPolicy: Always
-          # imagePullPolicy: IfNotPresent
           command:
             - /bin/bash
             - -c
-          # sample
-          # args:
-          #  - |
-          #    exec vllm serve \
-          #      /models/Qwen2___5-0___5B-Instruct \
-          #      --port 8000 \
-          #      --trust-remote-code \
-          #      --host 0.0.0.0 \
-          #      --kv-transfer-config '{"kv_connector":"MooncakeConnector","kv_role":"kv_both", "kv_connector_module_path":"mooncake.mooncake_connector_v1"}'
 
-          # deepseek-r1-0528 pd+ep
+          # deepseek-r1 pd+ep
           args:
             - |-
               # Clear /dev/shm on start to prevent running out of space when crashes occur
@@ -121,11 +73,6 @@ spec:
                 --gpu-memory-utilization 0.7 \
                 --kv-transfer-config '{"kv_connector":"MooncakeConnector","kv_role":"kv_consumer", "kv_connector_module_path":"mooncake.mooncake_connector_v1"}' \
                 --compilation_config '{"level":"0", "cudagraph_mode":2}'
-                # --enable-eplb \
-                # --eplb-config '{"window_size":"1000",
-                #                 "step_interval":"3000",
-                #                 "num_redundant_experts":"32",
-                #                 "log_balancedness":"False"}' \
           env:
           # configuration for Llumnix
           - name: LLUMNIX_CMS_REDIS_ADDRESS
@@ -236,45 +183,33 @@ spec:
               memory: 256Gi
               nvidia.com/gpu: "4"
           volumeMounts:
-#            - name: dshm
-#              mountPath: /dev/shm
-#            - name: hf-cache
-#              mountPath: /var/cache/huggingface
-#            - name: jit-cache
-#              mountPath: /var/cache/vllm
-            # nas model
-            # - name: model-storage
-            #   mountPath: /models
-            #   readOnly: true
-            # oss model
             - name: model-storage
               mountPath: /models
               readOnly: true
-        # - name: runtime
-        #   image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260115-160850
-        #   command:
-        #     - /bin/bash
-        #     - -c
-        #   args:
-        #     - |-
-        #       cd /app && \
-        #       exec python3 -m runtime.discovery \
-        #       --role normal \
-        #       --dp_size_local 4 \
-        #       --entrypoint_port 8000 \
-        #       --kv_transfer_port 28000 \
-        #       --pod_name $(POD_NAME) \
-        #       --pod_ip $(POD_IP) \
-        #       --redis_address redis \
-        #       --redis_port 6379 \
-        #       --redis_username default
-        #   env:
-        #     - name: POD_NAME
-        #       valueFrom:
-        #         fieldRef:
-        #           fieldPath: metadata.name
-        #     - name: POD_IP
-        #       valueFrom:
-        #         fieldRef:
-        #           fieldPath: status.podIP
-  
+        - name: runtime
+          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260127-164441
+          command:
+            - /bin/bash
+            - -c
+          args:
+            - |-
+              cd /app && \
+              exec python3 -m runtime.discovery \
+              --role decode \
+              --pod_name $(POD_NAME) \
+              --entrypoint_ip $(POD_IP) \
+              --entrypoint_port 8000 \
+              --kv_transfer_ip $(POD_IP) \
+              --kv_transfer_port 28000 \
+              --dp_size_local 4 \
+              --redis_address redis \
+              --redis_port 6379
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP

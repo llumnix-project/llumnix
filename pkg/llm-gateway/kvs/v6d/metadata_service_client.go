@@ -14,7 +14,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"k8s.io/klog/v2"
 
-	redis2 "easgo/pkg/llm-gateway/redis"
+	redis2 "llumnix/pkg/llm-gateway/redis"
 )
 
 // Only safeBatchZReadRange is actually used, other methods are only used in test.

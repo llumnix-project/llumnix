@@ -49,6 +49,7 @@ llm-gateway-build: llm-gateway-proto-build
 .PHONY: llumlet-install
 llumlet-install:
 	cd ./python/llumnix && make vllm_install && make proto
+	cp ./python/llumnix/patches/vllm/mooncake/mooncake_connector_v1.py /usr/local/lib/python3.12/dist-packages/mooncake/mooncake_connector_v1.py
 
 .PHONY: runtime-proto-build
 runtime-proto-build:

@@ -1,9 +1,9 @@
 package llumnix
 
 import (
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/consts"
 	"fmt"
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/consts"
 
 	"k8s.io/klog/v2"
 )

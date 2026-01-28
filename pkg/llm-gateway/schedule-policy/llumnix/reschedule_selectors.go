@@ -1,8 +1,8 @@
 package llumnix
 
 import (
-	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/util/maps"
+	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/util/maps"
 	"math"
 	"sort"
 

@@ -10,11 +10,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/cms"
-	"easgo/pkg/llm-gateway/consts"
-	kvs "easgo/pkg/llm-gateway/kvs"
-	"easgo/pkg/llm-gateway/types"
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/cms"
+	"llumnix/pkg/llm-gateway/consts"
+	kvs "llumnix/pkg/llm-gateway/kvs"
+	"llumnix/pkg/llm-gateway/types"
 )
 
 type MockRedisClient struct {

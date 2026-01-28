@@ -1,7 +1,7 @@
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
-  name: decode
+  name: normal
   labels:
     llm-d.ai/inferenceServing: "true"
     llm-d.ai/role: decode
@@ -20,51 +20,12 @@ spec:
           - name: aliyun-registry-secret
         terminationGracePeriodSeconds: 30
         volumes:
-#          - name: dshm
-#            emptyDir:
-#              medium: Memory
-#              sizeLimit: 2Gi
-#          - name: hf-cache
-#            emptyDir: {}
-#          - name: jit-cache
-#            emptyDir: {}
           - name: model-storage
             persistentVolumeClaim:
               claimName: nas-llumnix
-              # claimName: oss-llm-cache
-#        initContainers:
-#          - name: routing-proxy
-#            args:
-#              - --port=8000
-#              - --vllm-port=8200
-#              - --connector=nixlv2
-#              - --zap-log-level=1
-#              - --secure-proxy=false
-#              - --enable-prefiller-sampling
-#            image: registry-cn-hangzhou.ack.aliyuncs.com/dev/llm-d-routing-sidecar:v0.4.0-rc.1
-#            imagePullPolicy: IfNotPresent
-#            ports:
-#              - containerPort: 8000
-#                name: sidecar
-#                protocol: TCP
-#            resources: {}
-#            restartPolicy: Always
-#            securityContext:
-#              allowPrivilegeEscalation: false
-#              runAsNonRoot: true
-#        volumes:
-#          - name: dshm
-#            emptyDir:
-#              medium: Memory
-#              sizeLimit: 2Gi # roughly 32MB per local DP plus scratch space
-#          - name: hf-cache
-#            emptyDir: {}
-#          - name: jit-cache
-#            emptyDir: {}
         containers:
         - name: vllm
-          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260115-234024
-          # image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260115-204658
+          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260127-164441
           securityContext:
             capabilities:
               add:
@@ -73,11 +34,10 @@ spec:
             runAsGroup: 0
             runAsUser: 0
           imagePullPolicy: Always
-          # imagePullPolicy: IfNotPresent
           command:
             - /bin/bash
             - -c
-          # deepseek-r1-0528 pd+ep
+          # deepseek-r1 pd+ep
           args:
             - |-
               # Clear /dev/shm on start to prevent running out of space when crashes occur
@@ -232,22 +192,11 @@ spec:
               memory: 256Gi
               nvidia.com/gpu: "4"
           volumeMounts:
-#            - name: dshm
-#              mountPath: /dev/shm
-#            - name: hf-cache
-#              mountPath: /var/cache/huggingface
-#            - name: jit-cache
-#              mountPath: /var/cache/vllm
-            # nas model
-            # - name: model-storage
-            #   mountPath: /models
-            #   readOnly: true
-            # oss model
             - name: model-storage
               mountPath: /models
               readOnly: true
         - name: runtime
-          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260115-234024
+          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260127-164441
           command:
             - /bin/bash
             - -c
@@ -256,11 +205,12 @@ spec:
               cd /app && \
               exec python3 -m runtime.discovery \
               --role normal \
-              --dp_size_local 4 \
-              --entrypoint_port 8000 \
-              --kv_transfer_port 28000 \
               --pod_name $(POD_NAME) \
-              --pod_ip $(POD_IP) \
+              --entrypoint_ip $(POD_IP) \
+              --entrypoint_port 8000 \
+              --kv_transfer_ip $(POD_IP) \
+              --kv_transfer_port 28000 \
+              --dp_size_local 4 \
               --redis_address redis \
               --redis_port 6379
           env:

@@ -2,8 +2,8 @@ package handler
 
 import (
 	"context"
-	"easgo/pkg/llm-gateway/consts"
 	"io"
+	"llumnix/pkg/llm-gateway/consts"
 	"time"
 
 	"github.com/tmaxmax/go-sse"

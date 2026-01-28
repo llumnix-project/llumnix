@@ -17,7 +17,7 @@ import (
 	"github.com/google/uuid"
 	"k8s.io/klog/v2"
 
-	"easgo/cmd/llm-gateway/app/options"
+	"llumnix/cmd/llm-gateway/app/options"
 )
 
 var (

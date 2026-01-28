@@ -6,8 +6,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
-	"easgo/pkg/llm-gateway/cms"
-	"easgo/pkg/llm-gateway/kvs"
+	"llumnix/pkg/llm-gateway/cms"
+	"llumnix/pkg/llm-gateway/kvs"
 )
 
 // calcInstancesPrefixCacheHitLen calculates the prefix hit length of prompt tokens in instance cache.

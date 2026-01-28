@@ -1,8 +1,8 @@
 package service
 
 import (
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/schedule-policy"
+	"llumnix/cmd/llm-gateway/app/options"
+	schedule_policy "llumnix/pkg/llm-gateway/schedule-policy"
 )
 
 type ReschedulerService struct {

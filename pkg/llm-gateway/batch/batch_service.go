@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/redis"
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/redis"
 
 	"github.com/gorilla/mux"
 	"k8s.io/klog/v2"
