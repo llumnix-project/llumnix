@@ -3,13 +3,13 @@ set -e
 
 IMAGE="beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-20260128-150632"
 
-echo "Building llm-gateway binary..."
+echo "Building wheel package..."
 
 docker run --rm \
   -v "$(pwd):/workspace" \
   -w /workspace \
   "$IMAGE" \
-  bash -c "go mod tidy && make gateway-build"
+  bash -c "cd ./python/discovery && rm -rf dist && pip install -r requirements.txt && python3 setup.py bdist_wheel"
 
 echo "✓ Build completed"
-echo "Generated llm-gateway binary package: $(ls -1 ./bin/llm-gateway*)"
+echo "Generated wheel package: $(ls -1 ./python/discovery/dist/*.whl)"

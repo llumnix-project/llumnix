@@ -1,60 +1,30 @@
-# How to build dev image and release image
+# Development Guide
 
-
-## build dev image
-
-python wheel and go binaries are built in the dev image.
+`beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-20260128-150632` is recommended for development. Then, you should run the following commands to set up the environment:
 
 ```bash
-bash scripts/build_vllm_dev_images.sh
+go mod tidy
+
+# install patched vllm
+make vllm-install
+
+# install llumlet package
+make llumlet-install
+
+# install discovery package
+make discovery-install
+
+# build lib-tokenizers
+make lib-tokenizers-build
 ```
 
-## build vllm release image
+Run `make gateway-build` to build the gateway binary. 
 
-```bash
-# build python/llumnix whl
-bash scripts/build_llumlet_whl.sh
+Please refer to [tests/local/utils.py](tests/local/utils.py) for the details of launching commands.
 
-# build vllm release image
-bash scripts/build_vllm_release.sh
-```
-
-## build tokenizers lib
-
-```bash
-bash scripts/build_tokenizers.sh
-```
-
-## build gateway binary
-
-```bash
-bash scripts/build_gw_bin.sh
-```
-
-## build gateway release image
-
-```bash
-bash scripts/build_gw_release.sh
-```
-
-# How to run test
-
-```bash
-
-CURRENT_DIR=$(pwd)
-cd ./python/llumnix && pip install -e .[vllm]
-
-cd $CURRENT_DIR
-bash scripts/build_tokenizers.sh
-make llm-gateway-build
-pytest -x -v -s ./tests/local/vllm_e2e.py # NOTE: check the output
-pytest -x -v -s ./tests/local/vllm_pd_e2e.py # NOTE: check the output
-
-```
+And `make e2e-tests` is used to run all tests.
 
 # How to deploy
-
-update the image name in normal.yaml,prefill.yaml,decode.yaml,gateway.yaml,scheduler.yaml
 
 ```bash
 cd deploy

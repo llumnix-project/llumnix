@@ -1,10 +1,10 @@
 FROM ubuntu:22.04
 
-RUN apt-get update && apt-get install -y ca-certificates git curl wget vim \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git curl wget \
     && rm -rf /var/lib/apt/lists/*
 
 COPY ./bin/* /usr/local/bin/
 
 COPY ./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release/*.a /usr/lib
 
-WORKDIR /app
+WORKDIR /gateway

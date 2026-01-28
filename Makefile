@@ -5,7 +5,7 @@ vllm-install:
 	git clone -b releases/v0.12.0 https://github.com/vllm-project/vllm.git /tmp/vllm
 	
 	@echo "==> Copying patch file..."
-	cp ./python/llumnix/patches/vllm/vllm_v0.12.0.patch /tmp/vllm_v0.12.0.patch
+	cp ./patches/vllm/vllm_v0.12.0.patch /tmp/vllm_v0.12.0.patch
 	
 	@echo "==> Building and installing vllm..."
 	cd /tmp/vllm && \
@@ -16,6 +16,11 @@ vllm-install:
 
 	rm -rf /tmp/vllm
 	rm -f /tmp/vllm_v0.12.0.patch
+
+.PHONY: llumlet-install
+llumlet-install:
+	cd ./python/llumnix && make vllm_install && make proto
+	cp ./patches/vllm/mooncake/mooncake_connector_v1.py /usr/local/lib/python3.12/dist-packages/mooncake/mooncake_connector_v1.py
 
 .PHONY: lib-tokenizers-build
 lib-tokenizers-build:
@@ -40,31 +45,30 @@ llm-gateway-proto-build:
     	./pkg/llm-gateway/resolver/proto/redis_discovery.proto
 	@echo "Compiling ./pkg/llm-gateway/resolver/proto/redis_discovery.proto"
 
-.PHONY: llm-gateway-build
-llm-gateway-build: llm-gateway-proto-build
+.PHONY: gateway-build
+gateway-build: llm-gateway-proto-build
 	@echo "Building llm-gateway..."
 	@CGO_ENABLED=1 go build -buildvcs=false -ldflags="-extldflags '-L./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release/'" -o bin/llm-gateway ./cmd/llm-gateway
 	@echo "Building llm-gateway, done"
 
-.PHONY: llumlet-install
-llumlet-install:
-	cd ./python/llumnix && make vllm_install && make proto
-	cp ./python/llumnix/patches/vllm/mooncake/mooncake_connector_v1.py /usr/local/lib/python3.12/dist-packages/mooncake/mooncake_connector_v1.py
+.PHONY: discovery-proto-build
+discovery-proto-build:
+	cd ./python/discovery && make proto
 
-.PHONY: runtime-proto-build
-runtime-proto-build:
-	cd ./python/runtime && make proto
+.PHONY: discovery-install
+discovery-install:
+	cd ./python/discovery && make install
 
 .PHONY: simple-tests
-simple-tests: runtime-proto-build llm-gateway-build
+simple-tests: discovery-proto-build gateway-build
 	pytest -x -v -s /mnt/eas/cuikuilong/llumnix/tests/local/vllm_e2e.py::test_simple_requests
 
 .PHONY: migration-tests
-migration-tests: llm-gateway-build
+migration-tests: gateway-build
 	pytest -x -v -s /mnt/eas/cuikuilong/llumnix/tests/local/vllm_e2e.py::test_migration
 
 .PHONY: e2e-tests
-e2e-tests: runtime-proto-build llm-gateway-build simple-tests migration-tests
+e2e-tests: discovery-proto-build gateway-build simple-tests migration-tests
 
 TEST_DIRS := $(shell go list ./pkg/llm-gateway/... | grep -v "/lrs" | grep -v "/kvs")
 

@@ -170,15 +170,15 @@ spec:
             - name: model-storage
               mountPath: /models
               readOnly: true
-        - name: runtime
-          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260127-164441
+        - name: discovery
+          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:discovery-20260128-154151
           command:
             - /bin/bash
             - -c
           args:
             - |-
-              cd /app && \
-              exec python3 -m runtime.discovery \
+              cd /discovery && \
+              exec python3 -m discovery.discovery \
               --role prefill \
               --pod_name $(POD_NAME) \
               --entrypoint_ip $(POD_IP) \

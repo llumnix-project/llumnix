@@ -7,3 +7,7 @@ proto:
 	        PYTHONWARNINGS="ignore::DeprecationWarning" python3 -m grpc_tools.protoc --proto_path=. --python_out=. --grpc_python_out=. --pyi_out=. $$proto_file; \
 	    done; \
 	done;
+
+.PHONY: install
+install:
+	@pip install -e . --no-build-isolation

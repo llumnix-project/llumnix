@@ -3,7 +3,7 @@ FROM ${BASE_IMAGE}
 
 WORKDIR /vllm-workspace
 
-RUN apt-get update && apt-get install -y git curl wget vim \
+RUN apt-get update && apt-get install -y git curl wget \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip3 config set global.index-url https://mirrors.aliyun.com/pypi/simple/
@@ -12,7 +12,7 @@ RUN pip3 config set global.index-url https://mirrors.aliyun.com/pypi/simple/
 RUN git clone -b releases/v0.12.0 https://github.com/vllm-project/vllm.git /tmp/vllm/
 
 # Copy and apply patch, then install vllm
-COPY ./python/llumnix/patches/vllm/vllm_v0.12.0.patch /tmp/
+COPY ./patches/vllm/vllm_v0.12.0.patch /tmp/
 RUN cd /tmp/vllm \
     && export VLLM_PRECOMPILED_WHEEL_COMMIT=$(git rev-parse HEAD) \
     && export VLLM_USE_PRECOMPILED=1 \
@@ -26,7 +26,4 @@ RUN cd /tmp/llumnix_whl \
     && WHL_FILE=$(ls llumnix-*.whl) \
     && pip install "${WHL_FILE}[vllm]" \
     && rm -rf /tmp/llumnix_whl
-COPY ./python/llumnix/patches/vllm/mooncake/mooncake_connector_v1.py /usr/local/lib/python3.12/dist-packages/mooncake/mooncake_connector_v1.py
-
-# Runtime
-COPY ./python/runtime /app/runtime
+COPY ./patches/vllm/mooncake/mooncake_connector_v1.py /usr/local/lib/python3.12/dist-packages/mooncake/mooncake_connector_v1.py

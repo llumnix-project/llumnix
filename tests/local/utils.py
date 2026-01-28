@@ -149,7 +149,7 @@ def get_runtime_command(
     dp_size_local: int = 1,
 ):
     command = (
-        f"python3 -m python.runtime.discovery "
+        f"python3 -m discovery.discovery "
         f"--role {role} "
         f"--pod_name {uuid.uuid4()} "
         f"--entrypoint_ip 0.0.0.0 "

@@ -6,3 +6,4 @@ resources:
   - decode.yaml
   - prefill.yaml
   - gateway.yaml
+  - scheduler.yaml

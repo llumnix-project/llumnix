@@ -1,0 +1,23 @@
+FROM python:3.12-slim-bookworm
+
+# Use Aliyun APT mirror
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources \
+    && sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+
+RUN apt-get update && apt-get install -y \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Use Aliyun PyPI mirror
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/
+
+# Install discovery whl
+COPY ./python/discovery/dist/ /tmp/discovery_whl/
+RUN cd /tmp/discovery_whl \
+    && WHL_FILE=$(ls discovery-*.whl) \
+    && pip install "${WHL_FILE}[vllm]" \
+    && rm -rf /tmp/discovery_whl
+
+# Set working directory
+WORKDIR /discovery
