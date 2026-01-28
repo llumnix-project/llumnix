@@ -12,11 +12,11 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/keepalive"
-	"easgo/pkg/llm-gateway/resolver"
-	"easgo/pkg/llm-gateway/types"
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/keepalive"
+	"llumnix/pkg/llm-gateway/resolver"
+	"llumnix/pkg/llm-gateway/types"
 )
 
 const (

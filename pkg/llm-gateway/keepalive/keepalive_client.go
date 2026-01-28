@@ -2,10 +2,10 @@ package keepalive
 
 import (
 	"context"
-	"easgo/pkg/llm-gateway/resolver"
-	"easgo/pkg/llm-gateway/types"
 	"encoding/json"
 	"fmt"
+	"llumnix/pkg/llm-gateway/resolver"
+	"llumnix/pkg/llm-gateway/types"
 	"net"
 	"net/http"
 	"sync/atomic"

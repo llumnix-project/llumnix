@@ -2,9 +2,9 @@ package balancer
 
 import (
 	"context"
-	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/resolver"
-	"easgo/pkg/llm-gateway/types"
+	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/resolver"
+	"llumnix/pkg/llm-gateway/types"
 	"sync"
 
 	"k8s.io/klog/v2"

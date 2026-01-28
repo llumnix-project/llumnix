@@ -1,9 +1,9 @@
 package llumnix
 
 import (
-	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/predictor"
 	"fmt"
+	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/predictor"
 	"math"
 	"time"
 

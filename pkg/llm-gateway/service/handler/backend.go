@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"easgo/pkg/llm-gateway/types"
 	"fmt"
+	"llumnix/pkg/llm-gateway/types"
 	"sync"
 )
 

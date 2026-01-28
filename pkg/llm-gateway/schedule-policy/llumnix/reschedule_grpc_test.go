@@ -2,11 +2,11 @@ package llumnix
 
 import (
 	"context"
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/cms"
-	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/llumlet"
 	"fmt"
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/cms"
+	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/llumlet"
 	"net"
 	"os"
 	"strconv"

@@ -2,8 +2,8 @@ package resolver
 
 import (
 	"context"
-	"easgo/pkg/llm-gateway/types"
 	"fmt"
+	"llumnix/pkg/llm-gateway/types"
 	"strings"
 	"sync"
 

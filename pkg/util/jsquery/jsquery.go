@@ -17,8 +17,8 @@ import (
 	"github.com/go-playground/validator/v10"
 	"k8s.io/klog/v2"
 
-	jsonextension "easgo/pkg/util/json"
-	"easgo/pkg/util/strcase"
+	jsonextension "llumnix/pkg/util/json"
+	"llumnix/pkg/util/strcase"
 )
 
 var enableSuggestion = false

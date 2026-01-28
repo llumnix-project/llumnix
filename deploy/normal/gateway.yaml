@@ -1,72 +1,75 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: scheduler
+  name: gateway
   labels:
-    app: scheduler
-    role: scheduler
+    app: gateway
+    role: gateway
 spec:
   type: ClusterIP
   ports:
-    - port: 8088
-      targetPort: 8088
+    - port: 8089
+      targetPort: 8089
       protocol: TCP
       name: http
   selector:
-    app: scheduler
+    app: gateway
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: scheduler
+  name: gateway
   labels:
-    app: scheduler
-    role: scheduler
+    app: gateway
+    role: gateway
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: scheduler
+      app: gateway
   template:
     metadata:
       labels:
-        app: scheduler
-        role: scheduler
+        app: gateway
+        role: gateway
     spec:
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: nas-llumnix
       terminationGracePeriodSeconds: 300
       imagePullSecrets:
       - name: aliyun-registry-secret
       containers:
-      - name: scheduler
+      - name: gateway
         image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:gateway-20260127-162859
         imagePullPolicy: Always
         command: ["/usr/local/bin/llm-gateway"]
         args:
         - "--port"
-        - "8088"
+        - "8089"
         - "-v"
         - "4"
-        - "--host"
-        - "0.0.0.0"
+        - "--llm-scheduler"
+        - "llumnix-scheduler"
         - "--use-discovery"
         - "redis"
-        - "--schedule-mode"
-        - "--schedule-policy"
-        - "load-balance"
         - "--llumnix-cms-redis-host"
         - "redis"
         - "--llumnix-cms-redis-port"
         - "6379"
-        - "--llumnix-cms-pull-status-interval-ms"
-        - "5000"
-        - "--llumnix-cms-pull-metadata-interval-ms"
-        - "10000"
-        - "--llumnix-dispatch-neutral-load-metric"
-        - "num_requests"
+        - "--schedule-policy"
+        - "round-robin"
+        - "--local-test-scheduler-ip"
+        - "scheduler:8088"
+        - "--llumnix-kv-cache-block-size"
+        - "64"
+        - "--tokenizer-path"
+        - "/models/deepseek-moe-16b-base"
         - "--enable-full-mode-scheduling"
         - "True"
         ports:
-        - containerPort: 8088
+        - containerPort: 8089
           name: http
           protocol: TCP
         resources:
@@ -79,12 +82,16 @@ spec:
         livenessProbe:
           httpGet:
             path: /healthz
-            port: 8088
+            port: 8089
           initialDelaySeconds: 30
           periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /healthz
-            port: 8088
+            port: 8089
           initialDelaySeconds: 5
           periodSeconds: 5
+        volumeMounts:
+          - name: model-storage
+            mountPath: /models
+            readOnly: true

@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/types"
 	"fmt"
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/types"
 	"sync"
 	"time"
 )

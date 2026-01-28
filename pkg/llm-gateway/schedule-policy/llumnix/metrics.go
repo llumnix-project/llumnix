@@ -6,8 +6,8 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/consts"
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/consts"
 )
 
 func calculateMetrics(

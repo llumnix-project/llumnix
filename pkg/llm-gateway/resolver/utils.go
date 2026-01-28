@@ -1,10 +1,10 @@
 package resolver
 
 import (
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/types"
 	"fmt"
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/types"
 	"strings"
 
 	"k8s.io/klog/v2"

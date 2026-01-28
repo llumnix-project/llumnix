@@ -13,7 +13,7 @@ tests
 ## Development Prerequisites
 
 Ensure your environment is ready for testing. The recommended Docker image is:
-`beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-20260123-111542`.
+`beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-20260127-162037`.
 
 After setting up the Docker environment:
 

@@ -11,8 +11,8 @@ import (
 	"github.com/spf13/pflag"
 	"k8s.io/klog/v2"
 
-	"easgo/pkg/llm-gateway/consts"
-	prop "easgo/pkg/llm-gateway/property"
+	"llumnix/pkg/llm-gateway/consts"
+	prop "llumnix/pkg/llm-gateway/property"
 )
 
 type Config struct {

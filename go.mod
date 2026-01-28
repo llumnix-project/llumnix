@@ -1,4 +1,4 @@
-module easgo
+module llumnix
 
 require (
 	github.com/agiledragon/gomonkey/v2 v2.13.0
@@ -78,6 +78,4 @@ require (
 
 replace github.com/sglang/sglang-go-grpc-sdk => ./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang
 
-go 1.23.0
-
-toolchain go1.23.7
+go 1.23.7

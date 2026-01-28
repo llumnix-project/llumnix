@@ -7,7 +7,7 @@ requests
 # cms
 protobuf<5.0dev
 grpcio
-grpcio-tools
+grpcio-tools==1.62.3
 redis
 readerwriterlock
 

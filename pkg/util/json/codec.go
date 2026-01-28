@@ -8,8 +8,9 @@ import (
 	"unicode"
 	"unsafe"
 
-	"easgo/pkg/util/erraggr"
-	"easgo/pkg/util/strcase"
+	"llumnix/pkg/util/erraggr"
+	"llumnix/pkg/util/strcase"
+
 	jsoniter "github.com/json-iterator/go"
 	"github.com/modern-go/reflect2"
 	"k8s.io/apimachinery/pkg/util/sets"

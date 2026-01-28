@@ -1,15 +1,15 @@
 package llumnix
 
 import (
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/cms"
-	"easgo/pkg/llm-gateway/lrs"
 	"fmt"
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/cms"
+	"llumnix/pkg/llm-gateway/lrs"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
-	"easgo/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/consts"
 )
 
 func verifyConfig(c *options.Config) {

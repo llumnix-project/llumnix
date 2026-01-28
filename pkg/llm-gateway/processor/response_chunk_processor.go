@@ -1,13 +1,13 @@
 package processor
 
 import (
-	"easgo/cmd/llm-gateway/app/options"
-	reasoning_parser "easgo/pkg/llm-gateway/processor/reasoning-parser"
-	"easgo/pkg/llm-gateway/protocol"
-	"easgo/pkg/llm-gateway/tokenizer"
-	"easgo/pkg/llm-gateway/types"
 	"encoding/json"
 	"fmt"
+	"llumnix/cmd/llm-gateway/app/options"
+	reasoning_parser "llumnix/pkg/llm-gateway/processor/reasoning-parser"
+	"llumnix/pkg/llm-gateway/protocol"
+	"llumnix/pkg/llm-gateway/tokenizer"
+	"llumnix/pkg/llm-gateway/types"
 	"strings"
 
 	"github.com/sglang/sglang-go-grpc-sdk"

@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/types"
+	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/types"
 )
 
 // Helper function to create a test request

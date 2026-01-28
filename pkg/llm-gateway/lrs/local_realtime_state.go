@@ -1,10 +1,10 @@
 package lrs
 
 import (
-	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/metrics"
-	"easgo/pkg/llm-gateway/types"
 	"fmt"
+	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/metrics"
+	"llumnix/pkg/llm-gateway/types"
 	"runtime/debug"
 	"time"
 

@@ -150,12 +150,12 @@ def get_runtime_command(
 ):
     command = (
         f"python3 -m python.runtime.discovery "
+        f"--role {role} "
         f"--pod_name {uuid.uuid4()} "
         f"--entrypoint_ip 0.0.0.0 "
         f"--entrypoint_port {port} "
         f"--kv_transfer_ip 0.0.0.0 "
         f"--kv_transfer_port {port} "
-        f"--role {role} "
         f"--dp_size_local {dp_size_local} "
         f"--redis_address 127.0.0.1 "
         f"--redis_port 6379 "

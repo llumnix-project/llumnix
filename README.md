@@ -13,7 +13,7 @@ bash scripts/build_vllm_dev_images.sh
 
 ```bash
 # build python/llumnix whl
-bash scripts/build_vllm_whl.sh
+bash scripts/build_llumlet_whl.sh
 
 # build vllm release image
 bash scripts/build_vllm_release.sh

@@ -1,8 +1,8 @@
 package protocol
 
 import (
-	"easgo/pkg/llm-gateway/consts"
 	"encoding/json"
+	"llumnix/pkg/llm-gateway/consts"
 )
 
 // Chat message role defined by the OpenAI API.

@@ -2,11 +2,11 @@ package handler
 
 import (
 	"bytes"
-	"easgo/pkg/llm-gateway/protocol"
-	"easgo/pkg/llm-gateway/types"
 	"errors"
 	"fmt"
 	"io"
+	"llumnix/pkg/llm-gateway/protocol"
+	"llumnix/pkg/llm-gateway/types"
 	"net"
 	"net/http"
 	"time"
