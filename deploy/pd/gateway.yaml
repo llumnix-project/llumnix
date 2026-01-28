@@ -33,12 +33,16 @@ spec:
         app: gateway
         role: gateway
     spec:
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: nas-llumnix
       terminationGracePeriodSeconds: 300
       imagePullSecrets:
       - name: aliyun-registry-secret
       containers:
       - name: gateway
-        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:gateway-20260116-001948
+        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:gateway-20260127-162859
         imagePullPolicy: Always
         command: ["/usr/local/bin/llm-gateway"]
         args:
@@ -55,7 +59,6 @@ spec:
         - "--llumnix-cms-redis-port"
         - "6379"
         - "--schedule-policy"
-        # - "least-token"
         - "round-robin"
         - "--local-test-scheduler-ip"
         - "scheduler:8088"
@@ -63,8 +66,8 @@ spec:
         - "64"
         - "--tokenizer-path"
         - "/models/deepseek-moe-16b-base"
-        # - "--pdsplit-mode"
-        # - "vllm-mooncake"
+        - "--pdsplit-mode"
+        - "vllm-mooncake"
         - "--enable-full-mode-scheduling"
         - "True"
         ports:
@@ -90,12 +93,7 @@ spec:
             port: 8089
           initialDelaySeconds: 5
           periodSeconds: 5
-#        lifecycle:
-#          preStop:
-#            exec:
-#              command:
-#              - /bin/sh
-#              - -c
-#              - |
-#                echo "Gateway is shutting down, waiting 180 seconds for debugging..."
-#                sleep 180
+        volumeMounts:
+          - name: model-storage
+            mountPath: /models
+            readOnly: true

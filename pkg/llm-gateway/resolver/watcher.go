@@ -2,7 +2,7 @@ package resolver
 
 import (
 	"context"
-	"easgo/pkg/llm-gateway/types"
+	"llumnix/pkg/llm-gateway/types"
 	"sync"
 
 	"k8s.io/klog/v2"

@@ -5,8 +5,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"easgo/pkg/llm-gateway/cms"
-	"easgo/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/cms"
+	"llumnix/pkg/llm-gateway/consts"
 )
 
 func TestMetricBalanceSelector(t *testing.T) {

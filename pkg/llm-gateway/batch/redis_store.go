@@ -9,7 +9,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"easgo/pkg/llm-gateway/redis"
+	"llumnix/pkg/llm-gateway/redis"
 )
 
 // RedisStore provides Redis operations for batch processing

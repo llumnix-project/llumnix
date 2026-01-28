@@ -10,11 +10,11 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/cms"
-	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/llumlet"
-	"easgo/pkg/llm-gateway/metrics"
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/cms"
+	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/llumlet"
+	"llumnix/pkg/llm-gateway/metrics"
 )
 
 const DefaultLlumletGrpcTimeoutSeconds = 5

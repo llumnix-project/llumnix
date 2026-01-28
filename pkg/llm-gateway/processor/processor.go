@@ -1,7 +1,7 @@
 package processor
 
 import (
-	"easgo/pkg/llm-gateway/types"
+	"llumnix/pkg/llm-gateway/types"
 
 	"k8s.io/klog/v2"
 )

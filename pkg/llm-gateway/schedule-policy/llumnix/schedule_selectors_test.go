@@ -5,9 +5,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"easgo/pkg/llm-gateway/cms"
-	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/types"
+	"llumnix/pkg/llm-gateway/cms"
+	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/types"
 )
 
 func genInstanceViewInternals() map[string]*instanceViewScheduling {

@@ -1,7 +1,7 @@
 package cms
 
 import (
-	"easgo/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/consts"
 	"strings"
 	"time"
 

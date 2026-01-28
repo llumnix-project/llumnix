@@ -9,7 +9,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"easgo/pkg/util/jsquery"
+	"llumnix/pkg/util/jsquery"
 )
 
 // ConfigPath represents a single configuration file and its metadata.

@@ -3,10 +3,10 @@ package mirror
 import (
 	"bytes"
 	"context"
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/types"
 	"fmt"
 	"io"
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/types"
 	"math/rand"
 	"net"
 	"net/http"

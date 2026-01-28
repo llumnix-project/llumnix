@@ -1,10 +1,10 @@
 package processor
 
 import (
-	"easgo/pkg/llm-gateway/protocol"
-	"easgo/pkg/llm-gateway/tokenizer"
-	"easgo/pkg/llm-gateway/types"
 	"fmt"
+	"llumnix/pkg/llm-gateway/protocol"
+	"llumnix/pkg/llm-gateway/tokenizer"
+	"llumnix/pkg/llm-gateway/types"
 
 	"k8s.io/klog/v2"
 )

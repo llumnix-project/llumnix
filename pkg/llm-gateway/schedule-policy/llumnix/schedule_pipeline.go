@@ -1,8 +1,8 @@
 package llumnix
 
 import (
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/consts"
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/consts"
 )
 
 type scheduleStep struct {

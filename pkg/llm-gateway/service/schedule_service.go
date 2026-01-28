@@ -13,15 +13,15 @@ import (
 	"github.com/gorilla/websocket"
 	"k8s.io/klog/v2"
 
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/keepalive"
-	"easgo/pkg/llm-gateway/lrs"
-	"easgo/pkg/llm-gateway/metrics"
-	"easgo/pkg/llm-gateway/resolver"
-	schedule_policy "easgo/pkg/llm-gateway/schedule-policy"
-	"easgo/pkg/llm-gateway/types"
-	"easgo/pkg/llm-gateway/utils"
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/keepalive"
+	"llumnix/pkg/llm-gateway/lrs"
+	"llumnix/pkg/llm-gateway/metrics"
+	"llumnix/pkg/llm-gateway/resolver"
+	schedule_policy "llumnix/pkg/llm-gateway/schedule-policy"
+	"llumnix/pkg/llm-gateway/types"
+	"llumnix/pkg/llm-gateway/utils"
 )
 
 type ScheduleService struct {

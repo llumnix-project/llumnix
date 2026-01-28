@@ -3,10 +3,10 @@ package schedule_policy
 import (
 	"k8s.io/klog/v2"
 
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/lrs"
-	"easgo/pkg/llm-gateway/schedule-policy/llumnix"
-	"easgo/pkg/llm-gateway/types"
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/lrs"
+	"llumnix/pkg/llm-gateway/schedule-policy/llumnix"
+	"llumnix/pkg/llm-gateway/types"
 )
 
 type SchedulePolicy interface {

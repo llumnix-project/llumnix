@@ -1,14 +1,14 @@
 package llumnix
 
 import (
-	"easgo/pkg/util/maps"
 	"fmt"
+	"llumnix/pkg/util/maps"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
-	"easgo/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/consts"
 )
 
 func filter(

@@ -10,9 +10,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
-	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/llm-gateway/kvs/mooncake"
-	"easgo/pkg/llm-gateway/kvs/v6d"
+	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/kvs/mooncake"
+	"llumnix/pkg/llm-gateway/kvs/v6d"
 )
 
 type KVSClientInterface interface {

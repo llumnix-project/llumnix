@@ -12,9 +12,9 @@ import (
 	"github.com/spf13/pflag"
 	"k8s.io/klog/v2"
 
-	"easgo/cmd/llm-gateway/app/options"
-	"easgo/pkg/llm-gateway/service"
-	"easgo/pkg/llm-gateway/tokenizer"
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/service"
+	"llumnix/pkg/llm-gateway/tokenizer"
 )
 
 func waitAndClean() {

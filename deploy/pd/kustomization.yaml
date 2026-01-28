@@ -5,3 +5,4 @@ resources:
   - ../base
   - decode.yaml
   - prefill.yaml
+  - gateway.yaml

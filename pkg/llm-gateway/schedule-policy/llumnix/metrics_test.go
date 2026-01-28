@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"easgo/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/consts"
 )
 
 func TestBaseMetric(t *testing.T) {

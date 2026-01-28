@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"strings"
 
-	"easgo/pkg/util/gron"
+	"llumnix/pkg/util/gron"
 )
 
 // GetDottedStyleItem gets a dotted-styled item from a json object.

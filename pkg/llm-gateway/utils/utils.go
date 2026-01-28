@@ -15,8 +15,8 @@ import (
 	"github.com/valyala/fastjson"
 	"k8s.io/klog/v2"
 
-	"easgo/pkg/llm-gateway/consts"
-	"easgo/pkg/util/jsquery"
+	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/util/jsquery"
 )
 
 // Hop-by-hop headers. These are removed when sent to the backend.

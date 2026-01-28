@@ -4,5 +4,4 @@ kind: Kustomization
 resources:
   - serviceAccount.yaml
   - redis.yaml
-  - gateway.yaml
   - scheduler.yaml

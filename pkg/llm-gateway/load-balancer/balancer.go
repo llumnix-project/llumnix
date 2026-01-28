@@ -1,7 +1,7 @@
 package balancer
 
 import (
-	"easgo/pkg/llm-gateway/types"
+	"llumnix/pkg/llm-gateway/types"
 )
 
 type Balancer interface {
