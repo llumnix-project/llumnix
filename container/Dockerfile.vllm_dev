@@ -11,11 +11,6 @@ RUN curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.28/deb/Release.key | sudo gp
 
 RUN pip3 config set global.index-url https://mirrors.aliyun.com/pypi/simple/
 
-# Install llumnix python package
-COPY ./python/llumnix/requirements /tmp/requirements
-RUN  pip install -r /tmp/requirements/vllm.txt -r /tmp/requirements/common.txt \
-    && rm -rf /tmp/requirements
-
 # Install rust (Used for building tokenizer library)
 RUN export RUSTUP_DIST_SERVER="https://rsproxy.cn" \
     && export RUSTUP_UPDATE_ROOT="https://rsproxy.cn/rustup" \
@@ -52,11 +47,6 @@ RUN echo 'export GOROOT=/usr/local/go' >> ~/.bashrc && \
     echo 'export GOPATH=/root/go' >> ~/.bashrc && \
     echo 'export GOPROXY=https://goproxy.io,direct' >> ~/.bashrc && \
     echo 'export PATH=$PATH:/usr/local/go/bin:/root/go/bin' >> ~/.bashrc
-
-# Install go requirements
-COPY . /tmp/llumnix_go/
-RUN cd /tmp/llumnix_go && GOPROXY=https://goproxy.cn,direct go mod download \
-    && rm -rf /tmp/llumnix_go
 
 ENTRYPOINT [ "" ]
 

@@ -5,3 +5,4 @@ resources:
   - ../base
   - normal.yaml
   - gateway.yaml
+  - scheduler.yaml

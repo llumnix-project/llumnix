@@ -59,7 +59,7 @@ spec:
         - "--llumnix-cms-redis-port"
         - "6379"
         - "--schedule-policy"
-        - "round-robin"
+        - "load-balance"
         - "--local-test-scheduler-ip"
         - "scheduler:8088"
         - "--llumnix-kv-cache-block-size"

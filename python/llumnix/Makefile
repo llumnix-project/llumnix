@@ -2,7 +2,7 @@ CPU_CORES := $(shell nproc --all 2>/dev/null || echo 4)
 
 .PHONY: vllm_install
 vllm_install: proto
-	@pip install -e .[vllm]
+	@pip install -e .[vllm] --no-build-isolation
 
 .PHONY: lint
 lint: check_pylint_installed
