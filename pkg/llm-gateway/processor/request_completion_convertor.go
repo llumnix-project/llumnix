@@ -9,8 +9,6 @@ import (
 	"k8s.io/klog/v2"
 )
 
-const defaultMaxTokens = 16384
-
 type RequestCompletionConverter struct{}
 
 func NewRequestCompletionConverter() *RequestCompletionConverter {
@@ -38,19 +36,15 @@ func (rt *RequestCompletionConverter) applyTokenizerTemplate(req *types.RequestC
 	return processedReq.TokenIDs, nil
 }
 
-func (rt *RequestCompletionConverter) generateMaxTokens(req *types.RequestContext, maxTokens int) int {
+func (rt *RequestCompletionConverter) generateMaxTokens(req *types.RequestContext, maxTokens int) uint64 {
 	stats := req.RequestStats
 	if maxTokens != 0 {
 		stats.MaxTokensLimit = uint64(maxTokens)
 	} else {
-		// the default max_tokens in /completions api is 16k, in /chat/completions is none (get from model config), so we define it as 16k if user not set
-		stats.MaxTokensLimit = defaultMaxTokens
+		// the default max_tokens in /completions api is 16, in /chat/completions is none (get from model config), so we define it as model_max_len if user not set
+		stats.MaxTokensLimit = tokenizer.GetModelMaxLen() - stats.InputTokensLen
 	}
-	if stats.MaxTokensLimit > defaultMaxTokens {
-		return int(stats.MaxTokensLimit)
-	} else {
-		return defaultMaxTokens
-	}
+	return uint64(stats.MaxTokensLimit)
 }
 
 // PreProcess performs request transformation if needed.

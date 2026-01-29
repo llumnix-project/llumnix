@@ -66,6 +66,8 @@ func (rp *ResponseChunkProcessor) ChatCompletionStreamProcess(req *types.Request
 	choice := cmpStreamResp.Choices[0]
 	parseResult := &toolParseResult{}
 	reasoningContent, content := "", ""
+	stats := req.RequestStats
+	stats.OutputTokensLen += getTokenLen(choice.Text)
 	if choice.Text != "" {
 		reasoningContent, content = reasoningParser.ParseStreamChunk(choice.Text)
 		if toolParser != nil && content != "" {
@@ -100,26 +102,13 @@ func (rp *ResponseChunkProcessor) ChatCompletionStreamProcess(req *types.Request
 		SystemFingerprint: "fp", // TODO: maybe set fingerprint as instance
 	}
 
-	stats := req.RequestStats
 	reasoningTokensLen := getTokenLen(reasoningContent)
 	stats.ReasoningTokensLen += reasoningTokensLen
-	capacity := stats.MaxTokensLimit - (stats.OutputTokensLen - stats.ReasoningTokensLen)
-	contentInCapacity, rawContentTokensLen := getFirstNTokensContent(content, capacity)
-	if rawContentTokensLen >= capacity {
-		// reach max tokens limit, set finish reason to length
-		choice.FinishReason = "length"
-		stats.OutputTokensLen += (reasoningTokensLen + capacity)
-	} else {
-		// if contentTokensLen < capacity, it means the content is not truncated, so we keep the finish reason from backend
-		stats.OutputTokensLen += reasoningTokensLen + rawContentTokensLen
-		if parseResult != nil && len(parseResult.ToolCalls) > 0 {
-			stats.HasToolCalls = true
-			toolCalls, _ := json.Marshal(parseResult.ToolCalls)
-			stats.OutputTokensLen += getTokenLen(string(toolCalls))
-		}
+	if parseResult != nil && len(parseResult.ToolCalls) > 0 {
+		stats.HasToolCalls = true
 	}
 	klog.V(3).Infof("[%s] ChatCompletionStreamProcess: output_len: %d, reasoning_content_len: %d, raw_content_len: %d, capacity: %d, max_len: %d",
-		req.Id, stats.OutputTokensLen, stats.ReasoningTokensLen, rawContentTokensLen, capacity, stats.MaxTokensLimit)
+		req.Id, stats.OutputTokensLen, stats.ReasoningTokensLen, stats.OutputTokensLen, stats.MaxTokensLimit)
 
 	needSplitLastResp := false
 	if choice.FinishReason != "" {
@@ -130,8 +119,8 @@ func (rp *ResponseChunkProcessor) ChatCompletionStreamProcess(req *types.Request
 		}
 	}
 
-	klog.V(3).Infof("[%s] ChatCompletionStreamProcess: contentInCapacity: ##%s##, reasoningContent: ##%s##, finishReason: %s, needSplitLastResp: %v",
-		req.Id, contentInCapacity, reasoningContent, choice.FinishReason, needSplitLastResp)
+	klog.V(3).Infof("[%s] ChatCompletionStreamProcess: content: ##%s##, reasoningContent: ##%s##, finishReason: %s, needSplitLastResp: %v",
+		req.Id, content, reasoningContent, choice.FinishReason, needSplitLastResp)
 
 	// set the output choice
 	chatStreamResp.Choices = []protocol.ChatCompletionStreamChoice{
@@ -140,7 +129,7 @@ func (rp *ResponseChunkProcessor) ChatCompletionStreamProcess(req *types.Request
 			FinishReason: choice.FinishReason,
 			Delta: protocol.ChatCompletionStreamChoiceDelta{
 				Role:             assistantRole,
-				Content:          contentInCapacity,
+				Content:          content,
 				ToolCalls:        parseResult.ToolCalls,
 				ReasoningContent: reasoningContent,
 			},
@@ -224,6 +213,7 @@ func (rp *ResponseChunkProcessor) ChatCompletionProcess(req *types.RequestContex
 	choice := cmpStreamResp.Choices[0]
 	parseResult := &toolParseResult{NormalText: "", ToolCalls: nil}
 	reasoningContent, content := "", ""
+	stats.OutputTokensLen += getTokenLen(choice.Text)
 	if choice.Text != "" {
 		reasoningContent, content = reasoningParser.ParseStreamChunk(choice.Text)
 		if toolParser != nil && content != "" {
@@ -245,20 +235,9 @@ func (rp *ResponseChunkProcessor) ChatCompletionProcess(req *types.RequestContex
 
 	reasoningTokensLen := getTokenLen(reasoningContent)
 	stats.ReasoningTokensLen += reasoningTokensLen
-	capacity := stats.MaxTokensLimit - (stats.OutputTokensLen - stats.ReasoningTokensLen)
-	content, rawContentTokensLen := getFirstNTokensContent(content, capacity)
-	if rawContentTokensLen >= capacity {
-		// reach max tokens limit, set finish reason to length
-		choice.FinishReason = "length"
-		stats.OutputTokensLen += (reasoningTokensLen + capacity)
-	} else {
-		// if contentTokensLen < capacity, it means the content is not truncated, so we keep the finish reason from backend
-		stats.OutputTokensLen += (reasoningTokensLen + rawContentTokensLen)
-		if parseResult != nil && len(parseResult.ToolCalls) > 0 {
-			toolCalls, _ := json.Marshal(parseResult.ToolCalls)
-			stats.OutputTokensLen += getTokenLen(string(toolCalls))
-			choice.FinishReason = "tool_calls"
-		}
+
+	if parseResult != nil && len(parseResult.ToolCalls) > 0 {
+		choice.FinishReason = "tool_calls"
 	}
 
 	llmRequest.BufferChatResp.Choices[0].Message.Content += content
@@ -279,8 +258,8 @@ func (rp *ResponseChunkProcessor) ChatCompletionProcess(req *types.RequestContex
 		},
 	}
 
-	klog.V(3).Infof("[%s] ChatCompletionProcess: output_len: %d, reasoning_content_len: %d, raw_content_len: %d, capacity: %d, max_len: %d",
-		req.Id, stats.OutputTokensLen, stats.ReasoningTokensLen, rawContentTokensLen, capacity, stats.MaxTokensLimit)
+	klog.V(3).Infof("[%s] ChatCompletionProcess: output_len: %d, reasoning_content_len: %d, raw_content_len: %d, max_len: %d",
+		req.Id, stats.OutputTokensLen, stats.ReasoningTokensLen, stats.OutputTokensLen, stats.MaxTokensLimit)
 	klog.V(3).Infof("[%s] ChatCompletionProcess: content: ##%s##, reasoningContent: ##%s##, finishReason: %s, response: %p",
 		req.Id, content, reasoningContent, choice.FinishReason, llmRequest.BufferChatResp)
 
