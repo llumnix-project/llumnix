@@ -1,9 +1,9 @@
 from typing import List
 
 from vllm.v1.request import Request
-from vllm.v1.hybrid_connector.engine_proxy import get_param
 
 from llumnix.compat.vllm_compat import cdiv
+from llumnix.compat.hybrid_connector_compat import get_param
 from llumnix.status_collector.base_connector_metric_collector import BaseConnectorMetricsCollector
 
 class HybridConnectorMetricsCollector(BaseConnectorMetricsCollector):

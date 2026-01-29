@@ -183,7 +183,7 @@ class StatusUpdater:
             running_snapshot: List[Tuple["EngineCoreRequest", int]] = []
             if self.scheduler.running:
                 for req in self.scheduler.running:
-                    if req.prefill_done:
+                    if req.num_computed_tokens >= req.num_prompt_tokens:
                         try:
                             running_snapshot.append((self.migration_frontend.get_enginecore_request(req), req.num_output_tokens))
                         except KeyError as e:

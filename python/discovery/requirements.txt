@@ -1,0 +1,5 @@
+protobuf<5.0dev
+grpcio
+grpcio-tools==1.62.3
+redis
+aiohttp

@@ -59,13 +59,21 @@ discovery-proto-build:
 discovery-install:
 	cd ./python/discovery && make install
 
+.PHONY: blade-kvt-install
+blade-kvt-install:
+	cd ./python/blade-kvt && rm -rf build dist *.egg-info && bash ./tools/install_barex.sh && python3 setup.py bdist_wheel && pip install dist/*.whl
+
+.PHONY: runtime-proto-build
+runtime-proto-build:
+	cd ./python/runtime && make proto
+
 .PHONY: simple-tests
-simple-tests: discovery-proto-build gateway-build
-	pytest -x -v -s /mnt/eas/cuikuilong/llumnix/tests/local/vllm_e2e.py::test_simple_requests
+simple-tests: runtime-proto-build gateway-build
+	pytest -x -v -s ./tests/local/vllm_e2e.py::test_simple_requests
 
 .PHONY: migration-tests
 migration-tests: gateway-build
-	pytest -x -v -s /mnt/eas/cuikuilong/llumnix/tests/local/vllm_e2e.py::test_migration
+	pytest -x -v -s ./tests/local/vllm_e2e.py::test_migration
 
 .PHONY: e2e-tests
 e2e-tests: discovery-proto-build gateway-build simple-tests migration-tests

@@ -16,6 +16,9 @@ make discovery-install
 
 # build lib-tokenizers
 make lib-tokenizers-build
+
+# build blade-kvt
+make blade-kvt-install
 ```
 
 Run `make gateway-build` to build the gateway binary. 

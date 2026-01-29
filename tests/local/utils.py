@@ -9,7 +9,10 @@ import psutil
 import subprocess
 from pathlib import Path
 
+from vllm.utils.network_utils import get_ip
+
 LOG_DIR = Path("logs")
+NAMING_DIR = Path(f"{LOG_DIR}/naming.vllm")
 VLLM_BASE_PORT: int = 8000
 GATEWAY_PORT: int = 18089
 SCHEDULER_PORT: int = 18088
@@ -26,6 +29,7 @@ def get_gateway_command(
     enable_pd: bool = False,
     enable_full_mode_scheduling: bool = False,
     separate_pd_schedule: bool = False,
+    connector_type: str = "HybridConnector",
 ) -> str:
     command = (
         f"./bin/llm-gateway "
@@ -47,7 +51,10 @@ def get_gateway_command(
         command += "--enable-full-mode-scheduling=false "
 
     if enable_pd:
-        command += "--pdsplit-mode=vllm-mooncake "
+        if connector_type == "MooncakeConnector":
+            command += "--pdsplit-mode=vllm-mooncake "
+        else:
+            command += "--pdsplit-mode=vllm-kvt "
 
     if separate_pd_schedule:
         command += "--separate-pd-schedule "
@@ -107,7 +114,9 @@ def get_vllm_command(
     port: int,
     cuda: int,
     schedule_policy: str,
-    enable_full_mode_scheduling: bool
+    enable_full_mode_scheduling: bool,
+    tag: str,
+    connector_type: str,
 ) -> str:
     if role == "prefill":
         kv_role = "kv_producer"
@@ -115,8 +124,14 @@ def get_vllm_command(
         kv_role = "kv_consumer"
     else:
         kv_role = "kv_both"
-    
-    kv_transfer_config = f'{{"kv_connector":"MooncakeConnector","kv_role":"{kv_role}","kv_connector_module_path":"mooncake.mooncake_connector_v1"}}'
+    if connector_type == "HybridConnector":
+        if role == "prefill":
+            backend = "kvt"
+        else:
+            backend = "kvt+migration"
+        kv_transfer_config = f'{{"kv_connector":"HybridConnector", "kv_role": "{kv_role}","kv_connector_extra_config": {{"backend":"{backend}","naming_url": "file:{NAMING_DIR}","kvt_inst_id": "{tag}","rpc_port":{port+20000}}}}}'
+    elif connector_type == "MooncakeConnector":
+        kv_transfer_config = f'{{"kv_connector":"MooncakeConnector","kv_role":"{kv_role}","kv_connector_module_path":"mooncake.mooncake_connector_v1"}}'
 
     command = (
         f"VLLM_LOGGING_LEVEL=DEBUG "
@@ -126,13 +141,17 @@ def get_vllm_command(
         f"--port {port} "
         f"--kv-transfer-config '{kv_transfer_config}' "
     )
-
-    command = f"VLLM_MOONCAKE_SIDE_CHANNEL_PORT={16557+8*cuda} " + command
-    command = f"VLLM_MOONCAKE_MIGRATION_BASE_PORT={17557+8*cuda} " + command
+    if connector_type == "MooncakeConnector":
+        command = f"VLLM_MOONCAKE_SIDE_CHANNEL_PORT={16557+8*cuda} " + command
+        command = f"VLLM_MOONCAKE_MIGRATION_BASE_PORT={17557+8*cuda} " + command
+    elif connector_type == "HybridConnector":
+        command = f"BLLM_KVTRANS_PORT_BASE={33218+8*cuda} " + command
+    
     command = f"CUDA_VISIBLE_DEVICES={cuda} " + command
     command = "LLUMNIX_CMS_REDIS_ADDRESS=127.0.0.1 " + command
     command = "LLUMNIX_CMS_REDIS_PORT=6379 " + command
     command = "LLUMNIX_ENGINE_GET_STATUS_TIMEOUT=1 " + command
+        
    
     if enable_full_mode_scheduling:
         command = "LLUMNIX_ENABLE_MIGRATION=1 " + command
@@ -152,10 +171,11 @@ def get_runtime_command(
         f"python3 -m discovery.discovery "
         f"--role {role} "
         f"--pod_name {uuid.uuid4()} "
-        f"--entrypoint_ip 0.0.0.0 "
-        f"--entrypoint_port {port} "
-        f"--kv_transfer_ip 0.0.0.0 "
-        f"--kv_transfer_port {port} "
+        f"--entrypoint_ip {get_ip()} " 
+        f"--entrypoint_port {port} " 
+        f"--kv_transfer_ip {get_ip()} "# kvt ip
+        f"--kv_transfer_port {port+20000} "# kvt 
+        f"--role {role} "
         f"--dp_size_local {dp_size_local} "
         f"--redis_address 127.0.0.1 "
         f"--redis_port 6379 "

@@ -1,5 +1,7 @@
 import copy
 import json
+import os
+import shutil
 import subprocess
 import time
 import re
@@ -11,7 +13,7 @@ import pytest
 
 from .utils import (wait_for_service, GATEWAY_URL, start_process, cleanup_processes,
                     get_redis_command, get_gateway_command, get_scheduler_command, 
-                    get_vllm_command, get_runtime_command, VLLM_BASE_PORT, LOG_DIR)
+                    get_vllm_command, get_runtime_command, VLLM_BASE_PORT, LOG_DIR, NAMING_DIR)
 
 
 @pytest.fixture
@@ -39,12 +41,14 @@ def gateway_server(test_config: Dict[str, Any]) -> Generator[subprocess.Popen, N
     enable_pd =  test_config.get('enable_pd', False)
     enable_full_mode_scheduling = test_config.get('enable_full_mode_scheduling', False)
     separate_pd_schedule = test_config.get('separate_pd_schedule', False)
+    connector_type = test_config.get('connector_type', 'HybridConnector')
 
     command = get_gateway_command(
         schedule_policy=schedule_policy,
         enable_pd=enable_pd,
         enable_full_mode_scheduling=enable_full_mode_scheduling,
-        separate_pd_schedule=separate_pd_schedule
+        separate_pd_schedule=separate_pd_schedule,
+        connector_type=connector_type
     )
 
     proc = start_process("Gateway", command, "gateway.log")
@@ -81,11 +85,11 @@ def vllm_servers(test_config: Dict[str, Any]) -> Generator[List[subprocess.Popen
     schedule_policy = test_config.get('schedule_policy', 'round-robin')
     enable_full_mode_scheduling = test_config.get('enable_full_mode_scheduling', False)
 
-    def launch_vllm_process(role: str, port: int, cuda: int) -> subprocess.Popen:
+    def launch_vllm_process(role: str, port: int, cuda: int, tag: str, connector_type: str) -> subprocess.Popen:
         vllm_proc = start_process(
             f"vLLM-{cuda}",
             get_vllm_command(role, VLLM_BASE_PORT + cuda, cuda,
-                             schedule_policy, enable_full_mode_scheduling),
+                             schedule_policy, enable_full_mode_scheduling, tag, connector_type),
             f"vllm_{cuda}.log")
         runtime_proc = start_process(
             f"Runtime-{cuda}",
@@ -96,14 +100,14 @@ def vllm_servers(test_config: Dict[str, Any]) -> Generator[List[subprocess.Popen
     all_available_ports = []
     if test_config['enable_pd']:
         for cuda in range(2):
-            launch_vllm_process("prefill", VLLM_BASE_PORT + cuda, cuda)
+            launch_vllm_process("prefill", VLLM_BASE_PORT + cuda, cuda, f"prefill_{cuda}", test_config.get('connector_type', 'HybridConnector'))
             all_available_ports.append(VLLM_BASE_PORT + cuda)
         for cuda in range(2, 4):
-            launch_vllm_process("decode", VLLM_BASE_PORT + cuda, cuda)
+            launch_vllm_process("decode", VLLM_BASE_PORT + cuda, cuda, f"decode_{cuda}", test_config.get('connector_type', 'HybridConnector'))
             all_available_ports.append(VLLM_BASE_PORT + cuda)
     else:
         for cuda in range(2):
-            launch_vllm_process("normal", VLLM_BASE_PORT + cuda, cuda)
+            launch_vllm_process("normal", VLLM_BASE_PORT + cuda, cuda, f"normal_{cuda}", test_config.get('connector_type', 'HybridConnector'))
             all_available_ports.append(VLLM_BASE_PORT + cuda)
 
     print("test_config:", test_config)
@@ -118,8 +122,23 @@ def vllm_servers(test_config: Dict[str, Any]) -> Generator[List[subprocess.Popen
     cleanup_processes(processes)
 
 
+@pytest.fixture(scope="function")
+def prepare_test_environment():
+    """Prepare test environment by cleaning up old files and directories."""
+    shutil.rmtree(NAMING_DIR, ignore_errors=True)
+    if LOG_DIR.exists():
+        for log_file in LOG_DIR.glob('vllm_*.log'):
+            try:
+                log_file.unlink()
+                print(f"Deleted log file: {log_file}")
+            except OSError as e:
+                print(f"Error deleting file {log_file}: {e}")
+    os.makedirs(NAMING_DIR, exist_ok=True)
+    yield
+
+
 @pytest.fixture
-def setup_services(redis_server, scheduler_server, gateway_server, vllm_servers, test_config):
+def setup_services(prepare_test_environment, redis_server, scheduler_server, gateway_server, vllm_servers, test_config):
     """Setup all services - this combines all previous fixtures"""
     time.sleep(20)
     yield
@@ -196,6 +215,14 @@ def generate_e2e_config():
     ]
 
     update_configs = []
+    for connector_type in ['HybridConnector', 'MooncakeConnector']:
+        for config in base_configs:
+            tmp_config = copy.deepcopy(config)
+            tmp_config['connector_type'] = connector_type
+            update_configs.append(tmp_config)
+    base_configs = update_configs
+
+    update_configs = []
     for enable_pd in [False, True]:
         for config in base_configs:
             tmp_config = copy.deepcopy(config)
@@ -212,7 +239,6 @@ def generate_e2e_config():
             tmp_config['separate_pd_schedule'] = separate_pd_schedule
             update_configs.append(tmp_config)
     base_configs = update_configs
-
     return base_configs
 
 @pytest.mark.parametrize("test_config", generate_e2e_config(), indirect=True)
@@ -247,10 +273,17 @@ def test_simple_requests(setup_services):
                 assert result == 'How'
 
 
-def check_migration_logs():
-    migrate_in_pattern = r"update success migrate in request.*"
-    migrate_out_pattern = r"Migration .* suceess"
-    traceback_pattern = r"Traceback"
+def check_migration_logs(connector_type: str):
+    if connector_type == "MooncakeConnector":
+        migrate_in_pattern = r"update success migrate in request.*"
+        migrate_out_pattern = r"Migration .* suceess"
+        traceback_pattern = r"Traceback"
+    elif connector_type == "HybridConnector":
+        migrate_in_pattern = r"migration end.*"
+        migrate_out_pattern = r"suspend end:*"
+        traceback_pattern = r"Traceback"
+    else:
+        raise ValueError(f"Unknown connector type: {connector_type}")
     
     migrate_in_count = 0
     migrate_out_count = 0
@@ -300,13 +333,21 @@ def generate_migration_config():
         {'schedule_policy': 'flood', 'enable_full_mode_scheduling': True, 'enable_migration': True, 'enable_pd': True, 'separate_pd_schedule': False},
     ]
 
+    update_configs = []
+    for connector_type in ['HybridConnector', 'MooncakeConnector']:
+        for config in base_configs:
+            tmp_config = copy.deepcopy(config)
+            tmp_config['connector_type'] = connector_type
+            update_configs.append(tmp_config)
+    base_configs = update_configs
+
     return base_configs
 
-@pytest.mark.parametrize("test_config", generate_migration_config(), indirect=True)
-def test_migration(setup_services):
+@pytest.mark.parametrize("test_config", generate_migration_config())
+def test_migration(setup_services, test_config):
     num_requests = 50
 
-    def send_single_request(request_id):
+    def send_single_request(request_id, connector_type):
         payload = {
             "prompt": f"Request {request_id}: Hello, my name is"*10,
             "stream": False,
@@ -314,6 +355,9 @@ def test_migration(setup_services):
             "ignore_eos": True,
             "temperature": 0.0,
         }
+        if connector_type == "HybridConnector":
+            # HybridConnector may produce longer outputs due to its design
+            payload["kv_transfer_params"] = {"ali_llumnix_disagg": False}
         result = send_request(payload, endpoint_type='completions', ignore_output=True)
         return result
     
@@ -321,7 +365,7 @@ def test_migration(setup_services):
     start_time = time.time()
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-        futures = [executor.submit(send_single_request, i) for i in range(num_requests)]
+        futures = [executor.submit(send_single_request, i, test_config.get('connector_type')) for i in range(num_requests)]
         results = [future.result() for future in concurrent.futures.as_completed(futures)]
     
     end_time = time.time()
@@ -330,4 +374,4 @@ def test_migration(setup_services):
 
     assert len(results) == num_requests, f"Only {len(results)}/{num_requests} requests completed"
 
-    check_migration_logs()
+    check_migration_logs(connector_type=test_config.get('connector_type'))
