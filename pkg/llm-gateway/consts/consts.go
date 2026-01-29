@@ -119,7 +119,7 @@ const (
 	DefaultLlumnixCmsRedisPassword          = ""
 	DefaultLlumnixCmsRedisSocketTimeout     = 1.0
 	DefaultLlumnixCmsRedisRetryTimes        = 1
-	DefaultLlumnixCmsPullStatusIntervalMs   = 100
+	DefaultLlumnixCmsPullStatusIntervalMs   = 50
 	DefaultLlumnixCmsPullMetadataIntervalMs = 10000
 	DefaultLlumnixCmsRecordMetricsInterval  = 0
 
@@ -142,7 +142,7 @@ const (
 	// Schedule defaults
 	DefaultLlumnixDispatchTopK                        = 1
 	DefaultLlumnixDispatchNeutralLoadMetric           = LlumnixSchedulingMetricAllPrefillsKVBlocksNum
-	DefaultLlumnixDispatchNeutralLoadThreshold        = 2048
+	DefaultLlumnixDispatchNeutralLoadThreshold        = 8192
 	DefaultLlumnixDispatchPrefillLoadMetric           = LlumnixSchedulingMetricAllPrefillsKVBlocksNum
 	DefaultLlumnixDispatchPrefillLoadThreshold        = 2048
 	DefaultLlumnixDispatchDecodeLoadMetric            = LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills
