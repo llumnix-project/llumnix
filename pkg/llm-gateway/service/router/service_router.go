@@ -160,7 +160,7 @@ func (sr *ServiceRouter) selectByPrefix(req *types.RequestContext) (*RouteConfig
 	return &sr.routingConfigs[selectedIndex], RouteExternal
 }
 
-// getByPolicy gets next tokens based on routing policy
+// Route gets next endpoint based on routing policy
 func (sr *ServiceRouter) Route(req *types.RequestContext) (*RouteEndpoint, RouteType) {
 	if len(sr.routingConfigs) == 0 {
 		return nil, RouteInternal
@@ -168,7 +168,7 @@ func (sr *ServiceRouter) Route(req *types.RequestContext) (*RouteEndpoint, Route
 	var selectedConfig *RouteConfig
 	var rType RouteType
 
-	klog.V(3).Infof("get next tokens with routing policy: %s", sr.routingPolicy)
+	klog.V(3).Infof("get next endpoint with routing policy: %s", sr.routingPolicy)
 	// select routing config based on policy
 	switch sr.routingPolicy {
 	case consts.RoutePolicyWeight:
@@ -190,7 +190,7 @@ func (sr *ServiceRouter) Route(req *types.RequestContext) (*RouteEndpoint, Route
 	}
 }
 
-// Fallback gets fallback tokens from fallback configs
+// Fallback gets fallback endpoint from fallback configs
 func (sr *ServiceRouter) Fallback(req *types.RequestContext) (*RouteEndpoint, error) {
 	fallbackAttempt := req.RequestStats.FallbackAttempt
 	if len(sr.fallbackConfigs) == 0 || fallbackAttempt >= len(sr.fallbackConfigs) {
@@ -206,6 +206,6 @@ func (sr *ServiceRouter) Fallback(req *types.RequestContext) (*RouteEndpoint, er
 		Model:  fallbackConfig.Model,
 	}
 
-	klog.V(3).Infof("get fallback tokens with external endpoint: %s", externalEndpoint.String())
+	klog.V(3).Infof("get fallback endpoint with external endpoint: %s", externalEndpoint.String())
 	return externalEndpoint, nil
 }

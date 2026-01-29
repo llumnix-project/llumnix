@@ -17,23 +17,23 @@ const (
 	InferStageDecode  InferStage = "decode"
 )
 
-type ScheduledResult []LLMWorker
+type ScheduledResult []LLMInstance
 
 func (sr ScheduledResult) String() string {
 	var str string
-	for _, worker := range sr {
+	for _, instance := range sr {
 		if len(str) > 0 {
 			str += ","
 		}
-		str += worker.String()
+		str += instance.String()
 	}
 	return str
 }
 
-func (sr ScheduledResult) GetWorkerByRole(role InferRole) *LLMWorker {
-	for _, worker := range sr {
-		if worker.Role == role {
-			return &worker
+func (sr ScheduledResult) GetInstanceByRole(role InferRole) *LLMInstance {
+	for _, instance := range sr {
+		if instance.Role == role {
+			return &instance
 		}
 	}
 	return nil

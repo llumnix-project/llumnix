@@ -12,13 +12,13 @@ import (
 func newDispatchPolicyInternal(c *options.Config) dispatchPolicyInternal {
 	switch c.SchedulePolicy {
 	case consts.SchedulePolicyLoadBalance:
-		if c.LlumnixConfig.EnableFullModeScheduling {
-			return newLoadBalanceDispatchFullMode(&c.LlumnixConfig)
+		if c.SchedulerConfig.EnableFullModeScheduling {
+			return newLoadBalanceDispatchFullMode(&c.SchedulerConfig)
 		} else {
-			return newLoadBalanceDispatchLiteMode(&c.LlumnixConfig)
+			return newLoadBalanceDispatchLiteMode(&c.SchedulerConfig)
 		}
 	case consts.SchedulePolicyFlood:
-		return newFloodDispatchPolicyFullMode(&c.LlumnixConfig)
+		return newFloodDispatchPolicyFullMode(&c.SchedulerConfig)
 	default:
 		panic(fmt.Sprintf("unsupported schedule policy: %s", c.SchedulePolicy))
 	}
@@ -28,7 +28,7 @@ type loadBalanceDispatchPolicy struct {
 	baseDispatchPolicy
 }
 
-func newLoadBalanceDispatchFullMode(p *options.LlumnixConfig) *loadBalanceDispatchPolicy {
+func newLoadBalanceDispatchFullMode(p *options.SchedulerConfig) *loadBalanceDispatchPolicy {
 	policy := &loadBalanceDispatchPolicy{
 		baseDispatchPolicy: baseDispatchPolicy{
 			consts.PrefillInferMode: {
@@ -41,7 +41,7 @@ func newLoadBalanceDispatchFullMode(p *options.LlumnixConfig) *loadBalanceDispat
 					},
 				},
 				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.LlumnixPrefillInstanceType: {
+					consts.PrefillInstanceType: {
 						&schedulabilityFilter{},
 						&stalenessFilter{
 							instanceStalenessSeconds: p.InstanceStalenessSeconds,
@@ -53,7 +53,7 @@ func newLoadBalanceDispatchFullMode(p *options.LlumnixConfig) *loadBalanceDispat
 					},
 				},
 				selectors: map[string]dispatchSelector{
-					consts.LlumnixPrefillInstanceType: &metricBasedSelector{
+					consts.PrefillInstanceType: &metricBasedSelector{
 						topK:        p.DispatchTopK,
 						metricNames: []string{p.DispatchPrefillLoadMetric},
 					},
@@ -69,7 +69,7 @@ func newLoadBalanceDispatchFullMode(p *options.LlumnixConfig) *loadBalanceDispat
 					},
 				},
 				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.LlumnixDecodeInstanceType: {
+					consts.DecodeInstanceType: {
 						&schedulabilityFilter{},
 						&stalenessFilter{
 							instanceStalenessSeconds: p.InstanceStalenessSeconds,
@@ -81,7 +81,7 @@ func newLoadBalanceDispatchFullMode(p *options.LlumnixConfig) *loadBalanceDispat
 					},
 				},
 				selectors: map[string]dispatchSelector{
-					consts.LlumnixDecodeInstanceType: &metricBasedSelector{
+					consts.DecodeInstanceType: &metricBasedSelector{
 						topK:        p.DispatchTopK,
 						metricNames: []string{p.DispatchDecodeLoadMetric},
 					},
@@ -97,7 +97,7 @@ func newLoadBalanceDispatchFullMode(p *options.LlumnixConfig) *loadBalanceDispat
 					},
 				},
 				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.LlumnixNeutralInstanceType: {
+					consts.NeutralInstanceType: {
 						&schedulabilityFilter{},
 						&stalenessFilter{
 							instanceStalenessSeconds: p.InstanceStalenessSeconds,
@@ -109,7 +109,7 @@ func newLoadBalanceDispatchFullMode(p *options.LlumnixConfig) *loadBalanceDispat
 					},
 				},
 				selectors: map[string]dispatchSelector{
-					consts.LlumnixNeutralInstanceType: &metricBasedSelector{
+					consts.NeutralInstanceType: &metricBasedSelector{
 						topK:        p.DispatchTopK,
 						metricNames: []string{p.DispatchNeutralLoadMetric},
 					},
@@ -124,7 +124,7 @@ func newLoadBalanceDispatchFullMode(p *options.LlumnixConfig) *loadBalanceDispat
 			prefillInferModeMetrics[p.DispatchDecodeAsPrefillLoadMetric] =
 				getSchedulingMetric(p, p.DispatchDecodeAsPrefillLoadMetric)
 		}
-		policy.baseDispatchPolicy[consts.PrefillInferMode].singleInstanceFilters[consts.LlumnixDecodeInstanceType] =
+		policy.baseDispatchPolicy[consts.PrefillInferMode].singleInstanceFilters[consts.DecodeInstanceType] =
 			[]singleInstanceFilter{
 				&schedulabilityFilter{},
 				&stalenessFilter{
@@ -135,7 +135,7 @@ func newLoadBalanceDispatchFullMode(p *options.LlumnixConfig) *loadBalanceDispat
 					threshold:  p.DispatchDecodeAsPrefillLoadThreshold,
 				},
 			}
-		policy.baseDispatchPolicy[consts.PrefillInferMode].selectors[consts.LlumnixDecodeInstanceType] =
+		policy.baseDispatchPolicy[consts.PrefillInferMode].selectors[consts.DecodeInstanceType] =
 			&metricBasedSelector{
 				topK:        p.DispatchTopK,
 				metricNames: []string{p.DispatchDecodeAsPrefillLoadMetric},
@@ -146,7 +146,7 @@ func newLoadBalanceDispatchFullMode(p *options.LlumnixConfig) *loadBalanceDispat
 			decodeInferModeMetrics[p.DispatchPrefillAsDecodeLoadMetric] =
 				getSchedulingMetric(p, p.DispatchPrefillAsDecodeLoadMetric)
 		}
-		policy.baseDispatchPolicy[consts.DecodeInferMode].singleInstanceFilters[consts.LlumnixPrefillInstanceType] =
+		policy.baseDispatchPolicy[consts.DecodeInferMode].singleInstanceFilters[consts.PrefillInstanceType] =
 			[]singleInstanceFilter{
 				&schedulabilityFilter{},
 				&stalenessFilter{
@@ -157,7 +157,7 @@ func newLoadBalanceDispatchFullMode(p *options.LlumnixConfig) *loadBalanceDispat
 					threshold:  p.DispatchPrefillAsDecodeLoadThreshold,
 				},
 			}
-		policy.baseDispatchPolicy[consts.DecodeInferMode].selectors[consts.LlumnixPrefillInstanceType] =
+		policy.baseDispatchPolicy[consts.DecodeInferMode].selectors[consts.PrefillInstanceType] =
 			&metricBasedSelector{
 				topK:        p.DispatchTopK,
 				metricNames: []string{p.DispatchPrefillAsDecodeLoadMetric},
@@ -168,12 +168,12 @@ func newLoadBalanceDispatchFullMode(p *options.LlumnixConfig) *loadBalanceDispat
 	if p.EnableCacheAwareScheduling {
 		prefillInferModeMetrics := policy.baseDispatchPolicy[consts.PrefillInferMode].metrics
 		prefillInferModeMetrics[p.DispatchPrefillCacheLocalityMetric] = getSchedulingMetric(p, p.DispatchPrefillCacheLocalityMetric)
-		prefillInstanceSelector := policy.baseDispatchPolicy[consts.PrefillInferMode].selectors[consts.LlumnixPrefillInstanceType].(*metricBasedSelector)
+		prefillInstanceSelector := policy.baseDispatchPolicy[consts.PrefillInferMode].selectors[consts.PrefillInstanceType].(*metricBasedSelector)
 		prefillInstanceSelector.metricNames = append([]string{p.DispatchPrefillCacheLocalityMetric}, prefillInstanceSelector.metricNames...)
 
 		normalInferModeMetrics := policy.baseDispatchPolicy[consts.NormalInferMode].metrics
 		normalInferModeMetrics[p.DispatchPrefillCacheLocalityMetric] = getSchedulingMetric(p, p.DispatchPrefillCacheLocalityMetric)
-		neutralInstanceSelector := policy.baseDispatchPolicy[consts.NormalInferMode].selectors[consts.LlumnixNeutralInstanceType].(*metricBasedSelector)
+		neutralInstanceSelector := policy.baseDispatchPolicy[consts.NormalInferMode].selectors[consts.NeutralInstanceType].(*metricBasedSelector)
 		neutralInstanceSelector.metricNames = append([]string{p.DispatchPrefillCacheLocalityMetric}, neutralInstanceSelector.metricNames...)
 	}
 
@@ -185,7 +185,7 @@ type floodDispatchPolicy struct {
 	baseDispatchPolicy
 }
 
-func newFloodDispatchPolicyFullMode(p *options.LlumnixConfig) *floodDispatchPolicy {
+func newFloodDispatchPolicyFullMode(p *options.SchedulerConfig) *floodDispatchPolicy {
 	policy := &floodDispatchPolicy{
 		baseDispatchPolicy: baseDispatchPolicy{
 			consts.PrefillInferMode: {
@@ -196,7 +196,7 @@ func newFloodDispatchPolicyFullMode(p *options.LlumnixConfig) *floodDispatchPoli
 					},
 				},
 				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.LlumnixPrefillInstanceType: {
+					consts.PrefillInstanceType: {
 						&schedulabilityFilter{},
 						&stalenessFilter{
 							instanceStalenessSeconds: p.InstanceStalenessSeconds,
@@ -204,7 +204,7 @@ func newFloodDispatchPolicyFullMode(p *options.LlumnixConfig) *floodDispatchPoli
 					},
 				},
 				selectors: map[string]dispatchSelector{
-					consts.LlumnixPrefillInstanceType: &fixedPreferenceSelector{},
+					consts.PrefillInstanceType: &fixedPreferenceSelector{},
 				},
 			},
 			consts.DecodeInferMode: {
@@ -215,7 +215,7 @@ func newFloodDispatchPolicyFullMode(p *options.LlumnixConfig) *floodDispatchPoli
 					},
 				},
 				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.LlumnixDecodeInstanceType: {
+					consts.DecodeInstanceType: {
 						&schedulabilityFilter{},
 						&stalenessFilter{
 							instanceStalenessSeconds: p.InstanceStalenessSeconds,
@@ -223,7 +223,7 @@ func newFloodDispatchPolicyFullMode(p *options.LlumnixConfig) *floodDispatchPoli
 					},
 				},
 				selectors: map[string]dispatchSelector{
-					consts.LlumnixDecodeInstanceType: &fixedPreferenceSelector{},
+					consts.DecodeInstanceType: &fixedPreferenceSelector{},
 				},
 			},
 			consts.NormalInferMode: {
@@ -234,7 +234,7 @@ func newFloodDispatchPolicyFullMode(p *options.LlumnixConfig) *floodDispatchPoli
 					},
 				},
 				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.LlumnixNeutralInstanceType: {
+					consts.NeutralInstanceType: {
 						&schedulabilityFilter{},
 						&stalenessFilter{
 							instanceStalenessSeconds: p.InstanceStalenessSeconds,
@@ -242,7 +242,7 @@ func newFloodDispatchPolicyFullMode(p *options.LlumnixConfig) *floodDispatchPoli
 					},
 				},
 				selectors: map[string]dispatchSelector{
-					consts.LlumnixNeutralInstanceType: &fixedPreferenceSelector{},
+					consts.NeutralInstanceType: &fixedPreferenceSelector{},
 				},
 			},
 		},
@@ -259,7 +259,7 @@ func newFloodDispatchPolicyFullMode(p *options.LlumnixConfig) *floodDispatchPoli
 	return policy
 }
 
-func newLoadBalanceDispatchLiteMode(p *options.LlumnixConfig) *loadBalanceDispatchPolicy {
+func newLoadBalanceDispatchLiteMode(p *options.SchedulerConfig) *loadBalanceDispatchPolicy {
 	policy := &loadBalanceDispatchPolicy{
 		baseDispatchPolicy: baseDispatchPolicy{
 			consts.PrefillInferMode: {
@@ -268,7 +268,7 @@ func newLoadBalanceDispatchLiteMode(p *options.LlumnixConfig) *loadBalanceDispat
 				},
 				globalFilters: []globalFilter{},
 				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.LlumnixPrefillInstanceType: {
+					consts.PrefillInstanceType: {
 						&metricBasedFilter{
 							metricName: p.DispatchPrefillLoadMetric,
 							threshold:  p.DispatchPrefillLoadThreshold,
@@ -276,7 +276,7 @@ func newLoadBalanceDispatchLiteMode(p *options.LlumnixConfig) *loadBalanceDispat
 					},
 				},
 				selectors: map[string]dispatchSelector{
-					consts.LlumnixPrefillInstanceType: &metricBasedSelector{
+					consts.PrefillInstanceType: &metricBasedSelector{
 						topK:        p.DispatchTopK,
 						metricNames: []string{p.DispatchPrefillLoadMetric},
 					},
@@ -288,7 +288,7 @@ func newLoadBalanceDispatchLiteMode(p *options.LlumnixConfig) *loadBalanceDispat
 				},
 				globalFilters: []globalFilter{},
 				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.LlumnixDecodeInstanceType: {
+					consts.DecodeInstanceType: {
 						&metricBasedFilter{
 							metricName: p.DispatchDecodeLoadMetric,
 							threshold:  p.DispatchDecodeLoadThreshold,
@@ -296,7 +296,7 @@ func newLoadBalanceDispatchLiteMode(p *options.LlumnixConfig) *loadBalanceDispat
 					},
 				},
 				selectors: map[string]dispatchSelector{
-					consts.LlumnixDecodeInstanceType: &metricBasedSelector{
+					consts.DecodeInstanceType: &metricBasedSelector{
 						topK:        p.DispatchTopK,
 						metricNames: []string{p.DispatchDecodeLoadMetric},
 					},
@@ -308,7 +308,7 @@ func newLoadBalanceDispatchLiteMode(p *options.LlumnixConfig) *loadBalanceDispat
 				},
 				globalFilters: []globalFilter{},
 				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.LlumnixNeutralInstanceType: {
+					consts.NeutralInstanceType: {
 						&metricBasedFilter{
 							metricName: p.DispatchNeutralLoadMetric,
 							threshold:  p.DispatchNeutralLoadThreshold,
@@ -316,7 +316,7 @@ func newLoadBalanceDispatchLiteMode(p *options.LlumnixConfig) *loadBalanceDispat
 					},
 				},
 				selectors: map[string]dispatchSelector{
-					consts.LlumnixNeutralInstanceType: &metricBasedSelector{
+					consts.NeutralInstanceType: &metricBasedSelector{
 						topK:        p.DispatchTopK,
 						metricNames: []string{p.DispatchNeutralLoadMetric},
 					},

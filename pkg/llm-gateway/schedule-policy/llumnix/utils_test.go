@@ -39,11 +39,11 @@ func TestCalculateMetrics(t *testing.T) {
 	}
 	config := newConfig()
 	metrics := map[string]func() instanceSchedulingMetric{
-		consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills: getSchedulingMetric(
-			&config.LlumnixConfig, consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills),
+		consts.SchedulingMetricKVBlocksRatioWithAllPrefills: getSchedulingMetric(
+			&config.SchedulerConfig, consts.SchedulingMetricKVBlocksRatioWithAllPrefills),
 	}
 	calculateMetrics(instances, metrics)
-	assert.Equal(t, float32(math.MaxFloat32), instances["0"].metrics[consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills].GetValue())
+	assert.Equal(t, float32(math.MaxFloat32), instances["0"].metrics[consts.SchedulingMetricKVBlocksRatioWithAllPrefills].GetValue())
 }
 
 func TestFilter(t *testing.T) {
@@ -87,7 +87,7 @@ func TestFilter(t *testing.T) {
 	}
 
 	gf := []globalFilter{
-		&failoverFilter{failoverScope: consts.LlumnixFailoverScopeNodeUnit},
+		&failoverFilter{failoverScope: consts.FailoverScopeNodeUnit},
 	}
 
 	remainingInstances := filter(instanceViews, sif, gf, false)
@@ -124,7 +124,7 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 			instanceViews: map[string]*instanceViewScheduling{
 				"instance1": {
 					cmsView: &cms.InstanceView{
-						Worker: &types.LLMWorker{
+						Instance: &types.LLMInstance{
 							Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 							Role:     consts.NormalInferMode,
 						},
@@ -143,7 +143,7 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 				},
 				"instance2": {
 					cmsView: &cms.InstanceView{
-						Worker: &types.LLMWorker{
+						Instance: &types.LLMInstance{
 							Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 							Role:     consts.NormalInferMode,
 						},
@@ -177,7 +177,7 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 			instanceViews: map[string]*instanceViewScheduling{
 				"instance1": {
 					cmsView: &cms.InstanceView{
-						Worker: &types.LLMWorker{
+						Instance: &types.LLMInstance{
 							Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 							Role:     consts.NormalInferMode,
 						},
@@ -213,7 +213,7 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 			instanceViews: map[string]*instanceViewScheduling{
 				"instance1": {
 					cmsView: &cms.InstanceView{
-						Worker: &types.LLMWorker{
+						Instance: &types.LLMInstance{
 							Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 							Role:     consts.NormalInferMode,
 						},

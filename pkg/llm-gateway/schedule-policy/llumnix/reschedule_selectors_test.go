@@ -107,19 +107,19 @@ func TestMetricBalanceSelector(t *testing.T) {
 	}
 
 	selector := &metricBalanceSelector{
-		srcMetric:          consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-		dstMetric:          consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+		srcMetric:          consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+		dstMetric:          consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 		forceHigherToLower: true,
-		balanceScope:       consts.LlumnixRescheduleLoadBalanceScopeCluster,
+		balanceScope:       consts.RescheduleLoadBalanceScopeCluster,
 	}
 
 	config := newConfig()
 	calculateMetrics(srcCandidates, map[string]func() instanceSchedulingMetric{
-		selector.srcMetric: getSchedulingMetric(&config.LlumnixConfig, selector.srcMetric),
+		selector.srcMetric: getSchedulingMetric(&config.SchedulerConfig, selector.srcMetric),
 	})
 
 	calculateMetrics(dstCandidates, map[string]func() instanceSchedulingMetric{
-		selector.srcMetric: getSchedulingMetric(&config.LlumnixConfig, selector.dstMetric),
+		selector.srcMetric: getSchedulingMetric(&config.SchedulerConfig, selector.dstMetric),
 	})
 
 	pairs := selector.selectPairs(srcCandidates, dstCandidates)
@@ -158,17 +158,17 @@ func TestAggregateSelector(t *testing.T) {
 
 	dstCandidates := srcCandidates
 	selector := &aggregateSelector{
-		srcMetric: consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-		dstMetric: consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+		srcMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+		dstMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 	}
 
 	config := newConfig()
 	calculateMetrics(srcCandidates, map[string]func() instanceSchedulingMetric{
-		selector.srcMetric: getSchedulingMetric(&config.LlumnixConfig, selector.srcMetric),
+		selector.srcMetric: getSchedulingMetric(&config.SchedulerConfig, selector.srcMetric),
 	})
 
 	calculateMetrics(dstCandidates, map[string]func() instanceSchedulingMetric{
-		selector.srcMetric: getSchedulingMetric(&config.LlumnixConfig, selector.dstMetric),
+		selector.srcMetric: getSchedulingMetric(&config.SchedulerConfig, selector.dstMetric),
 	})
 
 	pairs := selector.selectPairs(srcCandidates, dstCandidates)
@@ -211,11 +211,11 @@ func TestAggregateSelector(t *testing.T) {
 	}
 
 	calculateMetrics(srcCandidates, map[string]func() instanceSchedulingMetric{
-		selector.srcMetric: getSchedulingMetric(&config.LlumnixConfig, selector.srcMetric),
+		selector.srcMetric: getSchedulingMetric(&config.SchedulerConfig, selector.srcMetric),
 	})
 
 	calculateMetrics(dstCandidates, map[string]func() instanceSchedulingMetric{
-		selector.srcMetric: getSchedulingMetric(&config.LlumnixConfig, selector.dstMetric),
+		selector.srcMetric: getSchedulingMetric(&config.SchedulerConfig, selector.dstMetric),
 	})
 
 	pairs = selector.selectPairs(srcCandidates, dstCandidates)

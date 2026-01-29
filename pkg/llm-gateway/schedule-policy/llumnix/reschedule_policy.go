@@ -32,26 +32,26 @@ type ReschedulePolicy struct {
 
 func NewReschedulePolicy(c *options.Config) *ReschedulePolicy {
 	cmsClient, err := cms.CreateOrGetClient(
-		c.LlumnixConfig.CmsRedisHost,
-		c.LlumnixConfig.CmsRedisPort,
-		c.LlumnixConfig.CmsRedisUsername,
-		c.LlumnixConfig.CmsRedisPassword,
-		c.LlumnixConfig.CmsRedisSocketTimeout,
-		c.LlumnixConfig.CmsRedisRetryTimes,
-		c.LlumnixConfig.CmsPullStatusIntervalMs,
-		c.LlumnixConfig.CmsPullMetadataIntervalMs,
-		c.LlumnixConfig.AllowConcurrentSchedule,
-		c.LlumnixConfig.EnableInstanceStatusLocalAccount,
-		c.LlumnixConfig.EnableCacheAwareScheduling,
-		c.LlumnixConfig.RequestLocalAccountStalenessSeconds,
-		c.LlumnixConfig.CmsRecordMetricsInterval,
-		c.LlumnixConfig.EnablePredictorEnhancedScheduling,
-		c.LlumnixConfig.KvCacheBlockSize,
-		c.LlumnixConfig.NumPredictorWarmupSamples)
+		c.SchedulerConfig.CmsRedisHost,
+		c.SchedulerConfig.CmsRedisPort,
+		c.SchedulerConfig.CmsRedisUsername,
+		c.SchedulerConfig.CmsRedisPassword,
+		c.SchedulerConfig.CmsRedisSocketTimeout,
+		c.SchedulerConfig.CmsRedisRetryTimes,
+		c.SchedulerConfig.CmsPullStatusIntervalMs,
+		c.SchedulerConfig.CmsPullMetadataIntervalMs,
+		c.SchedulerConfig.AllowConcurrentSchedule,
+		c.SchedulerConfig.EnableInstanceStatusLocalAccount,
+		c.SchedulerConfig.EnableCacheAwareScheduling,
+		c.SchedulerConfig.RequestLocalAccountStalenessSeconds,
+		c.SchedulerConfig.CmsRecordMetricsInterval,
+		c.SchedulerConfig.EnablePredictorEnhancedScheduling,
+		c.SchedulerConfig.KvCacheBlockSize,
+		c.SchedulerConfig.NumPredictorWarmupSamples)
 	if err != nil {
 		panic(err)
 	}
-	llumletGrpcTimeoutSeconds := c.LlumnixConfig.LlumletGrpcTimeoutSeconds
+	llumletGrpcTimeoutSeconds := c.SchedulerConfig.LlumletGrpcTimeoutSeconds
 	if llumletGrpcTimeoutSeconds <= 0 {
 		llumletGrpcTimeoutSeconds = DefaultLlumletGrpcTimeoutSeconds
 	}
@@ -59,23 +59,23 @@ func NewReschedulePolicy(c *options.Config) *ReschedulePolicy {
 		c:         c,
 		cmsClient: cmsClient,
 		llumletClientManager: llumlet.NewClientManager(
-			c.LlumnixConfig.LlumletGrpcConnectionPoolSize,
+			c.SchedulerConfig.LlumletGrpcConnectionPoolSize,
 		),
 		clusterView: clusterView{
 			groupedInstanceViews: nil,
 		},
 		grpcTimeoutSeconds:   llumletGrpcTimeoutSeconds,
-		rescheduleIntervalMs: c.LlumnixConfig.RescheduleIntervalMs,
+		rescheduleIntervalMs: c.SchedulerConfig.RescheduleIntervalMs,
 		stopChan:             make(chan bool),
 	}
-	polices := strings.Split(c.LlumnixConfig.ReschedulePolicies, ",")
-	if c.LlumnixConfig.EnableAdaptivePD {
-		polices = append(polices, consts.LlumnixReschedulePolicyCleanUpDecodeRequestsOnPrefill)
-		polices = append(polices, consts.LlumnixReschedulePolicyAggregateDecodeRequestsOnPrefill)
-		polices = append(polices, consts.LlumnixReschedulePolicyEaseBusyDecodeWithFreePrefill)
+	polices := strings.Split(c.SchedulerConfig.ReschedulePolicies, ",")
+	if c.SchedulerConfig.EnableAdaptivePD {
+		polices = append(polices, consts.ReschedulePolicyCleanUpDecodeRequestsOnPrefill)
+		polices = append(polices, consts.ReschedulePolicyAggregateDecodeRequestsOnPrefill)
+		polices = append(polices, consts.ReschedulePolicyEaseBusyDecodeWithFreePrefill)
 	}
 	for _, policy := range polices {
-		rp.policies = append(rp.policies, newReschedulePolicyInternal(&c.LlumnixConfig, policy))
+		rp.policies = append(rp.policies, newReschedulePolicyInternal(&c.SchedulerConfig, policy))
 	}
 	klog.Infof("Reschedule initialized, policies: %+v", polices)
 	return rp
@@ -103,7 +103,7 @@ func (p *ReschedulePolicy) RescheduleLoop() {
 }
 
 func (p *ReschedulePolicy) reschedule() []*reschedulePair {
-	if p.c.LlumnixConfig.AllowConcurrentSchedule {
+	if p.c.SchedulerConfig.AllowConcurrentSchedule {
 		p.cmsClient.RLock()
 		defer p.cmsClient.RUnlock()
 	} else {
@@ -204,11 +204,11 @@ func (p *ReschedulePolicy) executeMigrations(reschedulePairs []*reschedulePair) 
 				MigrationReqPolicy: rp.reqSelectOrder,
 			}
 			switch rp.reqSelectRule {
-			case consts.LlumnixMigrationReqSelectRuleNumReq:
+			case consts.MigrationReqSelectRuleNumReq:
 				migrationRequest.MigrationValue = &llumlet.MigrateRequest_NumReqs{NumReqs: int64(rp.reqSelectValue)}
-			case consts.LlumnixMigrationReqSelectRuleToken:
+			case consts.MigrationReqSelectRuleToken:
 				migrationRequest.MigrationValue = &llumlet.MigrateRequest_NumTokens{NumTokens: int64(rp.reqSelectValue)}
-			case consts.LlumnixMigrationReqSelectRuleRatio:
+			case consts.MigrationReqSelectRuleRatio:
 				migrationRequest.MigrationValue = &llumlet.MigrateRequest_BlockRatio{BlockRatio: rp.reqSelectValue}
 			default:
 				klog.Errorf("unknown migration type: %s, skip", rp.reqSelectRule)
@@ -305,8 +305,8 @@ func (brp *baseReschedulePolicy) selectPairs(
 
 func (brp *baseReschedulePolicy) getMigrationReqSelectPolicy() migrationReqSelectPolicy {
 	return migrationReqSelectPolicy{
-		rule:  consts.LlumnixMigrationReqSelectRuleNumReq,
-		order: consts.LlumnixMigrationReqSelectOrderLCR,
+		rule:  consts.MigrationReqSelectRuleNumReq,
+		order: consts.MigrationReqSelectOrderLCR,
 		value: 1,
 	}
 }

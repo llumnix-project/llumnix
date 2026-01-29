@@ -125,7 +125,7 @@ func (mbs *metricBalanceSelector) selectPairs(
 	}
 
 	switch mbs.balanceScope {
-	case consts.LlumnixRescheduleLoadBalanceScopeCluster:
+	case consts.RescheduleLoadBalanceScopeCluster:
 		srcList := make([]*instanceViewScheduling, 0, len(srcCandidates))
 		for _, instanceView := range srcCandidates {
 			srcList = append(srcList, instanceView)
@@ -137,7 +137,7 @@ func (mbs *metricBalanceSelector) selectPairs(
 
 		return pairLists(srcList, dstList)
 
-	case consts.LlumnixRescheduleLoadBalanceScopeUnit:
+	case consts.RescheduleLoadBalanceScopeUnit:
 		srcByUnit := make(map[string][]*instanceViewScheduling)
 		for _, instanceView := range srcCandidates {
 			metadata := instanceView.cmsView.Metadata

@@ -249,18 +249,18 @@ func (f *failoverFilter) filterOutInstances(instanceViews map[string]*instanceVi
 
 	needsFailoverInstances := getNeedsFailoverInstances(instanceViews)
 	switch f.failoverScope {
-	case consts.LlumnixFailoverScopeInstance:
+	case consts.FailoverScopeInstance:
 		// When the failover scope is instance, failover instances are identical to needs failover instances.
 		klog.V(3).Infof("Instance scope failover, filtered out instances: %v",
 			needsFailoverInstances.List())
 		return needsFailoverInstances
-	case consts.LlumnixFailoverScopeNode:
+	case consts.FailoverScopeNode:
 		// Failover instances sharing the same node with the needs failover instances.
 		failoverNodes := getFailoverNodes(needsFailoverInstances, instanceViews)
 		result := getNodeFailoverInstances(failoverNodes, instanceViews)
 		klog.V(3).Infof("Node scope failover, filtered out instances: %v", result.List())
 		return result
-	case consts.LlumnixFailoverScopeInstanceUnit:
+	case consts.FailoverScopeInstanceUnit:
 		if !isDataParallelEnabled(instanceViews) {
 			klog.V(3).Infof(
 				"Data parallel disabled, instance unit scope failover filtered out instances: %v",
@@ -272,7 +272,7 @@ func (f *failoverFilter) filterOutInstances(instanceViews map[string]*instanceVi
 		klog.V(3).Infof("Instance unit scope failover filtered out instances: %v",
 			result.List())
 		return result
-	case consts.LlumnixFailoverScopeNodeUnit:
+	case consts.FailoverScopeNodeUnit:
 		// 1. Find instances on nodes that have needs failover instances
 		// 2. Failover instances that share the same unit with instances found in step 1
 		failoverNodes := getFailoverNodes(needsFailoverInstances, instanceViews)

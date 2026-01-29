@@ -3,10 +3,11 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"llumnix/pkg/llm-gateway/types"
 	"net/http"
 
 	"k8s.io/klog/v2"
+
+	"llumnix/pkg/llm-gateway/types"
 )
 
 const (
@@ -35,9 +36,9 @@ func NewSimpleBackend() *SimpleBackend {
 func (b *SimpleBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
 	chunkChan := make(chan StreamChunk, 100)
 
-	worker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleNormal)
-	if worker == nil {
-		return nil, fmt.Errorf("no available worker for role: %s", types.InferRoleNormal)
+	instance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRoleNormal)
+	if instance == nil {
+		return nil, fmt.Errorf("no available instance for role: %s", types.InferRoleNormal)
 	}
 
 	go func() {
@@ -51,7 +52,7 @@ func (b *SimpleBackend) StreamInference(req *types.RequestContext) (<-chan Strea
 		}
 
 		// Build backend request
-		newReq, err := MakeNewBackendRequest(req, body, worker)
+		newReq, err := MakeNewBackendRequest(req, body, instance)
 		if err != nil {
 			klog.Errorf("failed to create new backend request: %v", err)
 			chunkChan <- StreamChunk{err: err}

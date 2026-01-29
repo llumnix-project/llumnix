@@ -130,12 +130,12 @@ func genInstanceViewScheduling(instanceId string, llumletPort int32, kvtPort int
 
 func TestExecuteMigrationsSuccess(t *testing.T) {
 	config := &options.Config{
-		LlumnixConfig: options.LlumnixConfig{
-			RescheduleDecodeLoadMetric:  consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			ReschedulePrefillLoadMetric: consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			RescheduleNeutralLoadMetric: consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+		SchedulerConfig: options.SchedulerConfig{
+			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			ReschedulePolicies:          "decode_load,prefill_failover,decode_failover,neutral_failover",
-			RescheduleLoadBalanceScope:  consts.LlumnixRescheduleLoadBalanceScopeCluster,
+			RescheduleLoadBalanceScope:  consts.RescheduleLoadBalanceScopeCluster,
 		},
 	}
 	rp := NewReschedulePolicyPartial(config)
@@ -145,8 +145,8 @@ func TestExecuteMigrationsSuccess(t *testing.T) {
 		reschedulePairs = append(reschedulePairs, &reschedulePair{
 			srcView:        genInstanceViewScheduling("instanceId-"+strconv.Itoa(i), int32(basePort+i), 0),
 			dstView:        genInstanceViewScheduling("instanceId-"+strconv.Itoa((i+1)%5), int32(basePort+i), 0),
-			reqSelectRule:  consts.LlumnixMigrationReqSelectRuleNumReq,
-			reqSelectOrder: consts.LlumnixMigrationReqSelectOrderLR,
+			reqSelectRule:  consts.MigrationReqSelectRuleNumReq,
+			reqSelectOrder: consts.MigrationReqSelectOrderLR,
 			reqSelectValue: 1.0,
 		})
 	}
@@ -158,12 +158,12 @@ func TestExecuteMigrationsSuccess(t *testing.T) {
 
 func TestExecuteMigrationsGrpcConnectFailed(t *testing.T) {
 	config := &options.Config{
-		LlumnixConfig: options.LlumnixConfig{
-			RescheduleDecodeLoadMetric:  consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			ReschedulePrefillLoadMetric: consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			RescheduleNeutralLoadMetric: consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+		SchedulerConfig: options.SchedulerConfig{
+			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			ReschedulePolicies:          "decode_load,prefill_failover,decode_failover,neutral_failover",
-			RescheduleLoadBalanceScope:  consts.LlumnixRescheduleLoadBalanceScopeCluster,
+			RescheduleLoadBalanceScope:  consts.RescheduleLoadBalanceScopeCluster,
 		},
 	}
 	rp := NewReschedulePolicyPartial(config)
@@ -172,8 +172,8 @@ func TestExecuteMigrationsGrpcConnectFailed(t *testing.T) {
 		{
 			srcView:        genInstanceViewScheduling("instanceId-100", int32(basePort+1000), 0),
 			dstView:        genInstanceViewScheduling("instanceId-1", int32(basePort+1000), 0),
-			reqSelectRule:  consts.LlumnixMigrationReqSelectRuleNumReq,
-			reqSelectOrder: consts.LlumnixMigrationReqSelectOrderLR,
+			reqSelectRule:  consts.MigrationReqSelectRuleNumReq,
+			reqSelectOrder: consts.MigrationReqSelectOrderLR,
 			reqSelectValue: 1.0,
 		},
 	}
@@ -187,12 +187,12 @@ func TestExecuteMigrationsGrpcConnectFailed(t *testing.T) {
 
 func TestExecuteMigrationsLlumletMigrateFailed(t *testing.T) {
 	config := &options.Config{
-		LlumnixConfig: options.LlumnixConfig{
-			RescheduleDecodeLoadMetric:  consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			ReschedulePrefillLoadMetric: consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			RescheduleNeutralLoadMetric: consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+		SchedulerConfig: options.SchedulerConfig{
+			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			ReschedulePolicies:          "decode_load,prefill_failover,decode_failover,neutral_failover",
-			RescheduleLoadBalanceScope:  consts.LlumnixRescheduleLoadBalanceScopeCluster,
+			RescheduleLoadBalanceScope:  consts.RescheduleLoadBalanceScopeCluster,
 		},
 	}
 	rp := NewReschedulePolicyPartial(config)
@@ -201,8 +201,8 @@ func TestExecuteMigrationsLlumletMigrateFailed(t *testing.T) {
 		{
 			srcView:        genInstanceViewScheduling("instanceId-4", int32(basePort+4), 0),
 			dstView:        genInstanceViewScheduling("instanceId-0", int32(basePort+4), 0),
-			reqSelectRule:  consts.LlumnixMigrationReqSelectRuleNumReq,
-			reqSelectOrder: consts.LlumnixMigrationReqSelectOrderLR,
+			reqSelectRule:  consts.MigrationReqSelectRuleNumReq,
+			reqSelectOrder: consts.MigrationReqSelectOrderLR,
 			reqSelectValue: 1.0,
 		},
 	}

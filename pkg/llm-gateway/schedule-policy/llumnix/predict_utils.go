@@ -20,7 +20,7 @@ func predictNumComputedPrefillBlocks(
 	now := time.Now().UnixMilli()
 	allPrefillsKVBlocksNumMetric := AllPrefillsKVBlocksNum{
 		baseMetric: baseMetric{
-			name: consts.LlumnixSchedulingMetricAllPrefillsKVBlocksNum,
+			name: consts.SchedulingMetricAllPrefillsKVBlocksNum,
 		},
 	}
 	for _, instance := range instances {

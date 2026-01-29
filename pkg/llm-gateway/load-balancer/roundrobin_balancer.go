@@ -15,12 +15,12 @@ import (
 type RoundRobinBalancer struct {
 	Resolver resolver.LLMResolver
 
-	addChan <-chan types.LLMWorkerSlice
-	delChan <-chan types.LLMWorkerSlice
+	addChan <-chan types.LLMInstanceSlice
+	delChan <-chan types.LLMInstanceSlice
 
 	mu           sync.Mutex
 	currentIndex uint64
-	workers      types.LLMWorkerSlice
+	instances    types.LLMInstanceSlice
 }
 
 // NewRoundRobinBalancer creates a new RoundRobinBalancer object.
@@ -29,7 +29,7 @@ func NewRoundRobinBalancer(r resolver.LLMResolver) *RoundRobinBalancer {
 
 	addChan, delChan, err := r.Watch(context.Background())
 	if err != nil {
-		klog.Errorf("failed to watch LLM workers: %v", err)
+		klog.Errorf("failed to watch LLM instances: %v", err)
 		return nil
 	}
 	lb.addChan = addChan
@@ -38,16 +38,16 @@ func NewRoundRobinBalancer(r resolver.LLMResolver) *RoundRobinBalancer {
 	go func() {
 		for {
 			select {
-			case workers := <-lb.addChan:
+			case instances := <-lb.addChan:
 				lb.mu.Lock()
-				lb.workers = append(lb.workers, workers...)
+				lb.instances = append(lb.instances, instances...)
 				lb.mu.Unlock()
-			case workers := <-lb.delChan:
+			case instances := <-lb.delChan:
 				lb.mu.Lock()
-				for _, w := range workers {
-					for i := 0; i < len(lb.workers); i++ {
-						if lb.workers[i].Id() == w.Id() {
-							lb.workers = append(lb.workers[:i], lb.workers[i+1:]...)
+				for _, w := range instances {
+					for i := 0; i < len(lb.instances); i++ {
+						if lb.instances[i].Id() == w.Id() {
+							lb.instances = append(lb.instances[:i], lb.instances[i+1:]...)
 							break
 						}
 					}
@@ -64,15 +64,15 @@ func (rrb *RoundRobinBalancer) Get(*types.RequestContext) (types.ScheduledResult
 	rrb.mu.Lock()
 	defer rrb.mu.Unlock()
 
-	if len(rrb.workers) == 0 {
+	if len(rrb.instances) == 0 {
 		return nil, consts.ErrorNoAvailableEndpoint
 	}
 
 	rrb.currentIndex++
-	index := rrb.currentIndex % uint64(len(rrb.workers))
-	klog.V(4).Infof("round-robin balancer: selected worker %s", rrb.workers[index].Id())
+	index := rrb.currentIndex % uint64(len(rrb.instances))
+	klog.V(4).Infof("round-robin balancer: selected instance %s", rrb.instances[index].Id())
 
-	return types.ScheduledResult{rrb.workers[index]}, nil
+	return types.ScheduledResult{rrb.instances[index]}, nil
 }
 
-func (rrb *RoundRobinBalancer) Release(*types.RequestContext, *types.LLMWorker) {}
+func (rrb *RoundRobinBalancer) Release(*types.RequestContext, *types.LLMInstance) {}

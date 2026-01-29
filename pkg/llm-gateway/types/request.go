@@ -185,7 +185,7 @@ func (req *LLMRequest) Stream() bool {
 }
 
 type ScheduleContext struct {
-	// forward target worker
+	// forward target instance
 	ScheduleResults ScheduledResult
 
 	// schedule mode
@@ -271,11 +271,11 @@ type RequestStateManagementHooks interface {
 	OnPostRequest(req *RequestContext)
 
 	// OnPostDecodeFirstStreamResponse is called after first decode stream response.
-	// Used for decode request realtime token state creation.
+	// Used for decode request token state creation.
 	OnPostDecodeFirstStreamResponse(req *RequestContext)
 
 	// OnPostDecodeEachStreamResponse is called after each decode stream response.
-	// Used for decode request realtime token state update.
+	// Used for decode request token state update.
 	OnPostDecodeEachStreamResponse(req *RequestContext)
 }
 

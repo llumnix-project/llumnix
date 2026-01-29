@@ -14,7 +14,7 @@ func genInstanceViewInternals() map[string]*instanceViewScheduling {
 	instances := map[string]*instanceViewScheduling{
 		"instance-1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Role: consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
@@ -26,9 +26,9 @@ func genInstanceViewInternals() map[string]*instanceViewScheduling {
 			},
 			schedulingCtx: schedulingCtx{
 				metrics: map[string]instanceSchedulingMetric{
-					consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
+					consts.SchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
 						baseMetric{
-							name:  consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+							name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 							value: 0.3,
 						},
 					},
@@ -38,7 +38,7 @@ func genInstanceViewInternals() map[string]*instanceViewScheduling {
 		},
 		"instance-2": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Role: consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
@@ -50,9 +50,9 @@ func genInstanceViewInternals() map[string]*instanceViewScheduling {
 			},
 			schedulingCtx: schedulingCtx{
 				metrics: map[string]instanceSchedulingMetric{
-					consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
+					consts.SchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
 						baseMetric{
-							name:  consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+							name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 							value: 0.5,
 						},
 					},
@@ -62,7 +62,7 @@ func genInstanceViewInternals() map[string]*instanceViewScheduling {
 		},
 		"instance-3": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Role: consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
@@ -74,9 +74,9 @@ func genInstanceViewInternals() map[string]*instanceViewScheduling {
 			},
 			schedulingCtx: schedulingCtx{
 				metrics: map[string]instanceSchedulingMetric{
-					consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
+					consts.SchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
 						baseMetric{
-							name:  consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+							name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 							value: 0.8,
 						},
 					},
@@ -97,7 +97,7 @@ func TestMetricBasedSelectorSelectMax(t *testing.T) {
 	// Test selector with selectMax = true (select highest value)
 	selectorMax := &metricBasedSelector{
 		topK:        1,
-		metricNames: []string{consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills},
+		metricNames: []string{consts.SchedulingMetricKVBlocksRatioWithAllPrefills},
 	}
 
 	selected := selectorMax.best(instances)
@@ -111,7 +111,7 @@ func TestMetricBasedSelectorRandomChoiceFromTopK(t *testing.T) {
 	// Test selector with selectMax = true (select highest value)
 	selector := &metricBasedSelector{
 		topK:        2,
-		metricNames: []string{consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills},
+		metricNames: []string{consts.SchedulingMetricKVBlocksRatioWithAllPrefills},
 	}
 
 	// Test multiple times to ensure randomness works

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -31,8 +30,8 @@ type ScheduleService struct {
 	reschedulePolicy schedule_policy.ReschedulePolicy
 
 	resolver  resolver.LLMResolver
-	addChan   <-chan types.LLMWorkerSlice
-	delChan   <-chan types.LLMWorkerSlice
+	addChan   <-chan types.LLMInstanceSlice
+	delChan   <-chan types.LLMInstanceSlice
 	lrsClient *lrs.LocalRealtimeStateClient
 }
 
@@ -44,18 +43,18 @@ func NewScheduleService(c *options.Config) *ScheduleService {
 		lrsClient:      lrsClient,
 		schedulePolicy: schedule_policy.NewSchedulePolicy(c.SchedulePolicy, c, lrsClient),
 	}
-	if c.ColocatedRescheduleMode && c.LlumnixConfig.EnableRescheduling {
+	if c.ColocatedRescheduleMode && c.SchedulerConfig.EnableRescheduling {
 		ss.reschedulePolicy = schedule_policy.NewReschedulePolicy(c)
 	}
 
-	if c.LlumnixConfig.EnableMetrics {
+	if c.SchedulerConfig.EnableMetrics {
 		metrics.EnableLlumnixMetrics()
 	}
 
 	resolver := resolver.CreateBackendServiceResolver(ss.config, types.InferRoleAll)
 	addChan, delChan, err := resolver.Watch(context.Background())
 	if err != nil {
-		klog.Errorf("failed to watch LLM workers: %v", err)
+		klog.Errorf("failed to watch LLM instances: %v", err)
 		return nil
 	}
 	ss.addChan = addChan
@@ -64,14 +63,14 @@ func NewScheduleService(c *options.Config) *ScheduleService {
 	go func() {
 		for {
 			select {
-			case workers := <-ss.addChan:
-				for _, w := range workers {
-					// create realtime stats for this worker
+			case instances := <-ss.addChan:
+				for _, w := range instances {
+					// create realtime stats for this instance
 					klog.Infof("add backend service endpoint: %s/%s", w.Role, w.String())
 					ss.lrsClient.AddInstance(&w)
 				}
-			case workers := <-ss.delChan:
-				for _, w := range workers {
+			case instances := <-ss.delChan:
+				for _, w := range instances {
 					klog.Infof("remove backend service endpoint: %s/%s", w.Role, w.String())
 					ss.lrsClient.RemoveInstance(w.Role.String(), w.Id())
 				}
@@ -82,62 +81,14 @@ func NewScheduleService(c *options.Config) *ScheduleService {
 	return ss
 }
 
-type WriteMessage struct {
-	data      []byte
-	needClose bool
-}
-
-type wsConn struct {
-	conn         *websocket.Conn
-	writeMessage chan *WriteMessage
-}
-
-// writeWithPingPong do ping pong with service or gateway
-func (ss *ScheduleService) writeWithPingPong(wsConn *wsConn) {
-	var missedPongs atomic.Int32
-	conn := wsConn.conn
-	conn.SetPongHandler(func(appData string) error {
-		missedPongs.Store(0)
-		return nil
-	})
-
-	ticker := time.NewTicker(3 * time.Second) // send ping every 3 seconds
-	defer func() {
-		ticker.Stop()
-		conn.Close()
-	}()
-OuterLoop:
-	for {
-		select {
-		case message := <-wsConn.writeMessage:
-			if err := conn.WriteMessage(websocket.TextMessage, message.data); err != nil {
-				break OuterLoop
-			}
-			if message.needClose {
-				break OuterLoop
-			}
-		case <-ticker.C:
-			if missedPongs.Load() >= 2 {
-				// two pongs missed, the connection may be broken
-				klog.V(3).Infof("2 pongs missed: %v", wsConn.conn.LocalAddr().String())
-				break OuterLoop
-			}
-			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				break OuterLoop
-			}
-			missedPongs.Add(1)
-		}
-	}
-}
-
-// handleWsToken do keepalive with gateway
+// handleKeepalive do keepalive with gateway.
 // URL: /keepalive
 func (ss *ScheduleService) handleKeepalive(w http.ResponseWriter, r *http.Request) {
 	// upgrade WebSocket connection.
 	defaultUpgrader := websocket.Upgrader{}
 	conn, err := defaultUpgrader.Upgrade(w, r, http.Header{})
 	if err != nil {
-		klog.Warningf("handle token: couldn't upgrade %s", err)
+		klog.Warningf("handle keepalive: couldn't upgrade %s", err)
 		return
 	}
 	defer conn.Close()
@@ -149,18 +100,18 @@ func (ss *ScheduleService) handleKeepalive(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// add borrower gateway for realtime stats
+	// add gateway for local realtime state
 	ss.lrsClient.AddGateway(remoteEndpoint.String())
 
 	// block and do keepalive with gateway
 	kac.StartKeepAlive(func() {
 		// If the goroutine terminates, it indicates that an anomaly occurred with the connection, which could be due to a ping pong
-		// failure or an abnormal TCP disconnection. Ultimately, we need to reclaim the tokens that are in use.
+		// failure or an abnormal TCP disconnection. Ultimately, we need to reclaim the request states that are in use.
 		ss.lrsClient.RemoveGateway(remoteEndpoint.String())
 	})
 }
 
-// handleSchedule returns the token of the backend service with the fewest current request handling.
+// handleSchedule returns the instance of the backend service with the minimum load.
 // URL: /schedule
 func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request) {
 	tStart := time.Now()
@@ -173,8 +124,8 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 
 	var schReq types.ScheduleRequest
 	if err := json.Unmarshal(body, &schReq); err != nil {
-		klog.Warningf("invalid expect token req: %s", body)
-		http.Error(w, "invalid expect token req", http.StatusBadRequest)
+		klog.Warningf("invalid schedule req: %s", body)
+		http.Error(w, "invalid schedule req", http.StatusBadRequest)
 		return
 	}
 
@@ -208,13 +159,13 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// record realtime stats for the acquired token
-	if !ss.config.LlumnixConfig.EnableFullModeScheduling {
-		for _, worker := range schReq.ScheduleResult {
-			reqState := lrs.NewRequestState(schReq.Id, int64(schReq.PromptNumTokens), worker.Id(), schReq.GatewayId)
-			err := ss.lrsClient.AllocateRequestState(worker.Role.String(), reqState)
+	// record realtime state for the scheduled instance
+	if !ss.config.EnableRequestStateTracking() {
+		for _, instance := range schReq.ScheduleResult {
+			reqState := lrs.NewRequestState(schReq.Id, int64(schReq.PromptNumTokens), instance.Id(), schReq.GatewayId)
+			err := ss.lrsClient.AllocateRequestState(instance.Role.String(), reqState)
 			if err != nil {
-				klog.Errorf("Acquire %s resource request failed: %v", worker.Role, err)
+				klog.Errorf("Allocate %s request state failed: %v", instance.Role, err)
 			}
 		}
 	}
@@ -228,7 +179,7 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// handleRelease accepts the token returned by the gateway
+// handleRelease accepts the request released by the gateway
 // URL: /release
 func (ss *ScheduleService) handleRelease(w http.ResponseWriter, r *http.Request) {
 	tStart := time.Now()
@@ -241,26 +192,28 @@ func (ss *ScheduleService) handleRelease(w http.ResponseWriter, r *http.Request)
 
 	var schReq types.ScheduleRequest
 	if err := json.Unmarshal(body, &schReq); err != nil {
-		klog.Warningf("invalid return token: %s", body)
-		http.Error(w, "invalid return token", http.StatusBadRequest)
+		klog.Warningf("invalid release request: %s", body)
+		http.Error(w, "invalid release request", http.StatusBadRequest)
 		return
 	}
 
 	if len(schReq.ScheduleResult) == 0 {
-		klog.Warningf("ignore, return 0 token.")
-		http.Error(w, "ignore, return 0 token.", http.StatusBadRequest)
+		klog.Warningf("ignore, release 0 request.")
+		http.Error(w, "ignore, release 0 request.", http.StatusBadRequest)
 		return
 	}
 
-	for _, worker := range schReq.ScheduleResult {
-		reqState := lrs.NewRequestState(schReq.Id, 0, worker.Id(), schReq.GatewayId)
-		ss.lrsClient.ReleaseRequestState(worker.Role.String(), reqState)
+	for _, instance := range schReq.ScheduleResult {
+		reqState := lrs.NewRequestState(schReq.Id, 0, instance.Id(), schReq.GatewayId)
+		ss.lrsClient.ReleaseRequestState(instance.Role.String(), reqState)
 	}
 
-	klog.V(3).Infof("%vms| do return endpoints by %s: %v", time.Since(tStart).Milliseconds(), schReq.GatewayId, string(body))
+	klog.V(3).Infof("%vms| do release request by %s: %v", time.Since(tStart).Milliseconds(), schReq.GatewayId, string(body))
 	w.WriteHeader(http.StatusOK)
 }
 
+// handleReport accepts the request reported by the gateway
+// URL: /report
 func (ss *ScheduleService) handleReport(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -270,14 +223,14 @@ func (ss *ScheduleService) handleReport(w http.ResponseWriter, r *http.Request) 
 
 	var reqDatas lrs.RequestReportDataArray
 	if err := json.Unmarshal(body, &reqDatas); err != nil {
-		klog.Warningf("invalid return token: %s", body)
-		http.Error(w, "invalid return token", http.StatusBadRequest)
+		klog.Warningf("invalid report request: %s", body)
+		http.Error(w, "invalid report request", http.StatusBadRequest)
 		return
 	}
 
 	for _, reqData := range reqDatas {
-		resourceReq := lrs.NewRequestState(reqData.Id, int64(reqData.NumTokens), reqData.InstanceId, reqData.GatewayId)
-		err := ss.lrsClient.UpdateRequestState(reqData.InferMode, resourceReq)
+		reqState := lrs.NewRequestState(reqData.Id, int64(reqData.NumTokens), reqData.InstanceId, reqData.GatewayId)
+		err := ss.lrsClient.UpdateRequestState(reqData.InferMode, reqState)
 		if err != nil {
 			klog.Errorf("update request state failed: %v", err)
 		}

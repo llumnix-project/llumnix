@@ -30,9 +30,9 @@ func (r InferRole) String() string {
 	}
 }
 
-// LLMWorker represents a single LLM inference worker instance.
+// LLMInstance represents a single LLM inference worker instance.
 // It contains all necessary information to identify and connect to the worker.
-type LLMWorker struct {
+type LLMInstance struct {
 	// Version may be a timestamp indicating the create time or a version identifier
 	Version int64 `json:"version"`
 	// ID is a unique identifier for the worker
@@ -51,12 +51,12 @@ type LLMWorker struct {
 	DPSize int `json:"dp_size"`
 }
 
-type LLMWorkerSlice []LLMWorker
+type LLMInstanceSlice []LLMInstance
 
 // Id returns a unique identifier for the worker.
 // The identifier is based on the worker's string representation.
 // Returns an empty string if the worker has no identifiable information.
-func (w *LLMWorker) Id() string {
+func (w *LLMInstance) Id() string {
 	if w.ID == "" {
 		w.ID = w.String()
 	}
@@ -64,7 +64,7 @@ func (w *LLMWorker) Id() string {
 }
 
 // String returns a human-readable string representation of the worker.
-func (w *LLMWorker) String() string {
+func (w *LLMInstance) String() string {
 	var parts []string
 
 	// Build the prefix part (Model and/or Role)

@@ -10,12 +10,12 @@ import (
 	"llumnix/pkg/llm-gateway/types"
 )
 
-func createTestToken(id string) *types.LLMWorker {
+func createTestInstance(id string) *types.LLMInstance {
 	return createTestInstanceWithModel(id, "gpt-3.5-turbo")
 }
 
-func createTestInstanceWithModel(id string, model string) *types.LLMWorker {
-	return &types.LLMWorker{
+func createTestInstanceWithModel(id string, model string) *types.LLMInstance {
+	return &types.LLMInstance{
 		Version: 1,
 		Model:   model,
 		Endpoint: types.Endpoint{
@@ -27,7 +27,7 @@ func createTestInstanceWithModel(id string, model string) *types.LLMWorker {
 
 func TestRequestState(t *testing.T) {
 	reqId := "test-req-1"
-	instanceId := "worker-1"
+	instanceId := "instance-1"
 	gatewayId := "gateway-1"
 	numTokens := int64(100)
 
@@ -40,7 +40,7 @@ func TestRequestState(t *testing.T) {
 }
 
 func TestInstanceView(t *testing.T) {
-	instance := createTestToken("worker-1")
+	instance := createTestInstance("instance-1")
 	wr := NewInstanceView(instance)
 
 	t.Run("Initial State", func(t *testing.T) {
@@ -68,7 +68,7 @@ func TestInstanceView(t *testing.T) {
 
 func TestLocalRealtimeState(t *testing.T) {
 	lrs := NewLocalRealtimeState()
-	instance := createTestToken("worker-1")
+	instance := createTestInstance("instance-1")
 	gateway := "gateway-1"
 
 	t.Run("Add Instance", func(t *testing.T) {
@@ -135,14 +135,14 @@ func TestLocalRealtimeState(t *testing.T) {
 
 func TestErrorCases(t *testing.T) {
 	lrs := NewLocalRealtimeState()
-	instance := createTestToken("worker-1")
+	instance := createTestInstance("instance-1")
 	gateway := "gateway-1"
 
 	t.Run("Allocate Without Instance", func(t *testing.T) {
 		reqState := &RequestState{
 			reqId:      "req-1",
 			numTokens:  100,
-			instanceId: "non-existent-worker",
+			instanceId: "non-existent-instance",
 			gatewayId:  gateway,
 		}
 
@@ -184,7 +184,7 @@ func TestErrorCases(t *testing.T) {
 
 func TestMetrics(t *testing.T) {
 	lrs := NewLocalRealtimeState()
-	instance := createTestToken("worker-1")
+	instance := createTestInstance("instance-1")
 	gateway := "gateway-1"
 
 	// Prepare test data
@@ -246,7 +246,7 @@ func TestMetrics(t *testing.T) {
 
 func TestEdgeCases(t *testing.T) {
 	lrs := NewLocalRealtimeState()
-	instance := createTestToken("worker-1")
+	instance := createTestInstance("instance-1")
 	gateway := "gateway-1"
 
 	t.Run("Release Zero State", func(t *testing.T) {
@@ -274,8 +274,8 @@ func TestEdgeCases(t *testing.T) {
 		err := lrs.AllocateRequestState(reqState1)
 		assert.NoError(t, err)
 
-		// Create new version of worker
-		newInstance := createTestToken("worker-1")
+		// Create new version of instance
+		newInstance := createTestInstance("instance-1")
 		newInstance.Version = 2
 		lrs.AddInstance(newInstance)
 
@@ -297,13 +297,13 @@ func TestEdgeCases(t *testing.T) {
 	})
 
 	t.Run("Remove Non-existent Instance", func(t *testing.T) {
-		lrs.RemoveInstance("non-existent-worker")
+		lrs.RemoveInstance("non-existent-instance")
 	})
 }
 
 func TestPrintInstanceViews(t *testing.T) {
 	lrs := NewLocalRealtimeState()
-	instance := createTestToken("worker-1")
+	instance := createTestInstance("instance-1")
 	gateway := "gateway-1"
 
 	lrs.AddInstance(instance)
@@ -324,7 +324,7 @@ func TestPrintInstanceViews(t *testing.T) {
 
 func TestStateRelease(t *testing.T) {
 	lrs := NewLocalRealtimeState()
-	instance := createTestToken("worker-1")
+	instance := createTestInstance("instance-1")
 	gateway := "gateway-1"
 
 	lrs.AddInstance(instance)
@@ -373,7 +373,7 @@ func TestStateRelease(t *testing.T) {
 	})
 
 	t.Run("Clear Empty Instance", func(t *testing.T) {
-		instance := createTestToken("empty-worker")
+		instance := createTestInstance("empty-instance")
 		lrs.AddInstance(instance)
 		lrs.RemoveInstance(instance.Id())
 		assert.Nil(t, lrs.GetInstanceView(instance.Id()))
@@ -382,7 +382,7 @@ func TestStateRelease(t *testing.T) {
 
 func TestUpdateRequestStateEdgeCases(t *testing.T) {
 	lrs := NewLocalRealtimeState()
-	instance := createTestToken("worker-1")
+	instance := createTestInstance("instance-1")
 	gateway := "gateway-1"
 
 	t.Run("Update Non-existent Request", func(t *testing.T) {
@@ -404,7 +404,7 @@ func TestUpdateRequestStateEdgeCases(t *testing.T) {
 		reqState := &RequestState{
 			reqId:      "req-1",
 			numTokens:  100,
-			instanceId: "invalid-worker",
+			instanceId: "invalid-instance",
 			gatewayId:  gateway,
 			updateTime: time.Now(),
 		}
@@ -415,7 +415,7 @@ func TestUpdateRequestStateEdgeCases(t *testing.T) {
 
 func TestInstanceVersionManagement(t *testing.T) {
 	lrs := NewLocalRealtimeState()
-	instance := createTestToken("worker-1")
+	instance := createTestInstance("instance-1")
 	gateway := "gateway-1"
 
 	t.Run("Version Update Cleanup", func(t *testing.T) {
@@ -434,7 +434,7 @@ func TestInstanceVersionManagement(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Update instance version
-		newInstance := createTestToken("worker-1")
+		newInstance := createTestInstance("instance-1")
 		newInstance.Version = 2
 		lrs.AddInstance(newInstance)
 
@@ -448,7 +448,7 @@ func TestInstanceVersionManagement(t *testing.T) {
 
 func TestRequestStateValidation(t *testing.T) {
 	lrs := NewLocalRealtimeState()
-	instance := createTestToken("worker-1")
+	instance := createTestInstance("instance-1")
 	gateway := "gateway-1"
 
 	lrs.AddInstance(instance)
@@ -508,10 +508,10 @@ func TestGetAllWorkStatsByModel(t *testing.T) {
 	gateway := "gateway-1"
 
 	// Create instances with different models
-	gpt35Instance1 := createTestInstanceWithModel("worker-gpt35-1", "gpt-3.5-turbo")
-	gpt35Instance2 := createTestInstanceWithModel("worker-gpt35-2", "gpt-3.5-turbo")
-	gpt4Instance := createTestInstanceWithModel("worker-gpt4-1", "gpt-4")
-	claudeInstance := createTestInstanceWithModel("worker-claude-1", "claude-2")
+	gpt35Instance1 := createTestInstanceWithModel("instance-gpt35-1", "gpt-3.5-turbo")
+	gpt35Instance2 := createTestInstanceWithModel("instance-gpt35-2", "gpt-3.5-turbo")
+	gpt4Instance := createTestInstanceWithModel("instance-gpt4-1", "gpt-4")
+	claudeInstance := createTestInstanceWithModel("instance-claude-1", "claude-2")
 
 	t.Run("Empty Manager", func(t *testing.T) {
 		results := lrs.GetInstanceViewsByModel("gpt-3.5-turbo")
@@ -612,7 +612,7 @@ func TestGetAllWorkStatsByModel(t *testing.T) {
 
 	t.Run("Empty Model String", func(t *testing.T) {
 		// Test empty string model
-		emptyModelInstance := createTestInstanceWithModel("worker-empty", "")
+		emptyModelInstance := createTestInstanceWithModel("instance-empty", "")
 		lrs.AddInstance(emptyModelInstance)
 
 		emptyResults := lrs.GetInstanceViewsByModel("")

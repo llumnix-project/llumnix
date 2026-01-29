@@ -18,13 +18,13 @@ type schedulePipeline struct {
 // schedulerPipeline is organized by inference mode. For a given inference mode,
 // a sequence of scheduleSteps, which define the policies for executing on specific
 // instance types, are carried out.
-func newSchedulerPipeline(p *options.LlumnixConfig) map[string]*schedulePipeline {
+func newSchedulerPipeline(p *options.SchedulerConfig) map[string]*schedulePipeline {
 	schedulerPipelines := map[string]*schedulePipeline{
 		consts.NormalInferMode: {
 			inferMode: consts.NormalInferMode,
 			scheduleSteps: []scheduleStep{
 				{
-					instanceType:     consts.LlumnixNeutralInstanceType,
+					instanceType:     consts.NeutralInstanceType,
 					skipWhenFallback: false,
 				},
 			},
@@ -33,7 +33,7 @@ func newSchedulerPipeline(p *options.LlumnixConfig) map[string]*schedulePipeline
 			inferMode: consts.PrefillInferMode,
 			scheduleSteps: []scheduleStep{
 				{
-					instanceType:     consts.LlumnixPrefillInstanceType,
+					instanceType:     consts.PrefillInstanceType,
 					skipWhenFallback: false,
 				},
 			},
@@ -42,7 +42,7 @@ func newSchedulerPipeline(p *options.LlumnixConfig) map[string]*schedulePipeline
 			inferMode: consts.DecodeInferMode,
 			scheduleSteps: []scheduleStep{
 				{
-					instanceType:     consts.LlumnixDecodeInstanceType,
+					instanceType:     consts.DecodeInstanceType,
 					skipWhenFallback: false,
 				},
 			},
@@ -53,14 +53,14 @@ func newSchedulerPipeline(p *options.LlumnixConfig) map[string]*schedulePipeline
 		schedulerPipelines[consts.PrefillInferMode].scheduleSteps = append(
 			schedulerPipelines[consts.PrefillInferMode].scheduleSteps,
 			scheduleStep{
-				instanceType:     consts.LlumnixDecodeInstanceType,
+				instanceType:     consts.DecodeInstanceType,
 				skipWhenFallback: true,
 			},
 		)
 		schedulerPipelines[consts.DecodeInferMode].scheduleSteps = append(
 			schedulerPipelines[consts.DecodeInferMode].scheduleSteps,
 			scheduleStep{
-				instanceType:     consts.LlumnixPrefillInstanceType,
+				instanceType:     consts.PrefillInstanceType,
 				skipWhenFallback: true,
 			},
 		)

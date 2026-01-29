@@ -25,11 +25,11 @@ func (b *benchmarkGateway) Id() string {
 	return b.id
 }
 
-func createBenchmarkInstance(id int) *types.LLMWorker {
-	return &types.LLMWorker{
+func createBenchmarkInstance(id int) *types.LLMInstance {
+	return &types.LLMInstance{
 		Version: 1,
 		Endpoint: types.Endpoint{
-			Host: fmt.Sprintf("worker-%d.test", id),
+			Host: fmt.Sprintf("instance-%d.test", id),
 			Port: 8080,
 		},
 	}
@@ -40,7 +40,7 @@ func BenchmarkLocalRealtimeState(b *testing.B) {
 	lrs := NewLocalRealtimeState()
 
 	// Create and register instances
-	instances := make([]*types.LLMWorker, numInstances)
+	instances := make([]*types.LLMInstance, numInstances)
 	for i := 0; i < numInstances; i++ {
 		instances[i] = createBenchmarkInstance(i)
 		lrs.AddInstance(instances[i])
