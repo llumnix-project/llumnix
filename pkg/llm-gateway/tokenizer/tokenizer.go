@@ -1,6 +1,7 @@
 package tokenizer
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,7 +15,10 @@ import (
 var (
 	builtInTokenizerDir = "/tokenizers"
 	builtInTokenizer    = map[string]*sglang.Tokenizer{}
+	ModelMaxLen         = uint64(16384)
 )
+
+const defaultMaxTokens = uint64(16384)
 
 var (
 	tkOnce     sync.Once
@@ -40,6 +44,33 @@ func newTokenizer(name string, path string, chatTemplatePath string) (*sglang.To
 	}
 }
 
+func GetModelMaxLength(path string) uint64 {
+	tokenizerConfigFile := filepath.Join(path, "tokenizer_config.json")
+	if _, err := os.Stat(tokenizerConfigFile); err != nil {
+		return defaultMaxTokens
+	}
+
+	data, err := os.ReadFile(tokenizerConfigFile)
+	if err != nil {
+		return defaultMaxTokens
+	}
+	var config map[string]interface{}
+	err = json.Unmarshal(data, &config)
+	if err != nil {
+		return defaultMaxTokens
+	}
+	maxLength, ok := config["model_max_length"].(float64)
+	if !ok {
+		return defaultMaxTokens
+	}
+
+	if maxLength < 0 || maxLength > float64(1<<53) {
+		klog.Warningf("invalid model_max_length: %v, using default: %d", maxLength, defaultMaxTokens)
+		return defaultMaxTokens
+	}
+	return uint64(maxLength)
+}
+
 func InitTokenizer(name, path, chatTemplatePath string) {
 	if name == "" && path == "" {
 		return
@@ -50,7 +81,12 @@ func InitTokenizer(name, path, chatTemplatePath string) {
 			klog.Errorf("Could not load the tokenizer: %v", err)
 		}
 		gTokenizer = tk
+		ModelMaxLen = GetModelMaxLength(path)
 	})
+}
+
+func GetModelMaxLen() uint64 {
+	return ModelMaxLen
 }
 
 func GetTokenizer() (*sglang.Tokenizer, error) {

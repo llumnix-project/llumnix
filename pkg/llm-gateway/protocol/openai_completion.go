@@ -93,7 +93,7 @@ type CompletionRequest struct {
 	// refs: https://platform.openai.com/docs/api-reference/completions/create#completions/create-logit_bias
 	LogitBias           map[string]int         `json:"logit_bias,omitempty"`
 	LogProbs            int                    `json:"logprobs,omitempty"`
-	MaxTokens           *int                   `json:"max_tokens,omitempty"`
+	MaxTokens           *uint64                `json:"max_tokens,omitempty"`
 	MaxCompletionTokens *int                   `json:"max_completion_tokens,omitempty"`
 	N                   int                    `json:"n,omitempty"`
 	PresencePenalty     float32                `json:"presence_penalty,omitempty"`
