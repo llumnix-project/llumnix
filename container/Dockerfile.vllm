@@ -27,3 +27,9 @@ RUN cd /tmp/llumnix_whl \
     && pip install "${WHL_FILE}[vllm]" \
     && rm -rf /tmp/llumnix_whl
 COPY ./patches/vllm/mooncake/mooncake_connector_v1.py /usr/local/lib/python3.12/dist-packages/mooncake/mooncake_connector_v1.py
+
+# Set CUDA environment variables
+ENV CUDA_HOME=/usr/local/cuda \
+    CUDA_PATH=/usr/local/cuda \
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH \
+    PATH=/usr/local/cuda/bin:$PATH 
