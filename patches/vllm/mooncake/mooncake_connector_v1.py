@@ -216,6 +216,23 @@ class MooncakeConnector(KVConnectorBase_V1):
     def update_connector_output(self, connector_output):
         assert self.connector_scheduler is not None
         return self.connector_scheduler.update_connector_output(connector_output)
+    
+    def step(self):
+        if not self.connector_scheduler:
+            return
+        if not self.connector_scheduler.enable_mig:
+            return
+        return self.connector_scheduler.step()
+    
+    def need_call_remote_migrate_in(self) -> bool:
+        if not self.connector_scheduler:
+            return False
+        return True
+
+    def has_migrate_in_reqs(self) -> bool:
+        if not self.connector_scheduler:
+            return False
+        return self.connector_scheduler.reqs_need_migrate_in
 
     ############################################################
     # Worker Side Methods
@@ -304,6 +321,7 @@ class MooncakeConnectorScheduler:
         self._reqs_need_send: dict[ReqId, list[int]] = {}
         self._migration_listener_t = None
         self.enable_llumnix = False
+        self.enable_mig = False
         
         # ZMQ socket for receiving migration messages
         self._zmq_context = None
@@ -315,7 +333,9 @@ class MooncakeConnectorScheduler:
     def init_migration(self, scheduler):
         # Migration args
         self.enable_llumnix = True
-        self.migration_zmq_path = make_zmq_path("tcp", get_ip(), VLLM_MOONCAKE_MIGRATION_BASE_PORT)
+        self.enable_mig = True
+        self.migration_zmq_path = make_zmq_path("tcp", get_ip(),
+                                                VLLM_MOONCAKE_MIGRATION_BASE_PORT + self.vllm_config.parallel_config.data_parallel_rank)
         self.scheduler = scheduler
         self._request_dispatcher = TypeBasedDispatcher(
             [
@@ -443,7 +463,7 @@ class MooncakeConnectorScheduler:
             req.kv_transfer_params["do_migrate_out"] = True
             req.kv_transfer_params["do_migrate_in"] = False
             req.kv_transfer_params["migration_zmq_path"] = self.migration_zmq_path
-            logger.info("request zmq_path %s, kv_transfer_params %s", zmq_path, req.kv_transfer_params)
+            logger.info("request kv_transfer_params %s", req.kv_transfer_params)
         
         with self.reqs_need_migrate_out.lock:
             self.reqs_need_migrate_out.reqs.extend(reqs)
@@ -474,6 +494,7 @@ class MooncakeConnectorScheduler:
         request.append_output_token_ids(extra_tokens)
         assert request.status == RequestStatus.WAITING_FOR_REMOTE_KVS, f"{request.status}"
         request.status = RequestStatus.WAITING
+        request.kv_transfer_params["is_migrating"] = False
         logger.info("update success migrate in request %s, %s, %s", zmq_req.req_id, request.num_tokens, request.num_computed_tokens)
         clear_migrate_in_req_status(zmq_req.req_id)
         

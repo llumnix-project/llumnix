@@ -161,7 +161,7 @@ def get_host_ip(ifname: str = None) -> str:
 def get_kvt_port(cfg: VllmConfig) -> int:
     if cfg.kv_transfer_config:
          # pylint: disable=import-outside-toplevel
-        from vllm.v1.hybrid_connector.engine_proxy import sched_rpc_server_port
+        from llumnix.compat.hybrid_connector_compat import sched_rpc_server_port
         return sched_rpc_server_port(cfg)
     return -1
 

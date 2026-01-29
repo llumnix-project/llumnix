@@ -7,26 +7,6 @@ import struct
 import msgspec
 
 from vllm.config import VllmConfig
-from vllm.v1.hybrid_connector.engine_proxy import (
-	MsgpackEncoder,
-	PlaceholderModule,
-	core_update_params,
-	req2corereq,
-)
-from vllm.v1.hybrid_connector.kvtbackend import _get_inst_id, rpc_port, CODE_OK
-from vllm.v1.hybrid_connector.migration import (
-	MIGRATE_TO_REQ,
-	MIGRATE_TO_RESP,
-	SRC_INFO, OUTPUT_TOKENS_N,
-	_g_migrate_out_req_ids,
-    _g_migrate_in_req_ids,
-	_g_migrate_out_req_info,
-    _g_migrate_in_req_info,
-	_g_migrate_out_req_info_lock,
-    _g_migrate_in_req_info_lock,
-	MigrateResp,
-)
-from vllm.v1.hybrid_connector.utils import PeerManager, ConnManager
 from vllm.v1.request import Request
 
 from llumnix import envs
@@ -37,6 +17,27 @@ from llumnix.migration_frontend.base_migration_frontend import BaseMigrationFron
 from llumnix.outputs.queue.zmq_server import MigrationZmqServer
 from llumnix.utils import MigrationParams, MigrationType
 from llumnix.compat.vllm_compat import get_ip, cdiv
+from llumnix.compat.hybrid_connector_compat import (
+	MsgpackEncoder,
+	PlaceholderModule,
+	core_update_params,
+	req2corereq,
+	_get_inst_id,
+	rpc_port,
+	CODE_OK,
+    MIGRATE_TO_REQ,
+	MIGRATE_TO_RESP,
+	SRC_INFO, OUTPUT_TOKENS_N,
+	_g_migrate_out_req_ids,
+    _g_migrate_in_req_ids,
+	_g_migrate_out_req_info,
+    _g_migrate_in_req_info,
+	_g_migrate_out_req_info_lock,
+    _g_migrate_in_req_info_lock,
+	MigrateResp,
+    PeerManager,
+    ConnManager
+)
 try:
     import blade_kvt
     from blade_kvt.kv_transfer import connect_naming

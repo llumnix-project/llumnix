@@ -76,6 +76,9 @@ func (b *PdSplitVllmKvtBackend) buildPrefillRequestData(req *types.RequestContex
 	cmplReq := *(req.LLMRequest.CompletionRequest)
 	maxTokens := 1
 	cmplReq.MaxTokens = &maxTokens
+	if cmplReq.KvTransferParams == nil {
+		cmplReq.KvTransferParams = make(map[string]interface{})
+	}
 	cmplReq.KvTransferParams["do_remote_decode"] = true
 	return json.Marshal(cmplReq)
 }
@@ -109,6 +112,9 @@ func (b *PdSplitVllmKvtBackend) doPrefill(req *types.RequestContext, pWorker *ty
 
 func (b *PdSplitVllmKvtBackend) buildDecodeRequestData(req *types.RequestContext, worker *types.LLMWorker) ([]byte, error) {
 	cmplReq := req.LLMRequest.CompletionRequest
+	if cmplReq.KvTransferParams == nil {
+		cmplReq.KvTransferParams = make(map[string]interface{})
+	}
 	// TODO(wingo.zwt): may need to use kvtIP
 	cmplReq.KvTransferParams["remote_host"] = worker.Endpoint.Host
 	cmplReq.KvTransferParams["remote_port"] = worker.AuxPort
@@ -116,8 +122,8 @@ func (b *PdSplitVllmKvtBackend) buildDecodeRequestData(req *types.RequestContext
 	return json.Marshal(cmplReq)
 }
 
-func (b *PdSplitVllmKvtBackend) doDecode(req *types.RequestContext, chunkChan chan StreamChunk, dWorker *types.LLMWorker) {
-	data, err := b.buildDecodeRequestData(req, dWorker)
+func (b *PdSplitVllmKvtBackend) doDecode(req *types.RequestContext, chunkChan chan StreamChunk, pWorker *types.LLMWorker, dWorker *types.LLMWorker) {
+	data, err := b.buildDecodeRequestData(req, pWorker)
 	if err != nil {
 		klog.Errorf("[%s] failed to build decode request data: %v", err, req.Id)
 		chunkChan <- StreamChunk{err: err}
@@ -157,7 +163,7 @@ func (b *PdSplitVllmKvtBackend) StagedScheduleStreamInference(req *types.Request
 			return
 		}
 
-		b.doDecode(req, chunkChan, dWorker)
+		b.doDecode(req, chunkChan, pWorker, dWorker)
 	}()
 
 	return chunkChan, nil
