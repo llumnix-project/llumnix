@@ -67,11 +67,11 @@ func CreateBackendServiceResolver(config *options.Config, role types.InferRole) 
 	switch config.UseDiscovery {
 	case consts.DiscoveryRedis:
 		uri := RedisUriPrefix + fmt.Sprintf("%s:%s",
-			config.LlumnixConfig.CmsRedisHost, config.LlumnixConfig.CmsRedisPort)
-		buildArgs["redis_username"] = config.LlumnixConfig.CmsRedisUsername
-		buildArgs["redis_password"] = config.LlumnixConfig.CmsRedisPassword
-		buildArgs["redis_socketTimeout"] = config.LlumnixConfig.CmsRedisSocketTimeout
-		buildArgs["redis_retryTimes"] = config.LlumnixConfig.CmsRedisRetryTimes
+			config.SchedulerConfig.CmsRedisHost, config.SchedulerConfig.CmsRedisPort)
+		buildArgs["redis_username"] = config.SchedulerConfig.CmsRedisUsername
+		buildArgs["redis_password"] = config.SchedulerConfig.CmsRedisPassword
+		buildArgs["redis_socketTimeout"] = config.SchedulerConfig.CmsRedisSocketTimeout
+		buildArgs["redis_retryTimes"] = config.SchedulerConfig.CmsRedisRetryTimes
 		buildArgs["redis_discovery_refresh_interval_ms"] = config.RedisDiscoveryRefreshIntervalMs
 		buildArgs["redis_discovery_status_ttl"] = config.RedisDiscoveryStatusTTLMs
 		r, err := BuildLlmResolver(uri, buildArgs)

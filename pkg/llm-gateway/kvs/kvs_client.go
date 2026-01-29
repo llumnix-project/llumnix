@@ -107,10 +107,10 @@ func CreateOrGetClient(
 	}
 	var kvsMetadataServiceClient KVSMetadataServiceClientInterface
 	var err error
-	if kvsBackend == consts.LlumnixKvsBackendV6d {
+	if kvsBackend == consts.KvsBackendV6d {
 		kvsMetadataServiceClient, err = v6d.NewMetadataServiceClient(
 			configPath, kvsMetadataServiceRedisClusterHosts, kvsMetadataServiceRedisClusterPassword)
-	} else if kvsBackend == consts.LlumnixKvsBackendMooncake {
+	} else if kvsBackend == consts.KvsBackendMooncake {
 		port, err2 := strconv.Atoi(kvsMetadataServiceHttpServerPort)
 		if err2 != nil {
 			return nil, fmt.Errorf("invalid kvs metadata service http server port: %w", err2)
@@ -119,7 +119,7 @@ func CreateOrGetClient(
 			kvsMetadataServiceHttpServerHost, port)
 	} else {
 		return nil, fmt.Errorf("invalid kvs backend: %s, only support %s and %s",
-			kvsBackend, consts.LlumnixKvsBackendV6d, consts.LlumnixKvsBackendMooncake)
+			kvsBackend, consts.KvsBackendV6d, consts.KvsBackendMooncake)
 	}
 
 	if err != nil {

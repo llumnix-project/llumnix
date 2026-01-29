@@ -140,25 +140,25 @@ func getRedisClient(t *testing.T) cms.RedisClientInterface {
 func newConfig() *options.Config {
 	return &options.Config{
 		SchedulePolicy: consts.SchedulePolicyLoadBalance,
-		LlumnixConfig: options.LlumnixConfig{
+		SchedulerConfig: options.SchedulerConfig{
 			EnableFullModeScheduling: true,
 
 			CmsPullStatusIntervalMs:              500,
 			CmsPullMetadataIntervalMs:            1000,
 			DispatchTopK:                         1,
-			DispatchNeutralLoadMetric:            consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			DispatchNeutralLoadMetric:            consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			DispatchNeutralLoadThreshold:         1.0,
-			DispatchPrefillLoadMetric:            consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			DispatchPrefillLoadMetric:            consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			DispatchPrefillLoadThreshold:         1.0,
-			DispatchDecodeLoadMetric:             consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			DispatchDecodeLoadMetric:             consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			DispatchDecodeLoadThreshold:          1.0,
-			DispatchPrefillAsDecodeLoadMetric:    consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			DispatchPrefillAsDecodeLoadMetric:    consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			DispatchPrefillAsDecodeLoadThreshold: 1.0,
-			DispatchDecodeAsPrefillLoadMetric:    consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			DispatchDecodeAsPrefillLoadMetric:    consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			DispatchDecodeAsPrefillLoadThreshold: 1.0,
-			FailoverScope:                        consts.LlumnixFailoverScopeNodeUnit,
+			FailoverScope:                        consts.FailoverScopeNodeUnit,
 			InstanceStalenessSeconds:             60,
-			DispatchPrefillCacheLocalityMetric:   consts.LlumnixSchedulingMetricKVCacheHitLen,
+			DispatchPrefillCacheLocalityMetric:   consts.SchedulingMetricKVCacheHitLen,
 			EnableCacheAwareScheduling:           false,
 		},
 	}
@@ -166,12 +166,12 @@ func newConfig() *options.Config {
 
 func newDispatchPolicy(t *testing.T, config *options.Config, inferMode string) DispatchPolicy {
 	cmsReadClient, _ := cms.NewCMSReadClient(
-		getRedisClient(t), config.LlumnixConfig.CmsPullStatusIntervalMs, config.LlumnixConfig.CmsPullMetadataIntervalMs,
-		false, config.LlumnixConfig.EnableInstanceStatusLocalAccount, config.LlumnixConfig.EnableCacheAwareScheduling,
-		config.LlumnixConfig.RequestLocalAccountStalenessSeconds, -1, false, config.LlumnixConfig.KvCacheBlockSize, config.LlumnixConfig.NumPredictorWarmupSamples)
+		getRedisClient(t), config.SchedulerConfig.CmsPullStatusIntervalMs, config.SchedulerConfig.CmsPullMetadataIntervalMs,
+		false, config.SchedulerConfig.EnableInstanceStatusLocalAccount, config.SchedulerConfig.EnableCacheAwareScheduling,
+		config.SchedulerConfig.RequestLocalAccountStalenessSeconds, -1, false, config.SchedulerConfig.KvCacheBlockSize, config.SchedulerConfig.NumPredictorWarmupSamples)
 
 	var kvsClient kvs.KVSClientInterface
-	if config.LlumnixConfig.EnableCacheAwareScheduling {
+	if config.SchedulerConfig.EnableCacheAwareScheduling {
 		allInstances := map[string][]string{
 			"hash1": {"instance-prefill-1", "instance-prefill-2", "instance-prefill-3", "instance-prefill-4",
 				"instance-neutral-1", "instance-neutral-2", "instance-neutral-3"},
@@ -220,7 +220,7 @@ func newDispatchPolicy(t *testing.T, config *options.Config, inferMode string) D
 		cmsClient:         cmsReadClient,
 		kvsClient:         kvsClient,
 		policyInternal:    newDispatchPolicyInternal(config),
-		schedulePipelines: newSchedulerPipeline(&config.LlumnixConfig),
+		schedulePipelines: newSchedulerPipeline(&config.SchedulerConfig),
 	}
 }
 
@@ -239,7 +239,7 @@ func TestDispatchPolicyScheduleNeutral(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.NormalInferMode,
 				},
@@ -286,7 +286,7 @@ func TestDispatchPolicySchedulePD(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-prefill": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
 					Role:     consts.PrefillInferMode,
 				},
@@ -309,7 +309,7 @@ func TestDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-decode": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
 					Role:     consts.DecodeInferMode,
 				},
@@ -366,7 +366,7 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 	instanceViews1 := map[string]*instanceViewScheduling{
 		"instance-prefill": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Role: consts.PrefillInferMode,
 				},
 				Status: &cms.InstanceStatus{
@@ -407,7 +407,7 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 	instanceViews2 := map[string]*instanceViewScheduling{
 		"instance-decode": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Role: consts.DecodeInferMode,
 				},
 				Status: &cms.InstanceStatus{
@@ -447,14 +447,14 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 
 func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 	config := newConfig()
-	config.LlumnixConfig.EnableAdaptivePD = true
+	config.SchedulerConfig.EnableAdaptivePD = true
 	policy := newDispatchPolicy(t, config, "prefill")
 
 	// No available P instances, choose D for prefill
 	instanceViews1 := map[string]*instanceViewScheduling{
 		"instance-prefill": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
 					Role:     consts.PrefillInferMode,
 				},
@@ -477,7 +477,7 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 		},
 		"instance-decode": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
 					Role:     consts.DecodeInferMode,
 				},
@@ -530,7 +530,7 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 	instanceViews2 := map[string]*instanceViewScheduling{
 		"instance-prefill": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
 					Role:     consts.PrefillInferMode,
 				},
@@ -553,7 +553,7 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 		},
 		"instance-decode": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
 					Role:     consts.DecodeInferMode,
 				},
@@ -605,7 +605,7 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 	instanceViews3 := map[string]*instanceViewScheduling{
 		"instance-prefill": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
 					Role:     consts.PrefillInferMode,
 				},
@@ -628,7 +628,7 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 		},
 		"instance-decode": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
 					Role:     consts.DecodeInferMode,
 				},
@@ -679,15 +679,15 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 
 func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 	config := newConfig()
-	config.LlumnixConfig.EnableCacheAwareScheduling = true
-	config.LlumnixConfig.KvCacheBlockSize = 1
+	config.SchedulerConfig.EnableCacheAwareScheduling = true
+	config.SchedulerConfig.KvCacheBlockSize = 1
 	policy := newDispatchPolicy(t, config, "prefill")
 
 	// Test prefill/decode mode scheduling
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-prefill-1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
 					Role:     consts.PrefillInferMode,
 				},
@@ -709,7 +709,7 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 		},
 		"instance-prefill-2": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
 					Role:     consts.PrefillInferMode,
 				},
@@ -731,7 +731,7 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 		},
 		"instance-prefill-3": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8003},
 					Role:     consts.PrefillInferMode,
 				},
@@ -753,7 +753,7 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 		},
 		"instance-decode": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8004},
 					Role:     consts.DecodeInferMode,
 				},
@@ -808,16 +808,16 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 
 func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 	config := newConfig()
-	config.LlumnixConfig.EnableCacheAwareScheduling = true
-	config.LlumnixConfig.KvCacheBlockSize = 1
-	config.LlumnixConfig.DispatchTopK = 2
+	config.SchedulerConfig.EnableCacheAwareScheduling = true
+	config.SchedulerConfig.KvCacheBlockSize = 1
+	config.SchedulerConfig.DispatchTopK = 2
 	policy := newDispatchPolicy(t, config, "prefill")
 
 	// Test prefill/decode mode scheduling
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-prefill-1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
 					Role:     consts.PrefillInferMode,
 				},
@@ -839,7 +839,7 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 		},
 		"instance-prefill-2": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
 					Role:     consts.PrefillInferMode,
 				},
@@ -861,7 +861,7 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 		},
 		"instance-prefill-3": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8003},
 					Role:     consts.PrefillInferMode,
 				},
@@ -883,7 +883,7 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 		},
 		"instance-prefill-4": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8004},
 					Role:     consts.PrefillInferMode,
 				},
@@ -905,7 +905,7 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 		},
 		"instance-decode": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8005},
 					Role:     consts.DecodeInferMode,
 				},
@@ -976,15 +976,15 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 
 func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 	config := newConfig()
-	config.LlumnixConfig.EnableCacheAwareScheduling = true
-	config.LlumnixConfig.KvCacheBlockSize = 1
+	config.SchedulerConfig.EnableCacheAwareScheduling = true
+	config.SchedulerConfig.KvCacheBlockSize = 1
 	policy := newDispatchPolicy(t, config, "neutral")
 
 	// Test neutral mode scheduling
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-neutral-1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
 					Role:     consts.NormalInferMode,
 				},
@@ -1006,7 +1006,7 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 		},
 		"instance-neutral-2": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
 					Role:     consts.NormalInferMode,
 				},
@@ -1028,7 +1028,7 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 		},
 		"instance-neutral-3": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8003},
 					Role:     consts.NormalInferMode,
 				},
@@ -1078,7 +1078,7 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-neutral1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
 					Role:     consts.NormalInferMode,
 				},
@@ -1102,7 +1102,7 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 		},
 		"instance-neutral2": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
 					Role:     consts.NormalInferMode,
 				},
@@ -1126,7 +1126,7 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 		},
 		"instance-neutral3": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8003},
 					Role:     consts.NormalInferMode,
 				},
@@ -1150,7 +1150,7 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 		},
 		"instance-neutral4": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8004},
 					Role:     consts.NormalInferMode,
 				},
@@ -1174,7 +1174,7 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 		},
 		"instance-neutral5": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8005},
 					Role:     consts.NormalInferMode,
 				},
@@ -1229,7 +1229,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-prefill1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
 					Role:     consts.PrefillInferMode,
 				},
@@ -1253,7 +1253,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-prefill2": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
 					Role:     consts.PrefillInferMode,
 				},
@@ -1277,7 +1277,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-prefill3": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
 					Role:     consts.PrefillInferMode,
 				},
@@ -1301,7 +1301,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-prefill4": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
 					Role:     consts.PrefillInferMode,
 				},
@@ -1325,7 +1325,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-prefill5": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
 					Role:     consts.PrefillInferMode,
 				},
@@ -1349,7 +1349,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-decode1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
 					Role:     consts.DecodeInferMode,
 				},
@@ -1373,7 +1373,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-decode2": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
 					Role:     consts.DecodeInferMode,
 				},
@@ -1397,7 +1397,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-decode3": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
 					Role:     consts.DecodeInferMode,
 				},
@@ -1421,7 +1421,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-decode4": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
 					Role:     consts.DecodeInferMode,
 				},
@@ -1445,7 +1445,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		},
 		"instance-decode5": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
 					Role:     consts.DecodeInferMode,
 				},
@@ -1512,15 +1512,15 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 
 func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 	config := newConfig()
-	config.LlumnixConfig.EnableInstanceStatusLocalAccount = true
-	config.LlumnixConfig.KvCacheBlockSize = 1
+	config.SchedulerConfig.EnableInstanceStatusLocalAccount = true
+	config.SchedulerConfig.KvCacheBlockSize = 1
 	policy := newDispatchPolicy(t, config, "neutral")
 
 	// Test neutral mode scheduling
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-neutral-1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
 					Role:     consts.NormalInferMode,
 				},
@@ -1548,7 +1548,7 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 		},
 		"instance-neutral-2": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
 					Role:     consts.NormalInferMode,
 				},

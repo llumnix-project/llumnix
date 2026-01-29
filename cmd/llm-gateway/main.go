@@ -60,7 +60,7 @@ func NewCommand() *cobra.Command {
 				if err := cs.Start(); err != nil {
 					klog.Fatalf("llm scheduler exit: %v", err)
 				}
-			} else if cfg.StandaloneRescheduleMode && cfg.LlumnixConfig.EnableRescheduling {
+			} else if cfg.StandaloneRescheduleMode && cfg.SchedulerConfig.EnableRescheduling {
 				r := service.NewRescheduleService(cfg)
 				klog.Info("llm rescheduler start ...")
 				if err := r.Start(); err != nil {

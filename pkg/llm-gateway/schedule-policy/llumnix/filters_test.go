@@ -50,7 +50,7 @@ func TestSchedulabilityFilter(t *testing.T) {
 
 func TestMetricBasedFilter(t *testing.T) {
 	filter1 := &metricBasedFilter{
-		metricName: consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+		metricName: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 		threshold:  0.6,
 	}
 
@@ -60,9 +60,9 @@ func TestMetricBasedFilter(t *testing.T) {
 		cmsView: &cms.InstanceView{Metadata: &cms.InstanceMetadata{InstanceId: "instance-1"}},
 		schedulingCtx: schedulingCtx{
 			metrics: map[string]instanceSchedulingMetric{
-				consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
+				consts.SchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
 					baseMetric{
-						name:  consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+						name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 						value: 0.5,
 					},
 				},
@@ -75,9 +75,9 @@ func TestMetricBasedFilter(t *testing.T) {
 		cmsView: &cms.InstanceView{Metadata: &cms.InstanceMetadata{InstanceId: "instance-2"}},
 		schedulingCtx: schedulingCtx{
 			metrics: map[string]instanceSchedulingMetric{
-				consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
+				consts.SchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
 					baseMetric{
-						name:  consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+						name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 						value: 0.8,
 					},
 				},
@@ -90,9 +90,9 @@ func TestMetricBasedFilter(t *testing.T) {
 		cmsView: &cms.InstanceView{Metadata: &cms.InstanceMetadata{InstanceId: "instance-3"}},
 		schedulingCtx: schedulingCtx{
 			metrics: map[string]instanceSchedulingMetric{
-				consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
+				consts.SchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
 					baseMetric{
-						name:  consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+						name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 						value: 0.3,
 					},
 				},
@@ -217,37 +217,37 @@ func TestFailoverFilter(t *testing.T) {
 	}{
 		{
 			name:          "instance failover scope",
-			failoverScope: consts.LlumnixFailoverScopeInstance,
+			failoverScope: consts.FailoverScopeInstance,
 			parallelSize:  1,
 			expected:      []string{"0"},
 		},
 		{
 			name:          "node failover scope",
-			failoverScope: consts.LlumnixFailoverScopeNode,
+			failoverScope: consts.FailoverScopeNode,
 			parallelSize:  1,
 			expected:      []string{"0", "1", "2"},
 		},
 		{
 			name:          "instance unit failover scope without data parallel",
-			failoverScope: consts.LlumnixFailoverScopeInstanceUnit,
+			failoverScope: consts.FailoverScopeInstanceUnit,
 			parallelSize:  1,
 			expected:      []string{"0"},
 		},
 		{
 			name:          "instance unit failover scope with data parallel",
-			failoverScope: consts.LlumnixFailoverScopeInstanceUnit,
+			failoverScope: consts.FailoverScopeInstanceUnit,
 			parallelSize:  2,
 			expected:      []string{"0", "1", "3"},
 		},
 		{
 			name:          "node unit failover scope without data parallel",
-			failoverScope: consts.LlumnixFailoverScopeNodeUnit,
+			failoverScope: consts.FailoverScopeNodeUnit,
 			parallelSize:  1,
 			expected:      []string{"0", "1", "2"},
 		},
 		{
 			name:          "node unit failover scope with data parallel",
-			failoverScope: consts.LlumnixFailoverScopeNodeUnit,
+			failoverScope: consts.FailoverScopeNodeUnit,
 			parallelSize:  2,
 			expected:      []string{"0", "1", "2", "3", "4"},
 		},
@@ -287,7 +287,7 @@ func TestInferModeFilter(t *testing.T) {
 				Status: &cms.InstanceStatus{
 					InstanceId: instanceId,
 				},
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Role: types.InferRole(inferMode),
 				},
 				Metadata: &cms.InstanceMetadata{
@@ -379,25 +379,25 @@ func TestFailoverMigrationSrcFilter(t *testing.T) {
 	}{
 		{
 			name:          "instance failover scope",
-			failoverScope: consts.LlumnixFailoverScopeInstance,
+			failoverScope: consts.FailoverScopeInstance,
 			parallelSize:  1,
 			expected:      []string{"1", "2", "3", "4"},
 		},
 		{
 			name:          "node failover scope",
-			failoverScope: consts.LlumnixFailoverScopeNode,
+			failoverScope: consts.FailoverScopeNode,
 			parallelSize:  1,
 			expected:      []string{"3", "4"},
 		},
 		{
 			name:          "unit failover scope without data parallel",
-			failoverScope: consts.LlumnixFailoverScopeNodeUnit,
+			failoverScope: consts.FailoverScopeNodeUnit,
 			parallelSize:  1,
 			expected:      []string{"3", "4"},
 		},
 		{
 			name:          "unit failover scope with data parallel",
-			failoverScope: consts.LlumnixFailoverScopeNodeUnit,
+			failoverScope: consts.FailoverScopeNodeUnit,
 			parallelSize:  2,
 			expected:      []string{},
 		},
@@ -432,7 +432,7 @@ func TestFailoverMigrationSrcFilter(t *testing.T) {
 func TestInvertedSingleInstanceFilterWrapper(t *testing.T) {
 	filter1 := &invertedSingleInstanceFilterWrapper{
 		innerFilter: &metricBasedFilter{
-			metricName: consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			metricName: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			threshold:  1.0,
 		},
 	}
@@ -449,9 +449,9 @@ func TestInvertedSingleInstanceFilterWrapper(t *testing.T) {
 		},
 		schedulingCtx: schedulingCtx{
 			metrics: map[string]instanceSchedulingMetric{
-				consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
+				consts.SchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
 					baseMetric: baseMetric{
-						name:  consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+						name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 						value: 2.0,
 					},
 				},
@@ -471,9 +471,9 @@ func TestInvertedSingleInstanceFilterWrapper(t *testing.T) {
 		},
 		schedulingCtx: schedulingCtx{
 			metrics: map[string]instanceSchedulingMetric{
-				consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
+				consts.SchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
 					baseMetric: baseMetric{
-						name:  consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+						name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 						value: 0.5,
 					},
 				},

@@ -102,7 +102,7 @@ func (cb *SchedulerClient) doSchedule(req *types.RequestContext) (types.Schedule
 		return nil, consts.ErrorSchedulerNotReady
 	}
 
-	// create token request to scheduler
+	// create schedule request to scheduler
 	schReq := cb.createScheduleRequest(req)
 	data, err := json.Marshal(&schReq)
 	if err != nil {
@@ -189,7 +189,7 @@ func (cb *SchedulerClient) Get(req *types.RequestContext) (types.ScheduledResult
 	}
 }
 
-func (cb *SchedulerClient) createReleaseRequest(req *types.RequestContext, worker *types.LLMWorker) *types.ScheduleRequest {
+func (cb *SchedulerClient) createReleaseRequest(req *types.RequestContext, instance *types.LLMInstance) *types.ScheduleRequest {
 	localEndpoint := cb.kac.GetLocalEndpoint()
 	return &types.ScheduleRequest{
 		Id:             req.Id,
@@ -197,12 +197,12 @@ func (cb *SchedulerClient) createReleaseRequest(req *types.RequestContext, worke
 		GatewayId:      localEndpoint.String(),
 		ScheduleMode:   req.ScheduleCtx.ScheduleMode,
 		InferStage:     req.ScheduleCtx.InferStage,
-		ScheduleResult: types.ScheduledResult{*worker},
+		ScheduleResult: types.ScheduledResult{*instance},
 	}
 }
 
-func (cb *SchedulerClient) Release(req *types.RequestContext, worker *types.LLMWorker) {
-	if req == nil || worker == nil {
+func (cb *SchedulerClient) Release(req *types.RequestContext, instance *types.LLMInstance) {
+	if req == nil || instance == nil {
 		return
 	}
 	// 1. The current gateway differs from the one at borrowing time, indicating the resources have been updated and no release is needed.
@@ -214,8 +214,8 @@ func (cb *SchedulerClient) Release(req *types.RequestContext, worker *types.LLMW
 	}
 
 	go func() {
-		releaseRequest := cb.createReleaseRequest(req, worker)
-		klog.V(3).Infof("release worker resource: %v", releaseRequest.String())
+		releaseRequest := cb.createReleaseRequest(req, instance)
+		klog.V(3).Infof("release request: %v", releaseRequest.String())
 		data, err := json.Marshal(releaseRequest)
 		if err != nil {
 			klog.Errorf("marshal release request error: %v", err)
@@ -238,7 +238,7 @@ func (cb *SchedulerClient) Release(req *types.RequestContext, worker *types.LLMW
 				time.Sleep(500 * time.Millisecond)
 				goto RETRY
 			}
-			klog.Warningf("release worker for request %s fail: %v\n", req.Id, err)
+			klog.Warningf("release state for request %s fail: %v\n", req.Id, err)
 			return
 		}
 
@@ -246,11 +246,11 @@ func (cb *SchedulerClient) Release(req *types.RequestContext, worker *types.LLMW
 
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
-			klog.Warningf("release worker for request %s: could not read body: %v", req.Id, err)
+			klog.Warningf("release state for request %s: could not read body: %v", req.Id, err)
 			return
 		}
 		if resp.StatusCode != http.StatusOK {
-			klog.Errorf("release worker for request %s: error: %d, %s", req.Id, resp.StatusCode, string(body))
+			klog.Errorf("release state for request %s: error: %d, %s", req.Id, resp.StatusCode, string(body))
 			return
 		}
 	}()

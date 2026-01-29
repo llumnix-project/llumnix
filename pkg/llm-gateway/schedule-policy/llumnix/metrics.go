@@ -34,110 +34,110 @@ type instanceSchedulingMetric interface {
 	ValueLess(value float32) bool
 }
 
-func getSchedulingMetric(p *options.LlumnixConfig, metricName string) func() instanceSchedulingMetric {
+func getSchedulingMetric(p *options.SchedulerConfig, metricName string) func() instanceSchedulingMetric {
 	klog.V(3).Infof("Getting scheduling metric factory for metric: %s", metricName)
 	switch metricName {
-	case consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills:
+	case consts.SchedulingMetricKVBlocksRatioWithAllPrefills:
 		klog.V(3).Infof("Creating KVBlocksRatioWithAllPrefills metric factory")
 		return func() instanceSchedulingMetric {
 			return &kvBlocksRatioWithAllPrefills{
 				baseMetric: baseMetric{
-					name: consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+					name: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 				},
 			}
 		}
-	case consts.LlumnixSchedulingMetricDecodeBatchSize:
+	case consts.SchedulingMetricDecodeBatchSize:
 		klog.V(3).Infof("Creating DecodeBatchSize metric factory")
 		return func() instanceSchedulingMetric {
 			return &decodeBatchSize{
 				baseMetric: baseMetric{
-					name: consts.LlumnixSchedulingMetricDecodeBatchSize,
+					name: consts.SchedulingMetricDecodeBatchSize,
 				},
 			}
 		}
-	case consts.LlumnixSchedulingMetricNumWaitingRequests:
+	case consts.SchedulingMetricNumWaitingRequests:
 		klog.V(3).Infof("Creating NumWaitingRequests metric factory")
 		return func() instanceSchedulingMetric {
 			return &numWaitingRequests{
 				baseMetric: baseMetric{
-					name: consts.LlumnixSchedulingMetricNumWaitingRequests,
+					name: consts.SchedulingMetricNumWaitingRequests,
 				},
 			}
 		}
-	case consts.LlumnixSchedulingMetricAllPrefillsKVBlocksNum:
+	case consts.SchedulingMetricAllPrefillsKVBlocksNum:
 		klog.V(3).Infof("Creating AllPrefillsKVBlocksNum metric factory")
 		return func() instanceSchedulingMetric {
 			return &AllPrefillsKVBlocksNum{
 				baseMetric: baseMetric{
-					name: consts.LlumnixSchedulingMetricAllPrefillsKVBlocksNum,
+					name: consts.SchedulingMetricAllPrefillsKVBlocksNum,
 				},
 			}
 		}
-	case consts.LlumnixSchedulingMetricKVCacheHitLen:
+	case consts.SchedulingMetricKVCacheHitLen:
 		klog.V(3).Infof("Creating KVCacheHitLen metric factory")
 		return func() instanceSchedulingMetric {
 			return &kvCacheHitLen{
 				baseMetric: baseMetric{
-					name: consts.LlumnixSchedulingMetricKVCacheHitLen,
+					name: consts.SchedulingMetricKVCacheHitLen,
 				},
 			}
 		}
-	case consts.LlumnixSchedulingMetricCacheAwareAllPrefillsKVBlocksNum:
+	case consts.SchedulingMetricCacheAwareAllPrefillsKVBlocksNum:
 		klog.V(3).Infof("Creating CacheAwareAllPrefillsKVBlocksNum metric factory")
 		return func() instanceSchedulingMetric {
 			return &CacheAwareAllPrefillsKVBlocksNum{
 				baseMetric: baseMetric{
-					name: consts.LlumnixSchedulingMetricCacheAwareAllPrefillsKVBlocksNum,
+					name: consts.SchedulingMetricCacheAwareAllPrefillsKVBlocksNum,
 				},
 				allPrefillsKVBlocksNumMetric: AllPrefillsKVBlocksNum{
 					baseMetric: baseMetric{
-						name: consts.LlumnixSchedulingMetricAllPrefillsKVBlocksNum,
+						name: consts.SchedulingMetricAllPrefillsKVBlocksNum,
 					},
 				},
 			}
 		}
-	case consts.LlumnixSchedulingMetricAdaptiveDecodeBatchSize:
+	case consts.SchedulingMetricAdaptiveDecodeBatchSize:
 		klog.V(3).Infof(
 			"Creating AdaptiveDecodeBatchSize metric factory with decodeComputeBoundBatchSize: %d",
 			p.DecodeComputeBoundBatchSize)
 		return func() instanceSchedulingMetric {
 			return &adaptiveDecodeBatchSize{
 				baseMetric: baseMetric{
-					name: consts.LlumnixSchedulingMetricAdaptiveDecodeBatchSize,
+					name: consts.SchedulingMetricAdaptiveDecodeBatchSize,
 				},
 				decodeBatchSizeMetric: decodeBatchSize{
 					baseMetric: baseMetric{
-						name: consts.LlumnixSchedulingMetricDecodeBatchSize,
+						name: consts.SchedulingMetricDecodeBatchSize,
 					},
 				},
 				decodeComputeBoundBatchSize: p.DecodeComputeBoundBatchSize,
 			}
 		}
-	case consts.LlumnixSchedulingMetricNumRequests:
+	case consts.SchedulingMetricNumRequests:
 		klog.V(3).Infof("Creating NumRequests metric factory")
 		return func() instanceSchedulingMetric {
 			return &numRequests{
 				baseMetric: baseMetric{
-					name: consts.LlumnixSchedulingMetricNumRequests,
+					name: consts.SchedulingMetricNumRequests,
 				},
 				enableFullModeScheduling: p.EnableFullModeScheduling,
 			}
 		}
-	case consts.LlumnixSchedulingMetricAllDecodesKVBlocksNumWithAllPrefills:
+	case consts.SchedulingMetricAllDecodesKVBlocksNumWithAllPrefills:
 		klog.V(3).Infof("Creating AllDecodesKVBlocksNumWithAllPrefills metric factory")
 		return func() instanceSchedulingMetric {
 			return &allDecodesKVBlocksNumWithAllPrefills{
 				baseMetric: baseMetric{
-					name: consts.LlumnixSchedulingMetricAllDecodesKVBlocksNumWithAllPrefills,
+					name: consts.SchedulingMetricAllDecodesKVBlocksNumWithAllPrefills,
 				},
 			}
 		}
-	case consts.LlumnixSchedulingMetricNumTokens:
+	case consts.SchedulingMetricNumTokens:
 		klog.V(3).Infof("Creating NumTokens metric factory")
 		return func() instanceSchedulingMetric {
 			return &numTokens{
 				baseMetric: baseMetric{
-					name: consts.LlumnixSchedulingMetricNumTokens,
+					name: consts.SchedulingMetricNumTokens,
 				},
 			}
 		}

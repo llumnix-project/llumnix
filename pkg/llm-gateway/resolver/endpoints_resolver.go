@@ -3,9 +3,10 @@ package resolver
 import (
 	"context"
 	"fmt"
-	"llumnix/pkg/llm-gateway/types"
 	"strings"
 	"sync"
+
+	"llumnix/pkg/llm-gateway/types"
 )
 
 const (
@@ -83,26 +84,26 @@ func (er *EndpointsResolver) GetEndpoints() ([]types.Endpoint, error) {
 	return er.endpoints, nil
 }
 
-// GetLLMWorkers implements the LLMResolver interface.
-// It converts the current endpoints to types.LLMWorker objects.
-func (er *EndpointsResolver) GetLLMWorkers() (types.LLMWorkerSlice, error) {
+// GetLLMInstances implements the LLMResolver interface.
+// It converts the current endpoints to types.LLMInstance objects.
+func (er *EndpointsResolver) GetLLMInstances() (types.LLMInstanceSlice, error) {
 	er.mu.RLock()
 	defer er.mu.RUnlock()
 
-	workers := make(types.LLMWorkerSlice, 0, len(er.endpoints))
+	instances := make(types.LLMInstanceSlice, 0, len(er.endpoints))
 	for _, ep := range er.endpoints {
-		workers = append(workers, types.LLMWorker{
+		instances = append(instances, types.LLMInstance{
 			Endpoint: ep,
 			Role:     types.InferRole(er.role),
 		})
 	}
-	return workers, nil
+	return instances, nil
 }
 
 // Watch implements the LLMResolver interface.
-// It returns channels for monitoring added and removed LLM workers.
-func (er *EndpointsResolver) Watch(ctx context.Context) (<-chan types.LLMWorkerSlice, <-chan types.LLMWorkerSlice, error) {
-	return er.watcher.Watch(ctx, er.GetLLMWorkers)
+// It returns channels for monitoring added and removed LLM instances.
+func (er *EndpointsResolver) Watch(ctx context.Context) (<-chan types.LLMInstanceSlice, <-chan types.LLMInstanceSlice, error) {
+	return er.watcher.Watch(ctx, er.GetLLMInstances)
 }
 
 // EndpointsResolverBuilder implements ResolverBuilder for creating EndpointsResolver instances.

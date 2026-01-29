@@ -5,13 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"llumnix/pkg/llm-gateway/protocol"
-	"llumnix/pkg/llm-gateway/types"
 	"net"
 	"net/http"
 	"time"
 
 	"k8s.io/klog/v2"
+
+	"llumnix/pkg/llm-gateway/protocol"
+	"llumnix/pkg/llm-gateway/types"
 )
 
 const (
@@ -54,13 +55,13 @@ func WriteResponse(req *types.RequestContext, chunk []byte) {
 }
 
 // MakeNewBackendRequest creates HTTP request for backend inference
-func MakeNewBackendRequest(req *types.RequestContext, body []byte, worker *types.LLMWorker) (*http.Request, error) {
+func MakeNewBackendRequest(req *types.RequestContext, body []byte, instance *types.LLMInstance) (*http.Request, error) {
 	httpReq := req.HttpRequest.Request
-	if worker == nil {
-		klog.Errorf("failed to get worker for request: %s", req.Id)
-		return nil, errors.New("failed to get worker")
+	if instance == nil {
+		klog.Errorf("failed to get instance for request: %s", req.Id)
+		return nil, errors.New("failed to get instance")
 	}
-	url := fmt.Sprintf("http://%s%s", worker.Endpoint.String(), protocol.CompletionsPath)
+	url := fmt.Sprintf("http://%s%s", instance.Endpoint.String(), protocol.CompletionsPath)
 	klog.V(3).Infof("Forwarding request to %s body: %s", url, string(body))
 
 	// Create a new request to forward to the backend
@@ -151,8 +152,8 @@ func StreamRead(req *types.RequestContext, chunkChan chan StreamChunk, r io.Read
 }
 
 // StreamResponseFromBackend starts streaming read from backend and sends chunks to channel
-func StreamResponseFromBackend(req *types.RequestContext, client *http.Client, body []byte, worker *types.LLMWorker, chunkChan chan StreamChunk) {
-	newReq, err := MakeNewBackendRequest(req, body, worker)
+func StreamResponseFromBackend(req *types.RequestContext, client *http.Client, body []byte, instance *types.LLMInstance, chunkChan chan StreamChunk) {
+	newReq, err := MakeNewBackendRequest(req, body, instance)
 	if err != nil {
 		chunkChan <- StreamChunk{err: err}
 		return

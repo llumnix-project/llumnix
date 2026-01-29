@@ -8,10 +8,10 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// observerPair stores a pair of channels for added and removed workers
+// observerPair stores a pair of channels for added and removed instances
 type observerPair struct {
-	added   chan<- types.LLMWorkerSlice
-	removed chan<- types.LLMWorkerSlice
+	added   chan<- types.LLMInstanceSlice
+	removed chan<- types.LLMInstanceSlice
 }
 
 // Watcher provides common observer management functionality for resolvers
@@ -31,14 +31,14 @@ func NewWatcher() *Watcher {
 }
 
 // Watch implements the common Watch method for resolvers.
-// It returns two channels: one for added workers and one for removed workers.
-// The first value sent on the added channel is the current state (all workers considered as "added").
+// It returns two channels: one for added instances and one for removed instances.
+// The first value sent on the added channel is the current state (all instances considered as "added").
 // Both channels will be closed when the context is cancelled or the resolver stops.
 // This method is thread-safe and supports multiple concurrent observers.
-func (w *Watcher) Watch(ctx context.Context, getCurrentWorkers func() (types.LLMWorkerSlice, error)) (<-chan types.LLMWorkerSlice, <-chan types.LLMWorkerSlice, error) {
+func (w *Watcher) Watch(ctx context.Context, getCurrentInstances func() (types.LLMInstanceSlice, error)) (<-chan types.LLMInstanceSlice, <-chan types.LLMInstanceSlice, error) {
 	// Create buffered channels to avoid blocking
-	addedCh := make(chan types.LLMWorkerSlice, 50)
-	removedCh := make(chan types.LLMWorkerSlice, 50)
+	addedCh := make(chan types.LLMInstanceSlice, 50)
+	removedCh := make(chan types.LLMInstanceSlice, 50)
 
 	// Create observer pair
 	pair := &observerPair{
@@ -52,9 +52,9 @@ func (w *Watcher) Watch(ctx context.Context, getCurrentWorkers func() (types.LLM
 	w.observers[pair] = struct{}{}
 
 	// Get current state using the provided function
-	currentSlice, err := getCurrentWorkers()
+	currentSlice, err := getCurrentInstances()
 
-	// Send initial state as added (all current workers are effectively "added" initially)
+	// Send initial state as added (all current instances are effectively "added" initially)
 	if len(currentSlice) > 0 && err == nil {
 		go func() {
 			select {
@@ -86,13 +86,13 @@ func (w *Watcher) removeObserver(pair *observerPair) {
 	close(pair.removed)
 }
 
-// notifyObservers sends added and removed workers to all registered observers
-func (w *Watcher) notifyObservers(added, removed types.LLMWorkerSlice) {
+// notifyObservers sends added and removed instances to all registered observers
+func (w *Watcher) notifyObservers(added, removed types.LLMInstanceSlice) {
 	w.obsMu.RLock()
 	defer w.obsMu.RUnlock()
 
 	for pair := range w.observers {
-		// Send added workers
+		// Send added instances
 		if len(added) > 0 {
 			select {
 			case pair.added <- added:
@@ -103,7 +103,7 @@ func (w *Watcher) notifyObservers(added, removed types.LLMWorkerSlice) {
 			}
 		}
 
-		// Send removed workers
+		// Send removed instances
 		if len(removed) > 0 {
 			select {
 			case pair.removed <- removed:

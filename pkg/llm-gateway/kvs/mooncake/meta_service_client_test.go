@@ -29,14 +29,15 @@ func newBatchQueryServer(t *testing.T, data map[string][]string) *httptest.Serve
 			_, _ = w.Write([]byte(`{"success":false,"error":"No keys provided"}`))
 			return
 		}
-		// keys are comma-separated
+
 		keys := strings.Split(keysStr, ",")
 		resp := map[string]any{
 			"success": true,
 			"data":    map[string]any{},
 		}
 		dataObj := resp["data"].(map[string]any)
-		// Only return requested keys; each key maps to list of objects with transport_endpoint_
+
+		// Return requested keys; each key maps to {ok, values:[{transport_endpoint_}]}
 		for _, k := range keys {
 			if eps, ok := data[k]; ok {
 				arr := make([]map[string]any, 0, len(eps))
@@ -47,12 +48,18 @@ func newBatchQueryServer(t *testing.T, data map[string][]string) *httptest.Serve
 						"transport_endpoint_": ep,
 					})
 				}
-				dataObj[k] = arr
+				dataObj[k] = map[string]any{
+					"ok":     true,
+					"values": arr,
+				}
 			} else {
-				// return empty list for not-hit keys (ok=true, values empty)
-				dataObj[k] = []any{}
+				dataObj[k] = map[string]any{
+					"ok":     true,
+					"values": []any{},
+				}
 			}
 		}
+
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		_ = json.NewEncoder(w).Encode(resp)
 	})
@@ -240,16 +247,21 @@ func TestBatchQueryPrefixHashHitKVSInstances_EmptyTransportEndpointSkipped(t *te
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"success": true,
 			"data": map[string]any{
-				"k1": []any{
-					map[string]any{"transport_endpoint_": ""},
-					map[string]any{"transport_endpoint_": "1.2.3.4:9999"},
+				"k1": map[string]any{
+					"ok": true,
+					"values": []any{
+						map[string]any{"transport_endpoint_": ""},
+						map[string]any{"transport_endpoint_": "1.2.3.4:9999"},
+					},
 				},
 			},
 		})
 	}))
 	defer srv.Close()
+
 	host, port := hostPortFromServerURL(t, srv.URL)
 	c, _ := NewMetadataServiceClient(host, port)
+
 	got, err := c.BatchQueryPrefixHashHitKVSInstances([]string{"k1"})
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)

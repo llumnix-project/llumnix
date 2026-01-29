@@ -19,7 +19,7 @@ type redisResolver struct {
 	role string
 
 	mu                sync.RWMutex
-	workers           types.LLMWorkerSlice
+	instances         types.LLMInstanceSlice
 	podDiscoveryInfos map[string]*PodDiscoveryInfo
 
 	watcher *Watcher
@@ -58,18 +58,18 @@ func newRedisResolver(
 	return r, nil
 }
 
-func (r *redisResolver) GetLLMWorkers() (types.LLMWorkerSlice, error) {
+func (r *redisResolver) GetLLMInstances() (types.LLMInstanceSlice, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	workers := make(types.LLMWorkerSlice, 0, len(r.workers))
-	for idx := range r.workers {
-		workers = append(workers, r.workers[idx])
+	instances := make(types.LLMInstanceSlice, 0, len(r.instances))
+	for idx := range r.instances {
+		instances = append(instances, r.instances[idx])
 	}
-	return workers, nil
+	return instances, nil
 }
 
-func (r *redisResolver) Watch(ctx context.Context) (<-chan types.LLMWorkerSlice, <-chan types.LLMWorkerSlice, error) {
-	return r.watcher.Watch(ctx, r.GetLLMWorkers)
+func (r *redisResolver) Watch(ctx context.Context) (<-chan types.LLMInstanceSlice, <-chan types.LLMInstanceSlice, error) {
+	return r.watcher.Watch(ctx, r.GetLLMInstances)
 }
 
 func (r *redisResolver) refreshLoop() {
@@ -101,7 +101,7 @@ func (r *redisResolver) refresh() {
 	}
 
 	newPodDiscoveryInfos := make(map[string]*PodDiscoveryInfo)
-	newWorkers := types.LLMWorkerSlice{}
+	newInstances := types.LLMInstanceSlice{}
 	for idx, PodInfoBytes := range PodInfos {
 		if PodInfoBytes == nil {
 			klog.Warningf("Empty data for key: %s", PodInRedis[idx])
@@ -127,7 +127,7 @@ func (r *redisResolver) refresh() {
 				continue
 			}
 
-			newWorkers = append(newWorkers, types.LLMWorker{
+			newInstances = append(newInstances, types.LLMInstance{
 				Version: instance.Version,
 				ID:      fmt.Sprintf("%s_dp%d", podInfo.PodName, instance.DpRank),
 				Model:   instance.Model,
@@ -150,15 +150,15 @@ func (r *redisResolver) refresh() {
 	}
 
 	r.mu.Lock()
-	added, removed := DiffSets(r.workers, newWorkers, func(w types.LLMWorker) string {
+	added, removed := DiffSets(r.instances, newInstances, func(w types.LLMInstance) string {
 		return w.Id()
 	})
 	if len(added) > 0 || len(removed) > 0 {
 		klog.V(4).Infof("redis resolover (role=%s): Added: %d, Removed: %d, Total: %d",
-			r.role, len(added), len(removed), len(newWorkers))
+			r.role, len(added), len(removed), len(newInstances))
 	}
 	r.podDiscoveryInfos = newPodDiscoveryInfos
-	r.workers = newWorkers
+	r.instances = newInstances
 	r.mu.Unlock()
 
 	if len(added) > 0 || len(removed) > 0 {

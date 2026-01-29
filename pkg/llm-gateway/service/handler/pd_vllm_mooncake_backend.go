@@ -53,7 +53,7 @@ func (b *PdSplitVllmMoonCakeBackend) buildPrefillRequestData(req *types.RequestC
 	return json.Marshal(cmplReq)
 }
 
-func (b *PdSplitVllmMoonCakeBackend) doPrefill(req *types.RequestContext, pWorker *types.LLMWorker) error {
+func (b *PdSplitVllmMoonCakeBackend) doPrefill(req *types.RequestContext, pInstance *types.LLMInstance) error {
 	// build prefill request
 	data, err := b.buildPrefillRequestData(req)
 	if err != nil {
@@ -61,7 +61,7 @@ func (b *PdSplitVllmMoonCakeBackend) doPrefill(req *types.RequestContext, pWorke
 		return err
 	}
 
-	newReq, err := MakeNewBackendRequest(req, data, pWorker)
+	newReq, err := MakeNewBackendRequest(req, data, pInstance)
 	if err != nil {
 		klog.Errorf("[%s] failed to make new backend request: %v", err, req.Id)
 		return err
@@ -89,32 +89,32 @@ func (b *PdSplitVllmMoonCakeBackend) doPrefill(req *types.RequestContext, pWorke
 	return nil
 }
 
-func (b *PdSplitVllmMoonCakeBackend) doDecode(req *types.RequestContext, chunkChan chan StreamChunk, dWorker *types.LLMWorker) {
+func (b *PdSplitVllmMoonCakeBackend) doDecode(req *types.RequestContext, chunkChan chan StreamChunk, dInstance *types.LLMInstance) {
 	data, err := json.Marshal(req.LLMRequest.CompletionRequest)
 	if err != nil {
 		klog.Errorf("[%s] failed to build decode request data: %v", err, req.Id)
 		chunkChan <- StreamChunk{err: err}
 		return
 	}
-	StreamResponseFromBackend(req, b.client, data, dWorker, chunkChan)
+	StreamResponseFromBackend(req, b.client, data, dInstance, chunkChan)
 }
 
 func (b *PdSplitVllmMoonCakeBackend) BatchScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
-	if pWorker == nil {
-		return nil, fmt.Errorf("[%s] no scheduled prefill worker", req.Id)
+	pInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRolePrefill)
+	if pInstance == nil {
+		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
 	}
 
-	dWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode)
-	if dWorker == nil {
-		return nil, fmt.Errorf("[%s] no scheduled decode worker", req.Id)
+	dInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRoleDecode)
+	if dInstance == nil {
+		return nil, fmt.Errorf("[%s] no scheduled decode instance", req.Id)
 	}
 
 	chunkChan := make(chan StreamChunk, 100)
 	go func() {
 		defer close(chunkChan)
 
-		err := b.doPrefill(req, pWorker)
+		err := b.doPrefill(req, pInstance)
 		if err != nil {
 			chunkChan <- StreamChunk{err: err}
 			return
@@ -126,23 +126,23 @@ func (b *PdSplitVllmMoonCakeBackend) BatchScheduleStreamInference(req *types.Req
 			chunkChan <- StreamChunk{err: err}
 			return
 		}
-		StreamResponseFromBackend(req, b.client, data, dWorker, chunkChan)
+		StreamResponseFromBackend(req, b.client, data, dInstance, chunkChan)
 	}()
 
 	return chunkChan, nil
 }
 
 func (b *PdSplitVllmMoonCakeBackend) StagedScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
-	if pWorker == nil {
-		return nil, fmt.Errorf("[%s] no scheduled prefill worker", req.Id)
+	pInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRolePrefill)
+	if pInstance == nil {
+		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
 	}
 
 	chunkChan := make(chan StreamChunk, 100)
 	go func() {
 		defer close(chunkChan)
 
-		err := b.doPrefill(req, pWorker)
+		err := b.doPrefill(req, pInstance)
 		if err != nil {
 			chunkChan <- StreamChunk{err: err}
 			return
@@ -156,14 +156,14 @@ func (b *PdSplitVllmMoonCakeBackend) StagedScheduleStreamInference(req *types.Re
 			return
 		}
 
-		dWorker := results.GetWorkerByRole(types.InferRoleDecode)
-		if dWorker == nil {
-			klog.Errorf("[%s] decode worker not found", req.Id)
-			chunkChan <- StreamChunk{err: fmt.Errorf("decode worker not found")}
+		dInstance := results.GetInstanceByRole(types.InferRoleDecode)
+		if dInstance == nil {
+			klog.Errorf("[%s] decode instance not found", req.Id)
+			chunkChan <- StreamChunk{err: fmt.Errorf("decode instance not found")}
 			return
 		}
 
-		b.doDecode(req, chunkChan, dWorker)
+		b.doDecode(req, chunkChan, dInstance)
 	}()
 
 	return chunkChan, nil

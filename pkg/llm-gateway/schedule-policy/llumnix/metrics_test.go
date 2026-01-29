@@ -20,7 +20,7 @@ func TestBaseMetric(t *testing.T) {
 func TestKVBlocksRatioWithAllPrefillsCalculate(t *testing.T) {
 	metric := &kvBlocksRatioWithAllPrefills{
 		baseMetric{
-			name: consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			name: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 		},
 	}
 
@@ -53,14 +53,14 @@ func TestKVBlocksRatioWithAllPrefillsCalculate(t *testing.T) {
 func TestKVBlocksRatioWithAllPrefillsCalculateLess(t *testing.T) {
 	metric1 := &kvBlocksRatioWithAllPrefills{
 		baseMetric{
-			name:  consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			value: 0.1,
 		},
 	}
 
 	metric2 := &kvBlocksRatioWithAllPrefills{
 		baseMetric{
-			name:  consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			value: 0.2,
 		},
 	}
@@ -72,7 +72,7 @@ func TestKVBlocksRatioWithAllPrefillsCalculateLess(t *testing.T) {
 func TestDecodeBatchSizeCalculate(t *testing.T) {
 	metric := &decodeBatchSize{
 		baseMetric{
-			name: consts.LlumnixSchedulingMetricDecodeBatchSize,
+			name: consts.SchedulingMetricDecodeBatchSize,
 		},
 	}
 
@@ -90,14 +90,14 @@ func TestDecodeBatchSizeCalculate(t *testing.T) {
 func TestDecodeBatchSizeLess(t *testing.T) {
 	metric1 := &decodeBatchSize{
 		baseMetric{
-			name:  consts.LlumnixSchedulingMetricDecodeBatchSize,
+			name:  consts.SchedulingMetricDecodeBatchSize,
 			value: 1.0,
 		},
 	}
 
 	metric2 := &decodeBatchSize{
 		baseMetric{
-			name:  consts.LlumnixSchedulingMetricDecodeBatchSize,
+			name:  consts.SchedulingMetricDecodeBatchSize,
 			value: 2.0,
 		},
 	}
@@ -109,7 +109,7 @@ func TestDecodeBatchSizeLess(t *testing.T) {
 func TestNumWaitingRequestsCalculate(t *testing.T) {
 	metric := &numWaitingRequests{
 		baseMetric{
-			name: consts.LlumnixSchedulingMetricNumWaitingRequests,
+			name: consts.SchedulingMetricNumWaitingRequests,
 		},
 	}
 
@@ -127,14 +127,14 @@ func TestNumWaitingRequestsCalculate(t *testing.T) {
 func TestNumWaitingRequestsLess(t *testing.T) {
 	metric1 := &numWaitingRequests{
 		baseMetric{
-			name:  consts.LlumnixSchedulingMetricNumWaitingRequests,
+			name:  consts.SchedulingMetricNumWaitingRequests,
 			value: 1.0,
 		},
 	}
 
 	metric2 := &numWaitingRequests{
 		baseMetric{
-			name:  consts.LlumnixSchedulingMetricNumWaitingRequests,
+			name:  consts.SchedulingMetricNumWaitingRequests,
 			value: 2.0,
 		},
 	}
@@ -146,7 +146,7 @@ func TestNumWaitingRequestsLess(t *testing.T) {
 func TestNumRequestsCalculate(t *testing.T) {
 	metric := &numRequests{
 		baseMetric{
-			name: consts.LlumnixSchedulingMetricNumRequests,
+			name: consts.SchedulingMetricNumRequests,
 		},
 		true,
 	}
@@ -166,7 +166,7 @@ func TestNumRequestsCalculate(t *testing.T) {
 func TestNumRequestsLess(t *testing.T) {
 	metric1 := &numRequests{
 		baseMetric{
-			name:  consts.LlumnixSchedulingMetricNumRequests,
+			name:  consts.SchedulingMetricNumRequests,
 			value: 1.0,
 		},
 		true,
@@ -174,7 +174,7 @@ func TestNumRequestsLess(t *testing.T) {
 
 	metric2 := &numWaitingRequests{
 		baseMetric{
-			name:  consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			value: 2.0,
 		},
 	}
@@ -186,7 +186,7 @@ func TestNumRequestsLess(t *testing.T) {
 func TestKVCacheHitLen(t *testing.T) {
 	metric := &kvCacheHitLen{
 		baseMetric: baseMetric{
-			name: consts.LlumnixSchedulingMetricKVCacheHitLen,
+			name: consts.SchedulingMetricKVCacheHitLen,
 		},
 	}
 
@@ -208,14 +208,14 @@ func TestKVCacheHitLen(t *testing.T) {
 	t.Run("test Less function", func(t *testing.T) {
 		metric1 := &kvCacheHitLen{
 			baseMetric: baseMetric{
-				name:  consts.LlumnixSchedulingMetricKVCacheHitLen,
+				name:  consts.SchedulingMetricKVCacheHitLen,
 				value: 100,
 			},
 		}
 
 		metric2 := &kvCacheHitLen{
 			baseMetric: baseMetric{
-				name:  consts.LlumnixSchedulingMetricKVCacheHitLen,
+				name:  consts.SchedulingMetricKVCacheHitLen,
 				value: 50,
 			},
 		}
@@ -243,7 +243,7 @@ func TestKVCacheHitLen(t *testing.T) {
 func TestAdaptiveDecodeBatchSizeCalculate(t *testing.T) {
 	metric := &adaptiveDecodeBatchSize{
 		baseMetric: baseMetric{
-			name: consts.LlumnixSchedulingMetricAdaptiveDecodeBatchSize,
+			name: consts.SchedulingMetricAdaptiveDecodeBatchSize,
 		},
 		decodeComputeBoundBatchSize: 10,
 	}
@@ -271,7 +271,7 @@ func TestAdaptiveDecodeBatchSizeCalculate(t *testing.T) {
 func TestAdaptiveDecodeBatchSizeLess(t *testing.T) {
 	metric1 := &adaptiveDecodeBatchSize{
 		baseMetric: baseMetric{
-			name: consts.LlumnixSchedulingMetricAdaptiveDecodeBatchSize,
+			name: consts.SchedulingMetricAdaptiveDecodeBatchSize,
 		},
 		decodeComputeBoundBatchSize: 10,
 	}
@@ -282,7 +282,7 @@ func TestAdaptiveDecodeBatchSizeLess(t *testing.T) {
 
 	metric2 := &adaptiveDecodeBatchSize{
 		baseMetric: baseMetric{
-			name: consts.LlumnixSchedulingMetricAdaptiveDecodeBatchSize,
+			name: consts.SchedulingMetricAdaptiveDecodeBatchSize,
 		},
 		decodeComputeBoundBatchSize: 10,
 	}
@@ -291,7 +291,7 @@ func TestAdaptiveDecodeBatchSizeLess(t *testing.T) {
 
 	metric3 := &adaptiveDecodeBatchSize{
 		baseMetric: baseMetric{
-			name: consts.LlumnixSchedulingMetricAdaptiveDecodeBatchSize,
+			name: consts.SchedulingMetricAdaptiveDecodeBatchSize,
 		},
 		decodeComputeBoundBatchSize: 10,
 	}
@@ -300,7 +300,7 @@ func TestAdaptiveDecodeBatchSizeLess(t *testing.T) {
 
 	metric4 := &adaptiveDecodeBatchSize{
 		baseMetric: baseMetric{
-			name: consts.LlumnixSchedulingMetricAdaptiveDecodeBatchSize,
+			name: consts.SchedulingMetricAdaptiveDecodeBatchSize,
 		},
 		decodeComputeBoundBatchSize: 10,
 	}
@@ -309,7 +309,7 @@ func TestAdaptiveDecodeBatchSizeLess(t *testing.T) {
 
 	metric5 := &adaptiveDecodeBatchSize{
 		baseMetric: baseMetric{
-			name: consts.LlumnixSchedulingMetricAdaptiveDecodeBatchSize,
+			name: consts.SchedulingMetricAdaptiveDecodeBatchSize,
 		},
 		decodeComputeBoundBatchSize: 10,
 	}

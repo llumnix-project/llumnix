@@ -17,9 +17,9 @@ const (
 
 // llm inference type for llumnix
 const (
-	LlumnixNeutralInstanceType = "neutral"
-	LlumnixPrefillInstanceType = "prefill"
-	LlumnixDecodeInstanceType  = "decode"
+	NeutralInstanceType = "neutral"
+	PrefillInstanceType = "prefill"
+	DecodeInstanceType  = "decode"
 )
 
 const (
@@ -36,51 +36,51 @@ const (
 )
 
 const (
-	LlumnixKvsBackendV6d      = "v6d"
-	LlumnixKvsBackendMooncake = "mooncake"
+	KvsBackendV6d      = "v6d"
+	KvsBackendMooncake = "mooncake"
 )
 
 const (
-	LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills         = "kv_blocks_ratio_with_all_prefills"
-	LlumnixSchedulingMetricDecodeBatchSize                      = "decode_batch_size"
-	LlumnixSchedulingMetricNumWaitingRequests                   = "num_waiting_requests"
-	LlumnixSchedulingMetricAllPrefillsKVBlocksNum               = "all_prefills_kv_blocks_num"
-	LlumnixSchedulingMetricKVCacheHitLen                        = "kv_cache_hit_len"
-	LlumnixSchedulingMetricCacheAwareAllPrefillsKVBlocksNum     = "cache_aware_all_prefills_kv_blocks_num"
-	LlumnixSchedulingMetricAdaptiveDecodeBatchSize              = "adaptive_decode_batch_size"
-	LlumnixSchedulingMetricNumRequests                          = "num_requests"
-	LlumnixSchedulingMetricAllDecodesKVBlocksNumWithAllPrefills = "all_decodes_kv_blocks_num_with_all_prefills"
-	LlumnixSchedulingMetricNumTokens                            = "num_tokens"
+	SchedulingMetricKVBlocksRatioWithAllPrefills         = "kv_blocks_ratio_with_all_prefills"
+	SchedulingMetricDecodeBatchSize                      = "decode_batch_size"
+	SchedulingMetricNumWaitingRequests                   = "num_waiting_requests"
+	SchedulingMetricAllPrefillsKVBlocksNum               = "all_prefills_kv_blocks_num"
+	SchedulingMetricKVCacheHitLen                        = "kv_cache_hit_len"
+	SchedulingMetricCacheAwareAllPrefillsKVBlocksNum     = "cache_aware_all_prefills_kv_blocks_num"
+	SchedulingMetricAdaptiveDecodeBatchSize              = "adaptive_decode_batch_size"
+	SchedulingMetricNumRequests                          = "num_requests"
+	SchedulingMetricAllDecodesKVBlocksNumWithAllPrefills = "all_decodes_kv_blocks_num_with_all_prefills"
+	SchedulingMetricNumTokens                            = "num_tokens"
 )
 
 const (
-	LlumnixMigrationReqSelectRuleNumReq = "NUM_REQ"
-	LlumnixMigrationReqSelectRuleToken  = "TOKEN"
-	LlumnixMigrationReqSelectRuleRatio  = "RATIO"
+	MigrationReqSelectRuleNumReq = "NUM_REQ"
+	MigrationReqSelectRuleToken  = "TOKEN"
+	MigrationReqSelectRuleRatio  = "RATIO"
 
-	LlumnixMigrationReqSelectOrderLCR   = "LCR"   // last running
-	LlumnixMigrationReqSelectOrderFCR   = "FCR"   // first running
-	LlumnixMigrationReqSelectOrderLR    = "LR"    // longest running
-	LlumnixMigrationReqSelectOrderSR    = "SR"    // shortest running
-	LlumnixMigrationReqSelectOrderFCW   = "FCW"   // first waiting
-	LlumnixMigrationReqSelectOrderFCWSR = "FCWSR" // first waiting and shortest running
+	MigrationReqSelectOrderLCR   = "LCR"   // last running
+	MigrationReqSelectOrderFCR   = "FCR"   // first running
+	MigrationReqSelectOrderLR    = "LR"    // longest running
+	MigrationReqSelectOrderSR    = "SR"    // shortest running
+	MigrationReqSelectOrderFCW   = "FCW"   // first waiting
+	MigrationReqSelectOrderFCWSR = "FCWSR" // first waiting and shortest running
 )
 
 const (
-	LlumnixReschedulePolicyNeutralLoad     = "neutral_load"
-	LlumnixReschedulePolicyDecodeLoad      = "decode_load"
-	LlumnixReschedulePolicyPrefillFailover = "prefill_failover"
-	LlumnixReschedulePolicyDecodeFailover  = "decode_failover"
-	LlumnixReschedulePolicyNeutralFailover = "neutral_failover"
+	ReschedulePolicyNeutralLoad     = "neutral_load"
+	ReschedulePolicyDecodeLoad      = "decode_load"
+	ReschedulePolicyPrefillFailover = "prefill_failover"
+	ReschedulePolicyDecodeFailover  = "decode_failover"
+	ReschedulePolicyNeutralFailover = "neutral_failover"
 
-	LlumnixReschedulePolicyCleanUpDecodeRequestsOnPrefill   = "clean_up_decode_requests_on_prefill"
-	LlumnixReschedulePolicyAggregateDecodeRequestsOnPrefill = "aggregate_decode_requests_on_prefill"
-	LlumnixReschedulePolicyEaseBusyDecodeWithFreePrefill    = "ease_busy_decode_with_free_prefill"
+	ReschedulePolicyCleanUpDecodeRequestsOnPrefill   = "clean_up_decode_requests_on_prefill"
+	ReschedulePolicyAggregateDecodeRequestsOnPrefill = "aggregate_decode_requests_on_prefill"
+	ReschedulePolicyEaseBusyDecodeWithFreePrefill    = "ease_busy_decode_with_free_prefill"
 )
 
 const (
-	LlumnixRescheduleLoadBalanceScopeCluster = "cluster"
-	LlumnixRescheduleLoadBalanceScopeUnit    = "unit"
+	RescheduleLoadBalanceScopeCluster = "cluster"
+	RescheduleLoadBalanceScopeUnit    = "unit"
 )
 
 // different pd-split mode
@@ -98,96 +98,96 @@ const (
 )
 
 const (
-	// LlumnixFailoverScopeInstanceUnit failover instances sharing the unit with the unschedulable instances
-	LlumnixFailoverScopeInstanceUnit = "instance-unit"
-	// LlumnixFailoverScopeNodeUnit failover instances sharing units with instances on nodes requiring failover
-	LlumnixFailoverScopeNodeUnit = "node-unit"
-	// LlumnixFailoverScopeNode failover instances sharing the same node with the unschedulable instances
-	LlumnixFailoverScopeNode = "node"
-	// LlumnixFailoverScopeInstance When the failover scope is instance, it is equivalent to failover filter not being enabled.
-	LlumnixFailoverScopeInstance = "instance"
+	// FailoverScopeInstanceUnit failover instances sharing the unit with the unschedulable instances
+	FailoverScopeInstanceUnit = "instance-unit"
+	// FailoverScopeNodeUnit failover instances sharing units with instances on nodes requiring failover
+	FailoverScopeNodeUnit = "node-unit"
+	// FailoverScopeNode failover instances sharing the same node with the unschedulable instances
+	FailoverScopeNode = "node"
+	// FailoverScopeInstance When the failover scope is instance, it is equivalent to failover filter not being enabled.
+	FailoverScopeInstance = "instance"
 )
 
 // default value
 const (
-	DefaultLlumnixEnableFullModeScheduling = true
+	DefaultEnableFullModeScheduling = true
 
 	// CMS defaults
-	DefaultLlumnixCmsRedisHost              = "redis.roles"
-	DefaultLlumnixCmsRedisPort              = "10000"
-	DefaultLlumnixCmsRedisUsername          = "default"
-	DefaultLlumnixCmsRedisPassword          = ""
-	DefaultLlumnixCmsRedisSocketTimeout     = 1.0
-	DefaultLlumnixCmsRedisRetryTimes        = 1
-	DefaultLlumnixCmsPullStatusIntervalMs   = 50
-	DefaultLlumnixCmsPullMetadataIntervalMs = 10000
-	DefaultLlumnixCmsRecordMetricsInterval  = 0
+	DefaultCmsRedisHost              = "redis.roles"
+	DefaultCmsRedisPort              = "10000"
+	DefaultCmsRedisUsername          = "default"
+	DefaultCmsRedisPassword          = ""
+	DefaultCmsRedisSocketTimeout     = 1.0
+	DefaultCmsRedisRetryTimes        = 1
+	DefaultCmsPullStatusIntervalMs   = 50
+	DefaultCmsPullMetadataIntervalMs = 10000
+	DefaultCmsRecordMetricsInterval  = 0
 
 	// KvsMetaService defaults
-	DefaultLlumnixEnableCacheAwareScheduling             = false
-	DefaultLlumnixKvsBackend                             = "mooncake"
-	DefaultLlumnixKvsMetadataServiceConfigPath           = ""
-	DefaultLlumnixKvsChunkSize                           = 256
-	DefaultLlumnixKvsEnableSaveUnfullChunk               = false
-	DefaultLlumnixKvsIrisMetaPrefix                      = "iris."
-	DefaultLlumnixKvsVLLMBlockPrefix                     = "block.hash.key."
-	DefaultLlumnixKvsRetryIntervalMs                     = 100
-	DefaultLlumnixKvsRetryTimes                          = 5
-	DefaultLlumnixKvsMetadataServiceDownDurationS        = 30
-	DefaultLlumnixKvsMetadataServiceRedisClusterHosts    = ""
-	DefaultLlumnixKvsMetadataServiceRedisClusterPassword = ""
-	DefaultLlumnixKvsMetadataServiceHttpServerHost       = "0.0.0.0"
-	DefaultLlumnixKvsMetadataServiceHttpServerPort       = "9003"
+	DefaultEnableCacheAwareScheduling             = false
+	DefaultKvsBackend                             = "mooncake"
+	DefaultKvsMetadataServiceConfigPath           = ""
+	DefaultKvsChunkSize                           = 256
+	DefaultKvsEnableSaveUnfullChunk               = false
+	DefaultKvsIrisMetaPrefix                      = "iris."
+	DefaultKvsVLLMBlockPrefix                     = "block.hash.key."
+	DefaultKvsRetryIntervalMs                     = 100
+	DefaultKvsRetryTimes                          = 5
+	DefaultKvsMetadataServiceDownDurationS        = 30
+	DefaultKvsMetadataServiceRedisClusterHosts    = ""
+	DefaultKvsMetadataServiceRedisClusterPassword = ""
+	DefaultKvsMetadataServiceHttpServerHost       = "0.0.0.0"
+	DefaultKvsMetadataServiceHttpServerPort       = "9003"
 
 	// Schedule defaults
-	DefaultLlumnixDispatchTopK                        = 1
-	DefaultLlumnixDispatchNeutralLoadMetric           = LlumnixSchedulingMetricAllPrefillsKVBlocksNum
-	DefaultLlumnixDispatchNeutralLoadThreshold        = 8192
-	DefaultLlumnixDispatchPrefillLoadMetric           = LlumnixSchedulingMetricAllPrefillsKVBlocksNum
-	DefaultLlumnixDispatchPrefillLoadThreshold        = 2048
-	DefaultLlumnixDispatchDecodeLoadMetric            = LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills
-	DefaultLlumnixDispatchDecodeLoadThreshold         = 1.0
-	DefaultLlumnixDispatchPrefillCacheLocalityMetric  = LlumnixSchedulingMetricCacheAwareAllPrefillsKVBlocksNum
-	DefaultLlumnixEnableInstanceStatusLocalAccount    = true
-	DefaultLlumnixKvCacheBlockSize                    = 64
-	DefaultLlumnixRequestLocalAccountStalenessSeconds = 10
-	DefaultLlumnixAllowConcurrentSchedule             = false
-	DefaultLlumnixEnablePredictorEnhancedScheduling   = false
-	DefaultLlumnixMaxNumBatchedTokens                 = 65536
-	DefaultLlumnixNumPredictorWarmupSamples           = 20
+	DefaultDispatchTopK                        = 1
+	DefaultDispatchNeutralLoadMetric           = SchedulingMetricAllPrefillsKVBlocksNum
+	DefaultDispatchNeutralLoadThreshold        = 8192
+	DefaultDispatchPrefillLoadMetric           = SchedulingMetricAllPrefillsKVBlocksNum
+	DefaultDispatchPrefillLoadThreshold        = 2048
+	DefaultDispatchDecodeLoadMetric            = SchedulingMetricKVBlocksRatioWithAllPrefills
+	DefaultDispatchDecodeLoadThreshold         = 1.0
+	DefaultDispatchPrefillCacheLocalityMetric  = SchedulingMetricCacheAwareAllPrefillsKVBlocksNum
+	DefaultEnableInstanceStatusLocalAccount    = true
+	DefaultKvCacheBlockSize                    = 64
+	DefaultRequestLocalAccountStalenessSeconds = 10
+	DefaultAllowConcurrentSchedule             = false
+	DefaultEnablePredictorEnhancedScheduling   = false
+	DefaultMaxNumBatchedTokens                 = 65536
+	DefaultNumPredictorWarmupSamples           = 20
 
 	// Adaptive PD defaults
-	DefaultLlumnixEnableAdaptivePD                     = false
-	DefaultLlumnixDispatchPrefillAsDecodeLoadMetric    = LlumnixSchedulingMetricAdaptiveDecodeBatchSize
-	DefaultLlumnixDispatchPrefillAsDecodeLoadThreshold = 256.0
-	DefaultLlumnixDispatchDecodeAsPrefillLoadMetric    = LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills
-	DefaultLlumnixDispatchDecodeAsPrefillLoadThreshold = 1.0
-	DefaultLlumnixDecodeComputeBoundBatchSize          = 128
+	DefaultEnableAdaptivePD                     = false
+	DefaultDispatchPrefillAsDecodeLoadMetric    = SchedulingMetricAdaptiveDecodeBatchSize
+	DefaultDispatchPrefillAsDecodeLoadThreshold = 256.0
+	DefaultDispatchDecodeAsPrefillLoadMetric    = SchedulingMetricKVBlocksRatioWithAllPrefills
+	DefaultDispatchDecodeAsPrefillLoadThreshold = 1.0
+	DefaultDecodeComputeBoundBatchSize          = 128
 
 	// Filter defaults
-	DefaultLlumnixFailoverScope            = LlumnixFailoverScopeInstanceUnit
-	DefaultLlumnixInstanceStalenessSeconds = 60
+	DefaultFailoverScope            = FailoverScopeInstanceUnit
+	DefaultInstanceStalenessSeconds = 60
 
 	// Reschedule defaults
-	DefaultLlumnixEnableRescheduling             = false
-	DefaultLlumnixReschedulePolicies             = "decode_load,prefill_failover,decode_failover,neutral_failover"
-	DefaultLlumnixRescheduleIntervalMs           = 500
-	DefaultLlumnixRescheduleDecodeLoadMetric     = LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills
-	DefaultLlumnixRescheduleDecodeLoadThreshold  = 1.0
-	DefaultLlumnixReschedulePrefillLoadMetric    = LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills
-	DefaultLlumnixRescheduleNeutralLoadMetric    = LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills
-	DefaultLlumnixRescheduleNeutralLoadThreshold = 1.0
-	DefaultLlumnixRescheduleReqSelectOrder       = LlumnixMigrationReqSelectOrderSR
-	DefaultLlumnixRescheduleReqSelectRule        = LlumnixMigrationReqSelectRuleToken
-	DefaultLlumnixRescheduleReqSelectValue       = 1
-	DefaultLlumnixRescheduleLoadBalanceThreshold = 0.01
-	DefaultLlumnixRescheduleLoadBalanceScope     = LlumnixRescheduleLoadBalanceScopeCluster
+	DefaultEnableRescheduling             = false
+	DefaultReschedulePolicies             = "decode_load,prefill_failover,decode_failover,neutral_failover"
+	DefaultRescheduleIntervalMs           = 500
+	DefaultRescheduleDecodeLoadMetric     = SchedulingMetricKVBlocksRatioWithAllPrefills
+	DefaultRescheduleDecodeLoadThreshold  = 1.0
+	DefaultReschedulePrefillLoadMetric    = SchedulingMetricKVBlocksRatioWithAllPrefills
+	DefaultRescheduleNeutralLoadMetric    = SchedulingMetricKVBlocksRatioWithAllPrefills
+	DefaultRescheduleNeutralLoadThreshold = 1.0
+	DefaultRescheduleReqSelectOrder       = MigrationReqSelectOrderSR
+	DefaultRescheduleReqSelectRule        = MigrationReqSelectRuleToken
+	DefaultRescheduleReqSelectValue       = 1
+	DefaultRescheduleLoadBalanceThreshold = 0.01
+	DefaultRescheduleLoadBalanceScope     = RescheduleLoadBalanceScopeCluster
 
 	// Llumlet defaults
-	DefaultLlumnixLlumletGrpcConnectionPoolSize = -1
-	DefaultLlumnixLlumletGrpcTimeoutSeconds     = -1
+	DefaultLlumletGrpcConnectionPoolSize = -1
+	DefaultLlumletGrpcTimeoutSeconds     = -1
 
-	DefaultLlumnixEnableMetrics = false
+	DefaultSchedulerEnableMetrics = false
 
-	DefaultLlumnixExtraArgs = ""
+	DefaultSchedulerExtraArgs = ""
 )

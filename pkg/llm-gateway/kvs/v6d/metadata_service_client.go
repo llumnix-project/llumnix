@@ -289,7 +289,7 @@ func (c *MetadataServiceClient) parseToKVSInstanceIp(kvsInstance string) string 
 
 func (c *MetadataServiceClient) InsertPrefixHashHitKVSInstance(hashKey string, kvsInstance string) error {
 	if err := c.zWrite(hashKey, kvsInstance, 0, ""); err != nil {
-		return fmt.Errorf("failed to insert hit kvs worker for hash key %s: %v", hashKey, err)
+		return fmt.Errorf("failed to insert hit kvs instance for hash key %s: %v", hashKey, err)
 	}
 	return nil
 }

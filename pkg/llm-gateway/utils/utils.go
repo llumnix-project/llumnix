@@ -17,9 +17,9 @@ func LogAccess(format string, args ...any) {
 }
 
 var instanceType2InferModeMap = map[string]string{
-	consts.LlumnixNeutralInstanceType: consts.NormalInferMode,
-	consts.LlumnixPrefillInstanceType: consts.PrefillInferMode,
-	consts.LlumnixDecodeInstanceType:  consts.DecodeInferMode,
+	consts.NeutralInstanceType: consts.NormalInferMode,
+	consts.PrefillInstanceType: consts.PrefillInferMode,
+	consts.DecodeInstanceType:  consts.DecodeInferMode,
 }
 
 func TransformInstanceType2InferMode(instanceType string) string {

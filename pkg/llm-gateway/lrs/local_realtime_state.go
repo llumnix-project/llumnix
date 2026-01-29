@@ -45,7 +45,7 @@ import (
 //     > Version-mismatched release requests are rejected
 
 type InstanceView struct {
-	worker        *types.LLMWorker
+	instance      *types.LLMInstance
 	version       int64
 	numTokens     int64 // allocated number of tokens of the instance, sum(requestStates.numTokens)
 	requestStates map[string]*RequestState
@@ -72,25 +72,25 @@ func NewRequestState(
 	}
 }
 
-func NewInstanceView(worker *types.LLMWorker) *InstanceView {
+func NewInstanceView(instance *types.LLMInstance) *InstanceView {
 	return &InstanceView{
-		worker:        worker,
-		version:       worker.Version,
+		instance:      instance,
+		version:       instance.Version,
 		numTokens:     0,
 		requestStates: make(map[string]*RequestState),
 	}
 }
 
-func (iv *InstanceView) GetInstance() *types.LLMWorker {
-	return iv.worker
+func (iv *InstanceView) GetInstance() *types.LLMInstance {
+	return iv.instance
 }
 
 func (iv *InstanceView) GetInstanceId() string {
-	return iv.worker.Id()
+	return iv.instance.Id()
 }
 
 func (iv *InstanceView) GetInferMode() string {
-	return iv.worker.Role.String()
+	return iv.instance.Role.String()
 }
 
 func (iv *InstanceView) NumTokens() int64 {
@@ -146,7 +146,7 @@ func (iv *InstanceView) ReleaseRequestState(reqId string) {
 	if reqState != nil {
 		if iv.numTokens < reqState.numTokens {
 			klog.Warningf("instance %s num tokens %d < request %s num tokens %d, set instance num tokens to 0",
-				iv.worker.Endpoint.String(), iv.numTokens, reqId, reqState.numTokens)
+				iv.instance.Endpoint.String(), iv.numTokens, reqId, reqState.numTokens)
 			iv.numTokens = 0
 		} else {
 			iv.numTokens -= reqState.numTokens
@@ -163,7 +163,7 @@ func (iv *InstanceView) ClearStates() {
 }
 
 func (iv *InstanceView) GetModel() string {
-	return iv.worker.Model
+	return iv.instance.Model
 }
 
 // LocalRealtimeState records the request states allocated to instances, and tracks which gateway allocated
@@ -193,7 +193,7 @@ func (lrs *LocalRealtimeState) GetInstanceViews() map[string]*InstanceView {
 func (lrs *LocalRealtimeState) GetInstanceViewsByModel(model string) map[string]*InstanceView {
 	results := make(map[string]*InstanceView)
 	for _, instance := range lrs.instanceViews {
-		if instance.worker.Model == model || instance.worker.Model == "" {
+		if instance.instance.Model == model || instance.instance.Model == "" {
 			results[instance.GetInstanceId()] = instance
 		}
 	}
@@ -221,22 +221,22 @@ func (lrs *LocalRealtimeState) removeInstance(instanceId string) {
 	}
 }
 
-func (lrs *LocalRealtimeState) AddInstance(worker *types.LLMWorker) {
-	id := worker.Id()
+func (lrs *LocalRealtimeState) AddInstance(instance *types.LLMInstance) {
+	id := instance.Id()
 	oldInstance := lrs.instanceViews[id]
 	if oldInstance != nil {
-		if worker.Version > oldInstance.version {
+		if instance.Version > oldInstance.version {
 			klog.Infof("instance %s version changed: %d -> %d, remove old instance",
-				id, oldInstance.version, worker.Version)
+				id, oldInstance.version, instance.Version)
 			lrs.removeInstance(id)
 		} else {
-			klog.Warningf("instance %s version not changed: %d -> %d", id, oldInstance.version, worker.Version)
+			klog.Warningf("instance %s version not changed: %d -> %d", id, oldInstance.version, instance.Version)
 			return
 		}
 	}
 
-	klog.Infof("add new instance %s", worker)
-	newInstanceView := NewInstanceView(worker)
+	klog.Infof("add new instance %s", instance)
+	newInstanceView := NewInstanceView(instance)
 	lrs.instanceViews[id] = newInstanceView
 }
 
@@ -287,8 +287,8 @@ func (lrs *LocalRealtimeState) gatewayExists(gatewayId string) bool {
 
 func (lrs *LocalRealtimeState) PrintInstanceViews() {
 	for _, instanceView := range lrs.instanceViews {
-		fmt.Printf("worker: %s, reqs: %d, tokens: %d\n",
-			instanceView.worker.Id(), instanceView.NumRequests(), instanceView.NumTokens())
+		fmt.Printf("instance: %s, reqs: %d, tokens: %d\n",
+			instanceView.instance.Id(), instanceView.NumRequests(), instanceView.NumTokens())
 	}
 }
 

@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"llumnix/pkg/llm-gateway/consts"
-	"llumnix/pkg/llm-gateway/types"
 	"net/http"
 
 	"k8s.io/klog/v2"
+
+	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/types"
 )
 
 func init() {
@@ -32,10 +33,10 @@ func NewPdSplitVllmKvtBackend(schMode types.ScheduleMode) (InferenceBackend, err
 	}, nil
 }
 
-func (b *PdSplitVllmKvtBackend) buildTransferParams(req *types.RequestContext, pWorker, dWorker *types.LLMWorker) map[string]interface{} {
+func (b *PdSplitVllmKvtBackend) buildTransferParams(req *types.RequestContext, pInstance, dInstance *types.LLMInstance) map[string]interface{} {
 	p := map[string]interface{}{
-		"remote_host": pWorker.Endpoint.Host,
-		"remote_port": pWorker.AuxPort,
+		"remote_host": pInstance.Endpoint.Host,
+		"remote_port": pInstance.AuxPort,
 	}
 	if b.scheduleMode == types.ScheduleModePDStaged {
 		p["do_remote_prefill"] = true
@@ -44,19 +45,19 @@ func (b *PdSplitVllmKvtBackend) buildTransferParams(req *types.RequestContext, p
 }
 
 func (b *PdSplitVllmKvtBackend) BatchScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
-	if pWorker == nil {
-		return nil, fmt.Errorf("[%s] no scheduled prefill worker", req.Id)
+	pInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRolePrefill)
+	if pInstance == nil {
+		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
 	}
-	dWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode)
-	if dWorker == nil {
-		return nil, fmt.Errorf("[%s] no scheduled decode worker", req.Id)
+	dInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRoleDecode)
+	if dInstance == nil {
+		return nil, fmt.Errorf("[%s] no scheduled decode instance", req.Id)
 	}
 
 	chunkChan := make(chan StreamChunk, 100)
 	go func() {
 		defer close(chunkChan)
-		req.LLMRequest.CompletionRequest.KvTransferParams = b.buildTransferParams(req, pWorker, dWorker)
+		req.LLMRequest.CompletionRequest.KvTransferParams = b.buildTransferParams(req, pInstance, dInstance)
 
 		body, err := json.Marshal(req.LLMRequest.CompletionRequest)
 		if err != nil {
@@ -66,7 +67,7 @@ func (b *PdSplitVllmKvtBackend) BatchScheduleStreamInference(req *types.RequestC
 		}
 
 		// build new backend request and stream read
-		StreamResponseFromBackend(req, b.client, body, dWorker, chunkChan)
+		StreamResponseFromBackend(req, b.client, body, dInstance, chunkChan)
 	}()
 
 	return chunkChan, nil
@@ -83,7 +84,7 @@ func (b *PdSplitVllmKvtBackend) buildPrefillRequestData(req *types.RequestContex
 	return json.Marshal(cmplReq)
 }
 
-func (b *PdSplitVllmKvtBackend) doPrefill(req *types.RequestContext, pWorker *types.LLMWorker) error {
+func (b *PdSplitVllmKvtBackend) doPrefill(req *types.RequestContext, pInstance *types.LLMInstance) error {
 	// build prefill request
 	data, err := b.buildPrefillRequestData(req)
 	if err != nil {
@@ -91,7 +92,7 @@ func (b *PdSplitVllmKvtBackend) doPrefill(req *types.RequestContext, pWorker *ty
 		return err
 	}
 
-	newReq, err := MakeNewBackendRequest(req, data, pWorker)
+	newReq, err := MakeNewBackendRequest(req, data, pInstance)
 	if err != nil {
 		klog.Errorf("[%s] failed to make new backend request: %v", err, req.Id)
 		return err
@@ -110,39 +111,39 @@ func (b *PdSplitVllmKvtBackend) doPrefill(req *types.RequestContext, pWorker *ty
 	return nil
 }
 
-func (b *PdSplitVllmKvtBackend) buildDecodeRequestData(req *types.RequestContext, worker *types.LLMWorker) ([]byte, error) {
+func (b *PdSplitVllmKvtBackend) buildDecodeRequestData(req *types.RequestContext, instance *types.LLMInstance) ([]byte, error) {
 	cmplReq := req.LLMRequest.CompletionRequest
 	if cmplReq.KvTransferParams == nil {
 		cmplReq.KvTransferParams = make(map[string]interface{})
 	}
 	// TODO(wingo.zwt): may need to use kvtIP
-	cmplReq.KvTransferParams["remote_host"] = worker.Endpoint.Host
-	cmplReq.KvTransferParams["remote_port"] = worker.AuxPort
+	cmplReq.KvTransferParams["remote_host"] = instance.Endpoint.Host
+	cmplReq.KvTransferParams["remote_port"] = instance.AuxPort
 	cmplReq.KvTransferParams["do_remote_prefill"] = true
 	return json.Marshal(cmplReq)
 }
 
-func (b *PdSplitVllmKvtBackend) doDecode(req *types.RequestContext, chunkChan chan StreamChunk, pWorker *types.LLMWorker, dWorker *types.LLMWorker) {
-	data, err := b.buildDecodeRequestData(req, pWorker)
+func (b *PdSplitVllmKvtBackend) doDecode(req *types.RequestContext, chunkChan chan StreamChunk, dInstance *types.LLMInstance) {
+	data, err := b.buildDecodeRequestData(req, dInstance)
 	if err != nil {
 		klog.Errorf("[%s] failed to build decode request data: %v", err, req.Id)
 		chunkChan <- StreamChunk{err: err}
 		return
 	}
-	StreamResponseFromBackend(req, b.client, data, dWorker, chunkChan)
+	StreamResponseFromBackend(req, b.client, data, dInstance, chunkChan)
 }
 
 func (b *PdSplitVllmKvtBackend) StagedScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
-	if pWorker == nil {
-		return nil, fmt.Errorf("[%s] no scheduled prefill worker", req.Id)
+	pInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRolePrefill)
+	if pInstance == nil {
+		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
 	}
 
 	chunkChan := make(chan StreamChunk, 100)
 	go func() {
 		defer close(chunkChan)
 
-		err := b.doPrefill(req, pWorker)
+		err := b.doPrefill(req, pInstance)
 		if err != nil {
 			chunkChan <- StreamChunk{err: err}
 			return
@@ -156,14 +157,14 @@ func (b *PdSplitVllmKvtBackend) StagedScheduleStreamInference(req *types.Request
 			return
 		}
 
-		dWorker := results.GetWorkerByRole(types.InferRoleDecode)
-		if dWorker == nil {
-			klog.Errorf("[%s] decode worker not found", req.Id)
-			chunkChan <- StreamChunk{err: fmt.Errorf("decode worker not found")}
+		dInstance := results.GetInstanceByRole(types.InferRoleDecode)
+		if dInstance == nil {
+			klog.Errorf("[%s] decode instance not found", req.Id)
+			chunkChan <- StreamChunk{err: fmt.Errorf("decode instance not found")}
 			return
 		}
 
-		b.doDecode(req, chunkChan, pWorker, dWorker)
+		b.doDecode(req, chunkChan, dInstance)
 	}()
 
 	return chunkChan, nil

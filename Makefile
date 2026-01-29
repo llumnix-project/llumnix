@@ -80,8 +80,8 @@ e2e-tests: discovery-proto-build gateway-build simple-tests migration-tests
 
 TEST_DIRS := $(shell go list ./pkg/llm-gateway/... | grep -v "/kvs/v6d")
 
-.PHONY: llumnix-unit-test
-llumnix-unit-test: llm-gateway-proto-build
+.PHONY: unit-test
+unit-test: llm-gateway-proto-build
 	CGO_ENABLED=1 \
 	CGO_LDFLAGS="-L./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release" \
 	go test -v -failfast $(TEST_DIRS) 2>&1 | grep -v "no test files"

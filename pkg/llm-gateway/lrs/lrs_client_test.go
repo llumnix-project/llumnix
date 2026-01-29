@@ -2,19 +2,20 @@ package lrs
 
 import (
 	"fmt"
-	"llumnix/cmd/llm-gateway/app/options"
-	"llumnix/pkg/llm-gateway/consts"
-	"llumnix/pkg/llm-gateway/types"
 	"math/rand"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+
+	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/llm-gateway/types"
 )
 
-func createTestTokenWithInferMode(id string, inferMode string) *types.LLMWorker {
-	return &types.LLMWorker{
+func createTestInstanceWithInferMode(id string, inferMode string) *types.LLMInstance {
+	return &types.LLMInstance{
 		Version: 1,
 		ID:      id,
 		Endpoint: types.Endpoint{
@@ -47,7 +48,7 @@ func TestLocalRealtimeStateClientConcurrency(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			scsClient := NewLocalRealtimeStateClient(&options.Config{})
-			instance := createTestTokenWithInferMode("worker-1", tc.inferMode)
+			instance := createTestInstanceWithInferMode("instance-1", tc.inferMode)
 			gateway := "gateway-1"
 			scsClient.AddInstance(instance)
 			scsClient.AddGateway(gateway)
@@ -111,19 +112,19 @@ func TestScheduelrStateStore(t *testing.T) {
 
 	t.Run("Instance Creation for Different Modes", func(t *testing.T) {
 		// Test normal mode
-		normalInstance := createTestTokenWithInferMode("worker-1", consts.NormalInferMode)
+		normalInstance := createTestInstanceWithInferMode("instance-1", consts.NormalInferMode)
 		scsClient.AddInstance(normalInstance)
 		stats := scsClient.GetInstanceView(consts.NormalInferMode, normalInstance.Id())
 		assert.NotNil(t, stats)
 
 		// Test prefill mode
-		prefillInstance := createTestTokenWithInferMode("worker-2", consts.PrefillInferMode)
+		prefillInstance := createTestInstanceWithInferMode("instance-2", consts.PrefillInferMode)
 		scsClient.AddInstance(prefillInstance)
 		stats = scsClient.GetInstanceView(consts.PrefillInferMode, prefillInstance.Id())
 		assert.NotNil(t, stats)
 
 		// Test decode mode
-		decodeInstance := createTestTokenWithInferMode("worker-3", consts.DecodeInferMode)
+		decodeInstance := createTestInstanceWithInferMode("instance-3", consts.DecodeInferMode)
 		scsClient.AddInstance(decodeInstance)
 		stats = scsClient.GetInstanceView(consts.DecodeInferMode, decodeInstance.Id())
 		assert.NotNil(t, stats)
@@ -131,18 +132,18 @@ func TestScheduelrStateStore(t *testing.T) {
 
 	t.Run("Instance Removal for Different Modes", func(t *testing.T) {
 		// Test normal mode deletion
-		scsClient.RemoveInstance(consts.NormalInferMode, "worker-1")
-		stats := scsClient.GetInstanceView(consts.NormalInferMode, "worker-1")
+		scsClient.RemoveInstance(consts.NormalInferMode, "instance-1")
+		stats := scsClient.GetInstanceView(consts.NormalInferMode, "instance-1")
 		assert.Nil(t, stats)
 
 		// Test prefill mode deletion
-		scsClient.RemoveInstance(consts.PrefillInferMode, "worker-2")
-		stats = scsClient.GetInstanceView(consts.PrefillInferMode, "worker-2")
+		scsClient.RemoveInstance(consts.PrefillInferMode, "instance-2")
+		stats = scsClient.GetInstanceView(consts.PrefillInferMode, "instance-2")
 		assert.Nil(t, stats)
 
 		// Test decode mode deletion
-		scsClient.RemoveInstance(consts.DecodeInferMode, "worker-3")
-		stats = scsClient.GetInstanceView(consts.DecodeInferMode, "worker-3")
+		scsClient.RemoveInstance(consts.DecodeInferMode, "instance-3")
+		stats = scsClient.GetInstanceView(consts.DecodeInferMode, "instance-3")
 		assert.Nil(t, stats)
 	})
 
@@ -150,12 +151,12 @@ func TestScheduelrStateStore(t *testing.T) {
 		// Add gateway
 		scsClient.AddGateway(gateway)
 
-		// Create test requests for each mode
-		instance := createTestTokenWithInferMode("worker-4", consts.NormalInferMode)
-		scsClient.AddInstance(instance)
-
 		modes := []string{consts.NormalInferMode, consts.PrefillInferMode, consts.DecodeInferMode}
 		for _, mode := range modes {
+			// Create test requests for each mode
+			instance := createTestInstanceWithInferMode("instance-"+mode, mode)
+			scsClient.AddInstance(instance)
+
 			reqState := &RequestState{
 				reqId:      "req-1",
 				numTokens:  100,
@@ -190,7 +191,7 @@ func TestScheduelrStateStore(t *testing.T) {
 
 	t.Run("Metrics and Stats Output", func(t *testing.T) {
 		// Add some test data
-		instance := createTestTokenWithInferMode("worker-5", consts.NormalInferMode)
+		instance := createTestInstanceWithInferMode("instance-5", consts.NormalInferMode)
 		scsClient.AddInstance(instance)
 		scsClient.AddGateway(gateway)
 
@@ -232,7 +233,7 @@ func TestScheduelrStateStore(t *testing.T) {
 	})
 
 	t.Run("Concurrent Mode Operations", func(t *testing.T) {
-		instance := createTestTokenWithInferMode("worker-6", consts.NormalInferMode)
+		instance := createTestInstanceWithInferMode("instance-6", consts.NormalInferMode)
 		scsClient.AddInstance(instance)
 		scsClient.AddGateway(gateway)
 
@@ -273,14 +274,14 @@ func TestScheduelrStateStore(t *testing.T) {
 		gateway := "gateway-1"
 
 		// Create instances with different models and different modes
-		gpt35NormalInstance := createTestTokenWithInferModeAndModel("worker-gpt35-normal", consts.NormalInferMode, "gpt-3.5-turbo")
-		gpt35PrefillInstance := createTestTokenWithInferModeAndModel("worker-gpt35-prefill", consts.PrefillInferMode, "gpt-3.5-turbo")
-		gpt35DecodeInstance := createTestTokenWithInferModeAndModel("worker-gpt35-decode", consts.DecodeInferMode, "gpt-3.5-turbo")
-		gpt4NormalInstance := createTestTokenWithInferModeAndModel("worker-gpt4-normal", consts.NormalInferMode, "gpt-4")
-		claudeNormalInstance := createTestTokenWithInferModeAndModel("worker-claude-normal", consts.NormalInferMode, "claude-2")
+		gpt35NormalInstance := createTestInstanceWithInferModeAndModel("instance-gpt35-normal", consts.NormalInferMode, "gpt-3.5-turbo")
+		gpt35PrefillInstance := createTestInstanceWithInferModeAndModel("instance-gpt35-prefill", consts.PrefillInferMode, "gpt-3.5-turbo")
+		gpt35DecodeInstance := createTestInstanceWithInferModeAndModel("instance-gpt35-decode", consts.DecodeInferMode, "gpt-3.5-turbo")
+		gpt4NormalInstance := createTestInstanceWithInferModeAndModel("instance-gpt4-normal", consts.NormalInferMode, "gpt-4")
+		claudeNormalInstance := createTestInstanceWithInferModeAndModel("instance-claude-normal", consts.NormalInferMode, "claude-2")
 
 		// Add all instances
-		instances := []*types.LLMWorker{gpt35NormalInstance, gpt35PrefillInstance, gpt35DecodeInstance, gpt4NormalInstance, claudeNormalInstance}
+		instances := []*types.LLMInstance{gpt35NormalInstance, gpt35PrefillInstance, gpt35DecodeInstance, gpt4NormalInstance, claudeNormalInstance}
 		for _, instance := range instances {
 			scsClient.AddInstance(instance)
 		}
@@ -330,7 +331,7 @@ func TestScheduelrStateStore(t *testing.T) {
 		})
 
 		t.Run("Empty Model String", func(t *testing.T) {
-			emptyModelInstance := createTestTokenWithInferModeAndModel("worker-empty", consts.NormalInferMode, "")
+			emptyModelInstance := createTestInstanceWithInferModeAndModel("instance-empty", consts.NormalInferMode, "")
 			scsClient.AddInstance(emptyModelInstance)
 
 			results := scsClient.GetInstanceViewsByModel("", consts.NormalInferMode)
@@ -347,8 +348,8 @@ func TestScheduelrStateStore(t *testing.T) {
 		gateway := "gateway-1"
 
 		// Create instances with different models
-		gpt35Instance := createTestTokenWithInferModeAndModel("worker-gpt35", consts.NormalInferMode, "gpt-3.5-turbo")
-		gpt4Instance := createTestTokenWithInferModeAndModel("worker-gpt4", consts.NormalInferMode, "gpt-4")
+		gpt35Instance := createTestInstanceWithInferModeAndModel("instance-gpt35", consts.NormalInferMode, "gpt-3.5-turbo")
+		gpt4Instance := createTestInstanceWithInferModeAndModel("instance-gpt4", consts.NormalInferMode, "gpt-4")
 
 		// Add instances
 		scsClient.AddInstance(gpt35Instance)
@@ -373,7 +374,7 @@ func TestScheduelrStateStore(t *testing.T) {
 		gateway := "gateway-1"
 
 		// Create instance and allocate request state
-		instance := createTestTokenWithInferModeAndModel("worker-with-states", consts.NormalInferMode, "gpt-3.5-turbo")
+		instance := createTestInstanceWithInferModeAndModel("instance-with-states", consts.NormalInferMode, "gpt-3.5-turbo")
 		scsClient.AddInstance(instance)
 		scsClient.AddGateway(gateway)
 
@@ -398,7 +399,7 @@ func TestScheduelrStateStore(t *testing.T) {
 
 	t.Run("GetInstanceViewsByModel Invalid Mode", func(t *testing.T) {
 		scsClient := NewLocalRealtimeStateClient(&options.Config{ServerlessMode: true})
-		instance := createTestTokenWithInferModeAndModel("worker-test", consts.NormalInferMode, "gpt-3.5-turbo")
+		instance := createTestInstanceWithInferModeAndModel("instance-test", consts.NormalInferMode, "gpt-3.5-turbo")
 		scsClient.AddInstance(instance)
 
 		// Test invalid inferMode
@@ -407,9 +408,9 @@ func TestScheduelrStateStore(t *testing.T) {
 	})
 }
 
-// createTestTokenWithInferModeAndModel creates a test token with specified mode and model
-func createTestTokenWithInferModeAndModel(id string, inferMode string, model string) *types.LLMWorker {
-	return &types.LLMWorker{
+// createTestInstanceWithInferModeAndModel creates a test instance with specified mode and model
+func createTestInstanceWithInferModeAndModel(id string, inferMode string, model string) *types.LLMInstance {
+	return &types.LLMInstance{
 		Version: 1,
 		Model:   model,
 		Role:    types.InferRole(inferMode),

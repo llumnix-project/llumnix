@@ -363,7 +363,7 @@ func (rp *ResponseChunkProcessor) PostProcess(req *types.RequestContext, done bo
 	p := req.LLMRequest.Protocol
 	switch p {
 	case protocol.OpenAIChatCompletion: // completion -> chat completion
-		// Pre check, ensure completion response is unmarshaled
+		// Pre check, ensure completion response is unmarshalled
 		cmpStreamResp := req.LLMRequest.CompletionResponse
 		if cmpStreamResp == nil {
 			klog.Errorf("[%s] chat completion stream process: completion response is empty", req.Id)

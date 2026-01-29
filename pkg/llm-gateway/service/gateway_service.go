@@ -140,7 +140,7 @@ func (lgs *LlmGatewayService) convertErrorResponse(msg *types.ResponseMsg) (int,
 	case consts.ErrorNoAvailableEndpoint:
 		return http.StatusTooManyRequests, []byte(`{"error": {"code": 429, "message": "too many requests"}}`)
 	case consts.ErrorEndpointNotFound:
-		return http.StatusNotFound, []byte(`{"error": {"code": 404, "message": "no inference worker found"}}`)
+		return http.StatusNotFound, []byte(`{"error": {"code": 404, "message": "no inference instance found"}}`)
 	case consts.ErrorBackendBadRequest:
 		// Parse backend error response to extract specific error details
 		var response types.ErrorResponse
@@ -273,7 +273,7 @@ func (lgs *LlmGatewayService) externalRouteRequest(reqCtx *types.RequestContext,
 
 // dispatchRequest routes the request and dispatches it to appropriate handler
 // It supports three routing types:
-//   - Internal: schedule to internal workers via balancer
+//   - Internal: schedule to internal instances via balancer
 //   - External: proxy to external service
 //   - Fallback: use fallback service when no route matches
 func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext) {
@@ -537,38 +537,44 @@ type RequestStateManagementHooks struct {
 }
 
 func (h *RequestStateManagementHooks) OnPostPrefill(req *types.RequestContext) {
-	klog.V(3).Infof("[%s] Post-prefill hook triggered", req.Id)
-	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
-	if pWorker != nil {
-		h.balancer.Release(req, pWorker)
+	if h.gateway.config.EnableRequestStateTracking() {
+		klog.V(3).Infof("[%s] Post-prefill hook triggered", req.Id)
+
+		pInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRolePrefill)
+		if pInstance != nil {
+			h.balancer.Release(req, pInstance)
+		}
+		req.ScheduleCtx.InferStage = types.InferStageDecode
 	}
-	req.ScheduleCtx.InferStage = types.InferStageDecode
 }
 
 func (h *RequestStateManagementHooks) OnPostRequest(req *types.RequestContext) {
-	klog.V(3).Infof("[%s] Post-request hook triggered", req.Id)
-	nWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleNormal)
-	if nWorker != nil {
-		h.balancer.Release(req, nWorker)
-	}
-	dWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode)
-	if dWorker != nil {
-		h.balancer.Release(req, dWorker)
+	if h.gateway.config.EnableRequestStateTracking() {
+		klog.V(3).Infof("[%s] Post-request hook triggered", req.Id)
+
+		nInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRoleNormal)
+		if nInstance != nil {
+			h.balancer.Release(req, nInstance)
+		}
+		dInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRoleDecode)
+		if dInstance != nil {
+			h.balancer.Release(req, dInstance)
+		}
 	}
 }
 
 func (h *RequestStateManagementHooks) OnPostDecodeFirstStreamResponse(req *types.RequestContext) {
-	klog.V(3).Infof("[%s] Post-decode-first-stream-response hook triggered", req.Id)
-
 	if h.gateway.config.EnableRequestStateTracking() && req.LLMRequest.ClientStream {
+		klog.V(3).Infof("[%s] Post-decode-first-stream-response hook triggered", req.Id)
+
 		var inferMode string
 		var instanceID string
-		if worker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode); worker != nil {
+		if instance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRoleDecode); instance != nil {
 			inferMode = consts.DecodeInferMode
-			instanceID = worker.Id()
-		} else if worker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleNormal); worker != nil {
+			instanceID = instance.Id()
+		} else if instance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRoleNormal); instance != nil {
 			inferMode = consts.NormalInferMode
-			instanceID = worker.Id()
+			instanceID = instance.Id()
 		}
 		reqTokenState := lrs.NewRequestTokenState(req, req.LLMRequest.Model, inferMode, instanceID, req.ScheduleCtx.GatewayId)
 		h.gateway.requestStateTracker.AddRequestState(reqTokenState)
@@ -578,9 +584,9 @@ func (h *RequestStateManagementHooks) OnPostDecodeFirstStreamResponse(req *types
 }
 
 func (h *RequestStateManagementHooks) OnPostDecodeEachStreamResponse(req *types.RequestContext) {
-	klog.V(3).Infof("[%s] Post-decode-each-stream-response hook triggered", req.Id)
-
 	if h.gateway.config.EnableRequestStateTracking() && req.LLMRequest.ClientStream {
+		klog.V(3).Infof("[%s] Post-decode-each-stream-response hook triggered", req.Id)
+
 		usage := utils.GetResponseUsage(req)
 		if usage != nil {
 			req.RequestTokenState.UpdateNumTokens(usage.TotalTokens)

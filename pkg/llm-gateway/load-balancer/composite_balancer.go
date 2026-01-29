@@ -168,12 +168,12 @@ func (bp *CompositeBalancer) Get(req *types.RequestContext) (types.ScheduledResu
 	}
 }
 
-// Release releases the worker back to the balancer pool.
+// Release releases the instance back to the balancer pool.
 // Only remote balancer modes need to release resources.
 // It implements the Balancer interface.
-func (bp *CompositeBalancer) Release(req *types.RequestContext, worker *types.LLMWorker) {
+func (bp *CompositeBalancer) Release(req *types.RequestContext, instance *types.LLMInstance) {
 	balanceMode := bp.balanceMode
 	if balanceMode == RemoteBalancer || balanceMode == PDRemoteBalancer {
-		bp.remoteBalancer.Release(req, worker)
+		bp.remoteBalancer.Release(req, instance)
 	}
 }

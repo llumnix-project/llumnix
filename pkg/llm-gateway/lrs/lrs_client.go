@@ -1,10 +1,11 @@
 package lrs
 
 import (
+	"sync"
+
 	"llumnix/cmd/llm-gateway/app/options"
 	"llumnix/pkg/llm-gateway/consts"
 	"llumnix/pkg/llm-gateway/types"
-	"sync"
 )
 
 // LocalRealtimeStateClient manages different scheduler state stores for different inference inferModes
@@ -55,31 +56,31 @@ func (lrsClient *LocalRealtimeStateClient) Unlock() {
 	lrsClient.mu.Unlock()
 }
 
-func (lrsClient *LocalRealtimeStateClient) AddInstance(token *types.LLMWorker) {
+func (lrsClient *LocalRealtimeStateClient) AddInstance(instance *types.LLMInstance) {
 	lrsClient.mu.Lock()
 	defer lrsClient.mu.Unlock()
 
-	switch token.Role.String() {
+	switch instance.Role.String() {
 	case consts.DecodeInferMode:
-		lrsClient.decodeState.AddInstance(token)
+		lrsClient.decodeState.AddInstance(instance)
 	case consts.PrefillInferMode:
-		lrsClient.prefillState.AddInstance(token)
+		lrsClient.prefillState.AddInstance(instance)
 	default:
-		lrsClient.normalState.AddInstance(token)
+		lrsClient.normalState.AddInstance(instance)
 	}
 }
 
-func (lrsClient *LocalRealtimeStateClient) RemoveInstance(inferMode string, workerId string) {
+func (lrsClient *LocalRealtimeStateClient) RemoveInstance(inferMode string, instanceId string) {
 	lrsClient.mu.Lock()
 	defer lrsClient.mu.Unlock()
 
 	switch inferMode {
 	case consts.DecodeInferMode:
-		lrsClient.decodeState.RemoveInstance(workerId)
+		lrsClient.decodeState.RemoveInstance(instanceId)
 	case consts.PrefillInferMode:
-		lrsClient.prefillState.RemoveInstance(workerId)
+		lrsClient.prefillState.RemoveInstance(instanceId)
 	default:
-		lrsClient.normalState.RemoveInstance(workerId)
+		lrsClient.normalState.RemoveInstance(instanceId)
 	}
 }
 

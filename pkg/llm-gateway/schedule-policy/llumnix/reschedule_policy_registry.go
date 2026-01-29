@@ -8,23 +8,23 @@ import (
 	"k8s.io/klog/v2"
 )
 
-func newReschedulePolicyInternal(p *options.LlumnixConfig, policy string) reschedulePolicyInternal {
+func newReschedulePolicyInternal(p *options.SchedulerConfig, policy string) reschedulePolicyInternal {
 	switch policy {
-	case consts.LlumnixReschedulePolicyNeutralLoad:
+	case consts.ReschedulePolicyNeutralLoad:
 		return newLoadBalanceReschedule(p, consts.NormalInferMode)
-	case consts.LlumnixReschedulePolicyDecodeLoad:
+	case consts.ReschedulePolicyDecodeLoad:
 		return newLoadBalanceReschedule(p, consts.DecodeInferMode)
-	case consts.LlumnixReschedulePolicyPrefillFailover:
+	case consts.ReschedulePolicyPrefillFailover:
 		return newFailoverReschedule(p, consts.PrefillInferMode)
-	case consts.LlumnixReschedulePolicyDecodeFailover:
+	case consts.ReschedulePolicyDecodeFailover:
 		return newFailoverReschedule(p, consts.DecodeInferMode)
-	case consts.LlumnixReschedulePolicyNeutralFailover:
+	case consts.ReschedulePolicyNeutralFailover:
 		return newFailoverReschedule(p, consts.NormalInferMode)
-	case consts.LlumnixReschedulePolicyCleanUpDecodeRequestsOnPrefill:
+	case consts.ReschedulePolicyCleanUpDecodeRequestsOnPrefill:
 		return newCleanUpDecodeRequestsOnPrefillReschedule(p)
-	case consts.LlumnixReschedulePolicyAggregateDecodeRequestsOnPrefill:
+	case consts.ReschedulePolicyAggregateDecodeRequestsOnPrefill:
 		return newAggregateDecodeRequestsOnPrefillReschedule(p)
-	case consts.LlumnixReschedulePolicyEaseBusyDecodeWithFreePrefill:
+	case consts.ReschedulePolicyEaseBusyDecodeWithFreePrefill:
 		return newEaseBusyDecodeWithFreePrefillReschedule(p)
 	default:
 		panic(fmt.Sprintf("unsupported reschedule policy: %s", p.ReschedulePolicies))
@@ -86,7 +86,7 @@ Filters:
 Selector:
   - Source instances with high load are preferentially paired with destination instances with low load.
 */
-func newLoadBalanceReschedule(p *options.LlumnixConfig, inferMode string) *decodeLoadBalanceReschedule {
+func newLoadBalanceReschedule(p *options.SchedulerConfig, inferMode string) *decodeLoadBalanceReschedule {
 	var targetLoadMetric string
 	var targetLoadThreshold float32
 
@@ -101,8 +101,8 @@ func newLoadBalanceReschedule(p *options.LlumnixConfig, inferMode string) *decod
 		panic(fmt.Sprintf("unsupported failover reschedule infer mode: %s", inferMode))
 	}
 
-	if p.RescheduleLoadBalanceScope != consts.LlumnixRescheduleLoadBalanceScopeCluster &&
-		p.RescheduleLoadBalanceScope != consts.LlumnixRescheduleLoadBalanceScopeUnit {
+	if p.RescheduleLoadBalanceScope != consts.RescheduleLoadBalanceScopeCluster &&
+		p.RescheduleLoadBalanceScope != consts.RescheduleLoadBalanceScopeUnit {
 		panic(fmt.Sprintf("unsupported reschedule load balance scope: %s", p.RescheduleLoadBalanceScope))
 	}
 
@@ -154,7 +154,7 @@ func newLoadBalanceReschedule(p *options.LlumnixConfig, inferMode string) *decod
 
 	// If reschedule load balance scope is unit, instance load inside the same unit should be balanced under any load,
 	// so there is no need to apply load threshold filter.
-	if targetLoadThreshold > 0 && p.RescheduleLoadBalanceScope != consts.LlumnixRescheduleLoadBalanceScopeUnit {
+	if targetLoadThreshold > 0 && p.RescheduleLoadBalanceScope != consts.RescheduleLoadBalanceScopeUnit {
 		r.srcSingleInstanceFilters = append(r.srcSingleInstanceFilters, &invertedSingleInstanceFilterWrapper{
 			innerFilter: &metricBasedFilter{
 				metricName: targetLoadMetric,
@@ -176,8 +176,8 @@ type failoverReschedule struct {
 
 func (p *failoverReschedule) getMigrationReqSelectPolicy() migrationReqSelectPolicy {
 	return migrationReqSelectPolicy{
-		rule:  consts.LlumnixMigrationReqSelectRuleNumReq,
-		order: consts.LlumnixMigrationReqSelectOrderLR,
+		rule:  consts.MigrationReqSelectRuleNumReq,
+		order: consts.MigrationReqSelectOrderLR,
 		// migration value -1 means pre stop
 		value: -1,
 	}
@@ -199,7 +199,7 @@ Filters:
 Selector:
   - Source instances with high load are preferentially paired with destination instances with low load.
 */
-func newFailoverReschedule(p *options.LlumnixConfig, inferMode string) *failoverReschedule {
+func newFailoverReschedule(p *options.SchedulerConfig, inferMode string) *failoverReschedule {
 	var reschedulerMetric string
 	switch inferMode {
 	case consts.PrefillInferMode:
@@ -273,12 +273,12 @@ Selector:
   - Prefer pairing source instances with high Decode batch sizes with destination instances low Decode load.
 */
 func newCleanUpDecodeRequestsOnPrefillReschedule(
-	p *options.LlumnixConfig) *cleanUpDecodeRequestsOnPrefillReschedule {
+	p *options.SchedulerConfig) *cleanUpDecodeRequestsOnPrefillReschedule {
 	return &cleanUpDecodeRequestsOnPrefillReschedule{
 		baseReschedulePolicy: baseReschedulePolicy{
 			metrics: map[string]func() instanceSchedulingMetric{
-				p.DispatchDecodeLoadMetric:                    getSchedulingMetric(p, p.DispatchDecodeLoadMetric),
-				consts.LlumnixSchedulingMetricDecodeBatchSize: getSchedulingMetric(p, consts.LlumnixSchedulingMetricDecodeBatchSize),
+				p.DispatchDecodeLoadMetric:             getSchedulingMetric(p, p.DispatchDecodeLoadMetric),
+				consts.SchedulingMetricDecodeBatchSize: getSchedulingMetric(p, consts.SchedulingMetricDecodeBatchSize),
 			},
 			srcSingleInstanceFilters: []singleInstanceFilter{
 				&inferModeFilter{targetInferMode: consts.PrefillInferMode},
@@ -286,7 +286,7 @@ func newCleanUpDecodeRequestsOnPrefillReschedule(
 				&stalenessFilter{instanceStalenessSeconds: p.InstanceStalenessSeconds},
 				&invertedSingleInstanceFilterWrapper{
 					innerFilter: &metricBasedFilter{
-						metricName: consts.LlumnixSchedulingMetricDecodeBatchSize,
+						metricName: consts.SchedulingMetricDecodeBatchSize,
 						threshold:  0.5,
 					},
 				},
@@ -311,9 +311,9 @@ func newCleanUpDecodeRequestsOnPrefillReschedule(
 				},
 			},
 			selector: &metricBalanceSelector{
-				srcMetric:    consts.LlumnixSchedulingMetricDecodeBatchSize,
+				srcMetric:    consts.SchedulingMetricDecodeBatchSize,
 				dstMetric:    p.DispatchDecodeLoadMetric,
-				balanceScope: consts.LlumnixRescheduleLoadBalanceScopeCluster,
+				balanceScope: consts.RescheduleLoadBalanceScopeCluster,
 			},
 		},
 	}
@@ -349,11 +349,11 @@ Filters:
 Selector:
   - Prefer pairing sources with low decode batch size with destinations that have high decode batch size.
 */
-func newAggregateDecodeRequestsOnPrefillReschedule(p *options.LlumnixConfig) *aggregateDecodeRequestsOnPrefillReschedule {
+func newAggregateDecodeRequestsOnPrefillReschedule(p *options.SchedulerConfig) *aggregateDecodeRequestsOnPrefillReschedule {
 	return &aggregateDecodeRequestsOnPrefillReschedule{
 		baseReschedulePolicy: baseReschedulePolicy{
 			metrics: map[string]func() instanceSchedulingMetric{
-				consts.LlumnixSchedulingMetricDecodeBatchSize: getSchedulingMetric(p, consts.LlumnixSchedulingMetricDecodeBatchSize),
+				consts.SchedulingMetricDecodeBatchSize: getSchedulingMetric(p, consts.SchedulingMetricDecodeBatchSize),
 			},
 			srcSingleInstanceFilters: []singleInstanceFilter{
 				&inferModeFilter{targetInferMode: consts.PrefillInferMode},
@@ -361,12 +361,12 @@ func newAggregateDecodeRequestsOnPrefillReschedule(p *options.LlumnixConfig) *ag
 				&stalenessFilter{instanceStalenessSeconds: p.InstanceStalenessSeconds},
 				&invertedSingleInstanceFilterWrapper{
 					innerFilter: &metricBasedFilter{
-						metricName: consts.LlumnixSchedulingMetricDecodeBatchSize,
+						metricName: consts.SchedulingMetricDecodeBatchSize,
 						threshold:  0.5,
 					},
 				},
 				&metricBasedFilter{
-					metricName: consts.LlumnixSchedulingMetricDecodeBatchSize,
+					metricName: consts.SchedulingMetricDecodeBatchSize,
 					threshold:  float32(p.DecodeComputeBoundBatchSize),
 				},
 			},
@@ -376,12 +376,12 @@ func newAggregateDecodeRequestsOnPrefillReschedule(p *options.LlumnixConfig) *ag
 				&stalenessFilter{instanceStalenessSeconds: p.InstanceStalenessSeconds},
 				&invertedSingleInstanceFilterWrapper{
 					innerFilter: &metricBasedFilter{
-						metricName: consts.LlumnixSchedulingMetricDecodeBatchSize,
+						metricName: consts.SchedulingMetricDecodeBatchSize,
 						threshold:  0.5,
 					},
 				},
 				&metricBasedFilter{
-					metricName: consts.LlumnixSchedulingMetricDecodeBatchSize,
+					metricName: consts.SchedulingMetricDecodeBatchSize,
 					threshold:  float32(p.DecodeComputeBoundBatchSize),
 				},
 			},
@@ -396,8 +396,8 @@ func newAggregateDecodeRequestsOnPrefillReschedule(p *options.LlumnixConfig) *ag
 				},
 			},
 			selector: &aggregateSelector{
-				srcMetric: consts.LlumnixSchedulingMetricDecodeBatchSize,
-				dstMetric: consts.LlumnixSchedulingMetricDecodeBatchSize,
+				srcMetric: consts.SchedulingMetricDecodeBatchSize,
+				dstMetric: consts.SchedulingMetricDecodeBatchSize,
 			},
 		},
 	}
@@ -428,13 +428,13 @@ Filters:
 Selector:
   - Prioritize pairing high decode load with free prefill.
 */
-func newEaseBusyDecodeWithFreePrefillReschedule(p *options.LlumnixConfig) *easeBusyDecodeWithFreePrefillReschedule {
+func newEaseBusyDecodeWithFreePrefillReschedule(p *options.SchedulerConfig) *easeBusyDecodeWithFreePrefillReschedule {
 	return &easeBusyDecodeWithFreePrefillReschedule{
 		baseReschedulePolicy: baseReschedulePolicy{
 			metrics: map[string]func() instanceSchedulingMetric{
-				p.DispatchPrefillLoadMetric:               getSchedulingMetric(p, p.DispatchPrefillLoadMetric),
-				p.DispatchDecodeLoadMetric:                getSchedulingMetric(p, p.DispatchDecodeLoadMetric),
-				consts.LlumnixSchedulingMetricNumRequests: getSchedulingMetric(p, consts.LlumnixSchedulingMetricNumRequests),
+				p.DispatchPrefillLoadMetric:        getSchedulingMetric(p, p.DispatchPrefillLoadMetric),
+				p.DispatchDecodeLoadMetric:         getSchedulingMetric(p, p.DispatchDecodeLoadMetric),
+				consts.SchedulingMetricNumRequests: getSchedulingMetric(p, consts.SchedulingMetricNumRequests),
 			},
 			srcSingleInstanceFilters: []singleInstanceFilter{
 				&inferModeFilter{targetInferMode: consts.DecodeInferMode},
@@ -452,7 +452,7 @@ func newEaseBusyDecodeWithFreePrefillReschedule(p *options.LlumnixConfig) *easeB
 				&schedulabilityFilter{},
 				&stalenessFilter{instanceStalenessSeconds: p.InstanceStalenessSeconds},
 				&metricBasedFilter{
-					metricName: consts.LlumnixSchedulingMetricNumRequests,
+					metricName: consts.SchedulingMetricNumRequests,
 					threshold:  0.5,
 				},
 			},
@@ -469,7 +469,7 @@ func newEaseBusyDecodeWithFreePrefillReschedule(p *options.LlumnixConfig) *easeB
 			selector: &metricBalanceSelector{
 				srcMetric:    p.DispatchDecodeLoadMetric,
 				dstMetric:    p.DispatchPrefillLoadMetric,
-				balanceScope: consts.LlumnixRescheduleLoadBalanceScopeCluster,
+				balanceScope: consts.RescheduleLoadBalanceScopeCluster,
 			},
 		},
 	}

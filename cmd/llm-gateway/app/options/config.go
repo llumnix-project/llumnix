@@ -50,7 +50,7 @@ type Config struct {
 	WaitScheduleTimeout int
 	// retry interval of waiting schedule results, unit is milliseconds
 	WaitScheduleRetryInterval int
-	// request token state report (report to llm scheduler) interval (seconds)
+	// request state report (report to llm scheduler) interval (seconds)
 	RequestStateReportInterval int
 
 	// enable access log
@@ -66,13 +66,13 @@ type Config struct {
 	RouteConfig
 
 	PDSplitConfig
-	LlumnixConfig
+	SchedulerConfig
 
 	BatchServiceConfig
 }
 
 type DiscoveryConfig struct {
-	// instead of relying on the active registration of inference workers, the
+	// instead of relying on the active registration of inference instances, the
 	// backend services are actively discovered through the scheduler, which can
 	// only be used in the scenario where BackendService are set
 	UseDiscovery                    string
@@ -120,7 +120,7 @@ type BatchServiceConfig struct {
 	RedisRetryTimes int
 }
 
-type LlumnixConfig struct {
+type SchedulerConfig struct {
 	// lite-mode scheduling: When not enabling full mode scheduling (lite-mode scheduling), llumnix does not
 	// intrusively modify inference engine, and only support basic load balance scheduling.
 	// In lite mode scheduling, LLM gateway collect update realtime request token states and report these data to
@@ -229,7 +229,7 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&c.ScheduleMode, "schedule-mode", false, "work as a scheduler")
 	flags.BoolVar(&c.ColocatedRescheduleMode, "colocated-reschedule-mode", false, "work as a scheduler with a colocated rescheduler")
 	flags.BoolVar(&c.StandaloneRescheduleMode, "standalone-reschedule-mode", false, "work as a standalone rescheduler")
-	flags.StringVar(&c.SchedulePolicy, "schedule-policy", "least-token", "schedule policy, now support round-robin, load-balance, flood")
+	flags.StringVar(&c.SchedulePolicy, "schedule-policy", "load-balance", "schedule policy, now support round-robin, load-balance, flood")
 
 	flags.StringVar(&c.PDSplitMode, "pdsplit-mode", "", "pd split mode, this configuration only takes effect under the pd-split policy, now support vllm-vineyard, vllm-kvt, sglang-mooncake")
 
@@ -238,12 +238,12 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&c.ServerlessMode, "serverless-mode", false, "run on serverless")
 
 	flags.IntVar(&c.WaitQueueThreads, "wait-queue-threads", 5, "number of coroutines which read the requests from queue")
-	flags.IntVar(&c.WaitScheduleTimeout, "wait-schedule-timeout", 10000, "waiting timeout if no free token, unit(milliseconds)")
+	flags.IntVar(&c.WaitScheduleTimeout, "wait-schedule-timeout", 10000, "waiting timeout if no free endpoint, unit(milliseconds)")
 	flags.IntVar(&c.WaitScheduleRetryInterval, "wait-schedule-try-period", 1000, "retry period while waiting free tokens, unit(milliseconds)")
 
 	flags.IntVar(&c.MaxQueueSize, "max-queue-size", 512, "max buffer queue size")
 
-	flags.StringVar(&c.UseDiscovery, "use-discovery", "", "the scheduler use cache-server/message-bus to discovery backend services.")
+	flags.StringVar(&c.UseDiscovery, "use-discovery", "", "the scheduler use redis to discovery backend services.")
 
 	flags.StringVar(&c.TokenizerName, "tokenizer-name", "", "builtin tokenizer name")
 	flags.StringVar(&c.TokenizerPath, "tokenizer-path", "", "builtin tokenizer path")
@@ -255,77 +255,77 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 
 	flags.BoolVar(&c.SeparatePDSchedule, "separate-pd-schedule", false, "Specify whether to separate pd schedule")
 
-	flags.BoolVar(&c.LlumnixConfig.EnableFullModeScheduling, "enable-full-mode-scheduling", consts.DefaultLlumnixEnableFullModeScheduling, "Enable full mode scheduling")
+	flags.BoolVar(&c.SchedulerConfig.EnableFullModeScheduling, "enable-full-mode-scheduling", consts.DefaultEnableFullModeScheduling, "Enable full mode scheduling")
 
-	flags.StringVar(&c.LlumnixConfig.CmsRedisHost, "llumnix-cms-redis-host", consts.DefaultLlumnixCmsRedisHost, "Llumnix CMS redis host")
-	flags.StringVar(&c.LlumnixConfig.CmsRedisPort, "llumnix-cms-redis-port", consts.DefaultLlumnixCmsRedisPort, "Llumnix CMS redis port")
-	flags.StringVar(&c.LlumnixConfig.CmsRedisUsername, "llumnix-cms-redis-username", consts.DefaultLlumnixCmsRedisUsername, "Llumnix CMS redis username")
-	flags.StringVar(&c.LlumnixConfig.CmsRedisPassword, "llumnix-cms-redis-password", consts.DefaultLlumnixCmsRedisPassword, "Llumnix CMS redis password")
-	flags.Float64Var(&c.LlumnixConfig.CmsRedisSocketTimeout, "llumnix-cms-redis-timeout", consts.DefaultLlumnixCmsRedisSocketTimeout, "Llumnix CMS redis socket timeout")
-	flags.IntVar(&c.LlumnixConfig.CmsRedisRetryTimes, "llumnix-cms-redis-retry-times", consts.DefaultLlumnixCmsRedisRetryTimes, "Llumnix CMS redis retry times")
-	flags.Int32Var(&c.LlumnixConfig.CmsPullStatusIntervalMs, "llumnix-cms-pull-status-interval-ms", consts.DefaultLlumnixCmsPullStatusIntervalMs, "Llumnix CMS pull status interval in milliseconds")
-	flags.Int32Var(&c.LlumnixConfig.CmsPullMetadataIntervalMs, "llumnix-cms-pull-metadata-interval-ms", consts.DefaultLlumnixCmsPullMetadataIntervalMs, "Llumnix CMS pull metadata interval in milliseconds")
-	flags.Int32Var(&c.LlumnixConfig.CmsRecordMetricsInterval, "llumnix-cms-record-metrics-interval", consts.DefaultLlumnixCmsRecordMetricsInterval, "Llumnix CMS record metrics interval")
+	flags.StringVar(&c.SchedulerConfig.CmsRedisHost, "cms-redis-host", consts.DefaultCmsRedisHost, "CMS redis host")
+	flags.StringVar(&c.SchedulerConfig.CmsRedisPort, "cms-redis-port", consts.DefaultCmsRedisPort, "CMS redis port")
+	flags.StringVar(&c.SchedulerConfig.CmsRedisUsername, "cms-redis-username", consts.DefaultCmsRedisUsername, "CMS redis username")
+	flags.StringVar(&c.SchedulerConfig.CmsRedisPassword, "cms-redis-password", consts.DefaultCmsRedisPassword, "CMS redis password")
+	flags.Float64Var(&c.SchedulerConfig.CmsRedisSocketTimeout, "cms-redis-timeout", consts.DefaultCmsRedisSocketTimeout, "CMS redis socket timeout")
+	flags.IntVar(&c.SchedulerConfig.CmsRedisRetryTimes, "cms-redis-retry-times", consts.DefaultCmsRedisRetryTimes, "CMS redis retry times")
+	flags.Int32Var(&c.SchedulerConfig.CmsPullStatusIntervalMs, "cms-pull-status-interval-ms", consts.DefaultCmsPullStatusIntervalMs, "CMS pull status interval in milliseconds")
+	flags.Int32Var(&c.SchedulerConfig.CmsPullMetadataIntervalMs, "cms-pull-metadata-interval-ms", consts.DefaultCmsPullMetadataIntervalMs, "CMS pull metadata interval in milliseconds")
+	flags.Int32Var(&c.SchedulerConfig.CmsRecordMetricsInterval, "cms-record-metrics-interval", consts.DefaultCmsRecordMetricsInterval, "CMS record metrics interval")
 
-	flags.BoolVar(&c.LlumnixConfig.EnableCacheAwareScheduling, "llumnix-enable-cache-aware-scheduling", consts.DefaultLlumnixEnableCacheAwareScheduling, "Llumnix enable cache aware scheduling")
-	flags.StringVar(&c.LlumnixConfig.KvsBackend, "llumnix-kvs-backend", consts.DefaultLlumnixKvsBackend, "Llumnix KVS backend")
-	flags.StringVar(&c.LlumnixConfig.KvsMetadataServiceConfigPath, "llumnix-kvs-metadata-service-config-path", consts.DefaultLlumnixKvsMetadataServiceConfigPath, "Llumnix KVS MetadataService config path")
-	flags.IntVar(&c.LlumnixConfig.KvsChunkSize, "llumnix-kvs-chunk-size", consts.DefaultLlumnixKvsChunkSize, "Llumnix KVS chunk size")
-	flags.BoolVar(&c.LlumnixConfig.KvsEnableSaveUnfullChunk, "llumnix-kvs-enable-save-unfull-chunk", consts.DefaultLlumnixKvsEnableSaveUnfullChunk, "Llumnix KVS enable save unfull chunk")
-	flags.StringVar(&c.LlumnixConfig.KvsIrisMetaPrefix, "llumnix-kvs-iris-meta-prefix", consts.DefaultLlumnixKvsIrisMetaPrefix, "Llumnix KVS iris meta prefix")
-	flags.StringVar(&c.LlumnixConfig.KvsVLLMBlockPrefix, "llumnix-kvs-vllm-block-prefix", consts.DefaultLlumnixKvsVLLMBlockPrefix, "Llumnix KVS vllm block prefix")
-	flags.IntVar(&c.LlumnixConfig.KvsRetryIntervalMs, "llumnix-kvs-retry-interval-ms", consts.DefaultLlumnixKvsRetryIntervalMs, "Llumnix KVS retry interval in milliseconds")
-	flags.IntVar(&c.LlumnixConfig.KvsRetryTimes, "llumnix-kvs-retry-times", consts.DefaultLlumnixKvsRetryTimes, "Llumnix KVS retry times")
-	flags.IntVar(&c.LlumnixConfig.KvsMetadataServiceDownDurationS, "llumnix-kvs-metadata-service-down-duration-s", consts.DefaultLlumnixKvsMetadataServiceDownDurationS, "Llumnix KVS metadata service down duration in seconds")
-	flags.StringVar(&c.LlumnixConfig.KvsMetadataServiceRedisClusterHosts, "llumnix-kvs-metadata-service-redis-cluster-hosts", consts.DefaultLlumnixKvsMetadataServiceRedisClusterHosts, "Llumnix KVS metadata service redis cluster hosts")
-	flags.StringVar(&c.LlumnixConfig.KvsMetadataServiceRedisClusterPassword, "llumnix-kvs-metadata-service-redis-cluster-password", consts.DefaultLlumnixKvsMetadataServiceRedisClusterPassword, "Llumnix KVS metadata service redis cluster password")
-	flags.StringVar(&c.LlumnixConfig.KvsMetadataServiceHttpServerHost, "llumnix-kvs-metadata-service-http-server-host", consts.DefaultLlumnixKvsMetadataServiceHttpServerHost, "Llumnix KVS metadata service http server host")
-	flags.StringVar(&c.LlumnixConfig.KvsMetadataServiceHttpServerPort, "llumnix-kvs-metadata-service-http-server-port", consts.DefaultLlumnixKvsMetadataServiceHttpServerPort, "Llumnix KVS metadata service http server port")
+	flags.BoolVar(&c.SchedulerConfig.EnableCacheAwareScheduling, "enable-cache-aware-scheduling", consts.DefaultEnableCacheAwareScheduling, "enable cache aware scheduling")
+	flags.StringVar(&c.SchedulerConfig.KvsBackend, "kvs-backend", consts.DefaultKvsBackend, "KVS backend")
+	flags.StringVar(&c.SchedulerConfig.KvsMetadataServiceConfigPath, "kvs-metadata-service-config-path", consts.DefaultKvsMetadataServiceConfigPath, "KVS MetadataService config path")
+	flags.IntVar(&c.SchedulerConfig.KvsChunkSize, "kvs-chunk-size", consts.DefaultKvsChunkSize, "KVS chunk size")
+	flags.BoolVar(&c.SchedulerConfig.KvsEnableSaveUnfullChunk, "kvs-enable-save-unfull-chunk", consts.DefaultKvsEnableSaveUnfullChunk, "KVS enable save unfull chunk")
+	flags.StringVar(&c.SchedulerConfig.KvsIrisMetaPrefix, "kvs-iris-meta-prefix", consts.DefaultKvsIrisMetaPrefix, "KVS iris meta prefix")
+	flags.StringVar(&c.SchedulerConfig.KvsVLLMBlockPrefix, "kvs-vllm-block-prefix", consts.DefaultKvsVLLMBlockPrefix, "KVS vllm block prefix")
+	flags.IntVar(&c.SchedulerConfig.KvsRetryIntervalMs, "kvs-retry-interval-ms", consts.DefaultKvsRetryIntervalMs, "KVS retry interval in milliseconds")
+	flags.IntVar(&c.SchedulerConfig.KvsRetryTimes, "kvs-retry-times", consts.DefaultKvsRetryTimes, "KVS retry times")
+	flags.IntVar(&c.SchedulerConfig.KvsMetadataServiceDownDurationS, "kvs-metadata-service-down-duration-s", consts.DefaultKvsMetadataServiceDownDurationS, "KVS metadata service down duration in seconds")
+	flags.StringVar(&c.SchedulerConfig.KvsMetadataServiceRedisClusterHosts, "kvs-metadata-service-redis-cluster-hosts", consts.DefaultKvsMetadataServiceRedisClusterHosts, "KVS metadata service redis cluster hosts")
+	flags.StringVar(&c.SchedulerConfig.KvsMetadataServiceRedisClusterPassword, "kvs-metadata-service-redis-cluster-password", consts.DefaultKvsMetadataServiceRedisClusterPassword, "KVS metadata service redis cluster password")
+	flags.StringVar(&c.SchedulerConfig.KvsMetadataServiceHttpServerHost, "kvs-metadata-service-http-server-host", consts.DefaultKvsMetadataServiceHttpServerHost, "KVS metadata service http server host")
+	flags.StringVar(&c.SchedulerConfig.KvsMetadataServiceHttpServerPort, "kvs-metadata-service-http-server-port", consts.DefaultKvsMetadataServiceHttpServerPort, "KVS metadata service http server port")
 
-	flags.IntVar(&c.LlumnixConfig.DispatchTopK, "llumnix-dispatch-top-k", consts.DefaultLlumnixDispatchTopK, "Llumnix dispatch top K")
-	flags.StringVar(&c.LlumnixConfig.DispatchNeutralLoadMetric, "llumnix-dispatch-neutral-load-metric", consts.DefaultLlumnixDispatchNeutralLoadMetric, "Llumnix dispatch neutral load metric")
-	flags.Float32Var(&c.LlumnixConfig.DispatchNeutralLoadThreshold, "llumnix-dispatch-neutral-load-threshold", consts.DefaultLlumnixDispatchNeutralLoadThreshold, "Llumnix dispatch neutral load threshold")
-	flags.StringVar(&c.LlumnixConfig.DispatchPrefillLoadMetric, "llumnix-dispatch-prefill-load-metric", consts.DefaultLlumnixDispatchPrefillLoadMetric, "Llumnix dispatch prefill load metric")
-	flags.Float32Var(&c.LlumnixConfig.DispatchPrefillLoadThreshold, "llumnix-dispatch-prefill-load-threshold", consts.DefaultLlumnixDispatchPrefillLoadThreshold, "Llumnix dispatch prefill load threshold")
-	flags.StringVar(&c.LlumnixConfig.DispatchDecodeLoadMetric, "llumnix-dispatch-decode-load-metric", consts.DefaultLlumnixDispatchDecodeLoadMetric, "Llumnix dispatch decode load metric")
-	flags.Float32Var(&c.LlumnixConfig.DispatchDecodeLoadThreshold, "llumnix-dispatch-decode-load-threshold", consts.DefaultLlumnixDispatchDecodeLoadThreshold, "Llumnix dispatch decode load threshold")
-	flags.StringVar(&c.LlumnixConfig.DispatchPrefillCacheLocalityMetric, "llumnix-dispatch-prefill-cache-locality-metric", consts.DefaultLlumnixDispatchPrefillCacheLocalityMetric, "Llumnix dispatch prefill cache locality metric")
-	flags.BoolVar(&c.LlumnixConfig.EnableInstanceStatusLocalAccount, "llumnix-enable-instance-status-local-account", consts.DefaultLlumnixEnableInstanceStatusLocalAccount, "Llumnix enable instance status local account")
-	flags.Int32Var(&c.LlumnixConfig.KvCacheBlockSize, "llumnix-kv-cache-block-size", consts.DefaultLlumnixKvCacheBlockSize, "Llumnix KV cache block size")
-	flags.Int32Var(&c.LlumnixConfig.RequestLocalAccountStalenessSeconds, "llumnix-request-local-account-staleness-seconds", consts.DefaultLlumnixRequestLocalAccountStalenessSeconds, "Llumnix request local account staleness seconds")
-	flags.BoolVar(&c.LlumnixConfig.AllowConcurrentSchedule, "llumnix-allow-concurrent-schedule", consts.DefaultLlumnixAllowConcurrentSchedule, "Llumnix allow concurrent schedule")
-	flags.BoolVar(&c.LlumnixConfig.EnablePredictorEnhancedScheduling, "llumnix-enable-predictor-enhanced-scheduling", consts.DefaultLlumnixEnablePredictorEnhancedScheduling, "Llumnix enable predictor enhanced scheduling")
-	flags.IntVar(&c.LlumnixConfig.MaxNumBatchedTokens, "llumnix-max-num-batched-tokens", consts.DefaultLlumnixMaxNumBatchedTokens, "Llumnix max num batched tokens")
-	flags.IntVar(&c.LlumnixConfig.NumPredictorWarmupSamples, "llumnix-num-predictor-warmup-samples", consts.DefaultLlumnixNumPredictorWarmupSamples, "Llumnix num predictor warmup samples")
+	flags.IntVar(&c.SchedulerConfig.DispatchTopK, "dispatch-top-k", consts.DefaultDispatchTopK, "dispatch top K")
+	flags.StringVar(&c.SchedulerConfig.DispatchNeutralLoadMetric, "dispatch-neutral-load-metric", consts.DefaultDispatchNeutralLoadMetric, "dispatch neutral load metric")
+	flags.Float32Var(&c.SchedulerConfig.DispatchNeutralLoadThreshold, "dispatch-neutral-load-threshold", consts.DefaultDispatchNeutralLoadThreshold, "dispatch neutral load threshold")
+	flags.StringVar(&c.SchedulerConfig.DispatchPrefillLoadMetric, "dispatch-prefill-load-metric", consts.DefaultDispatchPrefillLoadMetric, "dispatch prefill load metric")
+	flags.Float32Var(&c.SchedulerConfig.DispatchPrefillLoadThreshold, "dispatch-prefill-load-threshold", consts.DefaultDispatchPrefillLoadThreshold, "dispatch prefill load threshold")
+	flags.StringVar(&c.SchedulerConfig.DispatchDecodeLoadMetric, "dispatch-decode-load-metric", consts.DefaultDispatchDecodeLoadMetric, "dispatch decode load metric")
+	flags.Float32Var(&c.SchedulerConfig.DispatchDecodeLoadThreshold, "dispatch-decode-load-threshold", consts.DefaultDispatchDecodeLoadThreshold, "dispatch decode load threshold")
+	flags.StringVar(&c.SchedulerConfig.DispatchPrefillCacheLocalityMetric, "dispatch-prefill-cache-locality-metric", consts.DefaultDispatchPrefillCacheLocalityMetric, "dispatch prefill cache locality metric")
+	flags.BoolVar(&c.SchedulerConfig.EnableInstanceStatusLocalAccount, "enable-instance-status-local-account", consts.DefaultEnableInstanceStatusLocalAccount, "enable instance status local account")
+	flags.Int32Var(&c.SchedulerConfig.KvCacheBlockSize, "kv-cache-block-size", consts.DefaultKvCacheBlockSize, "KV cache block size")
+	flags.Int32Var(&c.SchedulerConfig.RequestLocalAccountStalenessSeconds, "request-local-account-staleness-seconds", consts.DefaultRequestLocalAccountStalenessSeconds, "request local account staleness seconds")
+	flags.BoolVar(&c.SchedulerConfig.AllowConcurrentSchedule, "allow-concurrent-schedule", consts.DefaultAllowConcurrentSchedule, "allow concurrent schedule")
+	flags.BoolVar(&c.SchedulerConfig.EnablePredictorEnhancedScheduling, "enable-predictor-enhanced-scheduling", consts.DefaultEnablePredictorEnhancedScheduling, "enable predictor enhanced scheduling")
+	flags.IntVar(&c.SchedulerConfig.MaxNumBatchedTokens, "max-num-batched-tokens", consts.DefaultMaxNumBatchedTokens, "max num batched tokens")
+	flags.IntVar(&c.SchedulerConfig.NumPredictorWarmupSamples, "num-predictor-warmup-samples", consts.DefaultNumPredictorWarmupSamples, "num predictor warmup samples")
 
-	flags.BoolVar(&c.LlumnixConfig.EnableAdaptivePD, "llumnix-enable-adaptive-pd", consts.DefaultLlumnixEnableAdaptivePD, "Llumnix enable adaptive pd")
-	flags.StringVar(&c.LlumnixConfig.DispatchPrefillAsDecodeLoadMetric, "llumnix-dispatch-prefill-as-decode-load-metric", consts.DefaultLlumnixDispatchPrefillAsDecodeLoadMetric, "Llumnix dispatch prefill as decode load metric")
-	flags.Float32Var(&c.LlumnixConfig.DispatchPrefillAsDecodeLoadThreshold, "llumnix-dispatch-prefill-as-decode-load-threshold", consts.DefaultLlumnixDispatchPrefillAsDecodeLoadThreshold, "Llumnix dispatch prefill as decode load threshold")
-	flags.StringVar(&c.LlumnixConfig.DispatchDecodeAsPrefillLoadMetric, "llumnix-dispatch-decode-as-prefill-load-metric", consts.DefaultLlumnixDispatchDecodeAsPrefillLoadMetric, "Llumnix dispatch decode as prefill load metric")
-	flags.Float32Var(&c.LlumnixConfig.DispatchDecodeAsPrefillLoadThreshold, "llumnix-dispatch-decode-as-prefill-load-threshold", consts.DefaultLlumnixDispatchDecodeAsPrefillLoadThreshold, "Llumnix dispatch decode as prefill load threshold")
-	flags.Int32Var(&c.LlumnixConfig.DecodeComputeBoundBatchSize, "llumnix-decode-compute-bound-batch-size", consts.DefaultLlumnixDecodeComputeBoundBatchSize, "Llumnix decode compute bound batch size for adaptive decode batch size metric")
+	flags.BoolVar(&c.SchedulerConfig.EnableAdaptivePD, "enable-adaptive-pd", consts.DefaultEnableAdaptivePD, "enable adaptive pd")
+	flags.StringVar(&c.SchedulerConfig.DispatchPrefillAsDecodeLoadMetric, "dispatch-prefill-as-decode-load-metric", consts.DefaultDispatchPrefillAsDecodeLoadMetric, "dispatch prefill as decode load metric")
+	flags.Float32Var(&c.SchedulerConfig.DispatchPrefillAsDecodeLoadThreshold, "dispatch-prefill-as-decode-load-threshold", consts.DefaultDispatchPrefillAsDecodeLoadThreshold, "dispatch prefill as decode load threshold")
+	flags.StringVar(&c.SchedulerConfig.DispatchDecodeAsPrefillLoadMetric, "dispatch-decode-as-prefill-load-metric", consts.DefaultDispatchDecodeAsPrefillLoadMetric, "dispatch decode as prefill load metric")
+	flags.Float32Var(&c.SchedulerConfig.DispatchDecodeAsPrefillLoadThreshold, "dispatch-decode-as-prefill-load-threshold", consts.DefaultDispatchDecodeAsPrefillLoadThreshold, "dispatch decode as prefill load threshold")
+	flags.Int32Var(&c.SchedulerConfig.DecodeComputeBoundBatchSize, "decode-compute-bound-batch-size", consts.DefaultDecodeComputeBoundBatchSize, "decode compute bound batch size for adaptive decode batch size metric")
 
-	flags.StringVar(&c.LlumnixConfig.FailoverScope, "llumnix-failover-scope", consts.DefaultLlumnixFailoverScope, "Llumnix failover scope")
-	flags.Int64Var(&c.LlumnixConfig.InstanceStalenessSeconds, "llumnix-instance-staleness-seconds", consts.DefaultLlumnixInstanceStalenessSeconds, "Llumnix instance staleness seconds")
+	flags.StringVar(&c.SchedulerConfig.FailoverScope, "failover-scope", consts.DefaultFailoverScope, "failover scope")
+	flags.Int64Var(&c.SchedulerConfig.InstanceStalenessSeconds, "instance-staleness-seconds", consts.DefaultInstanceStalenessSeconds, "instance staleness seconds")
 
-	flags.BoolVar(&c.LlumnixConfig.EnableRescheduling, "llumnix-enable-rescheduling", consts.DefaultLlumnixEnableRescheduling, "Llumnix enable rescheduling")
-	flags.StringVar(&c.LlumnixConfig.ReschedulePolicies, "llumnix-reschedule-policies", consts.DefaultLlumnixReschedulePolicies, "Llumnix reschedule policies, comma separated")
-	flags.Int32Var(&c.LlumnixConfig.RescheduleIntervalMs, "llumnix-reschedule-interval-ms", consts.DefaultLlumnixRescheduleIntervalMs, "Llumnix reschedule interval milliseconds")
-	flags.StringVar(&c.LlumnixConfig.RescheduleDecodeLoadMetric, "llumnix-reschedule-decode-load-metric", consts.DefaultLlumnixRescheduleDecodeLoadMetric, "Llumnix reschedule decode load metric")
-	flags.Float32Var(&c.LlumnixConfig.RescheduleDecodeLoadThreshold, "llumnix-reschedule-decode-load-threshold", consts.DefaultLlumnixRescheduleDecodeLoadThreshold, "Llumnix reschedule decode load threshold")
-	flags.StringVar(&c.LlumnixConfig.ReschedulePrefillLoadMetric, "llumnix-reschedule-prefill-load-metric", consts.DefaultLlumnixReschedulePrefillLoadMetric, "Llumnix reschedule prefill load metric")
-	flags.StringVar(&c.LlumnixConfig.RescheduleNeutralLoadMetric, "llumnix-reschedule-neutral-load-metric", consts.DefaultLlumnixRescheduleNeutralLoadMetric, "Llumnix reschedule neutral load metric")
-	flags.Float32Var(&c.LlumnixConfig.RescheduleNeutralLoadThreshold, "llumnix-reschedule-neutral-load-threshold", consts.DefaultLlumnixRescheduleNeutralLoadThreshold, "Llumnix reschedule neutral load threshold")
-	flags.IntVar(&c.LlumnixConfig.LlumletGrpcConnectionPoolSize, "llumnix-llumlet-grpc-connection-pool-size", consts.DefaultLlumnixLlumletGrpcConnectionPoolSize, "Llumnix llumlet grpc connection pool size")
-	flags.StringVar(&c.LlumnixConfig.RescheduleReqSelectOrder, "llumnix-reschedule-req-select-order", consts.DefaultLlumnixRescheduleReqSelectOrder, "Llumnix reschedule req selection order")
-	flags.StringVar(&c.LlumnixConfig.RescheduleReqSelectRule, "llumnix-reschedule-req-select-rule", consts.DefaultLlumnixRescheduleReqSelectRule, "Llumnix reschedule req selection rule")
-	flags.Float32Var(&c.LlumnixConfig.RescheduleReqSelectValue, "llumnix-reschedule-req-select-value", consts.DefaultLlumnixRescheduleReqSelectValue, "Llumnix reschedule req selection value")
-	flags.Float32Var(&c.LlumnixConfig.RescheduleLoadBalanceThreshold, "llumnix-reschedule-load-balance-threshold", consts.DefaultLlumnixRescheduleLoadBalanceThreshold, "Llumnix reschedule load balance threshold")
-	flags.StringVar(&c.LlumnixConfig.RescheduleLoadBalanceScope, "llumnix-reschedule-load-balance-scope", consts.DefaultLlumnixRescheduleLoadBalanceScope, "Llumnix reschedule load balance scope")
-	flags.IntVar(&c.LlumnixConfig.LlumletGrpcTimeoutSeconds, "llumnix-llumlet-grpc-timeout-seconds", consts.DefaultLlumnixLlumletGrpcTimeoutSeconds, "Llumnix llumlet grpc timeout seconds")
+	flags.BoolVar(&c.SchedulerConfig.EnableRescheduling, "enable-rescheduling", consts.DefaultEnableRescheduling, "enable rescheduling")
+	flags.StringVar(&c.SchedulerConfig.ReschedulePolicies, "reschedule-policies", consts.DefaultReschedulePolicies, "reschedule policies, comma separated")
+	flags.Int32Var(&c.SchedulerConfig.RescheduleIntervalMs, "reschedule-interval-ms", consts.DefaultRescheduleIntervalMs, "reschedule interval milliseconds")
+	flags.StringVar(&c.SchedulerConfig.RescheduleDecodeLoadMetric, "reschedule-decode-load-metric", consts.DefaultRescheduleDecodeLoadMetric, "reschedule decode load metric")
+	flags.Float32Var(&c.SchedulerConfig.RescheduleDecodeLoadThreshold, "reschedule-decode-load-threshold", consts.DefaultRescheduleDecodeLoadThreshold, "reschedule decode load threshold")
+	flags.StringVar(&c.SchedulerConfig.ReschedulePrefillLoadMetric, "reschedule-prefill-load-metric", consts.DefaultReschedulePrefillLoadMetric, "reschedule prefill load metric")
+	flags.StringVar(&c.SchedulerConfig.RescheduleNeutralLoadMetric, "reschedule-neutral-load-metric", consts.DefaultRescheduleNeutralLoadMetric, "reschedule neutral load metric")
+	flags.Float32Var(&c.SchedulerConfig.RescheduleNeutralLoadThreshold, "reschedule-neutral-load-threshold", consts.DefaultRescheduleNeutralLoadThreshold, "reschedule neutral load threshold")
+	flags.IntVar(&c.SchedulerConfig.LlumletGrpcConnectionPoolSize, "llumlet-grpc-connection-pool-size", consts.DefaultLlumletGrpcConnectionPoolSize, "llumlet grpc connection pool size")
+	flags.StringVar(&c.SchedulerConfig.RescheduleReqSelectOrder, "reschedule-req-select-order", consts.DefaultRescheduleReqSelectOrder, "reschedule req selection order")
+	flags.StringVar(&c.SchedulerConfig.RescheduleReqSelectRule, "reschedule-req-select-rule", consts.DefaultRescheduleReqSelectRule, "reschedule req selection rule")
+	flags.Float32Var(&c.SchedulerConfig.RescheduleReqSelectValue, "reschedule-req-select-value", consts.DefaultRescheduleReqSelectValue, "reschedule req selection value")
+	flags.Float32Var(&c.SchedulerConfig.RescheduleLoadBalanceThreshold, "reschedule-load-balance-threshold", consts.DefaultRescheduleLoadBalanceThreshold, "reschedule load balance threshold")
+	flags.StringVar(&c.SchedulerConfig.RescheduleLoadBalanceScope, "reschedule-load-balance-scope", consts.DefaultRescheduleLoadBalanceScope, "reschedule load balance scope")
+	flags.IntVar(&c.SchedulerConfig.LlumletGrpcTimeoutSeconds, "llumlet-grpc-timeout-seconds", consts.DefaultLlumletGrpcTimeoutSeconds, "llumlet grpc timeout seconds")
 
-	flags.BoolVar(&c.LlumnixConfig.EnableMetrics, "llumnix-enable-metrics", consts.DefaultLlumnixEnableMetrics, "Llumnix enable recording metrics")
-	flags.StringVar(&c.LlumnixConfig.ExtraArgs, "llumnix-extra-args", consts.DefaultLlumnixExtraArgs, "Llumnix extra args")
+	flags.BoolVar(&c.SchedulerConfig.EnableMetrics, "enable-metrics", consts.DefaultSchedulerEnableMetrics, "scheduler enable recording metrics")
+	flags.StringVar(&c.SchedulerConfig.ExtraArgs, "extra-args", consts.DefaultSchedulerExtraArgs, "scheduler extra args")
 
 	flags.StringVar(&c.RoutePolicy, "route-policy", "", "route policy, support weight and prefix")
 	flags.StringVar(&c.RouteConfigRaw, "route-config", "", "route config, include api key, base url, weight/prefix and fallback priority")
@@ -373,12 +373,12 @@ func (c *Config) GetModelName(origName string) string {
 }
 
 func (c *Config) EnableRequestStateTracking() bool {
-	return !c.LlumnixConfig.EnableFullModeScheduling && c.RequestStateReportInterval > 0 && len(c.LocalTestIPs) == 0
+	return !c.SchedulerConfig.EnableFullModeScheduling && c.RequestStateReportInterval > 0 && len(c.LocalTestIPs) == 0
 }
 
 func (c *Config) ScheduleNeedTokens() bool {
-	return c.LlumnixConfig.EnableFullModeScheduling &&
-		(c.LlumnixConfig.EnableCacheAwareScheduling || c.LlumnixConfig.EnableInstanceStatusLocalAccount)
+	return c.SchedulerConfig.EnableFullModeScheduling &&
+		(c.SchedulerConfig.EnableCacheAwareScheduling || c.SchedulerConfig.EnableInstanceStatusLocalAccount)
 }
 
 type LlmSchedulerProperty struct {
@@ -395,10 +395,7 @@ type LlmGatewayProperty struct {
 	WaitScheduleTimeout   *int  `json:"wait_schedule_timeout"`
 	WaitScheduleTryPeriod *int  `json:"wait_schedule_try_period"`
 	MaxQueueSize          *int  `json:"max_queue_size"`
-	RetryCount            *int  `json:"retry_count"`
 	ServerlessMode        *bool `json:"serverless_mode"`
-
-	InferBackend *string `json:"infer_backend"`
 }
 
 type RedisServiceProperty struct {
@@ -600,7 +597,7 @@ func safeSplitArgs(input string) []string {
 	return result
 }
 
-// ParseLlumnixExtraArgs parses llumnix-extra-args and overrides corresponding flag values.
+// ParseLlumnixExtraArgs parses extra-args and overrides corresponding flag values.
 // Supports two formats for array values:
 //   - Quoted strings: key='value1,value2' -> parsed as: key=value1,value2 (quotes removed)
 //   - Bracket arrays: key=[value1,value2] -> parsed as: key=[value1,value2] (brackets kept)
@@ -609,14 +606,14 @@ func safeSplitArgs(input string) []string {
 //
 //	"dispatch-top-k=5", "policies=[p1,p2]", "timeout=10,20"
 func (c *Config) ParseLlumnixExtraArgs(flags *pflag.FlagSet) error {
-	if c.LlumnixConfig.ExtraArgs == "" {
+	if c.SchedulerConfig.ExtraArgs == "" {
 		return nil
 	}
 
-	klog.Infof("Parsing llumnix-extra-args: %s", c.LlumnixConfig.ExtraArgs)
+	klog.Infof("Parsing extra-args: %s", c.SchedulerConfig.ExtraArgs)
 
 	// Use safeSplitArgs to safely split by comma, handling quotes, brackets and arrays
-	args := safeSplitArgs(c.LlumnixConfig.ExtraArgs)
+	args := safeSplitArgs(c.SchedulerConfig.ExtraArgs)
 
 	for _, arg := range args {
 		if arg == "" {

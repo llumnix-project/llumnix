@@ -28,14 +28,14 @@ var (
 )
 
 type InstanceView struct {
-	Worker   *types.LLMWorker
+	Instance *types.LLMInstance
 	Status   *InstanceStatus
 	Metadata *InstanceMetadata
 	InstanceStatusLocalAccount
 }
 
-func (iv *InstanceView) GetInstance() *types.LLMWorker {
-	return iv.Worker
+func (iv *InstanceView) GetInstance() *types.LLMInstance {
+	return iv.Instance
 }
 
 func (iv *InstanceView) GetInstanceId() string {
@@ -43,7 +43,7 @@ func (iv *InstanceView) GetInstanceId() string {
 }
 
 func (iv *InstanceView) GetInferMode() string {
-	return iv.Worker.Role.String()
+	return iv.Instance.Role.String()
 }
 
 type CMSReadClientInterface interface {
@@ -499,7 +499,7 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 			c.instanceViews[instanceID] = &InstanceView{
 				Metadata: c.instanceMetadatas[instanceID],
 				Status:   c.instanceStatuses[instanceID],
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{
 						Host: c.instanceMetadatas[instanceID].Ip,
 						Port: int(c.instanceMetadatas[instanceID].ApiServerPort),
@@ -509,7 +509,7 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 					DPRank:  int(c.instanceMetadatas[instanceID].DpRank),
 					DPSize:  int(c.instanceMetadatas[instanceID].DataParallelSize),
 					// NOTE(zhaohanyu.zhy): use v6d parser format by default
-					ID: fmt.Sprintf("%s_worker%d_%d",
+					ID: fmt.Sprintf("%s_instance%d_%d",
 						c.instanceMetadatas[instanceID].Ip,
 						c.instanceMetadatas[instanceID].DpRank,
 						c.instanceMetadatas[instanceID].DataParallelSize),

@@ -3,11 +3,12 @@ package resolver
 import (
 	"context"
 	"fmt"
-	"llumnix/pkg/llm-gateway/types"
 	"strings"
 	"sync"
 
 	"k8s.io/klog/v2"
+
+	"llumnix/pkg/llm-gateway/types"
 )
 
 // BuildArgs is a map of string keys to arbitrary values
@@ -152,18 +153,18 @@ type Resolver interface {
 	GetEndpoints() ([]types.Endpoint, error)
 }
 
-// LLMResolver is an interface for discovering and monitoring LLM workers.
-// Implementations of this interface provide mechanisms to get current worker
+// LLMResolver is an interface for discovering and monitoring LLM instances.
+// Implementations of this interface provide mechanisms to get current instance
 // state and watch for changes over time.
 type LLMResolver interface {
-	// GetLLMWorkers returns the current list of available LLM workers.
-	// This provides a snapshot of the worker state at the time of calling.
-	GetLLMWorkers() (types.LLMWorkerSlice, error)
+	// GetLLMInstances returns the current list of available LLM instances.
+	// This provides a snapshot of the instance state at the time of calling.
+	GetLLMInstances() (types.LLMInstanceSlice, error)
 
-	// Watch returns two channels for monitoring worker changes.
-	// The first channel receives slices of workers that have been added.
-	// The second channel receives slices of workers that have been removed.
+	// Watch returns two channels for monitoring instance changes.
+	// The first channel receives slices of instances that have been added.
+	// The second channel receives slices of instances that have been removed.
 	// Both channels will be closed when the context is cancelled or the resolver stops.
 	// This method supports multiple concurrent observers.
-	Watch(ctx context.Context) (<-chan types.LLMWorkerSlice, <-chan types.LLMWorkerSlice, error)
+	Watch(ctx context.Context) (<-chan types.LLMInstanceSlice, <-chan types.LLMInstanceSlice, error)
 }

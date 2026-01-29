@@ -21,25 +21,25 @@ func NewReschedulePolicyPartial(c *options.Config) *ReschedulePolicy {
 	rp := &ReschedulePolicy{
 		c:                    c,
 		cmsClient:            nil,
-		rescheduleIntervalMs: c.LlumnixConfig.RescheduleIntervalMs,
+		rescheduleIntervalMs: c.SchedulerConfig.RescheduleIntervalMs,
 		grpcTimeoutSeconds:   5,
 		stopChan:             make(chan bool),
 	}
 
-	if len(c.LlumnixConfig.ReschedulePolicies) > 0 {
-		polices := strings.Split(c.LlumnixConfig.ReschedulePolicies, ",")
+	if len(c.SchedulerConfig.ReschedulePolicies) > 0 {
+		polices := strings.Split(c.SchedulerConfig.ReschedulePolicies, ",")
 		for _, policy := range polices {
-			rp.policies = append(rp.policies, newReschedulePolicyInternal(&c.LlumnixConfig, policy))
+			rp.policies = append(rp.policies, newReschedulePolicyInternal(&c.SchedulerConfig, policy))
 		}
 	}
 
-	if c.LlumnixConfig.EnableAdaptivePD {
-		rp.policies = append(rp.policies, newReschedulePolicyInternal(&c.LlumnixConfig,
-			consts.LlumnixReschedulePolicyCleanUpDecodeRequestsOnPrefill))
-		rp.policies = append(rp.policies, newReschedulePolicyInternal(&c.LlumnixConfig,
-			consts.LlumnixReschedulePolicyAggregateDecodeRequestsOnPrefill))
-		rp.policies = append(rp.policies, newReschedulePolicyInternal(&c.LlumnixConfig,
-			consts.LlumnixReschedulePolicyEaseBusyDecodeWithFreePrefill))
+	if c.SchedulerConfig.EnableAdaptivePD {
+		rp.policies = append(rp.policies, newReschedulePolicyInternal(&c.SchedulerConfig,
+			consts.ReschedulePolicyCleanUpDecodeRequestsOnPrefill))
+		rp.policies = append(rp.policies, newReschedulePolicyInternal(&c.SchedulerConfig,
+			consts.ReschedulePolicyAggregateDecodeRequestsOnPrefill))
+		rp.policies = append(rp.policies, newReschedulePolicyInternal(&c.SchedulerConfig,
+			consts.ReschedulePolicyEaseBusyDecodeWithFreePrefill))
 	}
 
 	return rp
@@ -47,12 +47,12 @@ func NewReschedulePolicyPartial(c *options.Config) *ReschedulePolicy {
 
 func TestReschedulePolicy(t *testing.T) {
 	config := &options.Config{
-		LlumnixConfig: options.LlumnixConfig{
-			RescheduleDecodeLoadMetric:  consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			ReschedulePrefillLoadMetric: consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			RescheduleNeutralLoadMetric: consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+		SchedulerConfig: options.SchedulerConfig{
+			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			ReschedulePolicies:          "decode_load,prefill_failover,decode_failover,neutral_failover",
-			RescheduleLoadBalanceScope:  consts.LlumnixRescheduleLoadBalanceScopeCluster,
+			RescheduleLoadBalanceScope:  consts.RescheduleLoadBalanceScopeCluster,
 		},
 	}
 	rp := NewReschedulePolicyPartial(config)
@@ -86,14 +86,14 @@ func TestReschedulePolicy(t *testing.T) {
 
 func TestAdaptivePDReschedulePolicy(t *testing.T) {
 	config := &options.Config{
-		LlumnixConfig: options.LlumnixConfig{
+		SchedulerConfig: options.SchedulerConfig{
 			EnableAdaptivePD:            true,
-			DispatchPrefillLoadMetric:   consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			DispatchDecodeLoadMetric:    consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			RescheduleDecodeLoadMetric:  consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			ReschedulePrefillLoadMetric: consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			RescheduleNeutralLoadMetric: consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			RescheduleLoadBalanceScope:  consts.LlumnixRescheduleLoadBalanceScopeCluster,
+			DispatchPrefillLoadMetric:   consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			DispatchDecodeLoadMetric:    consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleLoadBalanceScope:  consts.RescheduleLoadBalanceScopeCluster,
 		},
 	}
 	rp := NewReschedulePolicyPartial(config)
@@ -114,7 +114,7 @@ func TestAdaptivePDReschedulePolicy(t *testing.T) {
 
 func TestRescheduleLoop(t *testing.T) {
 	config := &options.Config{
-		LlumnixConfig: options.LlumnixConfig{
+		SchedulerConfig: options.SchedulerConfig{
 			RescheduleIntervalMs: 100,
 		},
 	}
@@ -122,7 +122,7 @@ func TestRescheduleLoop(t *testing.T) {
 	rp := &ReschedulePolicy{
 		c:                    config,
 		cmsClient:            nil,
-		rescheduleIntervalMs: config.LlumnixConfig.RescheduleIntervalMs,
+		rescheduleIntervalMs: config.SchedulerConfig.RescheduleIntervalMs,
 		stopChan:             make(chan bool),
 	}
 
@@ -151,7 +151,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-neutral-1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.NormalInferMode,
 				},
@@ -175,7 +175,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-neutral-2": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.NormalInferMode,
 				},
@@ -199,7 +199,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-neutral-3": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.NormalInferMode,
 				},
@@ -223,7 +223,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-neutral-4": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.NormalInferMode,
 				},
@@ -247,7 +247,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-neutral-x": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.NormalInferMode,
 				},
@@ -271,7 +271,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-prefill-1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -295,7 +295,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-prefill-2": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -319,7 +319,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-prefill-3": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -343,7 +343,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-prefill-4": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -367,7 +367,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-decode-1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -391,7 +391,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-decode-2": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -415,7 +415,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-decode-3": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -439,7 +439,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-decode-4": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -463,7 +463,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-decode-5": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -487,7 +487,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-decode-6": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -511,7 +511,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 		},
 		"instance-decode-x": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -542,17 +542,17 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 
 func TestDecodeLoadBalanceReschedulePolicy(t *testing.T) {
 	config := &options.Config{
-		LlumnixConfig: options.LlumnixConfig{
-			FailoverScope:                  consts.LlumnixFailoverScopeNode,
-			RescheduleDecodeLoadMetric:     consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+		SchedulerConfig: options.SchedulerConfig{
+			FailoverScope:                  consts.FailoverScopeNode,
+			RescheduleDecodeLoadMetric:     consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			RescheduleDecodeLoadThreshold:  1.0,
-			ReschedulePrefillLoadMetric:    consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			RescheduleNeutralLoadMetric:    consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			ReschedulePolicies:             consts.LlumnixReschedulePolicyDecodeLoad,
-			RescheduleReqSelectRule:        consts.LlumnixMigrationReqSelectRuleToken,
+			ReschedulePrefillLoadMetric:    consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleNeutralLoadMetric:    consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			ReschedulePolicies:             consts.ReschedulePolicyDecodeLoad,
+			RescheduleReqSelectRule:        consts.MigrationReqSelectRuleToken,
 			RescheduleLoadBalanceThreshold: 0.7,
 			KvCacheBlockSize:               1,
-			RescheduleLoadBalanceScope:     consts.LlumnixRescheduleLoadBalanceScopeCluster,
+			RescheduleLoadBalanceScope:     consts.RescheduleLoadBalanceScopeCluster,
 		},
 	}
 	rp := NewReschedulePolicyPartial(config)
@@ -568,15 +568,15 @@ func TestDecodeLoadBalanceReschedulePolicy(t *testing.T) {
 
 func TestNeutralLoadBalanceReschedulePolicy(t *testing.T) {
 	config := &options.Config{
-		LlumnixConfig: options.LlumnixConfig{
-			FailoverScope:                  consts.LlumnixFailoverScopeNode,
-			RescheduleDecodeLoadMetric:     consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+		SchedulerConfig: options.SchedulerConfig{
+			FailoverScope:                  consts.FailoverScopeNode,
+			RescheduleDecodeLoadMetric:     consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			RescheduleDecodeLoadThreshold:  1.0,
-			ReschedulePrefillLoadMetric:    consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			RescheduleNeutralLoadMetric:    consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			ReschedulePrefillLoadMetric:    consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleNeutralLoadMetric:    consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			RescheduleNeutralLoadThreshold: 1.0,
-			ReschedulePolicies:             consts.LlumnixReschedulePolicyNeutralLoad,
-			RescheduleLoadBalanceScope:     consts.LlumnixRescheduleLoadBalanceScopeCluster,
+			ReschedulePolicies:             consts.ReschedulePolicyNeutralLoad,
+			RescheduleLoadBalanceScope:     consts.RescheduleLoadBalanceScopeCluster,
 		},
 	}
 	rp := NewReschedulePolicyPartial(config)
@@ -592,15 +592,15 @@ func TestNeutralLoadBalanceReschedulePolicy(t *testing.T) {
 
 func TestFailoverReschedulePolicy(t *testing.T) {
 	config := &options.Config{
-		LlumnixConfig: options.LlumnixConfig{
-			FailoverScope:                 consts.LlumnixFailoverScopeNode,
+		SchedulerConfig: options.SchedulerConfig{
+			FailoverScope:                 consts.FailoverScopeNode,
 			InstanceStalenessSeconds:      100,
-			RescheduleDecodeLoadMetric:    consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleDecodeLoadMetric:    consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			RescheduleDecodeLoadThreshold: 1.0,
-			ReschedulePrefillLoadMetric:   consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			RescheduleNeutralLoadMetric:   consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			ReschedulePrefillLoadMetric:   consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleNeutralLoadMetric:   consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			ReschedulePolicies:            "prefill_failover,decode_failover,neutral_failover",
-			RescheduleLoadBalanceScope:    consts.LlumnixRescheduleLoadBalanceScopeCluster,
+			RescheduleLoadBalanceScope:    consts.RescheduleLoadBalanceScopeCluster,
 		},
 	}
 	rp := NewReschedulePolicyPartial(config)
@@ -634,20 +634,20 @@ func TestFailoverReschedulePolicy(t *testing.T) {
 
 func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 	config := &options.Config{
-		LlumnixConfig: options.LlumnixConfig{
+		SchedulerConfig: options.SchedulerConfig{
 			DecodeComputeBoundBatchSize:   10,
-			FailoverScope:                 consts.LlumnixFailoverScopeNode,
+			FailoverScope:                 consts.FailoverScopeNode,
 			InstanceStalenessSeconds:      100,
-			DispatchPrefillLoadMetric:     consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			DispatchPrefillLoadMetric:     consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			DispatchPrefillLoadThreshold:  1.0,
-			DispatchDecodeLoadMetric:      consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			DispatchDecodeLoadMetric:      consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			DispatchDecodeLoadThreshold:   1.0,
-			RescheduleDecodeLoadMetric:    consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleDecodeLoadMetric:    consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			RescheduleDecodeLoadThreshold: 1.0,
-			ReschedulePrefillLoadMetric:   consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			RescheduleNeutralLoadMetric:   consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			ReschedulePolicies:            consts.LlumnixReschedulePolicyCleanUpDecodeRequestsOnPrefill,
-			RescheduleLoadBalanceScope:    consts.LlumnixRescheduleLoadBalanceScopeCluster,
+			ReschedulePrefillLoadMetric:   consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleNeutralLoadMetric:   consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			ReschedulePolicies:            consts.ReschedulePolicyCleanUpDecodeRequestsOnPrefill,
+			RescheduleLoadBalanceScope:    consts.RescheduleLoadBalanceScopeCluster,
 		},
 	}
 	rp := NewReschedulePolicyPartial(config)
@@ -655,7 +655,7 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-prefill-1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -680,7 +680,7 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-2": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -705,7 +705,7 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-3": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -730,7 +730,7 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-4": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -755,7 +755,7 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-x1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -780,7 +780,7 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -805,7 +805,7 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-2": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -830,7 +830,7 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-3": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -855,7 +855,7 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-4": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -880,7 +880,7 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-x1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -916,18 +916,18 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 
 func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 	config := &options.Config{
-		LlumnixConfig: options.LlumnixConfig{
+		SchedulerConfig: options.SchedulerConfig{
 			DecodeComputeBoundBatchSize:   10,
-			FailoverScope:                 consts.LlumnixFailoverScopeNodeUnit,
+			FailoverScope:                 consts.FailoverScopeNodeUnit,
 			InstanceStalenessSeconds:      100,
-			DispatchDecodeLoadMetric:      consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			DispatchDecodeLoadMetric:      consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			DispatchDecodeLoadThreshold:   1.0,
-			RescheduleDecodeLoadMetric:    consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleDecodeLoadMetric:    consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			RescheduleDecodeLoadThreshold: 1.0,
-			ReschedulePrefillLoadMetric:   consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			RescheduleNeutralLoadMetric:   consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			ReschedulePolicies:            consts.LlumnixReschedulePolicyAggregateDecodeRequestsOnPrefill,
-			RescheduleLoadBalanceScope:    consts.LlumnixRescheduleLoadBalanceScopeCluster,
+			ReschedulePrefillLoadMetric:   consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleNeutralLoadMetric:   consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			ReschedulePolicies:            consts.ReschedulePolicyAggregateDecodeRequestsOnPrefill,
+			RescheduleLoadBalanceScope:    consts.RescheduleLoadBalanceScopeCluster,
 		},
 	}
 	rp := NewReschedulePolicyPartial(config)
@@ -935,7 +935,7 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-prefill-1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -960,7 +960,7 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-2": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -985,7 +985,7 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-3": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -1010,7 +1010,7 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-4": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -1035,7 +1035,7 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-5": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -1060,7 +1060,7 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-6": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -1085,7 +1085,7 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-x1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -1110,7 +1110,7 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-x2": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -1135,7 +1135,7 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -1171,22 +1171,22 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 
 func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 	config := &options.Config{
-		LlumnixConfig: options.LlumnixConfig{
+		SchedulerConfig: options.SchedulerConfig{
 			EnableFullModeScheduling: true,
 
 			DecodeComputeBoundBatchSize:   10,
-			FailoverScope:                 consts.LlumnixFailoverScopeNodeUnit,
+			FailoverScope:                 consts.FailoverScopeNodeUnit,
 			InstanceStalenessSeconds:      100,
-			DispatchPrefillLoadMetric:     consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			DispatchPrefillLoadMetric:     consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			DispatchPrefillLoadThreshold:  1.0,
-			DispatchDecodeLoadMetric:      consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			DispatchDecodeLoadMetric:      consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			DispatchDecodeLoadThreshold:   1.0,
-			RescheduleDecodeLoadMetric:    consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleDecodeLoadMetric:    consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			RescheduleDecodeLoadThreshold: 1.0,
-			ReschedulePrefillLoadMetric:   consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			RescheduleNeutralLoadMetric:   consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			ReschedulePolicies:            consts.LlumnixReschedulePolicyEaseBusyDecodeWithFreePrefill,
-			RescheduleLoadBalanceScope:    consts.LlumnixRescheduleLoadBalanceScopeCluster,
+			ReschedulePrefillLoadMetric:   consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleNeutralLoadMetric:   consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			ReschedulePolicies:            consts.ReschedulePolicyEaseBusyDecodeWithFreePrefill,
+			RescheduleLoadBalanceScope:    consts.RescheduleLoadBalanceScopeCluster,
 		},
 	}
 	rp := NewReschedulePolicyPartial(config)
@@ -1194,7 +1194,7 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-prefill-1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -1217,7 +1217,7 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-2": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -1240,7 +1240,7 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-3": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -1263,7 +1263,7 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-4": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -1286,7 +1286,7 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-prefill-x1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.PrefillInferMode,
 				},
@@ -1309,7 +1309,7 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -1334,7 +1334,7 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-2": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -1359,7 +1359,7 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-3": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -1384,7 +1384,7 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-4": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -1409,7 +1409,7 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-5": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -1434,7 +1434,7 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 		},
 		"instance-decode-x1": {
 			cmsView: &cms.InstanceView{
-				Worker: &types.LLMWorker{
+				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
 					Role:     consts.DecodeInferMode,
 				},
@@ -1473,19 +1473,19 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 // and also accounts for the effects of pre-filtering like schedulabilityFilter and stalenessFilter.
 func TestDecodeLoadBalanceReschedulePolicyUnitLoadBalance(t *testing.T) {
 	config := &options.Config{
-		LlumnixConfig: options.LlumnixConfig{
+		SchedulerConfig: options.SchedulerConfig{
 			// Key configuration: set the load balancing scope to 'unit'
-			RescheduleLoadBalanceScope:     consts.LlumnixRescheduleLoadBalanceScopeUnit,
-			RescheduleDecodeLoadMetric:     consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleLoadBalanceScope:     consts.RescheduleLoadBalanceScopeUnit,
+			RescheduleDecodeLoadMetric:     consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			RescheduleDecodeLoadThreshold:  1.0,
-			ReschedulePrefillLoadMetric:    consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			RescheduleNeutralLoadMetric:    consts.LlumnixSchedulingMetricKVBlocksRatioWithAllPrefills,
-			ReschedulePolicies:             consts.LlumnixReschedulePolicyDecodeLoad,
-			RescheduleReqSelectRule:        consts.LlumnixMigrationReqSelectRuleToken,
+			ReschedulePrefillLoadMetric:    consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleNeutralLoadMetric:    consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			ReschedulePolicies:             consts.ReschedulePolicyDecodeLoad,
+			RescheduleReqSelectRule:        consts.MigrationReqSelectRuleToken,
 			RescheduleLoadBalanceThreshold: 0.0,
 			KvCacheBlockSize:               1,
 			InstanceStalenessSeconds:       100,
-			FailoverScope:                  consts.LlumnixFailoverScopeNode,
+			FailoverScope:                  consts.FailoverScopeNode,
 		},
 	}
 	rp := NewReschedulePolicyPartial(config)
