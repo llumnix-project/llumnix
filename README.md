@@ -21,7 +21,7 @@ make lib-tokenizers-build
 make blade-kvt-install
 ```
 
-Run `make gateway` to build the gateway binary and `make scheduler` to build the scheduler binary. And `make e2e-tests` is used to run all tests. Please refer to [tests/local/utils.py](tests/local/utils.py) for the details of launching commands.
+Run `make gateway-build` to build the gateway binary and `make scheduler-build` to build the scheduler binary. And `make e2e-tests` is used to run all tests. Please refer to [tests/local/utils.py](tests/local/utils.py) for the details of launching commands.
 
 # How to deploy
 
