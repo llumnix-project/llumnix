@@ -115,11 +115,11 @@ func TestMetricBalanceSelector(t *testing.T) {
 
 	config := newConfig()
 	calculateMetrics(srcCandidates, map[string]func() instanceSchedulingMetric{
-		selector.srcMetric: getSchedulingMetric(&config.SchedulerConfig, selector.srcMetric),
+		selector.srcMetric: getSchedulingMetric(config, selector.srcMetric),
 	})
 
 	calculateMetrics(dstCandidates, map[string]func() instanceSchedulingMetric{
-		selector.srcMetric: getSchedulingMetric(&config.SchedulerConfig, selector.dstMetric),
+		selector.srcMetric: getSchedulingMetric(config, selector.dstMetric),
 	})
 
 	pairs := selector.selectPairs(srcCandidates, dstCandidates)
@@ -164,11 +164,11 @@ func TestAggregateSelector(t *testing.T) {
 
 	config := newConfig()
 	calculateMetrics(srcCandidates, map[string]func() instanceSchedulingMetric{
-		selector.srcMetric: getSchedulingMetric(&config.SchedulerConfig, selector.srcMetric),
+		selector.srcMetric: getSchedulingMetric(config, selector.srcMetric),
 	})
 
 	calculateMetrics(dstCandidates, map[string]func() instanceSchedulingMetric{
-		selector.srcMetric: getSchedulingMetric(&config.SchedulerConfig, selector.dstMetric),
+		selector.srcMetric: getSchedulingMetric(config, selector.dstMetric),
 	})
 
 	pairs := selector.selectPairs(srcCandidates, dstCandidates)
@@ -211,11 +211,11 @@ func TestAggregateSelector(t *testing.T) {
 	}
 
 	calculateMetrics(srcCandidates, map[string]func() instanceSchedulingMetric{
-		selector.srcMetric: getSchedulingMetric(&config.SchedulerConfig, selector.srcMetric),
+		selector.srcMetric: getSchedulingMetric(config, selector.srcMetric),
 	})
 
 	calculateMetrics(dstCandidates, map[string]func() instanceSchedulingMetric{
-		selector.srcMetric: getSchedulingMetric(&config.SchedulerConfig, selector.dstMetric),
+		selector.srcMetric: getSchedulingMetric(config, selector.dstMetric),
 	})
 
 	pairs = selector.selectPairs(srcCandidates, dstCandidates)

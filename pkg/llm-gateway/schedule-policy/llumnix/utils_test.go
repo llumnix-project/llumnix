@@ -40,7 +40,7 @@ func TestCalculateMetrics(t *testing.T) {
 	config := newConfig()
 	metrics := map[string]func() instanceSchedulingMetric{
 		consts.SchedulingMetricKVBlocksRatioWithAllPrefills: getSchedulingMetric(
-			&config.SchedulerConfig, consts.SchedulingMetricKVBlocksRatioWithAllPrefills),
+			config, consts.SchedulingMetricKVBlocksRatioWithAllPrefills),
 	}
 	calculateMetrics(instances, metrics)
 	assert.Equal(t, float32(math.MaxFloat32), instances["0"].metrics[consts.SchedulingMetricKVBlocksRatioWithAllPrefills].GetValue())

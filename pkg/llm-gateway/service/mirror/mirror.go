@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/cmd/gateway/app/options"
 	"llumnix/pkg/llm-gateway/types"
 	"math/rand"
 	"net"
@@ -16,11 +16,11 @@ import (
 )
 
 type Mirror struct {
-	config *options.Config
+	config *options.GatewayConfig
 	client *http.Client
 }
 
-func NewMirror(config *options.Config) *Mirror {
+func NewMirror(config *options.GatewayConfig) *Mirror {
 	return &Mirror{
 		config: config,
 		client: &http.Client{

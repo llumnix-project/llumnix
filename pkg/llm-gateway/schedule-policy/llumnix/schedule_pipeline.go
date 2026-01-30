@@ -1,7 +1,7 @@
 package llumnix
 
 import (
-	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/cmd/scheduler/app/options"
 	"llumnix/pkg/llm-gateway/consts"
 )
 

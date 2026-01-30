@@ -6,13 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
 	"net/http"
 	"strings"
 	"time"
 
 	"k8s.io/klog/v2"
 
-	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/cmd/gateway/app/options"
 	"llumnix/pkg/llm-gateway/consts"
 	"llumnix/pkg/llm-gateway/keepalive"
 	"llumnix/pkg/llm-gateway/resolver"
@@ -25,22 +26,16 @@ const (
 )
 
 type SchedulerClient struct {
-	config *options.Config
+	config *options.GatewayConfig
 
 	schClient *http.Client
 
 	kac *keepalive.KeepAliveClient
 }
 
-func NewSchedulerClient(config *options.Config) *SchedulerClient {
-	// create scheduler resolver
-	if len(config.LlmScheduler) == 0 {
-		klog.Error("llm scheduler service config is empty.")
-		return nil
-	}
-
-	schResolver := resolver.CreateSchedulerResolver(config)
-	kac := keepalive.NewKeepAliveClient(config.LlmScheduler, config.ServiceToken, schResolver)
+func NewSchedulerClient(config *options.GatewayConfig) *SchedulerClient {
+	schResolver := resolver.CreateSchedulerResolver(&config.DiscoveryConfig)
+	kac := keepalive.NewKeepAliveClient("scheduler", config.ServiceToken, schResolver)
 
 	cb := &SchedulerClient{
 		config:    config,
@@ -50,7 +45,7 @@ func NewSchedulerClient(config *options.Config) *SchedulerClient {
 
 	kac.StartAndAwaitReady()
 
-	klog.Infof("create llm scheduler balancer(%s) successfully.", config.LlmScheduler)
+	klog.Infof("create llm scheduler balancer successfully.")
 	return cb
 }
 
@@ -66,10 +61,9 @@ func (cb *SchedulerClient) createScheduleRequest(req *types.RequestContext) *typ
 	}
 
 	if tokenIds, ok := req.LLMRequest.GetPromptTokens(); ok {
-		if cb.config.ScheduleNeedTokens() {
+		schRequest.PromptNumTokens = len(tokenIds)
+		if cb.config.ForwardTokens {
 			schRequest.PromptTokenIds = tokenIds
-		} else {
-			schRequest.PromptNumTokens = len(tokenIds)
 		}
 	} else {
 		klog.Warningf("schedule request %s prompt string and token ids are empty or not support: %v", req.Id, req.LLMRequest.CompletionRequest.Prompt)
@@ -174,7 +168,7 @@ func (cb *SchedulerClient) Get(req *types.RequestContext) (types.ScheduledResult
 
 		// all service endpoints are busy, wait a period for next try
 		if errors.Is(err, consts.ErrorNoAvailableEndpoint) {
-			if time.Since(tStart).Milliseconds() > int64(cb.config.WaitScheduleTimeout) {
+			if time.Since(tStart) > cb.config.WaitScheduleTimeout {
 				return nil, err
 			} else {
 				klog.Infof("[%s] all service endpoints are busy, try next after %dms", req.Id, cb.config.WaitScheduleRetryInterval)

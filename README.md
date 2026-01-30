@@ -1,6 +1,6 @@
 # Development Guide
 
-`beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-20260128-150632` is recommended for development. Then, you should run the following commands to set up the environment:
+`beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-20260130-105003` is recommended for development. Then, you should run the following commands to set up the environment:
 
 ```bash
 go mod tidy
@@ -21,11 +21,7 @@ make lib-tokenizers-build
 make blade-kvt-install
 ```
 
-Run `make gateway-build` to build the gateway binary. 
-
-Please refer to [tests/local/utils.py](tests/local/utils.py) for the details of launching commands.
-
-And `make e2e-tests` is used to run all tests.
+Run `make gateway` to build the gateway binary and `make scheduler` to build the scheduler binary. And `make e2e-tests` is used to run all tests. Please refer to [tests/local/utils.py](tests/local/utils.py) for the details of launching commands.
 
 # How to deploy
 

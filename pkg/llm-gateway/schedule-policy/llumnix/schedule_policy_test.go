@@ -2,6 +2,7 @@ package llumnix
 
 import (
 	"fmt"
+	"llumnix/cmd/config"
 	"log"
 	"strings"
 	"testing"
@@ -10,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/cmd/scheduler/app/options"
 	"llumnix/pkg/llm-gateway/cms"
 	"llumnix/pkg/llm-gateway/consts"
 	kvs "llumnix/pkg/llm-gateway/kvs"
@@ -137,12 +138,13 @@ func getRedisClient(t *testing.T) cms.RedisClientInterface {
 	}
 }
 
-func newConfig() *options.Config {
-	return &options.Config{
-		SchedulePolicy: consts.SchedulePolicyLoadBalance,
-		SchedulerConfig: options.SchedulerConfig{
+func newConfig() *options.SchedulerConfig {
+	return &options.SchedulerConfig{
+		ScheduleBaseConfig: config.ScheduleBaseConfig{
+			SchedulePolicy:           consts.SchedulePolicyLoadBalance,
 			EnableFullModeScheduling: true,
-
+		},
+		FullModeScheduleConfig: config.FullModeScheduleConfig{
 			CmsPullStatusIntervalMs:              500,
 			CmsPullMetadataIntervalMs:            1000,
 			DispatchTopK:                         1,
@@ -164,14 +166,15 @@ func newConfig() *options.Config {
 	}
 }
 
-func newDispatchPolicy(t *testing.T, config *options.Config, inferMode string) DispatchPolicy {
+func newDispatchPolicy(t *testing.T, config *options.SchedulerConfig, inferMode string) DispatchPolicy {
 	cmsReadClient, _ := cms.NewCMSReadClient(
-		getRedisClient(t), config.SchedulerConfig.CmsPullStatusIntervalMs, config.SchedulerConfig.CmsPullMetadataIntervalMs,
-		false, config.SchedulerConfig.EnableInstanceStatusLocalAccount, config.SchedulerConfig.EnableCacheAwareScheduling,
-		config.SchedulerConfig.RequestLocalAccountStalenessSeconds, -1, false, config.SchedulerConfig.KvCacheBlockSize, config.SchedulerConfig.NumPredictorWarmupSamples)
+		getRedisClient(t), config.CmsPullStatusIntervalMs, config.CmsPullMetadataIntervalMs,
+		false, config.EnableInstanceStatusLocalAccount, config.EnableCacheAwareScheduling,
+		config.RequestLocalAccountStalenessSeconds, -1, false,
+		config.KvCacheBlockSize, config.NumPredictorWarmupSamples)
 
 	var kvsClient kvs.KVSClientInterface
-	if config.SchedulerConfig.EnableCacheAwareScheduling {
+	if config.EnableCacheAwareScheduling {
 		allInstances := map[string][]string{
 			"hash1": {"instance-prefill-1", "instance-prefill-2", "instance-prefill-3", "instance-prefill-4",
 				"instance-neutral-1", "instance-neutral-2", "instance-neutral-3"},
@@ -220,7 +223,7 @@ func newDispatchPolicy(t *testing.T, config *options.Config, inferMode string) D
 		cmsClient:         cmsReadClient,
 		kvsClient:         kvsClient,
 		policyInternal:    newDispatchPolicyInternal(config),
-		schedulePipelines: newSchedulerPipeline(&config.SchedulerConfig),
+		schedulePipelines: newSchedulerPipeline(config),
 	}
 }
 
@@ -447,7 +450,7 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 
 func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 	config := newConfig()
-	config.SchedulerConfig.EnableAdaptivePD = true
+	config.EnableAdaptivePD = true
 	policy := newDispatchPolicy(t, config, "prefill")
 
 	// No available P instances, choose D for prefill
@@ -679,8 +682,8 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 
 func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 	config := newConfig()
-	config.SchedulerConfig.EnableCacheAwareScheduling = true
-	config.SchedulerConfig.KvCacheBlockSize = 1
+	config.EnableCacheAwareScheduling = true
+	config.KvCacheBlockSize = 1
 	policy := newDispatchPolicy(t, config, "prefill")
 
 	// Test prefill/decode mode scheduling
@@ -808,9 +811,9 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 
 func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 	config := newConfig()
-	config.SchedulerConfig.EnableCacheAwareScheduling = true
-	config.SchedulerConfig.KvCacheBlockSize = 1
-	config.SchedulerConfig.DispatchTopK = 2
+	config.EnableCacheAwareScheduling = true
+	config.KvCacheBlockSize = 1
+	config.DispatchTopK = 2
 	policy := newDispatchPolicy(t, config, "prefill")
 
 	// Test prefill/decode mode scheduling
@@ -976,8 +979,8 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 
 func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 	config := newConfig()
-	config.SchedulerConfig.EnableCacheAwareScheduling = true
-	config.SchedulerConfig.KvCacheBlockSize = 1
+	config.EnableCacheAwareScheduling = true
+	config.KvCacheBlockSize = 1
 	policy := newDispatchPolicy(t, config, "neutral")
 
 	// Test neutral mode scheduling
@@ -1512,8 +1515,8 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 
 func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 	config := newConfig()
-	config.SchedulerConfig.EnableInstanceStatusLocalAccount = true
-	config.SchedulerConfig.KvCacheBlockSize = 1
+	config.EnableInstanceStatusLocalAccount = true
+	config.KvCacheBlockSize = 1
 	policy := newDispatchPolicy(t, config, "neutral")
 
 	// Test neutral mode scheduling

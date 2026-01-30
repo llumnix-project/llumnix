@@ -1,8 +1,3 @@
-#!/bin/bash
-
-echo ""
-echo "# --- CUDA Environment Settings ---"
-
 export CUDA_HOME=/usr/local/cuda
 export CUDA_PATH=/usr/local/cuda
 export PATH=$CUDA_HOME/bin:$PATH

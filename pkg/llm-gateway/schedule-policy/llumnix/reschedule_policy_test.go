@@ -1,6 +1,7 @@
 package llumnix
 
 import (
+	"llumnix/cmd/config"
 	"reflect"
 	"sort"
 	"strings"
@@ -11,34 +12,34 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
 
-	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/cmd/scheduler/app/options"
 	"llumnix/pkg/llm-gateway/cms"
 	"llumnix/pkg/llm-gateway/consts"
 	"llumnix/pkg/llm-gateway/types"
 )
 
-func NewReschedulePolicyPartial(c *options.Config) *ReschedulePolicy {
+func NewReschedulePolicyPartial(c *options.SchedulerConfig) *ReschedulePolicy {
 	rp := &ReschedulePolicy{
 		c:                    c,
 		cmsClient:            nil,
-		rescheduleIntervalMs: c.SchedulerConfig.RescheduleIntervalMs,
+		rescheduleIntervalMs: c.RescheduleIntervalMs,
 		grpcTimeoutSeconds:   5,
 		stopChan:             make(chan bool),
 	}
 
-	if len(c.SchedulerConfig.ReschedulePolicies) > 0 {
-		polices := strings.Split(c.SchedulerConfig.ReschedulePolicies, ",")
+	if len(c.ReschedulePolicies) > 0 {
+		polices := strings.Split(c.ReschedulePolicies, ",")
 		for _, policy := range polices {
-			rp.policies = append(rp.policies, newReschedulePolicyInternal(&c.SchedulerConfig, policy))
+			rp.policies = append(rp.policies, newReschedulePolicyInternal(c, policy))
 		}
 	}
 
-	if c.SchedulerConfig.EnableAdaptivePD {
-		rp.policies = append(rp.policies, newReschedulePolicyInternal(&c.SchedulerConfig,
+	if c.EnableAdaptivePD {
+		rp.policies = append(rp.policies, newReschedulePolicyInternal(c,
 			consts.ReschedulePolicyCleanUpDecodeRequestsOnPrefill))
-		rp.policies = append(rp.policies, newReschedulePolicyInternal(&c.SchedulerConfig,
+		rp.policies = append(rp.policies, newReschedulePolicyInternal(c,
 			consts.ReschedulePolicyAggregateDecodeRequestsOnPrefill))
-		rp.policies = append(rp.policies, newReschedulePolicyInternal(&c.SchedulerConfig,
+		rp.policies = append(rp.policies, newReschedulePolicyInternal(c,
 			consts.ReschedulePolicyEaseBusyDecodeWithFreePrefill))
 	}
 
@@ -46,8 +47,8 @@ func NewReschedulePolicyPartial(c *options.Config) *ReschedulePolicy {
 }
 
 func TestReschedulePolicy(t *testing.T) {
-	config := &options.Config{
-		SchedulerConfig: options.SchedulerConfig{
+	config := &options.SchedulerConfig{
+		FullModeScheduleConfig: config.FullModeScheduleConfig{
 			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
@@ -85,8 +86,8 @@ func TestReschedulePolicy(t *testing.T) {
 }
 
 func TestAdaptivePDReschedulePolicy(t *testing.T) {
-	config := &options.Config{
-		SchedulerConfig: options.SchedulerConfig{
+	config := &options.SchedulerConfig{
+		FullModeScheduleConfig: config.FullModeScheduleConfig{
 			EnableAdaptivePD:            true,
 			DispatchPrefillLoadMetric:   consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			DispatchDecodeLoadMetric:    consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
@@ -113,8 +114,8 @@ func TestAdaptivePDReschedulePolicy(t *testing.T) {
 }
 
 func TestRescheduleLoop(t *testing.T) {
-	config := &options.Config{
-		SchedulerConfig: options.SchedulerConfig{
+	config := &options.SchedulerConfig{
+		FullModeScheduleConfig: config.FullModeScheduleConfig{
 			RescheduleIntervalMs: 100,
 		},
 	}
@@ -122,7 +123,7 @@ func TestRescheduleLoop(t *testing.T) {
 	rp := &ReschedulePolicy{
 		c:                    config,
 		cmsClient:            nil,
-		rescheduleIntervalMs: config.SchedulerConfig.RescheduleIntervalMs,
+		rescheduleIntervalMs: config.RescheduleIntervalMs,
 		stopChan:             make(chan bool),
 	}
 
@@ -541,8 +542,8 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 }
 
 func TestDecodeLoadBalanceReschedulePolicy(t *testing.T) {
-	config := &options.Config{
-		SchedulerConfig: options.SchedulerConfig{
+	config := &options.SchedulerConfig{
+		FullModeScheduleConfig: config.FullModeScheduleConfig{
 			FailoverScope:                  consts.FailoverScopeNode,
 			RescheduleDecodeLoadMetric:     consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			RescheduleDecodeLoadThreshold:  1.0,
@@ -567,8 +568,8 @@ func TestDecodeLoadBalanceReschedulePolicy(t *testing.T) {
 }
 
 func TestNeutralLoadBalanceReschedulePolicy(t *testing.T) {
-	config := &options.Config{
-		SchedulerConfig: options.SchedulerConfig{
+	config := &options.SchedulerConfig{
+		FullModeScheduleConfig: config.FullModeScheduleConfig{
 			FailoverScope:                  consts.FailoverScopeNode,
 			RescheduleDecodeLoadMetric:     consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			RescheduleDecodeLoadThreshold:  1.0,
@@ -591,8 +592,8 @@ func TestNeutralLoadBalanceReschedulePolicy(t *testing.T) {
 }
 
 func TestFailoverReschedulePolicy(t *testing.T) {
-	config := &options.Config{
-		SchedulerConfig: options.SchedulerConfig{
+	config := &options.SchedulerConfig{
+		FullModeScheduleConfig: config.FullModeScheduleConfig{
 			FailoverScope:                 consts.FailoverScopeNode,
 			InstanceStalenessSeconds:      100,
 			RescheduleDecodeLoadMetric:    consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
@@ -633,8 +634,8 @@ func TestFailoverReschedulePolicy(t *testing.T) {
 }
 
 func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
-	config := &options.Config{
-		SchedulerConfig: options.SchedulerConfig{
+	config := &options.SchedulerConfig{
+		FullModeScheduleConfig: config.FullModeScheduleConfig{
 			DecodeComputeBoundBatchSize:   10,
 			FailoverScope:                 consts.FailoverScopeNode,
 			InstanceStalenessSeconds:      100,
@@ -915,8 +916,8 @@ func TestCleanUpDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 }
 
 func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
-	config := &options.Config{
-		SchedulerConfig: options.SchedulerConfig{
+	config := &options.SchedulerConfig{
+		FullModeScheduleConfig: config.FullModeScheduleConfig{
 			DecodeComputeBoundBatchSize:   10,
 			FailoverScope:                 consts.FailoverScopeNodeUnit,
 			InstanceStalenessSeconds:      100,
@@ -1170,10 +1171,11 @@ func TestAggregateDecodeRequestsOnPrefillReschedulePolicy(t *testing.T) {
 }
 
 func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
-	config := &options.Config{
-		SchedulerConfig: options.SchedulerConfig{
+	config := &options.SchedulerConfig{
+		ScheduleBaseConfig: config.ScheduleBaseConfig{
 			EnableFullModeScheduling: true,
-
+		},
+		FullModeScheduleConfig: config.FullModeScheduleConfig{
 			DecodeComputeBoundBatchSize:   10,
 			FailoverScope:                 consts.FailoverScopeNodeUnit,
 			InstanceStalenessSeconds:      100,
@@ -1472,8 +1474,8 @@ func TestEaseBusyDecodeWithFreePrefillReschedulePolicy(t *testing.T) {
 // when the scope is set to 'unit'. It verifies that pairs are only created within the same unit,
 // and also accounts for the effects of pre-filtering like schedulabilityFilter and stalenessFilter.
 func TestDecodeLoadBalanceReschedulePolicyUnitLoadBalance(t *testing.T) {
-	config := &options.Config{
-		SchedulerConfig: options.SchedulerConfig{
+	config := &options.SchedulerConfig{
+		FullModeScheduleConfig: config.FullModeScheduleConfig{
 			// Key configuration: set the load balancing scope to 'unit'
 			RescheduleLoadBalanceScope:     consts.RescheduleLoadBalanceScopeUnit,
 			RescheduleDecodeLoadMetric:     consts.SchedulingMetricKVBlocksRatioWithAllPrefills,

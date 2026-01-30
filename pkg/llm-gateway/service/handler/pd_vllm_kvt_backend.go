@@ -75,7 +75,7 @@ func (b *PdSplitVllmKvtBackend) BatchScheduleStreamInference(req *types.RequestC
 
 func (b *PdSplitVllmKvtBackend) buildPrefillRequestData(req *types.RequestContext) ([]byte, error) {
 	cmplReq := *(req.LLMRequest.CompletionRequest)
-	maxTokens := 1
+	maxTokens := uint64(1)
 	cmplReq.MaxTokens = &maxTokens
 	if cmplReq.KvTransferParams == nil {
 		cmplReq.KvTransferParams = make(map[string]interface{})
@@ -123,8 +123,12 @@ func (b *PdSplitVllmKvtBackend) buildDecodeRequestData(req *types.RequestContext
 	return json.Marshal(cmplReq)
 }
 
-func (b *PdSplitVllmKvtBackend) doDecode(req *types.RequestContext, chunkChan chan StreamChunk, dInstance *types.LLMInstance) {
-	data, err := b.buildDecodeRequestData(req, dInstance)
+func (b *PdSplitVllmKvtBackend) doDecode(
+	req *types.RequestContext,
+	chunkChan chan StreamChunk,
+	pInstance *types.LLMInstance,
+	dInstance *types.LLMInstance) {
+	data, err := b.buildDecodeRequestData(req, pInstance)
 	if err != nil {
 		klog.Errorf("[%s] failed to build decode request data: %v", err, req.Id)
 		chunkChan <- StreamChunk{err: err}
@@ -164,7 +168,7 @@ func (b *PdSplitVllmKvtBackend) StagedScheduleStreamInference(req *types.Request
 			return
 		}
 
-		b.doDecode(req, chunkChan, dInstance)
+		b.doDecode(req, chunkChan, pInstance, dInstance)
 	}()
 
 	return chunkChan, nil
@@ -173,11 +177,12 @@ func (b *PdSplitVllmKvtBackend) StagedScheduleStreamInference(req *types.Request
 // StreamInference implements InferBackend interface
 // Performs streaming inference by forwarding request to backend and streaming response chunks
 func (b *PdSplitVllmKvtBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	if b.scheduleMode == types.ScheduleModePDBatch {
+	switch b.scheduleMode {
+	case types.ScheduleModePDBatch:
 		return b.BatchScheduleStreamInference(req)
-	} else if b.scheduleMode == types.ScheduleModePDStaged {
+	case types.ScheduleModePDStaged:
 		return b.StagedScheduleStreamInference(req)
-	} else {
+	default:
 		return nil, fmt.Errorf("[%s] unsupported schedule mode: %s", req.Id, b.scheduleMode)
 	}
 }

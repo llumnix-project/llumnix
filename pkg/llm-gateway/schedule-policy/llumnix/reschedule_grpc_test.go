@@ -3,7 +3,8 @@ package llumnix
 import (
 	"context"
 	"fmt"
-	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/cmd/config"
+	"llumnix/cmd/scheduler/app/options"
 	"llumnix/pkg/llm-gateway/cms"
 	"llumnix/pkg/llm-gateway/consts"
 	"llumnix/pkg/llm-gateway/llumlet"
@@ -129,8 +130,8 @@ func genInstanceViewScheduling(instanceId string, llumletPort int32, kvtPort int
 }
 
 func TestExecuteMigrationsSuccess(t *testing.T) {
-	config := &options.Config{
-		SchedulerConfig: options.SchedulerConfig{
+	config := &options.SchedulerConfig{
+		FullModeScheduleConfig: config.FullModeScheduleConfig{
 			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
@@ -157,8 +158,8 @@ func TestExecuteMigrationsSuccess(t *testing.T) {
 }
 
 func TestExecuteMigrationsGrpcConnectFailed(t *testing.T) {
-	config := &options.Config{
-		SchedulerConfig: options.SchedulerConfig{
+	config := &options.SchedulerConfig{
+		FullModeScheduleConfig: config.FullModeScheduleConfig{
 			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
@@ -186,8 +187,8 @@ func TestExecuteMigrationsGrpcConnectFailed(t *testing.T) {
 }
 
 func TestExecuteMigrationsLlumletMigrateFailed(t *testing.T) {
-	config := &options.Config{
-		SchedulerConfig: options.SchedulerConfig{
+	config := &options.SchedulerConfig{
+		FullModeScheduleConfig: config.FullModeScheduleConfig{
 			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
 			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,

@@ -26,8 +26,8 @@ llumlet-install:
 lib-tokenizers-build:
 	cd ./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang && make build
 
-.PHONY: llm-gateway-proto-build
-llm-gateway-proto-build:
+.PHONY: gateway-proto-build
+gateway-proto-build:
 	@protoc --go_out=./pkg/llm-gateway/cms/ \
     	--proto_path="./pkg" \
     	./pkg/llm-gateway/cms/proto/cms.proto
@@ -45,11 +45,20 @@ llm-gateway-proto-build:
     	./pkg/llm-gateway/resolver/proto/redis_discovery.proto
 	@echo "Compiling ./pkg/llm-gateway/resolver/proto/redis_discovery.proto"
 
+.PHONY: scheduler-proto-build
+scheduler-proto-build: gateway-proto-build
+
 .PHONY: gateway-build
-gateway-build: llm-gateway-proto-build
-	@echo "Building llm-gateway..."
-	@CGO_ENABLED=1 go build -buildvcs=false -ldflags="-extldflags '-L./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release/'" -o bin/llm-gateway ./cmd/llm-gateway
-	@echo "Building llm-gateway, done"
+gateway-build: gateway-proto-build
+	@echo "Building gateway..."
+	@CGO_ENABLED=1 go build -buildvcs=false -ldflags="-extldflags '-L./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release/'" -o bin/gateway ./cmd/gateway
+	@echo "Building gateway, done"
+
+@PHONY: scheduler-build
+scheduler-build: scheduler-proto-build
+	@echo "Building scheduler..."
+	@CGO_ENABLED=1 go build -buildvcs=false -ldflags="-extldflags '-L./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release/'" -o bin/scheduler ./cmd/scheduler
+	@echo "Building scheduler, done"
 
 .PHONY: discovery-proto-build
 discovery-proto-build:
@@ -63,12 +72,8 @@ discovery-install:
 blade-kvt-install:
 	cd ./python/blade-kvt && rm -rf build dist *.egg-info && bash ./tools/install_barex.sh && python3 setup.py bdist_wheel && pip install dist/*.whl
 
-.PHONY: runtime-proto-build
-runtime-proto-build:
-	cd ./python/runtime && make proto
-
 .PHONY: simple-tests
-simple-tests: runtime-proto-build gateway-build
+simple-tests: discovery-proto-build gateway-build scheduler-build
 	pytest -x -v -s ./tests/local/vllm_e2e.py::test_simple_requests
 
 .PHONY: migration-tests
@@ -78,10 +83,10 @@ migration-tests: gateway-build
 .PHONY: e2e-tests
 e2e-tests: discovery-proto-build gateway-build simple-tests migration-tests
 
-TEST_DIRS := $(shell go list ./pkg/llm-gateway/... | grep -v "/kvs/v6d")
+TEST_DIRS := $(shell go list ./pkg/llm-gateway/... | grep -v "/kvs/v6d" | grep -v "/kvs/mooncake")
 
-.PHONY: unit-test
-unit-test: llm-gateway-proto-build
+.PHONY: unit-tests
+unit-tests: discovery-proto-build gateway-build
 	CGO_ENABLED=1 \
 	CGO_LDFLAGS="-L./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release" \
 	go test -v -failfast $(TEST_DIRS) 2>&1 | grep -v "no test files"

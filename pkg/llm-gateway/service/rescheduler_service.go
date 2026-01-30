@@ -1,19 +1,19 @@
 package service
 
 import (
-	"llumnix/cmd/llm-gateway/app/options"
-	schedule_policy "llumnix/pkg/llm-gateway/schedule-policy"
+	"llumnix/cmd/scheduler/app/options"
+	policy "llumnix/pkg/llm-gateway/schedule-policy"
 )
 
 type ReschedulerService struct {
-	config           *options.Config
-	reschedulePolicy schedule_policy.ReschedulePolicy
+	config           *options.SchedulerConfig
+	reschedulePolicy policy.ReschedulePolicy
 }
 
-func NewRescheduleService(c *options.Config) *ReschedulerService {
+func NewRescheduleService(c *options.SchedulerConfig) *ReschedulerService {
 	return &ReschedulerService{
 		config:           c,
-		reschedulePolicy: schedule_policy.NewReschedulePolicy(c),
+		reschedulePolicy: policy.NewReschedulePolicy(c),
 	}
 }
 

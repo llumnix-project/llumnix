@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
+	"llumnix/cmd/gateway/app/options"
 	"net/http"
 	"runtime/debug"
 	"strconv"
@@ -13,14 +15,12 @@ import (
 	"github.com/gorilla/mux"
 	"k8s.io/klog/v2"
 
-	"llumnix/cmd/llm-gateway/app/options"
 	"llumnix/pkg/llm-gateway/batch"
 	"llumnix/pkg/llm-gateway/consts"
 	balancer "llumnix/pkg/llm-gateway/load-balancer"
 	"llumnix/pkg/llm-gateway/logging"
 	"llumnix/pkg/llm-gateway/lrs"
 	"llumnix/pkg/llm-gateway/metrics"
-	"llumnix/pkg/llm-gateway/resolver"
 	"llumnix/pkg/llm-gateway/service/handler"
 	"llumnix/pkg/llm-gateway/service/mirror"
 	"llumnix/pkg/llm-gateway/service/queue"
@@ -33,7 +33,7 @@ import (
 // It provides core features including load balancing, request queuing, and batch processing
 type LlmGatewayService struct {
 	// Gateway configuration
-	config *options.Config
+	config *options.GatewayConfig
 
 	// Request buffer queue for traffic control
 	bufferQueue *queue.QueueWorkerPool
@@ -68,7 +68,7 @@ type LlmGatewayService struct {
 //
 // Returns:
 //   - *LlmGatewayService: Gateway service instance, or nil if initialization fails
-func NewGatewayService(c *options.Config) *LlmGatewayService {
+func NewGatewayService(c *options.GatewayConfig) *LlmGatewayService {
 	lgs := &LlmGatewayService{
 		config:          c,
 		logInputEnabled: c.EnableLogInput,
@@ -80,7 +80,7 @@ func NewGatewayService(c *options.Config) *LlmGatewayService {
 	}
 
 	// Create request buffer queue for traffic control and request scheduling
-	lgs.bufferQueue = queue.NewQueueWorkerPool(c.MaxQueueSize, c.WaitQueueThreads)
+	lgs.bufferQueue = queue.NewQueueWorkerPool(c.MaxRequestBufferQueueSize, c.WaitQueueThreads)
 	lgs.bufferQueue.Start()
 
 	// Create request handler for parsing OpenAI format requests
@@ -90,21 +90,8 @@ func NewGatewayService(c *options.Config) *LlmGatewayService {
 	}
 	lgs.reqHandler = reqHandler
 
-	// Create load balancer and service router
-	var lb balancer.Balancer
-	if len(c.LocalTestIPs) == 0 {
-		lb = balancer.NewCompositeBalancer(c)
-	} else {
-		// Local debug mode: use fixed test IP list
-		uri := fmt.Sprintf("llm+endpoints://%s", c.LocalTestIPs)
-		r, err := resolver.BuildLlmResolver(uri, resolver.BuildArgs{"role": types.InferRoleNormal.String()})
-		if err != nil {
-			klog.Errorf("create resolver failed: %v", err)
-			return nil
-		}
-		lb = balancer.NewRoundRobinBalancer(r)
-	}
-	lgs.balancer = lb
+	lgs.balancer = balancer.NewBalancer(c)
+
 	lgs.router = router.NewServiceRouter(c.RoutePolicy, c.RouteConfigRaw)
 
 	// Create traffic mirror component
@@ -124,7 +111,7 @@ func NewGatewayService(c *options.Config) *LlmGatewayService {
 }
 
 // healthz is the health check endpoint for K8s liveness/readiness probes
-func (lgs *LlmGatewayService) healthz(w http.ResponseWriter, r *http.Request) {
+func (lgs *LlmGatewayService) Healthz(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -144,7 +131,7 @@ func (lgs *LlmGatewayService) convertErrorResponse(msg *types.ResponseMsg) (int,
 	case consts.ErrorBackendBadRequest:
 		// Parse backend error response to extract specific error details
 		var response types.ErrorResponse
-		err := json.Unmarshal([]byte(msg.Message), &response)
+		err := json.Unmarshal(msg.Message, &response)
 		if err != nil {
 			klog.Warningf("invalid bad backend bad request: %s", msg.Message)
 			return http.StatusBadRequest, []byte("{}")
@@ -157,7 +144,7 @@ func (lgs *LlmGatewayService) convertErrorResponse(msg *types.ResponseMsg) (int,
 
 	default:
 		if msg.Err == nil {
-			return http.StatusOK, []byte(msg.Message)
+			return http.StatusOK, msg.Message
 		} else {
 			return http.StatusBadRequest, []byte(msg.Err.Error())
 		}
@@ -183,7 +170,7 @@ func (lgs *LlmGatewayService) writeResponse(req *types.RequestContext, response 
 	// Note: Must set header before WriteHeader
 	writer.Header().Set("content-type", "application/json")
 	writer.WriteHeader(code)
-	writer.Write([]byte(body))
+	writer.Write(body)
 }
 
 // writeStreamResponse writes streaming response in SSE (Server-Sent Events) format
@@ -205,7 +192,7 @@ func (lgs *LlmGatewayService) writeStreamResponse(req *types.RequestContext, res
 			req.HttpRequest.StatusCode = code
 			writer.Header().Set("content-type", "text/event-stream; charset=utf-8")
 			writer.WriteHeader(code)
-			writer.Write([]byte(body))
+			writer.Write(body)
 		}
 		// If header already sent, just close the connection
 		return true
@@ -219,7 +206,7 @@ func (lgs *LlmGatewayService) writeStreamResponse(req *types.RequestContext, res
 	}
 
 	body := []byte("data: " + string(response.Message) + "\n\n")
-	writer.Write([]byte(body))
+	writer.Write(body)
 	// Flush immediately to ensure data is sent to client in real-time
 	writer.(http.Flusher).Flush()
 
@@ -400,22 +387,22 @@ func (lgs *LlmGatewayService) HandleSimpleRequest(w http.ResponseWriter, r *http
 // This method blocks until the server is shut down
 func (lgs *LlmGatewayService) Run() {
 	// Create router for handling different HTTP paths
-	router := mux.NewRouter()
-
-	// Register health check route
-	router.HandleFunc("/healthz", lgs.healthz)
+	r := mux.NewRouter()
 	// Register batch API routes if batch service is available
 	if lgs.batchService != nil {
-		lgs.batchService.RegisterRoutes(router)
+		lgs.batchService.RegisterRoutes(r)
 	}
+
+	// Register health check route
+	r.HandleFunc("/healthz", lgs.Healthz)
 	// handle all LLM inference requests
-	router.HandleFunc("/v1/chat/completions", lgs.HandleOpenAIRequest)
-	router.HandleFunc("/v1/completions", lgs.HandleOpenAIRequest)
-	router.HandleFunc("/v1/models", lgs.HandleSimpleRequest)
+	r.HandleFunc("/v1/chat/completions", lgs.HandleOpenAIRequest)
+	r.HandleFunc("/v1/completions", lgs.HandleOpenAIRequest)
+	r.HandleFunc("/v1/models", lgs.HandleSimpleRequest)
 
 	address := fmt.Sprintf("%s:%d", lgs.config.Host, lgs.config.Port)
 	klog.Infof("LLM Gateway start listen on %s", address)
-	klog.Fatal(http.ListenAndServe(address, router))
+	klog.Fatal(http.ListenAndServe(address, r))
 }
 
 // StartMetricRecord starts the metric recording loop
@@ -464,7 +451,7 @@ func (lgs *LlmGatewayService) Start() (err error) {
 //   - req: Request context
 func (lgs *LlmGatewayService) LogRequestInput(req *types.RequestContext) {
 	if lgs.logInputEnabled {
-		logging.AsyncLogf("Received request [%s] %s", req.Id, string(req.LLMRequest.RawData))
+		logging.AsyncLogf("Received request [%s] %s", req.Id, req.LLMRequest.RawData)
 	} else {
 		logging.Logf("Received request [%s]", req.Id)
 	}

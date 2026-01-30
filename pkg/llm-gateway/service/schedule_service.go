@@ -12,22 +12,22 @@ import (
 	"github.com/gorilla/websocket"
 	"k8s.io/klog/v2"
 
-	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/cmd/scheduler/app/options"
 	"llumnix/pkg/llm-gateway/consts"
 	"llumnix/pkg/llm-gateway/keepalive"
 	"llumnix/pkg/llm-gateway/lrs"
 	"llumnix/pkg/llm-gateway/metrics"
 	"llumnix/pkg/llm-gateway/resolver"
-	schedule_policy "llumnix/pkg/llm-gateway/schedule-policy"
+	policy "llumnix/pkg/llm-gateway/schedule-policy"
 	"llumnix/pkg/llm-gateway/types"
 	"llumnix/pkg/llm-gateway/utils"
 )
 
 type ScheduleService struct {
-	config *options.Config
+	config *options.SchedulerConfig
 
-	schedulePolicy   schedule_policy.SchedulePolicy
-	reschedulePolicy schedule_policy.ReschedulePolicy
+	schedulePolicy   policy.SchedulePolicy
+	reschedulePolicy policy.ReschedulePolicy
 
 	resolver  resolver.LLMResolver
 	addChan   <-chan types.LLMInstanceSlice
@@ -35,24 +35,25 @@ type ScheduleService struct {
 	lrsClient *lrs.LocalRealtimeStateClient
 }
 
-func NewScheduleService(c *options.Config) *ScheduleService {
+func NewScheduleService(c *options.SchedulerConfig) *ScheduleService {
 	lrsClient := lrs.NewLocalRealtimeStateClient(c)
 
 	ss := &ScheduleService{
 		config:         c,
 		lrsClient:      lrsClient,
-		schedulePolicy: schedule_policy.NewSchedulePolicy(c.SchedulePolicy, c, lrsClient),
-	}
-	if c.ColocatedRescheduleMode && c.SchedulerConfig.EnableRescheduling {
-		ss.reschedulePolicy = schedule_policy.NewReschedulePolicy(c)
+		schedulePolicy: policy.NewSchedulePolicy(c.SchedulePolicy, c, lrsClient),
 	}
 
-	if c.SchedulerConfig.EnableMetrics {
+	if c.ColocatedRescheduleMode {
+		ss.reschedulePolicy = policy.NewReschedulePolicy(c)
+	}
+
+	if c.EnableMetrics {
 		metrics.EnableLlumnixMetrics()
 	}
 
-	resolver := resolver.CreateBackendServiceResolver(ss.config, types.InferRoleAll)
-	addChan, delChan, err := resolver.Watch(context.Background())
+	r := resolver.CreateBackendServiceResolver(&c.DiscoveryConfig, types.InferRoleAll)
+	addChan, delChan, err := r.Watch(context.Background())
 	if err != nil {
 		klog.Errorf("failed to watch LLM instances: %v", err)
 		return nil
@@ -153,7 +154,7 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 			metrics.LlumnixMetricScheduleFailedCount, metrics.Labels{{"error_type", err.Error()}})
 		w.WriteHeader(statusCode)
 		w.Write([]byte(err.Error()))
-		if ss.config.EnableAccessLog {
+		if ss.config.EnableLogInput {
 			utils.LogAccess("[%s] status_code:%d,response_time:%vms,error:%s", schReq.Id, statusCode, time.Since(tStart).Milliseconds(), err.Error())
 		}
 		return
@@ -174,7 +175,7 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 	w.Header().Set("content-type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(retBytes)
-	if ss.config.EnableAccessLog {
+	if ss.config.EnableLogInput {
 		utils.LogAccess("[%s] status_code:%d,response_time:%vms,schedule results:%s", schReq.Id, http.StatusOK, time.Since(tStart).Milliseconds(), schReq.String())
 	}
 }

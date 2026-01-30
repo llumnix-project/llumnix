@@ -10,7 +10,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/cmd/scheduler/app/options"
 	"llumnix/pkg/llm-gateway/cms"
 	"llumnix/pkg/llm-gateway/consts"
 	"llumnix/pkg/llm-gateway/llumlet"
@@ -20,7 +20,7 @@ import (
 const DefaultLlumletGrpcTimeoutSeconds = 5
 
 type ReschedulePolicy struct {
-	c                    *options.Config
+	c                    *options.SchedulerConfig
 	cmsClient            *cms.CMSReadClient
 	llumletClientManager *llumlet.ClientManager
 	policies             []reschedulePolicyInternal
@@ -30,28 +30,28 @@ type ReschedulePolicy struct {
 	stopChan             chan bool
 }
 
-func NewReschedulePolicy(c *options.Config) *ReschedulePolicy {
+func NewReschedulePolicy(c *options.SchedulerConfig) *ReschedulePolicy {
 	cmsClient, err := cms.CreateOrGetClient(
-		c.SchedulerConfig.CmsRedisHost,
-		c.SchedulerConfig.CmsRedisPort,
-		c.SchedulerConfig.CmsRedisUsername,
-		c.SchedulerConfig.CmsRedisPassword,
-		c.SchedulerConfig.CmsRedisSocketTimeout,
-		c.SchedulerConfig.CmsRedisRetryTimes,
-		c.SchedulerConfig.CmsPullStatusIntervalMs,
-		c.SchedulerConfig.CmsPullMetadataIntervalMs,
-		c.SchedulerConfig.AllowConcurrentSchedule,
-		c.SchedulerConfig.EnableInstanceStatusLocalAccount,
-		c.SchedulerConfig.EnableCacheAwareScheduling,
-		c.SchedulerConfig.RequestLocalAccountStalenessSeconds,
-		c.SchedulerConfig.CmsRecordMetricsInterval,
-		c.SchedulerConfig.EnablePredictorEnhancedScheduling,
-		c.SchedulerConfig.KvCacheBlockSize,
-		c.SchedulerConfig.NumPredictorWarmupSamples)
+		c.CmsRedisHost,
+		c.CmsRedisPort,
+		c.CmsRedisUsername,
+		c.CmsRedisPassword,
+		c.CmsRedisSocketTimeout,
+		c.CmsRedisRetryTimes,
+		c.CmsPullStatusIntervalMs,
+		c.CmsPullMetadataIntervalMs,
+		c.AllowConcurrentSchedule,
+		c.EnableInstanceStatusLocalAccount,
+		c.EnableCacheAwareScheduling,
+		c.RequestLocalAccountStalenessSeconds,
+		c.CmsRecordMetricsInterval,
+		c.EnablePredictorEnhancedScheduling,
+		c.KvCacheBlockSize,
+		c.NumPredictorWarmupSamples)
 	if err != nil {
 		panic(err)
 	}
-	llumletGrpcTimeoutSeconds := c.SchedulerConfig.LlumletGrpcTimeoutSeconds
+	llumletGrpcTimeoutSeconds := c.LlumletGrpcTimeoutSeconds
 	if llumletGrpcTimeoutSeconds <= 0 {
 		llumletGrpcTimeoutSeconds = DefaultLlumletGrpcTimeoutSeconds
 	}
@@ -59,23 +59,23 @@ func NewReschedulePolicy(c *options.Config) *ReschedulePolicy {
 		c:         c,
 		cmsClient: cmsClient,
 		llumletClientManager: llumlet.NewClientManager(
-			c.SchedulerConfig.LlumletGrpcConnectionPoolSize,
+			c.LlumletGrpcConnectionPoolSize,
 		),
 		clusterView: clusterView{
 			groupedInstanceViews: nil,
 		},
 		grpcTimeoutSeconds:   llumletGrpcTimeoutSeconds,
-		rescheduleIntervalMs: c.SchedulerConfig.RescheduleIntervalMs,
+		rescheduleIntervalMs: c.RescheduleIntervalMs,
 		stopChan:             make(chan bool),
 	}
-	polices := strings.Split(c.SchedulerConfig.ReschedulePolicies, ",")
-	if c.SchedulerConfig.EnableAdaptivePD {
+	polices := strings.Split(c.ReschedulePolicies, ",")
+	if c.EnableAdaptivePD {
 		polices = append(polices, consts.ReschedulePolicyCleanUpDecodeRequestsOnPrefill)
 		polices = append(polices, consts.ReschedulePolicyAggregateDecodeRequestsOnPrefill)
 		polices = append(polices, consts.ReschedulePolicyEaseBusyDecodeWithFreePrefill)
 	}
 	for _, policy := range polices {
-		rp.policies = append(rp.policies, newReschedulePolicyInternal(&c.SchedulerConfig, policy))
+		rp.policies = append(rp.policies, newReschedulePolicyInternal(c, policy))
 	}
 	klog.Infof("Reschedule initialized, policies: %+v", polices)
 	return rp
@@ -103,7 +103,7 @@ func (p *ReschedulePolicy) RescheduleLoop() {
 }
 
 func (p *ReschedulePolicy) reschedule() []*reschedulePair {
-	if p.c.SchedulerConfig.AllowConcurrentSchedule {
+	if p.c.AllowConcurrentSchedule {
 		p.cmsClient.RLock()
 		defer p.cmsClient.RUnlock()
 	} else {

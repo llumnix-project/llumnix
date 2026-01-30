@@ -3,10 +3,10 @@ package balancer
 import (
 	"errors"
 	"fmt"
+	"llumnix/cmd/gateway/app/options"
 
 	"k8s.io/klog/v2"
 
-	"llumnix/cmd/llm-gateway/app/options"
 	"llumnix/pkg/llm-gateway/consts"
 	"llumnix/pkg/llm-gateway/resolver"
 	"llumnix/pkg/llm-gateway/types"
@@ -30,7 +30,7 @@ const (
 // balancer based on configuration and request context.
 // It supports local/remote balancing, prefill-decode split mode, and fallback strategies.
 type CompositeBalancer struct {
-	config *options.Config
+	config *options.GatewayConfig
 
 	// balanceMode determines which balancing strategy to use
 	balanceMode balanceMode
@@ -48,7 +48,7 @@ type CompositeBalancer struct {
 
 // NewCompositeBalancer creates a new CompositeBalancer instance based on configuration.
 // It automatically sets up the appropriate balancers for the configured mode.
-func NewCompositeBalancer(config *options.Config) *CompositeBalancer {
+func NewCompositeBalancer(config *options.GatewayConfig) *CompositeBalancer {
 	bp := &CompositeBalancer{
 		config: config,
 	}
@@ -62,10 +62,10 @@ func NewCompositeBalancer(config *options.Config) *CompositeBalancer {
 
 // setupPDSplitBalancer initializes balancers for prefill-decode split mode.
 // It creates separate balancers for prefill and decode stages.
-func (bp *CompositeBalancer) setupPDSplitBalancer(config *options.Config) {
-	prefillResolver := resolver.CreateBackendServiceResolver(config, types.InferRolePrefill)
+func (bp *CompositeBalancer) setupPDSplitBalancer(config *options.GatewayConfig) {
+	prefillResolver := resolver.CreateBackendServiceResolver(&config.DiscoveryConfig, types.InferRolePrefill)
 	bp.prefillLocalBalancer = NewRoundRobinBalancer(prefillResolver)
-	decodeResolver := resolver.CreateBackendServiceResolver(config, types.InferRoleDecode)
+	decodeResolver := resolver.CreateBackendServiceResolver(&config.DiscoveryConfig, types.InferRoleDecode)
 	bp.decodeLocalBalancer = NewRoundRobinBalancer(decodeResolver)
 
 	if config.IsPDRoundRobin() {
@@ -78,9 +78,9 @@ func (bp *CompositeBalancer) setupPDSplitBalancer(config *options.Config) {
 
 // setupNormalBalancer initializes balancers for normal (non-split) mode.
 // It creates a local balancer and optionally a remote scheduler balancer.
-func (bp *CompositeBalancer) setupNormalBalancer(config *options.Config) {
+func (bp *CompositeBalancer) setupNormalBalancer(config *options.GatewayConfig) {
 	bp.balanceMode = LocalBalancer
-	r := resolver.CreateBackendServiceResolver(config, types.InferRoleNormal)
+	r := resolver.CreateBackendServiceResolver(&config.DiscoveryConfig, types.InferRoleNormal)
 	bp.localBalancer = NewRoundRobinBalancer(r)
 	if config.SchedulePolicy != consts.SchedulePolicyRoundRobin {
 		bp.balanceMode = RemoteBalancer

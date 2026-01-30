@@ -35,7 +35,7 @@ func NewPdSplitVllmMoonCakeBackend(schMode types.ScheduleMode) (InferenceBackend
 
 func (b *PdSplitVllmMoonCakeBackend) buildPrefillRequestData(req *types.RequestContext) ([]byte, error) {
 	cmplReq := *(req.LLMRequest.CompletionRequest)
-	maxTokens := 1
+	maxTokens := uint64(1)
 	cmplReq.MaxTokens = &maxTokens
 	cmplReq.Stream = false
 	cmplReq.StreamOptions = nil

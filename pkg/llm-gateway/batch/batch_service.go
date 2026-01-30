@@ -2,11 +2,11 @@ package batch
 
 import (
 	"context"
+	"llumnix/cmd/gateway/app/options"
 	"os"
 	"strconv"
 	"strings"
 
-	"llumnix/cmd/llm-gateway/app/options"
 	"llumnix/pkg/llm-gateway/redis"
 
 	"github.com/gorilla/mux"
@@ -15,7 +15,7 @@ import (
 
 // BatchService handles batch processing functionality
 type BatchService struct {
-	config       *options.Config
+	config       *options.GatewayConfig
 	batchHandler *BatchHandler
 	redisStore   *RedisStore
 	ossClient    *OSSClient
@@ -24,9 +24,9 @@ type BatchService struct {
 }
 
 // NewBatchService creates a new batch service
-func NewBatchService(config *options.Config) (*BatchService, error) {
+func NewBatchService(config *options.GatewayConfig) (*BatchService, error) {
 	// Parse Redis cluster hosts from string to slice
-	hosts := strings.Split(config.RedisAddrs, ",")
+	hosts := strings.Split(config.BatchServiceRedisAddrs, ",")
 	// Remove empty hosts
 	nonEmptyHosts := []string{}
 	for _, host := range hosts {
@@ -39,9 +39,9 @@ func NewBatchService(config *options.Config) (*BatchService, error) {
 	// Initialize Redis client
 	redisClient := redis.NewRedisStandaloneClient(
 		nonEmptyHosts[0],
-		config.RedisUsername,
-		config.RedisPassword,
-		config.RedisRetryTimes,
+		config.BatchServiceRedisUsername,
+		config.BatchServiceRedisPassword,
+		config.BatchServiceRedisRetryTimes,
 	)
 
 	redisStore := NewRedisStore(redisClient)
