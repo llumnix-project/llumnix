@@ -38,9 +38,9 @@ spec:
       - name: aliyun-registry-secret
       containers:
       - name: scheduler
-        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:gateway-20260127-162859
+        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:scheduler-20260130-111734
         imagePullPolicy: Always
-        command: ["/usr/local/bin/llm-gateway"]
+        command: ["/usr/local/bin/scheduler"]
         args:
         - "--port"
         - "8088"
@@ -48,21 +48,22 @@ spec:
         - "4"
         - "--host"
         - "0.0.0.0"
-        - "--use-discovery"
+        - "--llm-backend-discovery"
         - "redis"
-        - "--schedule-mode"
+        - "--discovery-redis-host"
+        - "redis"
+        - "--discovery-redis-port"
+        - "6379"
         - "--schedule-policy"
         - "load-balance"
-        - "--llumnix-cms-redis-host"
+        - "--cms-redis-host"
         - "redis"
-        - "--llumnix-cms-redis-port"
+        - "--cms-redis-port"
         - "6379"
-        - "--llumnix-cms-pull-status-interval-ms"
+        - "--cms-pull-status-interval-ms"
         - "5000"
-        - "--llumnix-cms-pull-metadata-interval-ms"
+        - "--cms-pull-metadata-interval-ms"
         - "10000"
-        - "--llumnix-dispatch-neutral-load-metric"
-        - "num_requests"
         - "--enable-full-mode-scheduling"
         - "True"
         ports:
