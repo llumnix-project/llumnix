@@ -198,7 +198,7 @@ func (r *RedisResolverBuilder) Build(uri string, args BuildArgs) (LLMResolver, e
 	}
 
 	username, ok := args["redis_username"].(string)
-	if !ok || username == "" {
+	if !ok {
 		return nil, fmt.Errorf("missing username or invalid username build args: %v", username)
 	}
 

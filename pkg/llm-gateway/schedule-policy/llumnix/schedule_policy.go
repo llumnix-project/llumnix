@@ -1,12 +1,12 @@
 package llumnix
 
 import (
+	"llumnix/cmd/scheduler/app/options"
 	"time"
 
 	"golang.org/x/exp/maps"
 	"k8s.io/klog/v2"
 
-	"llumnix/cmd/llm-gateway/app/options"
 	"llumnix/pkg/llm-gateway/cms"
 	"llumnix/pkg/llm-gateway/consts"
 	kvs "llumnix/pkg/llm-gateway/kvs"
@@ -62,7 +62,7 @@ type ClusterViewClientInterface interface {
 }
 
 type DispatchPolicy struct {
-	c                 *options.Config
+	c                 *options.SchedulerConfig
 	schedulePolicy    string
 	cmsClient         *cms.CMSReadClient
 	lrsClient         *lrs.LocalRealtimeStateClient
@@ -74,30 +74,30 @@ type DispatchPolicy struct {
 }
 
 func NewDispatchPolicy(
-	c *options.Config, schedulePolicy string, lrsClient *lrs.LocalRealtimeStateClient) *DispatchPolicy {
+	c *options.SchedulerConfig, schedulePolicy string, lrsClient *lrs.LocalRealtimeStateClient) *DispatchPolicy {
 
 	verifyConfig(c)
 
 	var cmsClient *cms.CMSReadClient
 	var clusterViewClient ClusterViewClientInterface = nil
-	if c.SchedulerConfig.EnableFullModeScheduling {
+	if c.EnableFullModeScheduling {
 		client, err := cms.CreateOrGetClient(
-			c.SchedulerConfig.CmsRedisHost,
-			c.SchedulerConfig.CmsRedisPort,
-			c.SchedulerConfig.CmsRedisUsername,
-			c.SchedulerConfig.CmsRedisPassword,
-			c.SchedulerConfig.CmsRedisSocketTimeout,
-			c.SchedulerConfig.CmsRedisRetryTimes,
-			c.SchedulerConfig.CmsPullStatusIntervalMs,
-			c.SchedulerConfig.CmsPullMetadataIntervalMs,
-			c.SchedulerConfig.AllowConcurrentSchedule,
-			c.SchedulerConfig.EnableInstanceStatusLocalAccount,
-			c.SchedulerConfig.EnableCacheAwareScheduling,
-			c.SchedulerConfig.RequestLocalAccountStalenessSeconds,
-			c.SchedulerConfig.CmsRecordMetricsInterval,
-			c.SchedulerConfig.EnablePredictorEnhancedScheduling,
-			c.SchedulerConfig.KvCacheBlockSize,
-			c.SchedulerConfig.NumPredictorWarmupSamples)
+			c.CmsRedisHost,
+			c.CmsRedisPort,
+			c.CmsRedisUsername,
+			c.CmsRedisPassword,
+			c.CmsRedisSocketTimeout,
+			c.CmsRedisRetryTimes,
+			c.CmsPullStatusIntervalMs,
+			c.CmsPullMetadataIntervalMs,
+			c.AllowConcurrentSchedule,
+			c.EnableInstanceStatusLocalAccount,
+			c.EnableCacheAwareScheduling,
+			c.RequestLocalAccountStalenessSeconds,
+			c.CmsRecordMetricsInterval,
+			c.EnablePredictorEnhancedScheduling,
+			c.KvCacheBlockSize,
+			c.NumPredictorWarmupSamples)
 		if err != nil {
 			panic(err)
 		}
@@ -108,21 +108,21 @@ func NewDispatchPolicy(
 	}
 
 	var kvsClient kvs.KVSClientInterface
-	if c.SchedulerConfig.EnableCacheAwareScheduling {
+	if c.EnableCacheAwareScheduling {
 		client, err := kvs.CreateOrGetClient(
-			c.SchedulerConfig.KvsBackend,
-			c.SchedulerConfig.KvsMetadataServiceConfigPath,
-			c.SchedulerConfig.KvsChunkSize,
-			c.SchedulerConfig.KvsEnableSaveUnfullChunk,
-			c.SchedulerConfig.KvsIrisMetaPrefix,
-			c.SchedulerConfig.KvsVLLMBlockPrefix,
-			c.SchedulerConfig.KvsRetryTimes,
-			c.SchedulerConfig.KvsRetryIntervalMs,
-			c.SchedulerConfig.KvsMetadataServiceDownDurationS,
-			c.SchedulerConfig.KvsMetadataServiceRedisClusterHosts,
-			c.SchedulerConfig.KvsMetadataServiceRedisClusterPassword,
-			c.SchedulerConfig.KvsMetadataServiceHttpServerHost,
-			c.SchedulerConfig.KvsMetadataServiceHttpServerPort)
+			c.KvsBackend,
+			c.KvsMetadataServiceConfigPath,
+			c.KvsChunkSize,
+			c.KvsEnableSaveUnfullChunk,
+			c.KvsIrisMetaPrefix,
+			c.KvsVLLMBlockPrefix,
+			c.KvsRetryTimes,
+			c.KvsRetryIntervalMs,
+			c.KvsMetadataServiceDownDurationS,
+			c.KvsMetadataServiceRedisClusterHosts,
+			c.KvsMetadataServiceRedisClusterPassword,
+			c.KvsMetadataServiceHttpServerHost,
+			c.KvsMetadataServiceHttpServerPort)
 		if err != nil {
 			panic(err)
 		}
@@ -137,7 +137,7 @@ func NewDispatchPolicy(
 		clusterViewClient: clusterViewClient,
 		kvsClient:         kvsClient,
 		policyInternal:    newDispatchPolicyInternal(c),
-		schedulePipelines: newSchedulerPipeline(&c.SchedulerConfig),
+		schedulePipelines: newSchedulerPipeline(c),
 		clusterView: clusterView{
 			groupedInstanceViews: nil,
 		},
@@ -164,7 +164,7 @@ func (p *DispatchPolicy) Schedule(request *types.ScheduleRequest) error {
 			elapsed, request.Id, len(request.PromptTokenIds))
 	}()
 
-	if p.c.SchedulerConfig.EnableFullModeScheduling {
+	if p.c.EnableFullModeScheduling {
 		if !p.cmsClient.IsAlive() {
 			klog.V(2).Info("CMS client is not alive, return ErrorCmsNotAvailable")
 			return consts.ErrorCmsNotAvailable
@@ -175,13 +175,13 @@ func (p *DispatchPolicy) Schedule(request *types.ScheduleRequest) error {
 
 	startTime := time.Now()
 
-	if p.c.SchedulerConfig.AllowConcurrentSchedule {
+	if p.c.AllowConcurrentSchedule {
 		p.clusterViewClient.RLock()
 	} else {
 		p.clusterViewClient.Lock()
 	}
 	defer func() {
-		if p.c.SchedulerConfig.AllowConcurrentSchedule {
+		if p.c.AllowConcurrentSchedule {
 			p.clusterViewClient.RUnlock()
 		} else {
 			p.clusterViewClient.Unlock()
@@ -190,7 +190,7 @@ func (p *DispatchPolicy) Schedule(request *types.ScheduleRequest) error {
 			metrics.LlumnixMetricScheduleLatencyMicroseconds, metrics.Labels{}, time.Since(startTime).Microseconds())
 	}()
 
-	if p.c.SchedulerConfig.EnableFullModeScheduling {
+	if p.c.EnableFullModeScheduling {
 		p.clusterView.groupedInstanceViews = toInstanceViewInterfaceMap(p.cmsClient.GetGroupedInstanceViews())
 	} else {
 		p.clusterView.groupedInstanceViews = toInstanceViewInterfaceMap(p.lrsClient.GetGroupedInstanceViews())
@@ -212,7 +212,7 @@ func (p *DispatchPolicy) Schedule(request *types.ScheduleRequest) error {
 
 		schResults = append(schResults, *instance.GetInstance())
 		klog.V(4).Infof("Added token from instance: %s", instance.GetInstanceId())
-		logSelectedInstance(instance, request.Id, consts.PrefillInferMode, p.c.SchedulerConfig.EnableFullModeScheduling)
+		logSelectedInstance(instance, request.Id, consts.PrefillInferMode, p.c.EnableFullModeScheduling)
 	}
 	if len(selectedInstances) > 1 {
 		for _, instance := range selectedInstances[1] {
@@ -222,7 +222,7 @@ func (p *DispatchPolicy) Schedule(request *types.ScheduleRequest) error {
 
 			schResults = append(schResults, *instance.GetInstance())
 			klog.V(4).Infof("Added token2 from instance: %s", instance.GetInstanceId())
-			logSelectedInstance(instance, request.Id, consts.DecodeInferMode, p.c.SchedulerConfig.EnableFullModeScheduling)
+			logSelectedInstance(instance, request.Id, consts.DecodeInferMode, p.c.EnableFullModeScheduling)
 		}
 	}
 	request.ScheduleResult = schResults
@@ -235,31 +235,31 @@ func (p *DispatchPolicy) schedule(
 	requestId := request.Id
 	promptTokenIds := Uint32ToInt64(request.PromptTokenIds)
 	selectedInstances = [][]*instanceViewScheduling{}
-	if p.c.SchedulerConfig.EnableCacheAwareScheduling {
+	if p.c.EnableCacheAwareScheduling {
 		// NOTE(sunbiao.sun): Calculating instance prompt cache hit len has ms-level latency, but it does not r/w
 		// the raw instance view, so we unlock and re-lock here to improve schedule throughput
 		// when not allowing concurrent schedule.
-		if !p.c.SchedulerConfig.AllowConcurrentSchedule {
+		if !p.c.AllowConcurrentSchedule {
 			p.cmsClient.Unlock()
 		}
 		// Write prefixHitLen in scheduling ctx of instance view.
 		calcInstancesPrefixCacheHitLen(
-			p.kvsClient, p.cmsClient, promptTokenIds, clusterView.instanceViews, p.c.SchedulerConfig.KvCacheBlockSize)
-		if !p.c.SchedulerConfig.AllowConcurrentSchedule {
+			p.kvsClient, p.cmsClient, promptTokenIds, clusterView.instanceViews, p.c.KvCacheBlockSize)
+		if !p.c.AllowConcurrentSchedule {
 			p.cmsClient.Lock()
 		}
 	}
 
 	numBlocks := int32(0)
-	if p.c.SchedulerConfig.EnableInstanceStatusLocalAccount {
+	if p.c.EnableInstanceStatusLocalAccount {
 		numBlocks =
-			(int32(len(promptTokenIds)) + p.c.SchedulerConfig.KvCacheBlockSize - 1) / p.c.SchedulerConfig.KvCacheBlockSize
+			(int32(len(promptTokenIds)) + p.c.KvCacheBlockSize - 1) / p.c.KvCacheBlockSize
 	}
 
-	if p.c.SchedulerConfig.EnablePredictorEnhancedScheduling {
+	if p.c.EnablePredictorEnhancedScheduling {
 		predictNumComputedPrefillBlocks(
 			clusterView.groupedInstanceViews[consts.PrefillInferMode], p.cmsClient.TTFTPredictor,
-			p.c.SchedulerConfig.KvCacheBlockSize, int32(p.c.SchedulerConfig.MaxNumBatchedTokens))
+			p.c.KvCacheBlockSize, int32(p.c.MaxNumBatchedTokens))
 	}
 	for inferMode, instanceViews := range clusterView.groupedInstanceViews {
 		klog.V(3).Infof(
@@ -274,7 +274,7 @@ func (p *DispatchPolicy) schedule(
 			if normal != nil {
 				klog.V(4).Infof("Normal instance selected: %s", normal.GetInstanceId())
 				selectedInstances = append(selectedInstances, []*instanceViewScheduling{normal})
-				if p.c.SchedulerConfig.EnableInstanceStatusLocalAccount {
+				if p.c.EnableInstanceStatusLocalAccount {
 					p.cmsClient.AddRequestLocalAccount(
 						normal.cmsView, consts.NormalInferMode, numBlocks,
 						int32(normal.schedulingCtx.prefixHitNumBlocks), requestId, true)
@@ -299,7 +299,7 @@ func (p *DispatchPolicy) schedule(
 		if prefill == nil {
 			klog.V(4).Info("No prefill instance selected, return")
 		} else {
-			if p.c.SchedulerConfig.EnableInstanceStatusLocalAccount {
+			if p.c.EnableInstanceStatusLocalAccount {
 				p.cmsClient.AddRequestLocalAccount(
 					prefill.cmsView, consts.PrefillInferMode, numBlocks,
 					int32(prefill.schedulingCtx.prefixHitNumBlocks), requestId, true)
@@ -313,12 +313,12 @@ func (p *DispatchPolicy) schedule(
 		decode = p.executeSchedulePipeline(p.schedulePipelines[consts.DecodeInferMode], clusterView.groupedInstanceViews)
 		if decode == nil {
 			klog.V(4).Info("No decode instance selected, return")
-			if p.c.SchedulerConfig.EnableInstanceStatusLocalAccount && prefill != nil {
+			if p.c.EnableInstanceStatusLocalAccount && prefill != nil {
 				p.cmsClient.RevertRequestPrefillLocalAccount(
 					prefill.cmsView, numBlocks, int32(prefill.schedulingCtx.prefixHitNumBlocks), requestId)
 			}
 		} else {
-			if p.c.SchedulerConfig.EnableInstanceStatusLocalAccount {
+			if p.c.EnableInstanceStatusLocalAccount {
 				p.cmsClient.AddRequestLocalAccount(
 					decode.cmsView, consts.DecodeInferMode, numBlocks, int32(decode.schedulingCtx.prefixHitNumBlocks),
 					requestId, decode != prefill)

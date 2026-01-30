@@ -20,7 +20,7 @@ from .utils import (wait_for_service, GATEWAY_URL, start_process, cleanup_proces
 def test_config(request):
     return getattr(request, 'param', {
         'enable_pd': False,
-        'schedule_policy': 'round-robin',
+        'policy': 'round-robin',
         'enable_full_mode_scheduling': False,
         "enable_migration": False
     })
@@ -37,14 +37,14 @@ def redis_server() -> Generator[subprocess.Popen, None, None]:
 @pytest.fixture
 def gateway_server(test_config: Dict[str, Any]) -> Generator[subprocess.Popen, None, None]:
     """Start Gateway server"""
-    schedule_policy = test_config.get('schedule_policy', 'round-robin')
+    policy = test_config.get('policy', 'round-robin')
     enable_pd =  test_config.get('enable_pd', False)
     enable_full_mode_scheduling = test_config.get('enable_full_mode_scheduling', False)
     separate_pd_schedule = test_config.get('separate_pd_schedule', False)
     connector_type = test_config.get('connector_type', 'HybridConnector')
 
     command = get_gateway_command(
-        schedule_policy=schedule_policy,
+        policy=policy,
         enable_pd=enable_pd,
         enable_full_mode_scheduling=enable_full_mode_scheduling,
         separate_pd_schedule=separate_pd_schedule,
@@ -60,14 +60,14 @@ def gateway_server(test_config: Dict[str, Any]) -> Generator[subprocess.Popen, N
 def scheduler_server(test_config: Dict[str, Any]) -> Generator[subprocess.Popen | None, None, None]:
     """Start Scheduler server"""
     proc = None
-    schedule_policy = test_config.get('schedule_policy', 'round-robin')
+    policy = test_config.get('policy', 'round-robin')
     enable_full_mode_scheduling = test_config.get('enable_full_mode_scheduling', False)
     enable_migration = test_config.get('enable_migration', False)
     enable_pd = test_config.get('enable_pd', False)
 
-    if schedule_policy != "round-robin":
+    if policy != "round-robin":
         command = get_scheduler_command(
-            schedule_policy=schedule_policy,
+            policy=policy,
             enable_full_mode_scheduling=enable_full_mode_scheduling,
             enable_migration=enable_migration,
             enable_pd=enable_pd
@@ -82,14 +82,13 @@ def scheduler_server(test_config: Dict[str, Any]) -> Generator[subprocess.Popen 
 def vllm_servers(test_config: Dict[str, Any]) -> Generator[List[subprocess.Popen], None, None]:
     """Start vLLM instances and runtime discovery"""
     processes = []
-    schedule_policy = test_config.get('schedule_policy', 'round-robin')
+    policy = test_config.get('policy', 'round-robin')
     enable_full_mode_scheduling = test_config.get('enable_full_mode_scheduling', False)
 
     def launch_vllm_process(role: str, port: int, cuda: int, tag: str, connector_type: str) -> subprocess.Popen:
         vllm_proc = start_process(
             f"vLLM-{cuda}",
-            get_vllm_command(role, VLLM_BASE_PORT + cuda, cuda,
-                             schedule_policy, enable_full_mode_scheduling, tag, connector_type),
+            get_vllm_command(role, VLLM_BASE_PORT + cuda, cuda, enable_full_mode_scheduling, tag, connector_type),
             f"vllm_{cuda}.log")
         runtime_proc = start_process(
             f"Runtime-{cuda}",
@@ -121,9 +120,8 @@ def vllm_servers(test_config: Dict[str, Any]) -> Generator[List[subprocess.Popen
     yield processes
     cleanup_processes(processes)
 
-
-@pytest.fixture(scope="function")
-def prepare_test_environment():
+@pytest.fixture
+def setup_environment():
     """Prepare test environment by cleaning up old files and directories."""
     shutil.rmtree(NAMING_DIR, ignore_errors=True)
     if LOG_DIR.exists():
@@ -138,7 +136,7 @@ def prepare_test_environment():
 
 
 @pytest.fixture
-def setup_services(prepare_test_environment, redis_server, scheduler_server, gateway_server, vllm_servers, test_config):
+def setup_services(setup_environment, redis_server, scheduler_server, gateway_server, vllm_servers, test_config):
     """Setup all services - this combines all previous fixtures"""
     time.sleep(20)
     yield
@@ -209,9 +207,9 @@ def send_request(
 
 def generate_e2e_config():
     base_configs = [
-        {'schedule_policy': 'round-robin', 'enable_full_mode_scheduling': False},
-        {'schedule_policy': 'load-balance', 'enable_full_mode_scheduling': True},
-        {'schedule_policy': 'load-balance', 'enable_full_mode_scheduling': False},
+        {'policy': 'round-robin', 'enable_full_mode_scheduling': False},
+        {'policy': 'load-balance', 'enable_full_mode_scheduling': True},
+        {'policy': 'load-balance', 'enable_full_mode_scheduling': False},
     ]
 
     update_configs = []
@@ -329,8 +327,8 @@ def check_migration_logs(connector_type: str):
 
 def generate_migration_config():
     base_configs = [
-        {'schedule_policy': 'flood', 'enable_full_mode_scheduling': True, 'enable_migration': True, 'enable_pd': False, 'separate_pd_schedule': False},
-        {'schedule_policy': 'flood', 'enable_full_mode_scheduling': True, 'enable_migration': True, 'enable_pd': True, 'separate_pd_schedule': False},
+        {'policy': 'flood', 'enable_full_mode_scheduling': True, 'enable_migration': True, 'enable_pd': False, 'separate_pd_schedule': False},
+        {'policy': 'flood', 'enable_full_mode_scheduling': True, 'enable_migration': True, 'enable_pd': True, 'separate_pd_schedule': False},
     ]
 
     update_configs = []

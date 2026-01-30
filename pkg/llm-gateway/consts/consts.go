@@ -92,9 +92,8 @@ const (
 
 // llm-gateway support different discovery mode
 const (
-	DiscoveryCacheServer = "cache-server"
-	DiscoveryMessageBus  = "message-bus"
-	DiscoveryRedis       = "redis"
+	DiscoveryEndpoints = "endpoints"
+	DiscoveryRedis     = "redis"
 )
 
 const (
@@ -115,7 +114,7 @@ const (
 	// CMS defaults
 	DefaultCmsRedisHost              = "redis.roles"
 	DefaultCmsRedisPort              = "10000"
-	DefaultCmsRedisUsername          = "default"
+	DefaultCmsRedisUsername          = ""
 	DefaultCmsRedisPassword          = ""
 	DefaultCmsRedisSocketTimeout     = 1.0
 	DefaultCmsRedisRetryTimes        = 1
@@ -187,7 +186,5 @@ const (
 	DefaultLlumletGrpcConnectionPoolSize = -1
 	DefaultLlumletGrpcTimeoutSeconds     = -1
 
-	DefaultSchedulerEnableMetrics = false
-
-	DefaultSchedulerExtraArgs = ""
+	DefaultEnableMetrics = false
 )

@@ -2,10 +2,9 @@ package resolver
 
 import (
 	"fmt"
-	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/cmd/config"
 	"llumnix/pkg/llm-gateway/consts"
 	"llumnix/pkg/llm-gateway/types"
-	"strings"
 
 	"k8s.io/klog/v2"
 )
@@ -40,61 +39,48 @@ func DiffSets[T any](old, new []T, keyFunc func(T) string) (added, removed []T) 
 }
 
 // CreateSchedulerResolver creates a scheduler resolver based on the provided configuration.
-func CreateSchedulerResolver(config *options.Config) Resolver {
-	var (
-		schResolver Resolver
-		err         error
-	)
-	if config.LocalTestSchedulerIP != "" {
-		uri := fmt.Sprintf("endpoints://%s", config.LocalTestSchedulerIP)
-		schResolver, err = BuildResolver(uri, BuildArgs{})
-	} else {
-		parts := strings.Split(config.LlmScheduler, ".")
-		uri := fmt.Sprintf("eas://%s?include=%s", parts[0], config.LlmScheduler)
-		schResolver, err = BuildResolver(uri, BuildArgs{})
+func CreateSchedulerResolver(config *config.DiscoveryConfig) Resolver {
+	switch config.SchedulerDiscovery {
+	case consts.DiscoveryEndpoints:
+		uri := fmt.Sprintf("endpoints://%s", config.SchedulerEndpoints)
+		schResolver, err := BuildResolver(uri, BuildArgs{})
+		if err != nil {
+			klog.Fatalf("create scheduler resolver failed: %v", err)
+		}
+		return schResolver
+	default:
+		panic("unsupported discovery type")
 	}
-	if err != nil {
-		klog.Fatalf("create scheduler resolver failed: %v", err)
-	}
-	return schResolver
 }
 
 // CreateBackendServiceResolver creates an LLM resolver based on the provided configuration and role.
 // It supports message bus discovery and EAS service discovery.
-func CreateBackendServiceResolver(config *options.Config, role types.InferRole) LLMResolver {
+func CreateBackendServiceResolver(config *config.DiscoveryConfig, role types.InferRole) LLMResolver {
 	buildArgs := BuildArgs{"role": role.String()}
 
-	switch config.UseDiscovery {
+	switch config.LLMBackendDiscovery {
 	case consts.DiscoveryRedis:
-		uri := RedisUriPrefix + fmt.Sprintf("%s:%s",
-			config.SchedulerConfig.CmsRedisHost, config.SchedulerConfig.CmsRedisPort)
-		buildArgs["redis_username"] = config.SchedulerConfig.CmsRedisUsername
-		buildArgs["redis_password"] = config.SchedulerConfig.CmsRedisPassword
-		buildArgs["redis_socketTimeout"] = config.SchedulerConfig.CmsRedisSocketTimeout
-		buildArgs["redis_retryTimes"] = config.SchedulerConfig.CmsRedisRetryTimes
-		buildArgs["redis_discovery_refresh_interval_ms"] = config.RedisDiscoveryRefreshIntervalMs
-		buildArgs["redis_discovery_status_ttl"] = config.RedisDiscoveryStatusTTLMs
+		uri := RedisUriPrefix + fmt.Sprintf("%s:%d",
+			config.DiscoveryRedisHost, config.DiscoveryRedisPort)
+		buildArgs["redis_username"] = config.DiscoveryRedisUsername
+		buildArgs["redis_password"] = config.DiscoveryRedisPassword
+		buildArgs["redis_socketTimeout"] = config.DiscoveryRedisSocketTimeout
+		buildArgs["redis_retryTimes"] = config.DiscoveryRedisRetryTimes
+		buildArgs["redis_discovery_refresh_interval_ms"] = config.DiscoveryRedisRefreshIntervalMs
+		buildArgs["redis_discovery_status_ttl"] = config.DiscoveryRedisStatusTTLMs
 		r, err := BuildLlmResolver(uri, buildArgs)
 		if err != nil {
 			klog.Fatalf("create redis resolver failed: %v", err)
 		}
 		return r
-	default:
-		parts := strings.Split(config.LlmScheduler, ".")
-		if len(parts) < 2 {
-			klog.Fatalf("invalid scheduler service name: %s", config.LlmScheduler)
-		}
-		group := parts[0]
-
-		excludeService := fmt.Sprintf("%s,%s", config.LlmScheduler, config.LlmGateway)
-		if len(config.Redis) > 0 {
-			excludeService = fmt.Sprintf("%s,%s", excludeService, config.Redis)
-		}
-		uri := fmt.Sprintf("llm+eas://%s?exclude=%s", group, excludeService)
+	case consts.DiscoveryEndpoints:
+		uri := fmt.Sprintf("%s://%s", EndpointsLlmUriPrefix, config.LLMBackendEndpoints)
 		r, err := BuildLlmResolver(uri, buildArgs)
 		if err != nil {
-			klog.Fatalf("create llm eas resolver failed: %v", err)
+			klog.Fatalf("create endpoints resolver failed: %v", err)
 		}
 		return r
+	default:
+		panic("unsupported discovery type")
 	}
 }

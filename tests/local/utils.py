@@ -14,6 +14,7 @@ from vllm.utils.network_utils import get_ip
 LOG_DIR = Path("logs")
 NAMING_DIR = Path(f"{LOG_DIR}/naming.vllm")
 VLLM_BASE_PORT: int = 8000
+KVT_PORT_OFFSET: int = 20000
 GATEWAY_PORT: int = 18089
 SCHEDULER_PORT: int = 18088
 GATEWAY_URL = f"http://localhost:{GATEWAY_PORT}/v1/completions"
@@ -24,7 +25,7 @@ def get_redis_command() -> str:
 
 
 def get_gateway_command(
-    schedule_policy: str = "round-robin",
+    policy: str = "round-robin",
     tokenizer_path: str = MODEL_PATH,
     enable_pd: bool = False,
     enable_full_mode_scheduling: bool = False,
@@ -32,15 +33,15 @@ def get_gateway_command(
     connector_type: str = "HybridConnector",
 ) -> str:
     command = (
-        f"./bin/llm-gateway "
+        f"./bin/gateway "
         f"--port={GATEWAY_PORT} "
-        f"--llm-scheduler=llumnix-scheduler "
         f"--enable-log-input "
-        f"--use-discovery=redis "
-        f"--llumnix-cms-redis-host=127.0.0.1 "
-        f"--llumnix-cms-redis-port=6379 "
-        f"--schedule-policy={schedule_policy} "
-        f"--local-test-scheduler-ip=localhost:{SCHEDULER_PORT} "
+        f"--llm-backend-discovery=redis "
+        f"--scheduler-discovery=endpoints "
+        f"--scheduler-endpoints=localhost:{SCHEDULER_PORT} "
+        f"--discovery-redis-host=127.0.0.1 "
+        f"--discovery-redis-port=6379 "
+        f"--schedule-policy={policy} "
         f"--tokenizer-path={tokenizer_path} "
         f"-v=4 "
     )
@@ -52,9 +53,9 @@ def get_gateway_command(
 
     if enable_pd:
         if connector_type == "MooncakeConnector":
-            command += "--pdsplit-mode=vllm-mooncake "
+            command += "--pd-split-mode=vllm-mooncake "
         else:
-            command += "--pdsplit-mode=vllm-kvt "
+            command += "--pd-split-mode=vllm-kvt "
 
     if separate_pd_schedule:
         command += "--separate-pd-schedule "
@@ -67,22 +68,24 @@ def get_gateway_command(
 
 
 def get_scheduler_command(
-    schedule_policy: str = "load-balance",
+    policy: str = "load-balance",
     enable_full_mode_scheduling: bool = False,
     enable_migration: bool = False,
     enable_pd: bool = False,
 ) -> str:
     command = (
-        f"./bin/llm-gateway "
-        f"--schedule-mode "
+        f"./bin/scheduler "
         f"--port={SCHEDULER_PORT} "
         f"--host=0.0.0.0 "
-        f"--use-discovery=redis "
-        f"--schedule-policy={schedule_policy} "
-        f"--llumnix-cms-redis-host=127.0.0.1 "
-        f"--llumnix-cms-redis-port=6379 "
-        f"--llumnix-cms-pull-status-interval-ms=100 "
-        f"--llumnix-cms-pull-metadata-interval-ms=100 "
+        f"--enable-log-input "
+        f"--llm-backend-discovery=redis "
+        f"--discovery-redis-host=127.0.0.1 "
+        f"--discovery-redis-port=6379 "
+        f"--schedule-policy={policy} "
+        f"--cms-redis-host=127.0.0.1 "
+        f"--cms-redis-port=6379 "
+        f"--cms-pull-status-interval-ms=100 "
+        f"--cms-pull-metadata-interval-ms=100 "
         f"-v 4 "
     )
 
@@ -94,15 +97,15 @@ def get_scheduler_command(
     if enable_migration:
         reschedule_policy = "decode_load" if enable_pd else "neutral_load"
         command += "--colocated-reschedule-mode "
-        command += "--llumnix-enable-rescheduling "
-        command += f"--llumnix-reschedule-policies={reschedule_policy} "
-        command += "--llumnix-reschedule-load-balance-threshold=0 "
-        command += "--llumnix-reschedule-neutral-load-threshold=0 "
-        command += "--llumnix-reschedule-decode-load-threshold=0 "
-        command += "--llumnix-reschedule-req-select-rule=NUM_REQ "
+        command += "--enable-rescheduling "
+        command += f"--reschedule-policies={reschedule_policy} "
+        command += "--reschedule-load-balance-threshold=0 "
+        command += "--reschedule-neutral-load-threshold=0 "
+        command += "--reschedule-decode-load-threshold=0 "
+        command += "--reschedule-req-select-rule=NUM_REQ "
     else:
         command += "--colocated-reschedule-mode=false "
-        command += "--llumnix-enable-rescheduling=false "
+        command += "--enable-rescheduling=false "
 
     print(f"scheduler command: {command}")
 
@@ -113,7 +116,6 @@ def get_vllm_command(
     role: str,
     port: int,
     cuda: int,
-    schedule_policy: str,
     enable_full_mode_scheduling: bool,
     tag: str,
     connector_type: str,
@@ -129,7 +131,7 @@ def get_vllm_command(
             backend = "kvt"
         else:
             backend = "kvt+migration"
-        kv_transfer_config = f'{{"kv_connector":"HybridConnector", "kv_role": "{kv_role}","kv_connector_extra_config": {{"backend":"{backend}","naming_url": "file:{NAMING_DIR}","kvt_inst_id": "{tag}","rpc_port":{port+20000}}}}}'
+        kv_transfer_config = f'{{"kv_connector":"HybridConnector", "kv_role": "{kv_role}","kv_connector_extra_config": {{"backend":"{backend}","naming_url": "file:{NAMING_DIR}","kvt_inst_id": "{tag}","rpc_port":{port+KVT_PORT_OFFSET}}}}}'
     elif connector_type == "MooncakeConnector":
         kv_transfer_config = f'{{"kv_connector":"MooncakeConnector","kv_role":"{kv_role}","kv_connector_module_path":"mooncake.mooncake_connector_v1"}}'
 
@@ -152,7 +154,6 @@ def get_vllm_command(
     command = "LLUMNIX_CMS_REDIS_PORT=6379 " + command
     command = "LLUMNIX_ENGINE_GET_STATUS_TIMEOUT=1 " + command
         
-   
     if enable_full_mode_scheduling:
         command = "LLUMNIX_ENABLE_MIGRATION=1 " + command
         command = "VLLM_ENABLE_LLUMNIX=1 " + command
@@ -173,8 +174,8 @@ def get_runtime_command(
         f"--pod_name {uuid.uuid4()} "
         f"--entrypoint_ip {get_ip()} " 
         f"--entrypoint_port {port} " 
-        f"--kv_transfer_ip {get_ip()} "# kvt ip
-        f"--kv_transfer_port {port+20000} "# kvt 
+        f"--kv_transfer_ip {get_ip()} "
+        f"--kv_transfer_port {port+KVT_PORT_OFFSET} "
         f"--role {role} "
         f"--dp_size_local {dp_size_local} "
         f"--redis_address 127.0.0.1 "

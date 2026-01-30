@@ -6,7 +6,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/cmd/scheduler/app/options"
 	"llumnix/pkg/llm-gateway/consts"
 )
 

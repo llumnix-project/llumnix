@@ -2,6 +2,7 @@ package lrs
 
 import (
 	"fmt"
+	"llumnix/cmd/scheduler/app/options"
 	"math/rand"
 	"sync"
 	"testing"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"llumnix/cmd/llm-gateway/app/options"
 	"llumnix/pkg/llm-gateway/consts"
 	"llumnix/pkg/llm-gateway/types"
 )
@@ -47,7 +47,7 @@ func TestLocalRealtimeStateClientConcurrency(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			scsClient := NewLocalRealtimeStateClient(&options.Config{})
+			scsClient := NewLocalRealtimeStateClient(&options.SchedulerConfig{})
 			instance := createTestInstanceWithInferMode("instance-1", tc.inferMode)
 			gateway := "gateway-1"
 			scsClient.AddInstance(instance)
@@ -107,7 +107,7 @@ func TestLocalRealtimeStateClientConcurrency(t *testing.T) {
 }
 
 func TestScheduelrStateStore(t *testing.T) {
-	scsClient := NewLocalRealtimeStateClient(&options.Config{})
+	scsClient := NewLocalRealtimeStateClient(&options.SchedulerConfig{})
 	gateway := "gateway-1"
 
 	t.Run("Instance Creation for Different Modes", func(t *testing.T) {
@@ -270,7 +270,7 @@ func TestScheduelrStateStore(t *testing.T) {
 
 	t.Run("GetInstanceViewsByModel with MultiModelSupport", func(t *testing.T) {
 		// Create a scsClient that supports multiple models
-		scsClient := NewLocalRealtimeStateClient(&options.Config{ServerlessMode: true})
+		scsClient := NewLocalRealtimeStateClient(&options.SchedulerConfig{MultiModelSupport: true})
 		gateway := "gateway-1"
 
 		// Create instances with different models and different modes
@@ -344,7 +344,7 @@ func TestScheduelrStateStore(t *testing.T) {
 
 	t.Run("GetInstanceViewsByModel without MultiModelSupport", func(t *testing.T) {
 		// Create a scsClient that does not support multiple models
-		scsClient := NewLocalRealtimeStateClient(&options.Config{ServerlessMode: false})
+		scsClient := NewLocalRealtimeStateClient(&options.SchedulerConfig{MultiModelSupport: false})
 		gateway := "gateway-1"
 
 		// Create instances with different models
@@ -370,7 +370,7 @@ func TestScheduelrStateStore(t *testing.T) {
 	})
 
 	t.Run("GetInstanceViewsByModel with States", func(t *testing.T) {
-		scsClient := NewLocalRealtimeStateClient(&options.Config{ServerlessMode: true})
+		scsClient := NewLocalRealtimeStateClient(&options.SchedulerConfig{MultiModelSupport: true})
 		gateway := "gateway-1"
 
 		// Create instance and allocate request state
@@ -398,7 +398,7 @@ func TestScheduelrStateStore(t *testing.T) {
 	})
 
 	t.Run("GetInstanceViewsByModel Invalid Mode", func(t *testing.T) {
-		scsClient := NewLocalRealtimeStateClient(&options.Config{ServerlessMode: true})
+		scsClient := NewLocalRealtimeStateClient(&options.SchedulerConfig{MultiModelSupport: true})
 		instance := createTestInstanceWithInferModeAndModel("instance-test", consts.NormalInferMode, "gpt-3.5-turbo")
 		scsClient.AddInstance(instance)
 

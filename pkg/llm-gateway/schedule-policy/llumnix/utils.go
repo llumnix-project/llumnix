@@ -2,7 +2,7 @@ package llumnix
 
 import (
 	"fmt"
-	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/cmd/scheduler/app/options"
 	"llumnix/pkg/llm-gateway/cms"
 	"llumnix/pkg/llm-gateway/lrs"
 
@@ -12,18 +12,18 @@ import (
 	"llumnix/pkg/llm-gateway/consts"
 )
 
-func verifyConfig(c *options.Config) {
+func verifyConfig(c *options.SchedulerConfig) {
 	verifySchedulePolicy(c)
 	verifySchedulingFeature(c)
 	verifyDispatchLoadMetric(c)
 }
 
-func verifySchedulePolicy(c *options.Config) {
+func verifySchedulePolicy(c *options.SchedulerConfig) {
 	liteModeSchedulePolicySet := sets.NewString(consts.SchedulePolicyLoadBalance)
 	fullModeSchedulePolicySet := sets.NewString(consts.SchedulePolicyLoadBalance, consts.SchedulePolicyFlood)
 
 	policy := c.SchedulePolicy
-	if !c.SchedulerConfig.EnableFullModeScheduling {
+	if !c.EnableFullModeScheduling {
 		if !liteModeSchedulePolicySet.Has(policy) {
 			panic(fmt.Sprintf("The schedule policy %s is not supported when not enable full-mode scheduling.", policy))
 		}
@@ -34,32 +34,32 @@ func verifySchedulePolicy(c *options.Config) {
 	}
 }
 
-func verifySchedulingFeature(c *options.Config) {
-	if !c.SchedulerConfig.EnableFullModeScheduling {
-		if c.SchedulerConfig.EnableCacheAwareScheduling == true {
-			c.SchedulerConfig.EnableCacheAwareScheduling = false
+func verifySchedulingFeature(c *options.SchedulerConfig) {
+	if !c.EnableFullModeScheduling {
+		if c.EnableCacheAwareScheduling == true {
+			c.EnableCacheAwareScheduling = false
 			klog.Warningf("The scheduling feature cache-aware scheduling is not supported when not enable full-mode scheduling, forcefully disable it here.")
 		}
-		if c.SchedulerConfig.EnablePredictorEnhancedScheduling == true {
-			c.SchedulerConfig.EnablePredictorEnhancedScheduling = false
+		if c.EnablePredictorEnhancedScheduling == true {
+			c.EnablePredictorEnhancedScheduling = false
 			klog.Warningf("The scheduling feature predictor-enhanced scheduling is not supported when not enable full-mode scheduling, forcefully disable it here.")
 		}
-		if c.SchedulerConfig.EnableAdaptivePD == true {
-			c.SchedulerConfig.EnableAdaptivePD = false
+		if c.EnableAdaptivePD == true {
+			c.EnableAdaptivePD = false
 			klog.Warningf("The scheduling feature adaptive-pd is not supported when not enable full-mode scheduling, forcefully disable it here.")
 		}
-		if c.SchedulerConfig.EnableRescheduling == true {
-			c.SchedulerConfig.EnableRescheduling = false
+		if c.EnableRescheduling == true {
+			c.EnableRescheduling = false
 			klog.Warningf("The scheduling feature rescheduling is not supported when not enable full-mode scheduling, forcefully disable it here.")
 		}
-		if c.SchedulerConfig.EnableInstanceStatusLocalAccount {
-			c.SchedulerConfig.EnableInstanceStatusLocalAccount = false
+		if c.EnableInstanceStatusLocalAccount {
+			c.EnableInstanceStatusLocalAccount = false
 			klog.Warningf("The scheduling feature instance-status-local-account is not supported when not enable full-mode scheduling, forcefully disable it here.")
 		}
 	}
 }
 
-func verifyDispatchLoadMetric(c *options.Config) {
+func verifyDispatchLoadMetric(c *options.SchedulerConfig) {
 	liteModeSchedulingMetricSet := sets.NewString(
 		consts.SchedulingMetricNumRequests, consts.SchedulingMetricNumTokens)
 	fullModeSchedulingMetricSet := sets.NewString(
@@ -69,37 +69,37 @@ func verifyDispatchLoadMetric(c *options.Config) {
 		consts.SchedulingMetricAdaptiveDecodeBatchSize, consts.SchedulingMetricNumRequests,
 		consts.SchedulingMetricAllDecodesKVBlocksNumWithAllPrefills)
 
-	if !c.SchedulerConfig.EnableFullModeScheduling {
-		if !liteModeSchedulingMetricSet.Has(c.SchedulerConfig.DispatchNeutralLoadMetric) {
+	if !c.EnableFullModeScheduling {
+		if !liteModeSchedulingMetricSet.Has(c.DispatchNeutralLoadMetric) {
 			klog.Warningf("The neutral dispatch load metric %s is not supported when not enable full-mode scheduling, "+
-				"forcefully set metric to %s here.", c.SchedulerConfig.DispatchNeutralLoadMetric, consts.SchedulingMetricNumTokens)
-			c.SchedulerConfig.DispatchNeutralLoadMetric = consts.SchedulingMetricNumTokens
+				"forcefully set metric to %s here.", c.DispatchNeutralLoadMetric, consts.SchedulingMetricNumTokens)
+			c.DispatchNeutralLoadMetric = consts.SchedulingMetricNumTokens
 		}
-		if !liteModeSchedulingMetricSet.Has(c.SchedulerConfig.DispatchPrefillLoadMetric) {
+		if !liteModeSchedulingMetricSet.Has(c.DispatchPrefillLoadMetric) {
 			klog.Warningf("The prefill dispatch load metric %s is not supported when not enable full-mode scheduling, "+
-				"forcefully set metric to %s here", c.SchedulerConfig.DispatchPrefillLoadMetric, consts.SchedulingMetricNumTokens)
-			c.SchedulerConfig.DispatchPrefillLoadMetric = consts.SchedulingMetricNumTokens
+				"forcefully set metric to %s here", c.DispatchPrefillLoadMetric, consts.SchedulingMetricNumTokens)
+			c.DispatchPrefillLoadMetric = consts.SchedulingMetricNumTokens
 		}
-		if !liteModeSchedulingMetricSet.Has(c.SchedulerConfig.DispatchDecodeLoadMetric) {
+		if !liteModeSchedulingMetricSet.Has(c.DispatchDecodeLoadMetric) {
 			klog.Warningf("The decode dispatch load metric %s is not supported when not enable full-mode scheduling, "+
-				"forcefully set metric to %s here", c.SchedulerConfig.DispatchDecodeLoadMetric, consts.SchedulingMetricNumTokens)
-			c.SchedulerConfig.DispatchDecodeLoadMetric = consts.SchedulingMetricNumTokens
+				"forcefully set metric to %s here", c.DispatchDecodeLoadMetric, consts.SchedulingMetricNumTokens)
+			c.DispatchDecodeLoadMetric = consts.SchedulingMetricNumTokens
 		}
 	} else {
-		if !fullModeSchedulingMetricSet.Has(c.SchedulerConfig.DispatchNeutralLoadMetric) {
+		if !fullModeSchedulingMetricSet.Has(c.DispatchNeutralLoadMetric) {
 			klog.Warningf("The neutral dispatch load metric %s is not supported when enable full-mode scheduling, "+
-				"forcefully set metric to %s here", c.SchedulerConfig.DispatchNeutralLoadMetric, consts.SchedulingMetricKVBlocksRatioWithAllPrefills)
-			c.SchedulerConfig.DispatchNeutralLoadMetric = consts.SchedulingMetricKVBlocksRatioWithAllPrefills
+				"forcefully set metric to %s here", c.DispatchNeutralLoadMetric, consts.SchedulingMetricKVBlocksRatioWithAllPrefills)
+			c.DispatchNeutralLoadMetric = consts.SchedulingMetricKVBlocksRatioWithAllPrefills
 		}
-		if !fullModeSchedulingMetricSet.Has(c.SchedulerConfig.DispatchPrefillLoadMetric) {
+		if !fullModeSchedulingMetricSet.Has(c.DispatchPrefillLoadMetric) {
 			klog.Warningf("The prefill dispatch load metric %s is not supported when enable full-mode scheduling, "+
-				"forcefully set metric to %s here", c.SchedulerConfig.DispatchPrefillLoadMetric, consts.SchedulingMetricAllPrefillsKVBlocksNum)
-			c.SchedulerConfig.DispatchPrefillLoadMetric = consts.SchedulingMetricAllPrefillsKVBlocksNum
+				"forcefully set metric to %s here", c.DispatchPrefillLoadMetric, consts.SchedulingMetricAllPrefillsKVBlocksNum)
+			c.DispatchPrefillLoadMetric = consts.SchedulingMetricAllPrefillsKVBlocksNum
 		}
-		if !fullModeSchedulingMetricSet.Has(c.SchedulerConfig.DispatchDecodeLoadMetric) {
+		if !fullModeSchedulingMetricSet.Has(c.DispatchDecodeLoadMetric) {
 			klog.Warningf("The decode dispatch load metric %s is not supported when enable full-mode scheduling, "+
-				"forcefully set metric to %s here", c.SchedulerConfig.DispatchDecodeLoadMetric, consts.SchedulingMetricKVBlocksRatioWithAllPrefills)
-			c.SchedulerConfig.DispatchDecodeLoadMetric = consts.SchedulingMetricKVBlocksRatioWithAllPrefills
+				"forcefully set metric to %s here", c.DispatchDecodeLoadMetric, consts.SchedulingMetricKVBlocksRatioWithAllPrefills)
+			c.DispatchDecodeLoadMetric = consts.SchedulingMetricKVBlocksRatioWithAllPrefills
 		}
 	}
 }

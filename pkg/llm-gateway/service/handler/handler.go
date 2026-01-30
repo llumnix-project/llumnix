@@ -2,7 +2,7 @@ package handler
 
 import (
 	"fmt"
-	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/cmd/gateway/app/options"
 	"llumnix/pkg/llm-gateway/types"
 	"sync"
 	"time"
@@ -31,7 +31,7 @@ type RequestHandler interface {
 
 // HandlerFactory is a factory function that creates a RequestHandler instance
 // It takes a config as parameter and returns the corresponding handler
-type HandlerFactory func(config *options.Config) (RequestHandler, error)
+type HandlerFactory func(config *options.GatewayConfig) (RequestHandler, error)
 
 // handlerRegistry holds registered handler factories indexed by protocol type
 var (
@@ -49,7 +49,7 @@ func RegisterHandler(protocol string, factory HandlerFactory) {
 
 // BuildHandler creates a RequestHandler instance based on the protocol type
 // Returns an error if the protocol type is not registered
-func BuildHandler(protocol string, config *options.Config) (RequestHandler, error) {
+func BuildHandler(protocol string, config *options.GatewayConfig) (RequestHandler, error) {
 	handlerMu.RLock()
 	factory, exists := handlerRegistry[protocol]
 	handlerMu.RUnlock()

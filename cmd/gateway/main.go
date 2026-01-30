@@ -2,6 +2,8 @@ package main
 
 import (
 	"flag"
+	"llumnix/cmd/config"
+	"llumnix/cmd/gateway/app/options"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -12,23 +14,22 @@ import (
 	"github.com/spf13/pflag"
 	"k8s.io/klog/v2"
 
-	"llumnix/cmd/llm-gateway/app/options"
 	"llumnix/pkg/llm-gateway/service"
 	"llumnix/pkg/llm-gateway/tokenizer"
 )
 
 func waitAndClean() {
-	signal_ch := make(chan os.Signal, 1)
+	signalCh := make(chan os.Signal, 1)
 	done := make(chan bool)
 
-	signal.Notify(signal_ch,
+	signal.Notify(signalCh,
 		syscall.SIGINT,
 		syscall.SIGTERM,
 	)
 
 	go func() {
 		cnt := 0
-		for s := range signal_ch {
+		for s := range signalCh {
 			cnt += 1
 			klog.Infof("received Signal[%v], stopping lb-gateway services ...", s.String())
 			if cnt == 2 {
@@ -41,9 +42,9 @@ func waitAndClean() {
 }
 
 func NewCommand() *cobra.Command {
-	cfg := &options.Config{}
+	cfg := &options.GatewayConfig{}
 	cmd := &cobra.Command{
-		Use: "llm-gateway",
+		Use: "gateway",
 		Run: func(cmd *cobra.Command, args []string) {
 			if cfg.EnablePprof {
 				klog.Infoln("enable pprof")
@@ -51,32 +52,22 @@ func NewCommand() *cobra.Command {
 					klog.Infoln(http.ListenAndServe(":6061", nil))
 				}()
 			}
+
 			cfg.LoadCfgFromProperties()
-			cfg.ParseLlumnixExtraArgs(cmd.Flags())
+			config.ParseLlumnixExtraArgs(cmd.Flags(), cfg.ExtraArgs)
 			klog.Infof("llm-gateway config: %+v", cfg)
-			if cfg.ScheduleMode {
-				cs := service.NewScheduleService(cfg)
-				klog.Info("llm scheduler start ...")
-				if err := cs.Start(); err != nil {
-					klog.Fatalf("llm scheduler exit: %v", err)
-				}
-			} else if cfg.StandaloneRescheduleMode && cfg.SchedulerConfig.EnableRescheduling {
-				r := service.NewRescheduleService(cfg)
-				klog.Info("llm rescheduler start ...")
-				if err := r.Start(); err != nil {
-					klog.Fatalf("llm rescheduler exit: %v", err)
-				}
-			} else {
-				// try init tokenizer
-				tokenizer.InitTokenizer(cfg.TokenizerName, cfg.TokenizerPath, cfg.ChatTemplatePath)
-				gw := service.NewGatewayService(cfg)
-				klog.Info("llm gateway start ...")
-				if err := gw.Start(); err != nil {
-					klog.Fatalf("llm gateway exit: %v", err)
-				}
+
+			tokenizer.InitTokenizer(cfg.TokenizerName, cfg.TokenizerPath, cfg.ChatTemplatePath)
+
+			gw := service.NewGatewayService(cfg)
+			klog.Info("llm gateway start ...")
+
+			if err := gw.Start(); err != nil {
+				klog.Fatalf("llm gateway exit: %v", err)
 			}
+
 			waitAndClean()
-			klog.Info("service exited")
+			klog.Info("gateway service exited")
 		},
 	}
 	cfg.AddFlags(cmd.Flags())

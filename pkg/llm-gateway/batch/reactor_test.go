@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"llumnix/cmd/config"
+	"llumnix/cmd/gateway/app/options"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"llumnix/cmd/llm-gateway/app/options"
 )
 
 // TestNewTaskReactor tests the NewTaskReactor function
@@ -20,7 +20,7 @@ func TestNewTaskReactor(t *testing.T) {
 	ossClient := &OSSClient{}
 	instanceID := "test-instance"
 	ossPrefix := "test-prefix"
-	config := &options.Config{
+	config := &options.GatewayConfig{
 		Port: 8080,
 	}
 
@@ -147,7 +147,7 @@ func TestCreateResponse(t *testing.T) {
 // TestProcessRequest tests the processRequest function
 func TestProcessRequest(t *testing.T) {
 	// Create a mock TaskReactor with minimal config
-	config := &options.Config{
+	config := &options.GatewayConfig{
 		Port: 8080,
 	}
 	tr := &TaskReactor{
@@ -302,8 +302,8 @@ func TestOSSPathHelpers(t *testing.T) {
 // TestShardInputFile tests the shardInputFile function
 func TestShardInputFile(t *testing.T) {
 	// Create a mock TaskReactor with minimal config
-	config := &options.Config{
-		BatchServiceConfig: options.BatchServiceConfig{
+	config := &options.GatewayConfig{
+		BatchServiceConfig: config.BatchServiceConfig{
 			BatchLinesPerShard: 2, // Small number for testing
 		},
 	}
@@ -369,7 +369,7 @@ func TestShardInputFile(t *testing.T) {
 // TestValidateInputFile tests the validateInputFile function
 func TestValidateInputFile(t *testing.T) {
 	// Create a mock TaskReactor with minimal config
-	config := &options.Config{}
+	config := &options.GatewayConfig{}
 	tr := &TaskReactor{
 		config: config,
 	}
@@ -444,7 +444,7 @@ func TestValidateInputFile(t *testing.T) {
 // TestCreateFileShard tests the createFileShard function
 func TestCreateFileShard(t *testing.T) {
 	// Create a mock TaskReactor with minimal config
-	config := &options.Config{}
+	config := &options.GatewayConfig{}
 	tr := &TaskReactor{
 		config: config,
 	}
@@ -525,7 +525,7 @@ func TestCreateFileShard(t *testing.T) {
 // TestValidateBatchFile tests the ValidateBatchFile function
 func TestValidateBatchFile(t *testing.T) {
 	// Create a mock TaskReactor with minimal config
-	config := &options.Config{}
+	config := &options.GatewayConfig{}
 	tr := &TaskReactor{
 		config: config,
 	}

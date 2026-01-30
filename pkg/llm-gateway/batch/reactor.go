@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"llumnix/cmd/gateway/app/options"
 	"math/rand"
 	"net/http"
 	"path"
@@ -16,8 +17,6 @@ import (
 
 	"github.com/google/uuid"
 	"k8s.io/klog/v2"
-
-	"llumnix/cmd/llm-gateway/app/options"
 )
 
 var (
@@ -30,7 +29,7 @@ type TaskReactor struct {
 	ossClient     *OSSClient
 	instanceID    string
 	ossPrefix     string
-	config        *options.Config
+	config        *options.GatewayConfig
 	port          int
 	linesPerShard int
 }
@@ -138,7 +137,7 @@ func (tr *TaskReactor) startShardLockRenewalAndStatusMonitoring(
 }
 
 // NewTaskReactor creates a new task reactor
-func NewTaskReactor(redisStore *RedisStore, ossClient *OSSClient, instanceID, ossPrefix string, config *options.Config) *TaskReactor {
+func NewTaskReactor(redisStore *RedisStore, ossClient *OSSClient, instanceID, ossPrefix string, config *options.GatewayConfig) *TaskReactor {
 	return &TaskReactor{
 		redisStore: redisStore,
 		ossClient:  ossClient,

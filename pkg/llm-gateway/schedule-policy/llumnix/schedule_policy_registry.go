@@ -5,20 +5,20 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/cmd/scheduler/app/options"
 	"llumnix/pkg/llm-gateway/consts"
 )
 
-func newDispatchPolicyInternal(c *options.Config) dispatchPolicyInternal {
+func newDispatchPolicyInternal(c *options.SchedulerConfig) dispatchPolicyInternal {
 	switch c.SchedulePolicy {
 	case consts.SchedulePolicyLoadBalance:
-		if c.SchedulerConfig.EnableFullModeScheduling {
-			return newLoadBalanceDispatchFullMode(&c.SchedulerConfig)
+		if c.EnableFullModeScheduling {
+			return newLoadBalanceDispatchFullMode(c)
 		} else {
-			return newLoadBalanceDispatchLiteMode(&c.SchedulerConfig)
+			return newLoadBalanceDispatchLiteMode(c)
 		}
 	case consts.SchedulePolicyFlood:
-		return newFloodDispatchPolicyFullMode(&c.SchedulerConfig)
+		return newFloodDispatchPolicyFullMode(c)
 	default:
 		panic(fmt.Sprintf("unsupported schedule policy: %s", c.SchedulePolicy))
 	}

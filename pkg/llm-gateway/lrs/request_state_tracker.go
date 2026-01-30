@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/cmd/gateway/app/options"
 	"llumnix/pkg/llm-gateway/resolver"
 	"llumnix/pkg/llm-gateway/tokenizer"
 	"llumnix/pkg/llm-gateway/types"
@@ -23,7 +23,7 @@ type RequestStateTracker struct {
 
 	schedulerResolver resolver.Resolver
 	client            *http.Client
-	config            *options.Config
+	config            *options.GatewayConfig
 }
 
 var (
@@ -31,11 +31,11 @@ var (
 	gTracker *RequestStateTracker
 )
 
-func NewRequestStateTracker(config *options.Config) *RequestStateTracker {
+func NewRequestStateTracker(config *options.GatewayConfig) *RequestStateTracker {
 	once.Do(func() {
 		gTracker = &RequestStateTracker{
 			reqTokenState:     make(map[string]*RequestTokenState),
-			schedulerResolver: resolver.CreateSchedulerResolver(config),
+			schedulerResolver: resolver.CreateSchedulerResolver(&config.DiscoveryConfig),
 			client:            &http.Client{Timeout: 3 * time.Second},
 			config:            config,
 		}

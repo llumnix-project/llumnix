@@ -3,7 +3,7 @@ package processor
 import (
 	"encoding/json"
 	"fmt"
-	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/cmd/config"
 	reasoning_parser "llumnix/pkg/llm-gateway/processor/reasoning-parser"
 	"llumnix/pkg/llm-gateway/protocol"
 	"llumnix/pkg/llm-gateway/tokenizer"
@@ -31,7 +31,7 @@ type ResponseChunkProcessor struct {
 	toolParser      string
 }
 
-func NewResponseChunkProcessor(config *options.Config) *ResponseChunkProcessor {
+func NewResponseChunkProcessor(config *config.ProcessorConfig) *ResponseChunkProcessor {
 	tk, err := tokenizer.GetTokenizer()
 	if err != nil {
 		klog.Errorf("Failed to get tokenizer: %v", err)
@@ -107,7 +107,8 @@ func (rp *ResponseChunkProcessor) ChatCompletionStreamProcess(req *types.Request
 	if parseResult != nil && len(parseResult.ToolCalls) > 0 {
 		stats.HasToolCalls = true
 	}
-	klog.V(3).Infof("[%s] ChatCompletionStreamProcess: output_len: %d, reasoning_content_len: %d, raw_content_len: %d, capacity: %d, max_len: %d",
+
+	klog.V(3).Infof("[%s] ChatCompletionStreamProcess: output_len: %d, reasoning_content_len: %d, raw_content_len: %d, max_len: %d",
 		req.Id, stats.OutputTokensLen, stats.ReasoningTokensLen, stats.OutputTokensLen, stats.MaxTokensLimit)
 
 	needSplitLastResp := false

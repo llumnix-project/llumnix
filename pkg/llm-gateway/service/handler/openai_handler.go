@@ -10,7 +10,7 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/cmd/gateway/app/options"
 	"llumnix/pkg/llm-gateway/processor"
 	"llumnix/pkg/llm-gateway/protocol"
 	"llumnix/pkg/llm-gateway/types"
@@ -18,7 +18,7 @@ import (
 
 // init registers the OpenAI handler factory function with the handler registry.
 func init() {
-	RegisterHandler("openai", func(config *options.Config) (RequestHandler, error) {
+	RegisterHandler("openai", func(config *options.GatewayConfig) (RequestHandler, error) {
 		return NewOpenAIHandler(config)
 	})
 }
@@ -27,7 +27,7 @@ func init() {
 // It handles both chat completion and text completion requests, supporting streaming and non-streaming modes.
 type OpenAIHandler struct {
 	// config holds the gateway configuration
-	config *options.Config
+	config *options.GatewayConfig
 
 	// client is the HTTP client for making backend requests
 	client *http.Client
@@ -44,7 +44,7 @@ type OpenAIHandler struct {
 // NewOpenAIHandler creates a new OpenAIHandler with configured processor chains.
 // It initializes pre-processors for request transformation and post-processors for response handling.
 // Returns the handler instance or an error if initialization fails.
-func NewOpenAIHandler(config *options.Config) (RequestHandler, error) {
+func NewOpenAIHandler(config *options.GatewayConfig) (RequestHandler, error) {
 	// Setup pre-processor chain for request transformation
 	preProcessors := processor.CreatePreProcessorChain()
 	convertor := processor.NewRequestCompletionConverter()
@@ -55,7 +55,7 @@ func NewOpenAIHandler(config *options.Config) (RequestHandler, error) {
 
 	// Setup post-processor chain for response handling
 	postProcessor := processor.CreatePostProcessorChain()
-	chunkProcessor := processor.NewResponseChunkProcessor(config)
+	chunkProcessor := processor.NewResponseChunkProcessor(&config.ProcessorConfig)
 	if chunkProcessor == nil {
 		return nil, fmt.Errorf("failed to create response chunk processor")
 	}

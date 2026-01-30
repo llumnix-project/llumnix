@@ -1,11 +1,10 @@
 package lrs
 
 import (
-	"sync"
-
-	"llumnix/cmd/llm-gateway/app/options"
+	"llumnix/cmd/scheduler/app/options"
 	"llumnix/pkg/llm-gateway/consts"
 	"llumnix/pkg/llm-gateway/types"
+	"sync"
 )
 
 // LocalRealtimeStateClient manages different scheduler state stores for different inference inferModes
@@ -25,9 +24,9 @@ type LocalRealtimeStateClient struct {
 	mu sync.RWMutex
 }
 
-func NewLocalRealtimeStateClient(c *options.Config) *LocalRealtimeStateClient {
+func NewLocalRealtimeStateClient(c *options.SchedulerConfig) *LocalRealtimeStateClient {
 	w := &LocalRealtimeStateClient{
-		multiModelSupport: c.ServerlessMode,
+		multiModelSupport: c.MultiModelSupport,
 		normalState:       NewLocalRealtimeState(),
 		prefillState:      NewLocalRealtimeState(),
 		decodeState:       NewLocalRealtimeState(),

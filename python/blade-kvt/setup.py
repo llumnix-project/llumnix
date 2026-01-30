@@ -240,7 +240,7 @@ def get_kvt_version() -> str:
     git_describe_command = ["git", "describe", "--dirty", "--tags", "--long", "--match", "v*[0-9]*[0-9]*[0-9]"]
     version = get_version(
         root="../..",
-        write_to="python/blade-kvt/_version.py",
+        write_to="python/blade-kvt/version.py",
         git_describe_command=git_describe_command
     )
     return version
