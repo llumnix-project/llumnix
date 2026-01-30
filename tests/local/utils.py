@@ -1,7 +1,7 @@
 import subprocess
 import time
 import os
-from typing import List
+from typing import List, Dict, Any, Optional
 import uuid
 
 import requests
@@ -259,3 +259,77 @@ def cleanup_processes(processes: List[subprocess.Popen]):
     # Give processes time to clean up
     time.sleep(1)
     print("Cleanup complete.")
+
+def send_request(
+    payload: Dict[str, Any],
+    endpoint_type: str = 'completions',
+    ignore_output: bool = False
+):
+    """
+    Unified function for both completions and chat completions
+    endpoint_type: 'completions' or 'chat'
+    """
+    if endpoint_type == 'chat':
+        url = GATEWAY_URL.replace('/v1/completions', '/v1/chat/completions')
+    else:
+        url = GATEWAY_URL
+    
+    if payload.get('stream', False):
+        response = requests.post(url, json=payload, timeout=60, stream=True)
+        response.raise_for_status()
+        
+        chunks = []
+        full_text = ""
+        
+        for line in response.iter_lines():
+            if line:
+                decoded_line = line.decode('utf-8')
+                if decoded_line.startswith('data: '):
+                    chunk_data = decoded_line[6:]
+                    if chunk_data.strip() != '[DONE]':
+                        try:
+                            chunk_json = json.loads(chunk_data)
+                            chunks.append(chunk_json)
+                            
+                            if "choices" in chunk_json and len(chunk_json["choices"]) > 0:
+                                choice = chunk_json["choices"][0]
+                                if endpoint_type == 'chat':
+                                    full_text += choice.get("delta", {}).get("content", "")
+                                else:
+                                    full_text += choice.get("text", "")
+                        except json.JSONDecodeError:
+                            print(f"Failed to parse chunk: {chunk_data}")
+        
+        assert len(chunks) > 0, "No streaming chunks received"
+    else:
+        response = requests.post(url, json=payload, timeout=60)
+        response.raise_for_status()
+        result = response.json()
+        
+        assert "choices" in result, "Response missing 'choices' field"
+        assert len(result["choices"]) > 0, "No choices in response"
+        
+        if endpoint_type == 'chat':
+            full_text = result["choices"][0].get("message", {}).get("content", "")
+        else:
+            full_text = result["choices"][0].get("text", "")
+
+    if not ignore_output:
+        max_tokens = payload.get('max_tokens', None)
+        stream = payload.get('stream', False)
+        print(f"Response received ({endpoint_type}, stream={stream}, max_tokens={max_tokens}): {full_text}")
+
+    return full_text
+
+def download_and_cache_file(url: str, filename: Optional[str] = None) -> str:
+    if filename is None:
+        filename = os.path.join("/data", url.split("/")[-1])
+    if os.path.exists(filename):
+        return filename
+    print(f"Downloading from {url} to {filename}")
+    response = requests.get(url, stream=True)
+    response.raise_for_status()
+    with open(filename, "wb") as f:
+        for chunk in response.iter_content(chunk_size=1024):
+            f.write(chunk)
+    return filename
