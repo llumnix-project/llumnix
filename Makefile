@@ -80,6 +80,10 @@ simple-tests: discovery-proto-build gateway-build scheduler-build
 migration-tests: gateway-build
 	pytest -x -v -s ./tests/local/vllm_e2e.py::test_migration
 
+.PHONY: migration-correctness-tests
+migration-correctness-tests: gateway-build
+	pytest -x -v -s ./tests/local/vllm_mig_correctness.py::test_migration_correctness
+
 .PHONY: e2e-tests
 e2e-tests: discovery-proto-build gateway-build simple-tests migration-tests
 
