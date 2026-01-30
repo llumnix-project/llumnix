@@ -25,7 +25,7 @@ spec:
               claimName: nas-llumnix
         containers:
         - name: vllm
-          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260127-164441
+          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260130-105854
           securityContext:
             capabilities:
               add:
@@ -196,7 +196,7 @@ spec:
               mountPath: /models
               readOnly: true
         - name: discovery
-          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:discovery-20260128-154151
+          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:discovery-20260130-111823
           command:
             - /bin/bash
             - -c

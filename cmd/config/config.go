@@ -23,7 +23,7 @@ type DiscoveryConfig struct {
 
 func (c *DiscoveryConfig) AddDiscoveryConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.LLMBackendDiscovery, "llm-backend-discovery", "redis", "use redis/endpoints to discovery backend services.")
-	flags.StringVar(&c.SchedulerDiscovery, "scheduler-discovery", "endpoints", "use redis/endpoints to discovery scheduler services.")
+	flags.StringVar(&c.SchedulerDiscovery, "scheduler-discovery", "endpoints", "use endpoints to discovery scheduler services.")
 
 	c.RedisDiscoveryConfig.AddRedisDiscoveryConfigFlags(flags)
 	c.EndpointDiscoveryConfig.AddEndpointDiscoveryConfigFlags(flags)
@@ -102,7 +102,7 @@ type PDSplitConfig struct {
 }
 
 func (c *PDSplitConfig) AddPDSplitConfigFlags(flags *pflag.FlagSet) {
-	flags.StringVar(&c.PDSplitMode, "pd-split-mode", "", "pd split mode, this configuration only takes effect under the pd-split policy, now support vllm-vineyard, vllm-kvt, sglang-mooncake")
+	flags.StringVar(&c.PDSplitMode, "pd-split-mode", "", "pd split mode, this configuration only takes effect under the pd-split policy, now support vllm-mooncake, vllm-kvt, sglang-mooncake")
 	flags.BoolVar(&c.SeparatePDSchedule, "separate-pd-schedule", false, "Specify whether to separate pd schedule")
 }
 

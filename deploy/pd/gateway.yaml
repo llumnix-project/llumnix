@@ -42,31 +42,29 @@ spec:
       - name: aliyun-registry-secret
       containers:
       - name: gateway
-        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:gateway-20260127-162859
+        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:gateway-20260130-111650
         imagePullPolicy: Always
-        command: ["/usr/local/bin/llm-gateway"]
+        command: ["/usr/local/bin/gateway"]
         args:
         - "--port"
         - "8089"
         - "-v"
         - "4"
-        - "--llm-scheduler"
-        - "llumnix-scheduler"
-        - "--use-discovery"
+        - "--scheduler-discovery"
+        - "endpoints"
+        - "--scheduler-endpoints"
+        - "scheduler:8088"
+        - "--llm-backend-discovery"
         - "redis"
-        - "--llumnix-cms-redis-host"
+        - "--discovery-redis-host"
         - "redis"
-        - "--llumnix-cms-redis-port"
+        - "--discovery-redis-port"
         - "6379"
         - "--schedule-policy"
         - "load-balance"
-        - "--local-test-scheduler-ip"
-        - "scheduler:8088"
-        - "--llumnix-kv-cache-block-size"
-        - "64"
         - "--tokenizer-path"
         - "/models/deepseek-moe-16b-base"
-        - "--pdsplit-mode"
+        - "--pd-split-mode"
         - "vllm-mooncake"
         - "--enable-full-mode-scheduling"
         - "True"
