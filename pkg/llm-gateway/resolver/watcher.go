@@ -8,6 +8,8 @@ import (
 	"k8s.io/klog/v2"
 )
 
+// TODO(sunbiao.sun): Refine discovery codes to improve steadiness and consistency.
+
 // observerPair stores a pair of channels for added and removed instances
 type observerPair struct {
 	added   chan<- types.LLMInstanceSlice

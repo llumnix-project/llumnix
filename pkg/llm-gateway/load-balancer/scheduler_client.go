@@ -8,7 +8,6 @@ import (
 	"io"
 
 	"net/http"
-	"strings"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -136,15 +135,6 @@ func (cb *SchedulerClient) doSchedule(req *types.RequestContext) (types.Schedule
 		klog.Warningf("[%s] do request schedule: %d, %s", req.Id, resp.StatusCode, string(body))
 		return nil, consts.ErrorEndpointNotFound
 	}
-}
-
-func getServiceNameFromPodName(name string) string {
-	parts := strings.Split(name, "-")
-	if len(parts) <= 2 {
-		return strings.ReplaceAll(name, "-", "_")
-	}
-	serviceParts := parts[:len(parts)-2]
-	return strings.Join(serviceParts, "_")
 }
 
 func (cb *SchedulerClient) Get(req *types.RequestContext) (types.ScheduledResult, error) {
