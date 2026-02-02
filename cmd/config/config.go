@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"llumnix/pkg/llm-gateway/consts"
+	"llumnix/pkg/consts"
 
 	"github.com/spf13/pflag"
 	"k8s.io/klog/v2"
