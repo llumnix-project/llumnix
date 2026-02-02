@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"llumnix/pkg/scheduler/service"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -14,7 +15,6 @@ import (
 
 	"llumnix/cmd/config"
 	"llumnix/cmd/scheduler/app/options"
-	"llumnix/pkg/llm-gateway/service"
 )
 
 func waitAndClean() {
@@ -83,6 +83,6 @@ func main() {
 
 	cmd := NewCommand()
 	if err := cmd.Execute(); err != nil {
-		klog.Fatalf("llm-gateway cmd execute failed: %v", err)
+		klog.Fatalf("gateway cmd execute failed: %v", err)
 	}
 }

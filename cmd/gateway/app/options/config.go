@@ -7,8 +7,8 @@ import (
 	"github.com/spf13/pflag"
 
 	"llumnix/cmd/config"
-	"llumnix/pkg/llm-gateway/consts"
-	prop "llumnix/pkg/llm-gateway/property"
+	"llumnix/pkg/consts"
+	"llumnix/pkg/gateway/property"
 )
 
 type GatewayConfig struct {
@@ -28,7 +28,7 @@ type GatewayConfig struct {
 	// whether forward tokens to scheduler
 	ForwardTokens bool
 
-	configManager *prop.ConfigManager
+	configManager *property.ConfigManager
 
 	EnableLogInput bool
 	EnablePprof    bool
@@ -74,7 +74,7 @@ func (c *GatewayConfig) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.ExtraArgs, "extra-args", "", "Llumnix extra args")
 }
 
-func (c *GatewayConfig) GetConfigManager() *prop.ConfigManager {
+func (c *GatewayConfig) GetConfigManager() *property.ConfigManager {
 	return c.configManager
 }
 
@@ -91,14 +91,9 @@ func (c *GatewayConfig) EnableRequestStateTracking() bool {
 }
 
 func (c *GatewayConfig) LoadCfgFromProperties() {
-	const propertyFile = "/etc/override.properties"
-	prefetchKeys := []prop.PrefetchKey{
-		{Key: "llm_gateway.traffic_mirror.enable", Type: prop.BoolType},
-		{Key: "llm_gateway.traffic_mirror.target", Type: prop.StringType},
-		{Key: "llm_gateway.traffic_mirror.ratio", Type: prop.FloatType},
-		{Key: "llm_gateway.traffic_mirror.token", Type: prop.StringType},
-		{Key: "llm_gateway.traffic_mirror.timeout", Type: prop.FloatType},
-		{Key: "llm_gateway.traffic_mirror.enable_log", Type: prop.BoolType},
+	const propertyFile = "/mnt/mirror.json"
+	configPaths := map[string]string{
+		"mirror": propertyFile,
 	}
-	c.configManager = prop.NewConfigManager([]string{propertyFile}, prefetchKeys)
+	c.configManager = property.NewConfigManager(configPaths)
 }
