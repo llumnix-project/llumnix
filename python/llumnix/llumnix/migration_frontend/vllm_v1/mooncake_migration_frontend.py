@@ -8,10 +8,10 @@ from vllm.config import VllmConfig
 from vllm.v1.request import Request, RequestStatus
 
 from llumnix import envs
-from llumnix.llumlet.instance_info import InstanceStatus
-from llumnix.llumlet.proto import llumlet_server_pb2, llumlet_server_pb2_grpc
+from llumnix.instance_info import InstanceStatus
+from llumnix.server.proto import llumlet_server_pb2, llumlet_server_pb2_grpc
 from llumnix.logging.logger import init_logger
-from llumnix.migration_frontend.base_migration_frontend import BaseMigrationFrontend
+from llumnix.migration_frontend.vllm_v1.base_migration_frontend import BaseMigrationFrontend
 from llumnix.utils import MigrationParams, MigrationType, RequestMigrationPolicy
 from llumnix.compat.vllm_compat import cdiv
 

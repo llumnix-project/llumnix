@@ -11,14 +11,12 @@ from overrides import override
 from vllm.config import VllmConfig
 from vllm.v1.engine import (EngineCoreOutputs, UtilityOutput)
 from vllm.v1.engine.core_client import AsyncMPClient
-from vllm.version import __version__ as VLLM_VERSION
 from llumnix.compat.vllm_compat import get_ip, get_open_zmq_ipc_path
 
 from llumnix.engine_client.base_engine_client import BaseEngineClient
-from llumnix.llumlet.instance_info import ConnectorType, InstanceType, InstanceStatus
+from llumnix.instance_info import ConnectorType, InstanceType, InstanceStatus
 from llumnix.logging.logger import init_logger
 from llumnix.utils import MigrationParams, RequestIDType, get_ip_address
-from llumnix import envs as llumnix_envs
 
 
 AnyFuture = Union[asyncio.Future[Any], Future[Any]]
@@ -109,17 +107,12 @@ class VLLMEngineClient(BaseEngineClient, AsyncMPClient):
     async def get_instance_status(self) -> dict[str, InstanceStatus]:
         """Get instance information from the engine core."""
         res = await self.call_utility_async("get_instance_status")
-        if llumnix_envs.LLUMNIX_VLLM_BRANCH == "kvs-dev" or VLLM_VERSION.startswith("0.9"):
-            instance_status = res
-        else:
-            instance_status = res.result
+        instance_status = res.result
         return instance_status
 
     async def migrate_out(self, dst_engine_host: str, dst_engine_port: int, migration_params: MigrationParams) -> bool:
         """Send migration request to engine core"""
         res = await self.call_utility_async("migrate_out", dst_engine_host, dst_engine_port, migration_params)
-        if llumnix_envs.LLUMNIX_VLLM_BRANCH == "kvs-dev" or VLLM_VERSION.startswith("0.9"):
-            return res
         return res.result
 
     async def abort(self, request_ids: List[RequestIDType]) -> None:
@@ -127,8 +120,6 @@ class VLLMEngineClient(BaseEngineClient, AsyncMPClient):
 
     async def migrate_in(self, serialized_data: bytes, _):
         res = await self.call_utility_async("migrate_in", serialized_data)
-        if llumnix_envs.LLUMNIX_VLLM_BRANCH == "kvs-dev" or VLLM_VERSION.startswith("0.9"):
-            return res
         return res.result
 
 
@@ -158,12 +149,14 @@ def _llumnix_process_utility_output(output: UtilityOutput,
 def get_host_ip(ifname: str = None) -> str:
     return get_ip_address(ifname=ifname)
 
+
 def get_kvt_port(cfg: VllmConfig) -> int:
     if cfg.kv_transfer_config:
          # pylint: disable=import-outside-toplevel
         from llumnix.compat.hybrid_connector_compat import sched_rpc_server_port
         return sched_rpc_server_port(cfg)
     return -1
+
 
 def gen_unit_id(vllm_config: VllmConfig) -> str:
     parallel_config = vllm_config.parallel_config
@@ -240,6 +233,7 @@ def vllm_get_addresses() -> dict[str, str]:
         "output_address": output_addresses
     }
     return client_addresses
+
 
 def vllm_get_connector_type(cfg: VllmConfig) -> str:
     if not cfg.kv_transfer_config:

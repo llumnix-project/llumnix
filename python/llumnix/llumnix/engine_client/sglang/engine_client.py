@@ -24,10 +24,10 @@ from sglang.srt.managers.io_struct import (
 
 from llumnix.engine_client.base_engine_client import BaseEngineClient
 from llumnix.utils import MigrationParams, RequestIDType, get_ip_address
-from llumnix.llumlet.instance_info import InstanceType
+from llumnix.instance_info import InstanceType
 from llumnix.logging.logger import init_logger
-from llumnix.sglang_utils import SGLangConfig
-from llumnix.llumlet.proto import llumlet_server_pb2_grpc, llumlet_server_pb2
+from llumnix.sglang_llumlet_proxy import SGLangConfig
+from llumnix.server.proto import llumlet_server_pb2_grpc, llumlet_server_pb2
 
 logger = init_logger(__name__)
 

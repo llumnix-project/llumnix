@@ -203,12 +203,12 @@ def get_free_port() -> int:
 
 
 # ================== Others ==================
-def get_push_cms_interval():
-    interval = envs.LLUMNIX_PUSH_CMS_INTERVAL
+def get_metric_push_interval():
+    interval = envs.LLUMNIX_METRIC_PUSH_INTERVAL
     if isinstance(interval, str):
         interval = float(interval)
     if interval < 0:
-        logger.warning("LLUMNIX_PUSH_CMS_INTERVAL must be positive, get {}, set to default value 1.0".format(interval))
+        logger.warning("LLUMNIX_METRIC_PUSH_INTERVAL must be positive, get {}, set to default value 1.0".format(interval))
         interval = 1.0
     return interval
 

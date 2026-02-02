@@ -14,11 +14,11 @@ from llumnix import envs
 from llumnix.constants import MIGRATION_FRONTEND_INIT_TIMEOUT
 from llumnix.compat.vllm_compat import get_ip
 from llumnix.engine_client.utils import get_connector_type
-from llumnix.llumlet.instance_info import ConnectorType, InstanceStatus
-from llumnix.llumlet.llumlet import Llumlet
+from llumnix.instance_info import ConnectorType, InstanceStatus
+from llumnix.llumlet import Llumlet
 from llumnix.logging.logger import init_logger
-from llumnix.outputs.forwarder.thread_output_forwarder import ThreadOutputForwarder
-from llumnix.status_collector.status_updater import StatusUpdater, StepPhase
+from llumnix.outputs.forwarder.vllm_v1.thread_output_forwarder import ThreadOutputForwarder
+from llumnix.status_collector.vllm_v1.status_updater import StatusUpdater, StepPhase
 from llumnix.utils import (
     MigrationParams,
     RequestIDType,
@@ -54,7 +54,7 @@ class VLLMLlumletProxy:
                 os.environ["LLUMNIX_ENABLE_MIGRATION"] = "0"
             elif self.connector_type == ConnectorType.HYBRID:
                 # pylint: disable=import-outside-toplevel
-                from llumnix.migration_frontend.kvt_migration_frontend import KVTMigrationFrontend
+                from llumnix.migration_frontend.vllm_v1.kvt_migration_frontend import KVTMigrationFrontend
                 self.migration_frontend = KVTMigrationFrontend(vllm_config=vllm_config,
                                                                dp_rank=vllm_config.parallel_config.data_parallel_rank,
                                                                scheduler=scheduler)
@@ -63,7 +63,7 @@ class VLLMLlumletProxy:
                 self.mig_server_address = self.migration_frontend.mig_server.address
             elif self.connector_type == ConnectorType.MOONCAKE:
                 # pylint: disable=import-outside-toplevel
-                from llumnix.migration_frontend.mooncake_migration_frontend import MooncakeMigrationFrontend
+                from llumnix.migration_frontend.vllm_v1.mooncake_migration_frontend import MooncakeMigrationFrontend
                 self.migration_frontend = MooncakeMigrationFrontend(vllm_config=vllm_config,
                                                                     dp_rank=vllm_config.parallel_config.data_parallel_rank,
                                                                     scheduler=scheduler)

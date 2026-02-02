@@ -2,7 +2,7 @@ import multiprocessing
 from typing import Any, Dict, Optional
 
 from llumnix.engine_client.base_engine_client import BaseEngineClient
-from llumnix.llumlet.instance_info import BackendType
+from llumnix.instance_info import BackendType
 
 
 def create_engine_client(
@@ -14,14 +14,14 @@ def create_engine_client(
     if engine_type in (BackendType.VLLM_V1):
         # pylint: disable=import-outside-toplevel
         from vllm.config import VllmConfig
-        from llumnix.engine_client.vllm_engine_client import VLLMEngineClient
+        from llumnix.engine_client.vllm_v1.engine_client import VLLMEngineClient
         if not isinstance(engine_config, VllmConfig):
             raise TypeError("engine_config must be of type VllmConfig for engine_type 'vllm'")
         return VLLMEngineClient(vllm_config=engine_config, client_addresses=client_addresses, **kwargs)
 
     if engine_type == BackendType.SGLANG:
         # pylint: disable=import-outside-toplevel
-        from llumnix.engine_client.sglang_engine_client import SGLangEngineClient
+        from llumnix.engine_client.sglang.engine_client import SGLangEngineClient
         return SGLangEngineClient(
             client_addresses=client_addresses,
             **kwargs
@@ -39,26 +39,26 @@ def get_engine_mp_context(engine_type: str):
 def get_engine_client_addresses(engine_type: str) -> dict[str, str]:
     if engine_type in (BackendType.VLLM_V1):
         # pylint: disable=import-outside-toplevel
-        from llumnix.engine_client.vllm_engine_client import vllm_get_addresses
+        from llumnix.engine_client.vllm_v1.engine_client import vllm_get_addresses
         return vllm_get_addresses()
 
     if engine_type == BackendType.SGLANG:
         # pylint: disable=import-outside-toplevel
-        from llumnix.engine_client.sglang_engine_client import sglang_get_addresses
+        from llumnix.engine_client.sglang.engine_client import sglang_get_addresses
         return sglang_get_addresses()
 
-    raise ValueError(f"engine_type {engine_type} not supported")
+    raise NotImplementedError
 
 
 def get_specific_instance_meta_data(engine_type: str, cfg: Any) -> dict:
     if engine_type == BackendType.VLLM_V1:
         # pylint: disable=import-outside-toplevel
-        from llumnix.engine_client.vllm_engine_client import vllm_get_instance_meta_data
+        from llumnix.engine_client.vllm_v1.engine_client import vllm_get_instance_meta_data
         return vllm_get_instance_meta_data(cfg)
 
     if engine_type == BackendType.SGLANG:
         # pylint: disable=import-outside-toplevel
-        from llumnix.engine_client.sglang_engine_client import sglang_get_instance_meta_data
+        from llumnix.engine_client.sglang.engine_client import sglang_get_instance_meta_data
         return sglang_get_instance_meta_data(cfg)
 
     raise NotImplementedError
@@ -81,12 +81,12 @@ def add_llumlet_addresses(
         addresses["scheduler_to_llumlet_ipc_name"] = llumlet_addresses["scheduler_to_llumlet_ipc_name"]
         return addresses
 
-    raise ValueError(f"engine_type {engine_type} not supported")
+    raise NotImplementedError
 
 
 def get_connector_type(engine_type: str, cfg: Any) -> Optional[str]:
     if engine_type == BackendType.VLLM_V1:
         # pylint: disable=import-outside-toplevel
-        from llumnix.engine_client.vllm_engine_client import vllm_get_connector_type
+        from llumnix.engine_client.vllm_v1.engine_client import vllm_get_connector_type
         return vllm_get_connector_type(cfg)
     return None

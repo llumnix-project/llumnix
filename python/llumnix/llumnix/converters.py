@@ -1,8 +1,8 @@
 from llumnix.cms.proto.cms_pb2 import InstanceMetadata as CMSInstanceMetaData
 from llumnix.cms.proto.cms_pb2 import InstanceStatus as CMSInstanceStatus
-from llumnix.llumlet.instance_info import \
+from llumnix.instance_info import \
     InstanceMetaData as LlumletInstanceMetaData
-from llumnix.llumlet.instance_info import \
+from llumnix.instance_info import \
     InstanceStatus as LlumletInstanceStatus
 from llumnix.logging.logger import init_logger
 

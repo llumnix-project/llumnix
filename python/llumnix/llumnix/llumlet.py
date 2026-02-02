@@ -20,9 +20,9 @@ from llumnix.engine_client.utils import (
     get_specific_instance_meta_data,
     add_llumlet_addresses,
 )
-from llumnix.llumlet.converters import to_cms_metadata, to_cms_status
-from llumnix.llumlet.instance_info import BackendType, ConnectorType, InstanceMetaData, InstanceStatus
-from llumnix.llumlet.rpc_server import AsyncLlumletRPCServer
+from llumnix.converters import to_cms_metadata, to_cms_status
+from llumnix.instance_info import BackendType, ConnectorType, InstanceMetaData, InstanceStatus
+from llumnix.rpc_server import AsyncLlumletRPCServer
 from llumnix.logging.logger import init_logger
 from llumnix.outputs.queue.zmq_client import MigrationZmqClient
 from llumnix.utils import (
@@ -31,7 +31,7 @@ from llumnix.utils import (
     MigrationType,
     NotEnoughSlotsError,
     RequestIDType,
-    get_push_cms_interval,
+    get_metric_push_interval,
     get_migration_limits,
     get_rpc_port,
     UpdateInstanceStatusMode,
@@ -126,7 +126,7 @@ class LlumletProc:
             client_addresses=client_addresses,
         )
 
-        self.push_interval = get_push_cms_interval()
+        self.push_interval = get_metric_push_interval()
         self.push_task: Optional[asyncio.Task] = None
         self.cms_client: CMSWriteClient = CMSWriteClient()
         self.loop = None
@@ -137,7 +137,7 @@ class LlumletProc:
         self.instance_metadata: InstanceMetaData = self.get_instance_meta_data(engine_type, connector_type, self.engine_config)
         self.instance_id = self.instance_metadata.instance_id
         self.instance_status: InstanceStatus = InstanceStatus()
-        self.last_log_instance_status_timestamp = None
+        self.last_report_instance_status_timestamp = None
 
         self.enable_mig = envs.LLUMNIX_ENABLE_MIGRATION
         self.detailed_mig = envs.LLUMNIX_DETAILED_MIG_STATUS
@@ -280,7 +280,7 @@ class LlumletProc:
         if not await self.register_with_cms():
             return
         logger.info(
-            "Starting periodic status push every %s seconds.", self.push_interval)
+            "Starting periodic status reporting every %s seconds.", self.push_interval)
         while True:
             start_time = time.time()
             if self.parent_pid and not psutil.pid_exists(self.parent_pid):
@@ -424,9 +424,9 @@ class LlumletProc:
                 instance_status.num_available_migrate_out_tokens = self.mig_limits.max_token_mig_out - instance_status.num_migrate_out_tokens
                 instance_status.available_block_ratio_migrate_in = self.mig_limits.max_block_ratio_mig_in - instance_status.block_ratio_migrate_in
                 instance_status.available_block_ratio_migrate_out = self.mig_limits.max_block_ratio_mig_out - instance_status.block_ratio_migrate_out
-        if self.last_log_instance_status_timestamp is None or \
-            time.time() - self.last_log_instance_status_timestamp >= envs.LLUMNIX_LOG_INSTANCE_STATUS_INTERVAL_S:
-            self.last_log_instance_status_timestamp = time.time()
+        if self.last_report_instance_status_timestamp is None or \
+            time.time() - self.last_report_instance_status_timestamp >= envs.LLUMNIX_REPORT_INSTANCE_STATUS_INTERVAL_S:
+            self.last_report_instance_status_timestamp = time.time()
             logger.debug("instance_status: {}".format(instance_status))
 
     async def migrate(self, dst_engine_host: str, dst_engine_port: int, migration_params: MigrationParams) -> bool:

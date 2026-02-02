@@ -8,7 +8,7 @@ from llumnix.logging.logger import init_logger
 from llumnix.connection_pool import ConnectionType, LruConnectionPool
 from llumnix.utils import (RequestIDType, get_ip_address, get_free_port)
 
-from llumnix.llumlet.proto import (llumlet_server_pb2,
+from llumnix.server.proto import (llumlet_server_pb2,
                                   llumlet_server_pb2_grpc)
 
 logger = init_logger(__name__)

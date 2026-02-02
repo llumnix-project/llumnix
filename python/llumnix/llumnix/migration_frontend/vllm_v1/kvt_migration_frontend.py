@@ -11,9 +11,9 @@ from vllm.v1.request import Request
 
 from llumnix import envs
 from llumnix.constants import MIGRATION_FRONTEND_TIMEOUT, PRESTOP_TIMEOUT, VLLM_MIGRATION_RETRIES
-from llumnix.llumlet.instance_info import InstanceStatus
+from llumnix.instance_info import InstanceStatus
 from llumnix.logging.logger import init_logger
-from llumnix.migration_frontend.base_migration_frontend import BaseMigrationFrontend
+from llumnix.migration_frontend.vllm_v1.base_migration_frontend import BaseMigrationFrontend
 from llumnix.outputs.queue.zmq_server import MigrationZmqServer
 from llumnix.utils import MigrationParams, MigrationType
 from llumnix.compat.vllm_compat import get_ip, cdiv

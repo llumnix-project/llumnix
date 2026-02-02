@@ -2,9 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Any, List
 
 from vllm.v1.request import Request
-from vllm.v1.core.sched.output import SchedulerOutput
 
-class BaseConnectorMetricsCollector(ABC):
+class BaseConnectorStatusCollector(ABC):
 
     def __init__(self, scheduler: "Scheduler"):
         self.scheduler = scheduler
@@ -35,9 +34,9 @@ class BaseConnectorMetricsCollector(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_connector_loading_requests_num(self, scheduler_output: SchedulerOutput) -> int:
+    def get_connector_loading_requests_num(self) -> int:
         raise NotImplementedError
 
     @abstractmethod
-    def get_connector_num_blocks_loading_requests(self, scheduler_output: SchedulerOutput) -> int:
+    def get_connector_num_blocks_loading_requests(self) -> int:
         raise NotImplementedError
