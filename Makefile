@@ -28,22 +28,22 @@ lib-tokenizers-build:
 
 .PHONY: gateway-proto-build
 gateway-proto-build:
-	@protoc --go_out=./pkg/llm-gateway/cms/ \
+	@protoc --go_out=./pkg/cms/ \
     	--proto_path="./pkg" \
-    	./pkg/llm-gateway/cms/proto/cms.proto
-	@echo "Compiling ./pkg/llm-gateway/cms/proto/cms.proto"
+    	./pkg/cms/proto/cms.proto
+	@echo "Compiling ./pkg/cms/proto/cms.proto"
 
-	@protoc --go_out=./pkg/llm-gateway/llumlet/ \
-       --go-grpc_out=./pkg/llm-gateway/llumlet/ \
+	@protoc --go_out=./pkg/scheduler/llumlet/ \
+       --go-grpc_out=./pkg/scheduler/llumlet/ \
        --proto_path="./pkg" \
-		./pkg/llm-gateway/llumlet/proto/llumlet_server.proto
-	@echo "Compiling ./pkg/llm-gateway/llumlet/proto/llumlet_server.proto"
+		./pkg/scheduler/llumlet/proto/llumlet_server.proto
+	@echo "Compiling ./pkg/scheduler/llumlet/proto/llumlet_server.proto"
 
-	@protoc --go_out=./pkg/llm-gateway/resolver/ \
-       --go-grpc_out=./pkg/llm-gateway/resolver/ \
+	@protoc --go_out=./pkg/resolver/ \
+       --go-grpc_out=./pkg/resolver/ \
        --proto_path="./pkg" \
-    	./pkg/llm-gateway/resolver/proto/redis_discovery.proto
-	@echo "Compiling ./pkg/llm-gateway/resolver/proto/redis_discovery.proto"
+    	./pkg/resolver/proto/redis_discovery.proto
+	@echo "Compiling ./pkg/resolver/proto/redis_discovery.proto"
 
 .PHONY: scheduler-proto-build
 scheduler-proto-build: gateway-proto-build
@@ -84,13 +84,13 @@ migration-tests: gateway-build
 migration-correctness-tests: gateway-build
 	pytest -x -v -s ./tests/local/vllm_mig_correctness.py::test_migration_correctness
 
-.PHONY: e2e-tests
-e2e-tests: discovery-proto-build gateway-build simple-tests migration-tests
+.PHONY: e2e-test
+e2e-test: discovery-proto-build gateway-build simple-tests migration-tests
 
-TEST_DIRS := $(shell go list ./pkg/llm-gateway/... | grep -v "/kvs/v6d" | grep -v "/kvs/mooncake")
+TEST_DIRS := $(shell go list ./pkg/... | grep -v "/kvs/v6d" | grep -v "/kvs/mooncake")
 
-.PHONY: unit-tests
-unit-tests: discovery-proto-build gateway-build
+.PHONY: unit-test
+unit-test: discovery-proto-build gateway-build
 	CGO_ENABLED=1 \
 	CGO_LDFLAGS="-L./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release" \
 	go test -v -failfast $(TEST_DIRS) 2>&1 | grep -v "no test files"

@@ -14,8 +14,8 @@ import (
 	"github.com/spf13/pflag"
 	"k8s.io/klog/v2"
 
-	"llumnix/pkg/llm-gateway/service"
-	"llumnix/pkg/llm-gateway/tokenizer"
+	"llumnix/pkg/gateway/service"
+	"llumnix/pkg/gateway/tokenizer"
 )
 
 func waitAndClean() {
@@ -55,7 +55,7 @@ func NewCommand() *cobra.Command {
 
 			cfg.LoadCfgFromProperties()
 			config.ParseLlumnixExtraArgs(cmd.Flags(), cfg.ExtraArgs)
-			klog.Infof("llm-gateway config: %+v", cfg)
+			klog.Infof("gateway config: %+v", cfg)
 
 			tokenizer.InitTokenizer(cfg.TokenizerName, cfg.TokenizerPath, cfg.ChatTemplatePath)
 
@@ -81,6 +81,6 @@ func main() {
 
 	cmd := NewCommand()
 	if err := cmd.Execute(); err != nil {
-		klog.Fatalf("llm-gateway cmd execute failed: %v", err)
+		klog.Fatalf("gateway cmd execute failed: %v", err)
 	}
 }
