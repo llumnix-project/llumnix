@@ -19,10 +19,6 @@ spec:
         imagePullSecrets:
           - name: aliyun-registry-secret
         terminationGracePeriodSeconds: 30
-        volumes:
-          - name: model-storage
-            persistentVolumeClaim:
-              claimName: nas-llumnix
         containers:
         - name: vllm
           image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260130-105854
@@ -57,7 +53,7 @@ spec:
               # --enable-eplb: Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU Divisibility constraint: num_routed_experts (256 for DSv3) + num_redundant_experts must be divisible by the number of GPUs.
 
               exec vllm serve \
-                /models/deepseek-moe-16b-base \
+                deepseek-ai/deepseek-moe-16b-base \
                 --port 8000 \
                 --trust-remote-code \
                 --data-parallel-hybrid-lb \
@@ -87,6 +83,10 @@ spec:
             value: "1"
           - name: LLUMNIX_ENABLE_MIGRATION
             value: "0"
+
+         # download models
+          - name: VLLM_USE_MODELSCOPE
+            value: "true"
 
          # VLLM_MOE_DP_CHUNK_SIZE is a tunable parameter.
          # Higher values increase the memory footprint of the hidden states in the MoE layers,
@@ -182,10 +182,6 @@ spec:
               ephemeral-storage: 256Gi
               memory: 256Gi
               nvidia.com/gpu: "4"
-          volumeMounts:
-            - name: model-storage
-              mountPath: /models
-              readOnly: true
         - name: discovery
           image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:discovery-20260130-111823
           command:

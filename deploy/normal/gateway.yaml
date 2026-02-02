@@ -33,13 +33,37 @@ spec:
         app: gateway
         role: gateway
     spec:
-      volumes:
-      - name: model-storage
-        persistentVolumeClaim:
-          claimName: nas-llumnix
       terminationGracePeriodSeconds: 300
       imagePullSecrets:
       - name: aliyun-registry-secret
+      initContainers:
+      - name: download-tokenizer
+        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:python3.12-slim-bookworm
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          pip3 install modelscope -i https://mirrors.aliyun.com/pypi/simple/ && \
+          python3 << 'EOF'
+          from modelscope import snapshot_download
+          
+          model_dir = snapshot_download(
+              'deepseek-ai/deepseek-moe-16b-base',
+              cache_dir='/tokenizers',
+              allow_patterns=['tokenizer.json', 'tokenizer_config.json']
+          )
+          
+          print(f"download tokenizer done: {model_dir}")
+          EOF
+        volumeMounts:
+        - name: tokenizer-storage
+          mountPath: /tokenizers
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
       containers:
       - name: gateway
         image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:gateway-20260130-111650
@@ -63,7 +87,7 @@ spec:
         - "--schedule-policy"
         - "round-robin"
         - "--tokenizer-path"
-        - "/models/deepseek-moe-16b-base"
+        - "/tokenizers/deepseek-ai/deepseek-moe-16b-base"
         - "--enable-full-mode-scheduling"
         - "False"
         ports:
@@ -90,6 +114,9 @@ spec:
           initialDelaySeconds: 5
           periodSeconds: 5
         volumeMounts:
-          - name: model-storage
-            mountPath: /models
-            readOnly: true
+        - name: tokenizer-storage
+          mountPath: /tokenizers
+          readOnly: true
+      volumes:
+      - name: tokenizer-storage
+        emptyDir: {}

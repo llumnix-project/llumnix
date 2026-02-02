@@ -5,17 +5,24 @@ import shutil
 import time
 from typing import Generator, List, Dict, Any
 
+from modelscope import snapshot_download
+
 from .utils import (wait_for_service, start_process, cleanup_processes,
                     get_redis_command, get_gateway_command, get_scheduler_command, 
-                    get_vllm_command, get_runtime_command, VLLM_BASE_PORT, LOG_DIR, NAMING_DIR)
+                    get_vllm_command, get_runtime_command, VLLM_BASE_PORT, LOG_DIR,
+                    NAMING_DIR, MODEL_PATH)
+
+
+def pytest_sessionstart(session):
+    if os.path.exists(MODEL_PATH):
+        return
+    model_dir = snapshot_download('Qwen/Qwen2.5-7B', cache_dir='/models')
+    print(f"Downloaded model to {model_dir}")
+
+
 @pytest.fixture
 def test_config(request):
-    return getattr(request, 'param', {
-        'enable_pd': False,
-        'policy': 'round-robin',
-        'enable_full_mode_scheduling': False,
-        "enable_migration": False
-    })
+    return getattr(request, 'param')
 
 
 @pytest.fixture
@@ -128,8 +135,6 @@ def setup_environment():
 
 
 @pytest.fixture
-def setup_services(setup_environment, redis_server, scheduler_server, gateway_server, vllm_servers, test_config):
-    """Setup all services - this combines all previous fixtures"""
-    time.sleep(20)
+def setup_services(setup_environment, redis_server, scheduler_server, gateway_server, vllm_servers):
+    time.sleep(20) # wait for redis discovery work
     yield
-    # Cleanup handled by individual fixtures

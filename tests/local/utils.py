@@ -19,7 +19,9 @@ KVT_PORT_OFFSET: int = 20000
 GATEWAY_PORT: int = 18089
 SCHEDULER_PORT: int = 18088
 GATEWAY_URL = f"http://localhost:{GATEWAY_PORT}/v1/completions"
-MODEL_PATH: str = os.environ.get("MODEL_PATH", "/mnt/eas/models/Qwen2.5-7B")
+MODEL_NAME: str = "Qwen/Qwen2.5-7B"
+MODEL_PATH: str = os.environ.get("MODEL_PATH", f"/models/{MODEL_NAME}")
+
 
 def get_redis_command() -> str:
     return "redis-server --port 6379"
@@ -158,6 +160,8 @@ def get_vllm_command(
     if enable_full_mode_scheduling:
         command = "LLUMNIX_ENABLE_MIGRATION=1 " + command
         command = "VLLM_ENABLE_LLUMNIX=1 " + command
+
+    command = "VLLM_USE_MODELSCOPE=true " + command
 
     print(f"vllm command: {command}")
 
