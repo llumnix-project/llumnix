@@ -4,9 +4,9 @@ from vllm.v1.request import Request
 
 from llumnix.compat.vllm_compat import cdiv
 from llumnix.compat.hybrid_connector_compat import get_param
-from llumnix.status_collector.base_connector_metric_collector import BaseConnectorMetricsCollector
+from llumnix.status_collector.vllm_v1.base_connector_status_collector import BaseConnectorStatusCollector
 
-class HybridConnectorMetricsCollector(BaseConnectorMetricsCollector):
+class HybridConnectorStatusCollector(BaseConnectorStatusCollector):
 
     def get_connector_waiting_reqs(self) -> List[Request]:
         # _waiting: deque[tuple[Request, bool, bool]]
@@ -60,14 +60,14 @@ class HybridConnectorMetricsCollector(BaseConnectorMetricsCollector):
     def is_migrating(self, req: Request) -> bool:
         return get_param(req, "is_migrating")
 
-    def get_connector_loading_requests_num(self, scheduler_output) -> int:
+    def get_connector_loading_requests_num(self) -> int:
         num_loading_requests = 0
         if self.scheduler.connector is not None:
             # pylint: disable=protected-access
             num_loading_requests = len(self.scheduler.connector._sched._loading)
         return num_loading_requests
 
-    def get_connector_num_blocks_loading_requests(self, scheduler_output) -> int:
+    def get_connector_num_blocks_loading_requests(self) -> int:
         num_tokens_loading_requests = 0
         if self.scheduler.connector is not None:
             # pylint: disable=protected-access

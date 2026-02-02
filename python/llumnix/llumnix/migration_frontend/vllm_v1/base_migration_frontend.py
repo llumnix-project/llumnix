@@ -5,7 +5,7 @@ from vllm.config import VllmConfig
 from vllm.v1.request import Request
 
 from llumnix import envs
-from llumnix.llumlet.instance_info import InstanceStatus
+from llumnix.instance_info import InstanceStatus
 from llumnix.logging.logger import init_logger
 from llumnix.utils import MigrationParams, MigrationType, RequestMigrationPolicy
 

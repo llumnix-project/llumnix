@@ -1,7 +1,7 @@
 from typing import Dict, Set, List
 from dataclasses import fields
 
-from llumnix.llumlet.instance_info import InstanceStatus
+from llumnix.instance_info import InstanceStatus
 from llumnix.logging.logger import init_logger
 from llumnix import envs
 
@@ -44,7 +44,7 @@ METRIC_STATUSES_REQUIREMENTS: Dict[str, Set[str]] = {
         "num_loading_requests",
         "num_running_requests",
     },
-    "all_decodes_kv_blocks_num_with_all_prefills": {
+    "all_decodes_seq_len_with_all_prefills": {
         "hybrid_scheduler_waiting_to_decode_blocks_num",
         "scheduler_waiting_to_decode_blocks_num",
         "scheduler_running_to_decode_blocks_num",
@@ -66,9 +66,6 @@ def parse_used_metrics_from_env() -> List[str]:
 def generate_instance_status_mask(used_metrics: List[str]) -> Dict[str, bool]:
     logger.debug("Used metrics: {}".format(used_metrics))
     if len(used_metrics) == 1 and used_metrics[0] == "all":
-        logger.warning(
-            "LLUMNIX_USED_METRICS defaults to all. Since collecting the full set of instance status metrics adds slight overhead, "
-            "it is recommended to set LLUMNIX_USED_METRICS to only the metrics used by the gateway scheduler (separated by comma).")
         return {
             status_name: True
             for status_name in {f.name for f in fields(InstanceStatus)}

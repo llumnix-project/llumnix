@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import List
 
-from llumnix.llumlet.instance_info import InstanceStatus
+from llumnix.instance_info import InstanceStatus
 from llumnix.utils import MigrationParams, RequestIDType
 
 

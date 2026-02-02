@@ -15,7 +15,7 @@ from llumnix.outputs.queue.zmq_client import ZmqClient
 from llumnix.outputs.request_output import LlumnixRequestOutputs
 from llumnix.utils import start_asyncio_thread
 from llumnix.logging.logger import init_logger
-from llumnix.llumlet.instance_info import InstanceStatus
+from llumnix.instance_info import InstanceStatus
 
 logger = init_logger(__name__)
 

@@ -9,11 +9,11 @@ from llumnix.outputs.queue.base_queue_client import BaseQueueClient
 from llumnix.outputs.request_output import LlumnixRequestOutputsType
 from llumnix.utils import RequestIDType, UpdateInstanceStatusMode
 from llumnix.logging.logger import init_logger
-from llumnix.llumlet.proto import llumlet_server_pb2_grpc
-from llumnix.llumlet.converters import to_cms_status
-from llumnix.llumlet.instance_info import InstanceStatus
+from llumnix.server.proto import llumlet_server_pb2_grpc
+from llumnix.converters import to_cms_status
+from llumnix.instance_info import InstanceStatus
 from llumnix import envs
-from llumnix.llumlet.proto.llumlet_server_pb2 import AbortRequests
+from llumnix.server.proto.llumlet_server_pb2 import AbortRequests
 from llumnix.constants import GRPC_TIMEOUT
 
 logger = init_logger(__name__)
@@ -53,8 +53,7 @@ class BaseOutputForwarder(ABC):
         def output_done_callback(server_addr: str, req_outputs: LlumnixRequestOutputsType, fut):
             ret = fut.result()[0]
             if isinstance(ret, Exception):
-                logger.error("Server (queue_server_address: {}) is dead, "
-                             "exception: {}.".format(server_addr, ret), stack_info=True)
+                logger.exception("Server (queue_server_address: %s) is dead.", server_addr, exc_info=ret)
                 for req_output in req_outputs:
                     aborted_request_ids.append(req_output.request_id)
 

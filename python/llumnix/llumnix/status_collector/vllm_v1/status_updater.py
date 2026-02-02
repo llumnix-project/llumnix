@@ -6,11 +6,11 @@ from vllm.v1.core.sched.output import SchedulerOutput
 from vllm.v1.outputs import ModelRunnerOutput
 
 from llumnix import envs
-from llumnix.llumlet.instance_info import BackendType, ConnectorType, InstanceStatus
+from llumnix.instance_info import BackendType, ConnectorType, InstanceStatus
 from llumnix.logging.logger import init_logger
-from llumnix.migration_frontend.base_migration_frontend import BaseMigrationFrontend
-from llumnix.outputs.forwarder.thread_output_forwarder import ThreadOutputForwarder
-from llumnix.status_collector.metric_collector import InstanceStatusCollector, StepPhase
+from llumnix.migration_frontend.vllm_v1.base_migration_frontend import BaseMigrationFrontend
+from llumnix.outputs.forwarder.vllm_v1.thread_output_forwarder import ThreadOutputForwarder
+from llumnix.status_collector.vllm_v1.status_collector import InstanceStatusCollector, StepPhase
 from llumnix.utils import UpdateInstanceStatusMode
 
 
@@ -24,7 +24,9 @@ class StatusUpdater:
         "scheduler_waiting_to_decode_requests_num",
         "scheduler_waiting_to_decode_blocks_num",
         "num_uncomputed_blocks_all_waiting_prefills",
-        "num_waiting_requests"
+        "num_waiting_requests",
+        "num_loading_requests",
+        "num_blocks_loading_requests",
     }
 
     _RUNNING_STATUSES = {
@@ -32,8 +34,6 @@ class StatusUpdater:
         "num_unallocated_blocks_scheduler_running_prefills",
         "scheduler_running_to_decode_requests_num",
         "scheduler_running_to_decode_blocks_num",
-        "num_loading_requests",
-        "num_blocks_loading_requests",
         "num_running_requests",
     }
     def __init__(self, scheduler: "Scheduler",
@@ -42,7 +42,7 @@ class StatusUpdater:
                  mig_async: bool,
                  connector_type: ConnectorType,
                  migration_frontend: BaseMigrationFrontend=None,
-                 metric_forwarder: ThreadOutputForwarder=None):
+                 status_forwarder: ThreadOutputForwarder=None):
         self.engine_type: BackendType = BackendType.VLLM_V1
         self.update_freq = envs.LLUMNIX_INSTANCE_UPDATE_STEPS
         self.enable_migration = envs.LLUMNIX_ENABLE_MIGRATION
@@ -65,8 +65,8 @@ class StatusUpdater:
         self.migration_frontend = migration_frontend
         self.running_ref = None
         self.waiting_ref = None
-        self.metric_collector = InstanceStatusCollector(scheduler, vllm_config, connector_type)
-        self.metric_forwarder = metric_forwarder
+        self.update_collector = InstanceStatusCollector(scheduler, vllm_config, connector_type)
+        self.status_forwarder = status_forwarder
 
     def update_instance_status(
         self,
@@ -93,24 +93,24 @@ class StatusUpdater:
 
             if self.update_instance_status_mode == UpdateInstanceStatusMode.PUSH:
                 # pylint: disable=consider-using-with
-                self.metric_forwarder.forward_status_lock.acquire()
-            if step_phase == StepPhase.STEP_BEGIN:
+                self.status_forwarder.forward_status_lock.acquire()
+            if step_phase in [StepPhase.STEP_BEGIN, StepPhase.BYPASS_STEP_BEGIN]:
                 # NOTE(sunbiao.sun):
                 # Only update recent waitings status at the beginning of step,
                 # which can ensure all the newly added requests can be recorded
                 # rather than be finished in one step.
-                self._update_recent_waitings_status(instance_status)
+                self._update_recent_waitings_status(instance_status, step_phase)
             else:
+                self._update_instance_status(instance_status)
                 self._update_waiting_status(instance_status)
                 self._update_running_status(instance_status, step_phase, scheduler_output)
-                self._update_instance_status(instance_status)
                 # There is no need to push instance status in STEP_BEGIN step phase,
                 # because the instance status will be pushed in AFTER_SCHEDULE step phase,
                 # which is right after the STEP_BEGIN step phase.
                 if self.update_instance_status_mode == UpdateInstanceStatusMode.PUSH:
-                    self.metric_forwarder.forward_status(instance_status)
+                    self.status_forwarder.forward_status(instance_status)
             if self.update_instance_status_mode == UpdateInstanceStatusMode.PUSH:
-                self.metric_forwarder.forward_status_lock.release()
+                self.status_forwarder.forward_status_lock.release()
         # pylint: disable=broad-except
         except Exception:
             logger.exception("Failed to update instance status.")
@@ -146,13 +146,27 @@ class StatusUpdater:
         instance_status.num_scheduled_prefill_tokens = num_scheduled_prefill_tokens
 
 
-    def _update_recent_waitings_status(self, instance_status: InstanceStatus) -> None:
-        all_waitings = self.metric_collector.get_all_waiting_reqs()
+    def _update_recent_waitings_status(
+        self,
+        instance_status: InstanceStatus,
+        step_phase: StepPhase,
+    ) -> None:
+        # recent_waiting_requests statuses are used by instance status local account rather than metrics, so always collected.
+        # NOTE(sunbiao.sun):
+        # All the newly added requests will exist in waiting queue of scheduler or hybrid scheduler
+        # at the begin of the step.
+        all_waitings = self.update_collector.get_all_waiting_reqs()
         for req in all_waitings:
             if req not in self.recent_waitings_set:
                 self.recent_waitings_set.add(req)
             if time.time() - req.arrival_time > self.recent_waitings_staleness_seconds:
                 self.recent_waitings_set.remove(req)
+        # Newly added requests will not be stale in the first step no matter how long the step takes,
+        # because we only update recent waitings status at the beginning of step.
+        if step_phase == StepPhase.STEP_BEGIN:
+            for req in list(self.recent_waitings_set):
+                if time.time() - req.arrival_time > self.recent_waitings_staleness_seconds:
+                    self.recent_waitings_set.remove(req)
         instance_status.recent_waiting_requests = [req.request_id for req in self.recent_waitings_set]
 
     def _update_waiting_status(
@@ -160,7 +174,7 @@ class StatusUpdater:
         instance_status: InstanceStatus,
     ) -> None:
         # waiting_requests statuses are used by instance status local account rather than metrics, so always collected.
-        all_waitings = self.metric_collector.get_all_waiting_reqs()
+        all_waitings = self.update_collector.get_all_waiting_reqs()
 
         # waiting requests is not scheduled requests, so there is no need to correct computed tokens.
         if self.enable_migration and self.mig_async:
@@ -170,7 +184,7 @@ class StatusUpdater:
                 waiting_snapshot.append((self.migration_frontend.get_enginecore_request(req), 0))
             self.waiting_ref = waiting_snapshot
         instance_status.waiting_requests = [req.request_id for req in all_waitings]
-        self.metric_collector.get_waiting_status(self._WAITING_STATUSES, instance_status, all_waitings)
+        self.update_collector.get_waiting_status(self._WAITING_STATUSES, instance_status, all_waitings)
 
     def _update_running_status(
         self,
@@ -178,7 +192,7 @@ class StatusUpdater:
         step_phase: StepPhase,
         scheduler_output: SchedulerOutput = None,
     ) -> None:
-        self.metric_collector.get_running_status(self._RUNNING_STATUSES, instance_status, step_phase, scheduler_output)
+        self.update_collector.get_running_status(self._RUNNING_STATUSES, instance_status, step_phase, scheduler_output)
         if self.enable_migration and self.mig_async:
             running_snapshot: List[Tuple["EngineCoreRequest", int]] = []
             if self.scheduler.running:

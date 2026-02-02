@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 # pylint: disable-next=wrong-import-position
 from llumnix.logging.logger import init_logger
 # pylint: disable-next=wrong-import-position
-from llumnix.llumlet.llumlet import Llumlet
+from llumnix.llumlet import Llumlet
 # pylint: disable-next=wrong-import-position
 from llumnix.utils import MigrationType
 

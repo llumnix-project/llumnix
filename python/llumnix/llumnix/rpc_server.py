@@ -4,7 +4,7 @@ from typing import Any, Optional
 import grpc
 
 from llumnix.constants import RPC_TIMEOUT
-from llumnix.llumlet.proto import llumlet_server_pb2, llumlet_server_pb2_grpc
+from llumnix.server.proto import llumlet_server_pb2, llumlet_server_pb2_grpc
 from llumnix.logging.logger import init_logger
 from llumnix.utils import MigrationParams, MigrationType, NotEnoughSlotsError
 from llumnix.cms.proto.cms_pb2 import InstanceStatus as CMSInstanceStatus
