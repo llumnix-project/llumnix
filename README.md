@@ -21,22 +21,16 @@ make lib-tokenizers-build
 make blade-kvt-install
 ```
 
-Run `make gateway-build` to build the gateway binary and `make scheduler-build` to build the scheduler binary. And `make e2e-tests` is used to run all tests. Please refer to [tests/local/utils.py](tests/local/utils.py) for the details of launching commands.
+Run `make gateway-build` to build the gateway binary and `make scheduler-build` to build the scheduler binary. And `make e2e-test` is used to run all tests. Please refer to [tests/local/utils.py](tests/local/utils.py) for the details of launching commands. `make unit-test` is used to run all go unit tests.
 
 # How to deploy
 
 ```bash
 cd deploy
 
-# deploy
+# deploy, $DEPLOY_MODE is the mode to deploy, can be "pb" or "normal"
 bash group_deploy.sh $NAMESPACE $DEPLOY_MODE
 
 # delete (if hang, please CTRL+C and re-run the delete command)
 bash group_delete.sh $NAMESPACE
 ```
-
-kubectl get pods -n $NAMESPACE
-
-kubectl logs 
-
-kubectl describe pods

@@ -504,6 +504,7 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 						Host: c.instanceMetadatas[instanceID].Ip,
 						Port: int(c.instanceMetadatas[instanceID].ApiServerPort),
 					},
+					AuxIp:   c.instanceMetadatas[instanceID].IpKvt,
 					AuxPort: int(c.instanceMetadatas[instanceID].KvtPort),
 					Role:    types.InferRole(instanceRole),
 					DPRank:  int(c.instanceMetadatas[instanceID].DpRank),

@@ -28,6 +28,11 @@ message InstanceMetadata {
 
   double utc_create = 16;
   double utc_update = 17;
+
+  string ip_kvt = 18;
+  int32 block_size = 19;
+
+  int32 max_num_batched_tokens = 20;
 }
 
 message InstanceStatus {

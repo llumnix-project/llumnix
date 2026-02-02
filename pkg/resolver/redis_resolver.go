@@ -136,6 +136,7 @@ func (r *redisResolver) refresh() {
 					Host: instance.EntrypointIp,
 					Port: int(instance.EntrypointPort),
 				},
+				AuxIp:   instance.KvTransferIp,
 				AuxPort: int(instance.KvTransferPort),
 				DPRank:  int(instance.DpRank),
 				DPSize:  int(instance.DpSize),

@@ -43,6 +43,8 @@ type LLMInstance struct {
 	Role InferRole `json:"role"`
 	// Endpoint is the network address where the worker can be reached
 	Endpoint Endpoint `json:"endpoint"`
+	// AuxIp is the auxiliary ip of the worker for PD disaggregation
+	AuxIp string `json:"aux_ip"`
 	// AuxPort is the auxiliary port of the worker for PD disaggregation
 	AuxPort int `json:"aux_port"`
 	// DpRank is the data parallel rank of this worker (0-based)

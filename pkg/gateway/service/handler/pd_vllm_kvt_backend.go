@@ -35,7 +35,7 @@ func NewPdSplitVllmKvtBackend(schMode types.ScheduleMode) (InferenceBackend, err
 
 func (b *PdSplitVllmKvtBackend) buildTransferParams(pInstance *types.LLMInstance) map[string]interface{} {
 	p := map[string]interface{}{
-		"remote_host": pInstance.Endpoint.Host,
+		"remote_host": pInstance.AuxIp,
 		"remote_port": pInstance.AuxPort,
 	}
 	if b.scheduleMode == types.ScheduleModePDStaged {
@@ -116,8 +116,7 @@ func (b *PdSplitVllmKvtBackend) buildDecodeRequestData(req *types.RequestContext
 	if cmplReq.KvTransferParams == nil {
 		cmplReq.KvTransferParams = make(map[string]interface{})
 	}
-	// TODO(wingo.zwt): may need to use kvtIP
-	cmplReq.KvTransferParams["remote_host"] = instance.Endpoint.Host
+	cmplReq.KvTransferParams["remote_host"] = instance.AuxIp
 	cmplReq.KvTransferParams["remote_port"] = instance.AuxPort
 	cmplReq.KvTransferParams["do_remote_prefill"] = true
 	return json.Marshal(cmplReq)
