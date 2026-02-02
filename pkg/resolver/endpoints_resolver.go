@@ -95,6 +95,9 @@ func (er *EndpointsResolver) GetLLMInstances() (types.LLMInstanceSlice, error) {
 		instances = append(instances, types.LLMInstance{
 			Endpoint: ep,
 			Role:     types.InferRole(er.role),
+			// endpoints discovery for backend is just used for testing, hack it here!
+			AuxIp:   ep.Host,
+			AuxPort: 20000 + ep.Port,
 		})
 	}
 	return instances, nil
