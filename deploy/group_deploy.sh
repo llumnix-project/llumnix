@@ -39,8 +39,8 @@ fi
 
 # Check environment variables
 DOCKER_SERVER="${ALIYUN_DOCKER_SERVER:-beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com}"
-DOCKER_USERNAME="${ALIYUN_DOCKER_USERNAME:-cuikuilong.ckl@1748815774914563}"
-DOCKER_PASSWORD="${ALIYUN_DOCKER_PASSWORD:-Ckl110971}"
+DOCKER_USERNAME="${ALIYUN_DOCKER_USERNAME}"
+DOCKER_PASSWORD="${ALIYUN_DOCKER_PASSWORD}"
 
 if [ -z "$DOCKER_USERNAME" ] || [ -z "$DOCKER_PASSWORD" ]; then
     echo "Error: Missing required environment variables" >&2
@@ -65,15 +65,6 @@ kubectl create secret docker-registry aliyun-registry-secret \
     --docker-username="$DOCKER_USERNAME" \
     --docker-password="$DOCKER_PASSWORD" \
     -n "$GROUP_NAME"
-
-# Create PV and PVC
-echo "Creating OSS resources"
-sed "s/GROUP_NAME_PLACEHOLDER/$GROUP_NAME/g" base/oss-pv.yaml | kubectl apply -f -
-sed "s/GROUP_NAME_PLACEHOLDER/$GROUP_NAME/g" base/oss-pvc.yaml | kubectl apply -f -
-
-echo "Creating NAS resources"
-sed "s/GROUP_NAME_PLACEHOLDER/$GROUP_NAME/g" base/nas-pv.yaml | kubectl apply -f -
-sed "s/GROUP_NAME_PLACEHOLDER/$GROUP_NAME/g" base/nas-pvc.yaml | kubectl apply -f -
 
 # Deploy with kustomize
 echo "Deploying $DEPLOY_TYPE to namespace: $GROUP_NAME"

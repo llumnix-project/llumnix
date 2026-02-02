@@ -19,10 +19,6 @@ spec:
         imagePullSecrets:
           - name: aliyun-registry-secret
         terminationGracePeriodSeconds: 30
-        volumes:
-          - name: model-storage
-            persistentVolumeClaim:
-              claimName: nas-llumnix
         containers:
         - name: vllm
           image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260130-105854
@@ -61,7 +57,7 @@ spec:
                 PORT=$((8000 + i))
                 
                 CUDA_VISIBLE_DEVICES=$i vllm serve \
-                  /models/deepseek-moe-16b-base \
+                  deepseek-ai/deepseek-moe-16b-base \
                   --port $PORT \
                   --trust-remote-code \
                   --data-parallel-external-lb \
@@ -96,6 +92,10 @@ spec:
             value: "1"
           - name: LLUMNIX_ENABLE_MIGRATION
             value: "0"
+
+         # download models
+          - name: VLLM_USE_MODELSCOPE
+            value: "true"
 
          # VLLM_MOE_DP_CHUNK_SIZE is a tunable parameter.
          # Higher values increase the memory footprint of the hidden states in the MoE layers,
@@ -191,10 +191,6 @@ spec:
               ephemeral-storage: 256Gi
               memory: 256Gi
               nvidia.com/gpu: "4"
-          volumeMounts:
-            - name: model-storage
-              mountPath: /models
-              readOnly: true
         - name: discovery
           image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:discovery-20260130-111823
           command:

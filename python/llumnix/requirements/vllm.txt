@@ -2,3 +2,4 @@ mooncake-transfer-engine==0.3.7.post2
 psutil
 pytest
 pytest-asyncio
+modelscope
