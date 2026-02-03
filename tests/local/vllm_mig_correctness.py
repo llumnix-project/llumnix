@@ -9,7 +9,7 @@ import concurrent.futures
 import numpy as np
 import pytest
 
-from .utils import download_and_cache_file, send_request, LOG_DIR
+from utils import download_and_cache_file, send_request, LOG_DIR
 
 INVALID = -9999
 
@@ -129,7 +129,7 @@ def generate_gsm8k_dataset(num_questions: int):
 
     # Read data
     url = "https://raw.githubusercontent.com/openai/grade-school-math/master/grade_school_math/data/test.jsonl"
-    filename = download_and_cache_file(url, filename="./tests/data/gsm8k/test.jsonl")
+    filename = download_and_cache_file(url, filename="/data/gsm8k/test.jsonl")
     with open(filename) as fin:
         lines = [json.loads(line) for line in fin if not line.startswith("#")]
     # Get examples

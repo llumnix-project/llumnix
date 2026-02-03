@@ -1,12 +1,11 @@
 import copy
-import json
 import time
 import re
 import concurrent.futures
 
 import pytest
 
-from .utils import LOG_DIR, send_request
+from utils import LOG_DIR, send_request
 
 
 def generate_e2e_config():
