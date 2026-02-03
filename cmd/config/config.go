@@ -4,10 +4,10 @@ import (
 	"strings"
 	"time"
 
-	"llumnix/pkg/consts"
-
 	"github.com/spf13/pflag"
 	"k8s.io/klog/v2"
+
+	"llumnix/pkg/consts"
 )
 
 type DiscoveryConfig struct {
@@ -199,7 +199,6 @@ type FullModeScheduleConfig struct {
 	DispatchDecodeLoadThreshold         float32
 	DispatchPrefillCacheLocalityMetric  string
 	EnableInstanceStatusLocalAccount    bool
-	KvCacheBlockSize                    int32
 	RequestLocalAccountStalenessSeconds int32
 	AllowConcurrentSchedule             bool
 	EnablePredictorEnhancedScheduling   bool
@@ -277,7 +276,6 @@ func (c *FullModeScheduleConfig) AddFullModeScheduleConfigFlags(flags *pflag.Fla
 	flags.Float32Var(&c.DispatchDecodeLoadThreshold, "dispatch-decode-load-threshold", consts.DefaultDispatchDecodeLoadThreshold, "Llumnix dispatch decode load threshold")
 	flags.StringVar(&c.DispatchPrefillCacheLocalityMetric, "dispatch-prefill-cache-locality-metric", consts.DefaultDispatchPrefillCacheLocalityMetric, "Llumnix dispatch prefill cache locality metric")
 	flags.BoolVar(&c.EnableInstanceStatusLocalAccount, "enable-instance-status-local-account", consts.DefaultEnableInstanceStatusLocalAccount, "Llumnix enable instance status local account")
-	flags.Int32Var(&c.KvCacheBlockSize, "kv-cache-block-size", consts.DefaultKvCacheBlockSize, "Llumnix KV cache block size")
 	flags.Int32Var(&c.RequestLocalAccountStalenessSeconds, "request-local-account-staleness-seconds", consts.DefaultRequestLocalAccountStalenessSeconds, "Llumnix request local account staleness seconds")
 	flags.BoolVar(&c.AllowConcurrentSchedule, "allow-concurrent-schedule", consts.DefaultAllowConcurrentSchedule, "Llumnix allow concurrent schedule")
 	flags.BoolVar(&c.EnablePredictorEnhancedScheduling, "enable-predictor-enhanced-scheduling", consts.DefaultEnablePredictorEnhancedScheduling, "Llumnix enable predictor enhanced scheduling")

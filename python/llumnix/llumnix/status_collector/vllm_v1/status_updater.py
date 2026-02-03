@@ -19,21 +19,21 @@ logger = init_logger(__name__)
 class StatusUpdater:
     _WAITING_STATUSES = {
         "hybrid_scheduler_waiting_to_decode_requests_num",
-        "num_unallocated_blocks_hybrid_scheduler_waiting_decodes",
-        "hybrid_scheduler_waiting_to_decode_blocks_num",
+        "num_unallocated_tokens_hybrid_scheduler_waiting_decodes",
+        "hybrid_scheduler_waiting_to_decode_tokens_num",
         "scheduler_waiting_to_decode_requests_num",
-        "scheduler_waiting_to_decode_blocks_num",
-        "num_uncomputed_blocks_all_waiting_prefills",
+        "scheduler_waiting_to_decode_tokens_num",
+        "num_uncomputed_tokens_all_waiting_prefills",
         "num_waiting_requests",
         "num_loading_requests",
-        "num_blocks_loading_requests",
+        "num_tokens_loading_requests",
     }
 
     _RUNNING_STATUSES = {
-        "num_uncomputed_blocks_scheduler_running_prefills",
-        "num_unallocated_blocks_scheduler_running_prefills",
+        "num_uncomputed_tokens_scheduler_running_prefills",
+        "num_unallocated_tokens_scheduler_running_prefills",
         "scheduler_running_to_decode_requests_num",
-        "scheduler_running_to_decode_blocks_num",
+        "scheduler_running_to_decode_tokens_num",
         "num_running_requests",
     }
     def __init__(self, scheduler: "Scheduler",
@@ -211,8 +211,9 @@ class StatusUpdater:
         # basic instance statuses, always collected
         instance_status.step_id = self.step_id
         instance_status.update_id = self.update_id
-        instance_status.num_used_gpu_blocks = \
-            instance_status.num_total_gpu_blocks - self.scheduler.kv_cache_manager.block_pool.get_num_free_blocks()
+        instance_status.num_used_gpu_tokens = \
+            instance_status.num_total_gpu_tokens - \
+            self.scheduler.kv_cache_manager.block_pool.get_num_free_blocks() * self.scheduler.cache_config.block_size
         # Update migration status
         if self.enable_migration:
             self.migration_frontend.update_migration_status(instance_status)

@@ -1,19 +1,20 @@
 package cms
 
 import (
-	"llumnix/pkg/consts"
 	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
+
+	"llumnix/pkg/consts"
 )
 
 type RequestLocalAccount struct {
 	ScheduleTimestampMs int64
 	InferMode           string
-	NumBlocks           int32
-	NumUncomputedBlocks int32
+	NumTokens           int32
+	NumUncomputedTokens int32
 	FoundInCMS          bool
 }
 
@@ -22,8 +23,8 @@ type InstanceStatusLocalAccount struct {
 	NumInflightDispatchPrefillRequests                 int32
 	NumInflightDispatchDecodeRequests                  int32
 	NumInflightDispatchRequests                        int32
-	NumUncomputedBlocksInflightDispatchPrefillRequests int32
-	NumBlocksInflightDispatchDecodeRequests            int32
+	NumUncomputedTokensInflightDispatchPrefillRequests int32
+	NumTokensInflightDispatchDecodeRequests            int32
 }
 
 type InstanceStatusLocalAccountEditor struct {
@@ -63,7 +64,7 @@ func (e *InstanceStatusLocalAccountEditor) updateInstanceStatusLocalAccount(
 			// Delete request local account when the request has found in cms
 			// (means that request has been added to engine)
 			// and not exists in waiting requests
-			// (request local account is required to update num blocks of waiting requests).
+			// (request local account is required to update num tokens of waiting requests).
 			delete(instanceView.InstanceStatusLocalAccount.RequestLocalAccount, reqID)
 		}
 		if !requestLocalAccount.FoundInCMS && !waitingReqs.Has(reqID) &&
@@ -76,32 +77,32 @@ func (e *InstanceStatusLocalAccountEditor) updateInstanceStatusLocalAccount(
 			e.deleteRequestLocalAccount(instanceView, instanceID, reqID, true)
 		}
 	}
-	// Update num blocks of unallocated waiting prefill requests in instance status using instance status local account.
+	// Update num tokens of unallocated waiting prefill requests in instance status using instance status local account.
 	// Because the instance status local account is cache-aware,
-	// while num blocks of unallocated waiting prefill requests in instance status is not.
+	// while num tokens of unallocated waiting prefill requests in instance status is not.
 	waitingReqList := trimRequestIDsToList(instanceView.Status.WaitingRequests)
 	if e.enableCacheAwareScheduling {
 		// NOTE(sunbiao.sun): If a request is not found in instance status local account, it should be preempted or migrated-in,
-		// and we suppose that the number of uncomputed blocks of preempted or migrated-in request is 0,
-		// so we do not increase num blocks when request id is not found in instance status local account.
+		// and we suppose that the number of uncomputed tokens of preempted or migrated-in request is 0,
+		// so we do not increase num tokens when request id is not found in instance status local account.
 		if len(waitingReqList) > 0 {
 			klog.V(4).Infof(
-				"[updateInstanceStatusLocalAccount] NumUncomputedBlocksAllWaitingPrefills: %v",
-				instanceView.Status.NumUncomputedBlocksAllWaitingPrefills)
-			numUncomputedBlocksAllWaitingPrefills := int32(0)
+				"[updateInstanceStatusLocalAccount] NumUncomputedTokensAllWaitingPrefills: %v",
+				instanceView.Status.NumUncomputedTokensAllWaitingPrefills)
+			numUncomputedTokensAllWaitingPrefills := int32(0)
 			for _, reqID := range waitingReqList {
 				requestLocalAccount :=
 					instanceView.InstanceStatusLocalAccount.RequestLocalAccount
 				if _, exists := requestLocalAccount[reqID]; exists {
-					numUncomputedBlocksAllWaitingPrefills += requestLocalAccount[reqID].NumUncomputedBlocks
+					numUncomputedTokensAllWaitingPrefills += requestLocalAccount[reqID].NumUncomputedTokens
 				}
 			}
 			klog.V(4).Infof(
-				"[updateInstanceStatusLocalAccount] [%v] original num uncomputed blocks all waiting prefills: %v, "+
-					"updated num uncomputed blocks all waiting prefills: %v",
-				instanceID, instanceView.Status.NumUncomputedBlocksAllWaitingPrefills,
-				numUncomputedBlocksAllWaitingPrefills)
-			instanceView.Status.NumUncomputedBlocksAllWaitingPrefills = numUncomputedBlocksAllWaitingPrefills
+				"[updateInstanceStatusLocalAccount] [%v] original num uncomputed tokens all waiting prefills: %v, "+
+					"updated num uncomputed tokens all waiting prefills: %v",
+				instanceID, instanceView.Status.NumUncomputedTokensAllWaitingPrefills,
+				numUncomputedTokensAllWaitingPrefills)
+			instanceView.Status.NumUncomputedTokensAllWaitingPrefills = numUncomputedTokensAllWaitingPrefills
 		}
 	}
 }
@@ -120,15 +121,15 @@ func (e *InstanceStatusLocalAccountEditor) deleteRequestLocalAccount(
 	if requestLocalAccount.InferMode == consts.PrefillInferMode ||
 		requestLocalAccount.InferMode == consts.NormalInferMode {
 		instanceView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests -= 1
-		instanceView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests -=
-			requestLocalAccount.NumUncomputedBlocks
+		instanceView.InstanceStatusLocalAccount.NumUncomputedTokensInflightDispatchPrefillRequests -=
+			requestLocalAccount.NumUncomputedTokens
 	}
 
 	if requestLocalAccount.InferMode == consts.DecodeInferMode ||
 		requestLocalAccount.InferMode == consts.NormalInferMode {
 		instanceView.InstanceStatusLocalAccount.NumInflightDispatchDecodeRequests -= 1
-		instanceView.InstanceStatusLocalAccount.NumBlocksInflightDispatchDecodeRequests -=
-			requestLocalAccount.NumBlocks
+		instanceView.InstanceStatusLocalAccount.NumTokensInflightDispatchDecodeRequests -=
+			requestLocalAccount.NumTokens
 	}
 
 	instanceView.InstanceStatusLocalAccount.NumInflightDispatchRequests -= 1
@@ -141,13 +142,13 @@ func (e *InstanceStatusLocalAccountEditor) deleteRequestLocalAccount(
 func (e *InstanceStatusLocalAccountEditor) addRequestLocalAccount(
 	instanceView *InstanceView,
 	inferMode string,
-	numBlocks int32,
-	prefixHitNumBlocks int32,
+	numTokens int32,
+	prefixHitNumTokens int32,
 	requestId string,
 	firstAdd bool) {
-	numUncomputedBlocks := numBlocks
+	numUncomputedTokens := numTokens
 	if e.enableCacheAwareScheduling {
-		numUncomputedBlocks -= prefixHitNumBlocks
+		numUncomputedTokens -= prefixHitNumTokens
 	}
 
 	if firstAdd {
@@ -157,20 +158,20 @@ func (e *InstanceStatusLocalAccountEditor) addRequestLocalAccount(
 			&RequestLocalAccount{
 				ScheduleTimestampMs: time.Now().UnixMilli(),
 				InferMode:           inferMode,
-				NumBlocks:           numBlocks,
-				NumUncomputedBlocks: numUncomputedBlocks,
+				NumTokens:           numTokens,
+				NumUncomputedTokens: numUncomputedTokens,
 				FoundInCMS:          false,
 			}
 	}
 
 	if inferMode == consts.PrefillInferMode || inferMode == consts.NormalInferMode {
 		instanceView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests += 1
-		instanceView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests += numUncomputedBlocks
+		instanceView.InstanceStatusLocalAccount.NumUncomputedTokensInflightDispatchPrefillRequests += numUncomputedTokens
 	}
 
 	if inferMode == consts.DecodeInferMode || inferMode == consts.NormalInferMode {
 		instanceView.InstanceStatusLocalAccount.NumInflightDispatchDecodeRequests += 1
-		instanceView.InstanceStatusLocalAccount.NumBlocksInflightDispatchDecodeRequests += numBlocks
+		instanceView.InstanceStatusLocalAccount.NumTokensInflightDispatchDecodeRequests += numTokens
 	}
 
 	if !firstAdd {
@@ -181,13 +182,13 @@ func (e *InstanceStatusLocalAccountEditor) addRequestLocalAccount(
 }
 
 func (e *InstanceStatusLocalAccountEditor) revertRequestPrefillLocalAccount(
-	instanceView *InstanceView, numBlocks int32, prefixHitNumBlocks int32, requestId string) {
+	instanceView *InstanceView, numTokens int32, prefixHitNumTokens int32, requestId string) {
 	if e.enableCacheAwareScheduling {
-		numBlocks -= prefixHitNumBlocks
+		numTokens -= prefixHitNumTokens
 	}
 
 	instanceView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests -= 1
-	instanceView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests -= numBlocks
+	instanceView.InstanceStatusLocalAccount.NumUncomputedTokensInflightDispatchPrefillRequests -= numTokens
 	delete(instanceView.InstanceStatusLocalAccount.RequestLocalAccount, requestId)
 }
 

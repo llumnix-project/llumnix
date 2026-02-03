@@ -2,10 +2,11 @@ package schedule_policy
 
 import (
 	"fmt"
-	"llumnix/cmd/scheduler/app/options"
-	"llumnix/pkg/consts"
 
 	"k8s.io/klog/v2"
+
+	"llumnix/cmd/scheduler/app/options"
+	"llumnix/pkg/consts"
 )
 
 func newReschedulePolicyInternal(p *options.SchedulerConfig, policy string) reschedulePolicyInternal {
@@ -35,7 +36,6 @@ type decodeLoadBalanceReschedule struct {
 	baseReschedulePolicy
 	migrationReqSelectPolicy migrationReqSelectPolicy
 	metric                   string
-	kvCacheBlockSize         int32
 	loadBalanceThreshold     float32
 }
 
@@ -149,7 +149,6 @@ func newLoadBalanceReschedule(p *options.SchedulerConfig, inferMode string) *dec
 			order: p.RescheduleReqSelectOrder,
 			value: p.RescheduleReqSelectValue,
 		},
-		kvCacheBlockSize: p.KvCacheBlockSize,
 	}
 
 	// If reschedule load balance scope is unit, instance load inside the same unit should be balanced under any load,

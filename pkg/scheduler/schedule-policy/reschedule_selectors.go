@@ -22,12 +22,12 @@ func (as *aggregateSelector) selectPairs(
 	srcCandidates, dstCandidates map[string]*instanceViewScheduling) (pairs []*reschedulePair) {
 
 	usedInstanceIds := sets.NewString()
-	srcCandidateIds := mapKeys(srcCandidates)
+	srcCandidateIds := getKeySliceFromMap(srcCandidates)
 	sort.SliceStable(srcCandidateIds, func(i, j int) bool {
 		return srcCandidates[srcCandidateIds[i]].metrics[as.srcMetric].Less(
 			srcCandidates[srcCandidateIds[j]].metrics[as.srcMetric])
 	})
-	dstCandidateIds := mapKeys(dstCandidates)
+	dstCandidateIds := getKeySliceFromMap(dstCandidates)
 	sort.SliceStable(dstCandidateIds, func(i, j int) bool {
 		return !dstCandidates[dstCandidateIds[i]].metrics[as.dstMetric].Less(
 			dstCandidates[dstCandidateIds[j]].metrics[as.dstMetric])

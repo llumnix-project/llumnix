@@ -158,7 +158,7 @@ index d0912863e6..7ac6890613 100755
 +    LLUMNIX_DETAILED_MIG_STATUS: bool = False
 +    LLUMNIX_MAX_REQ_MIG_IN: int = 1
 +    LLUMNIX_MAX_TOKEN_MIG_IN: int = 10000
-+    LLUMNIX_MAX_BLOCK_RATIO_MIG_IN: float = 0.3
++    LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_IN: float = 0.3
 +    LLUMNIX_ENABLE_MIGRATION: bool = False
 +    VLLM_ENABLE_BYPASS_TASK: bool = True
 +    VLLM_KV_TRANS_PROTOCOL: str = "rdma"
@@ -184,10 +184,10 @@ index d0912863e6..7ac6890613 100755
 +    # only works when LLUMNIX_DETAILED_MIG_STATUS=True
 +    "LLUMNIX_MAX_TOKEN_MIG_IN":
 +    lambda: int(os.getenv("LLUMNIX_MAX_TOKEN_MIG_IN", "10000")),
-+    # Set to limit the max block ratio of requests being migrated simultaneously
++    # Set to limit the max kv cache usage ratio of requests being migrated simultaneously
 +    # only works when LLUMNIX_DETAILED_MIG_STATUS=True
-+    "LLUMNIX_MAX_BLOCK_RATIO_MIG_IN":
-+    lambda: float(os.getenv("LLUMNIX_MAX_BLOCK_RATIO_MIG_IN", "0.3")),
++    "LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_IN":
++    lambda: float(os.getenv("LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_IN", "0.3")),
 +    "LLUMNIX_ENABLE_MIGRATION":lambda: bool(int(os.getenv("LLUMNIX_ENABLE_MIGRATION", "0"))),
 +    "VLLM_KV_TRANS_PROTOCOL": lambda: os.getenv("VLLM_KV_TRANS_PROTOCOL", "rdma"),
 +    "VLLM_ENABLE_BYPASS_TASK": lambda: (

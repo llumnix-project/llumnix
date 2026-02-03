@@ -2,9 +2,6 @@ package schedule_policy
 
 import (
 	"fmt"
-	"llumnix/cmd/config"
-	"llumnix/pkg/cms"
-	"llumnix/pkg/scheduler/kvs"
 	"log"
 	"strings"
 	"testing"
@@ -13,7 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"llumnix/cmd/config"
+	"llumnix/pkg/cms"
 	"llumnix/cmd/scheduler/app/options"
+	"llumnix/pkg/scheduler/kvs"
 	"llumnix/pkg/consts"
 	"llumnix/pkg/types"
 )
@@ -148,15 +148,15 @@ func newConfig() *options.SchedulerConfig {
 			CmsPullStatusIntervalMs:              500,
 			CmsPullMetadataIntervalMs:            1000,
 			DispatchTopK:                         1,
-			DispatchNeutralLoadMetric:            consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			DispatchNeutralLoadMetric:            consts.SchedulingMetricKVCacheUsageRatioProjected,
 			DispatchNeutralLoadThreshold:         1.0,
-			DispatchPrefillLoadMetric:            consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			DispatchPrefillLoadMetric:            consts.SchedulingMetricKVCacheUsageRatioProjected,
 			DispatchPrefillLoadThreshold:         1.0,
-			DispatchDecodeLoadMetric:             consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			DispatchDecodeLoadMetric:             consts.SchedulingMetricKVCacheUsageRatioProjected,
 			DispatchDecodeLoadThreshold:          1.0,
-			DispatchPrefillAsDecodeLoadMetric:    consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			DispatchPrefillAsDecodeLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
 			DispatchPrefillAsDecodeLoadThreshold: 1.0,
-			DispatchDecodeAsPrefillLoadMetric:    consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			DispatchDecodeAsPrefillLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
 			DispatchDecodeAsPrefillLoadThreshold: 1.0,
 			FailoverScope:                        consts.FailoverScopeNodeUnit,
 			InstanceStalenessSeconds:             60,
@@ -171,7 +171,7 @@ func newDispatchPolicy(t *testing.T, config *options.SchedulerConfig, inferMode 
 		getRedisClient(t), config.CmsPullStatusIntervalMs, config.CmsPullMetadataIntervalMs,
 		false, config.EnableInstanceStatusLocalAccount, config.EnableCacheAwareScheduling,
 		config.RequestLocalAccountStalenessSeconds, -1, false,
-		config.KvCacheBlockSize, config.NumPredictorWarmupSamples)
+		config.NumPredictorWarmupSamples)
 
 	var kvsClient kvs.KVSClientInterface
 	if config.EnableCacheAwareScheduling {
@@ -247,9 +247,9 @@ func TestDispatchPolicyScheduleNeutral(t *testing.T) {
 					Role:     consts.NormalInferMode,
 				},
 				Status: &cms.InstanceStatus{
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      50,
-					NumUncomputedBlocksAllWaitingPrefills: 10,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      50,
+					NumUncomputedTokensAllWaitingPrefills: 10,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -295,9 +295,9 @@ func TestDispatchPolicySchedulePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      30,
-					NumUncomputedBlocksAllWaitingPrefills: 10,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      30,
+					NumUncomputedTokensAllWaitingPrefills: 10,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -318,9 +318,9 @@ func TestDispatchPolicySchedulePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      40,
-					NumUncomputedBlocksAllWaitingPrefills: 20,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      40,
+					NumUncomputedTokensAllWaitingPrefills: 20,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -374,9 +374,9 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      30,
-					NumUncomputedBlocksAllWaitingPrefills: 10,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      30,
+					NumUncomputedTokensAllWaitingPrefills: 10,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -415,9 +415,9 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      40,
-					NumUncomputedBlocksAllWaitingPrefills: 20,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      40,
+					NumUncomputedTokensAllWaitingPrefills: 20,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -463,9 +463,9 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      30,
-					NumUncomputedBlocksAllWaitingPrefills: 100,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      30,
+					NumUncomputedTokensAllWaitingPrefills: 100,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -486,9 +486,9 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      40,
-					NumUncomputedBlocksAllWaitingPrefills: 20,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      40,
+					NumUncomputedTokensAllWaitingPrefills: 20,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -539,9 +539,9 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      30,
-					NumUncomputedBlocksAllWaitingPrefills: 100,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      30,
+					NumUncomputedTokensAllWaitingPrefills: 100,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -562,9 +562,9 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      40,
-					NumUncomputedBlocksAllWaitingPrefills: 100,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      40,
+					NumUncomputedTokensAllWaitingPrefills: 100,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -614,9 +614,9 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      30,
-					NumUncomputedBlocksAllWaitingPrefills: 10,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      30,
+					NumUncomputedTokensAllWaitingPrefills: 10,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -637,9 +637,9 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      40,
-					NumUncomputedBlocksAllWaitingPrefills: 100,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      40,
+					NumUncomputedTokensAllWaitingPrefills: 100,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -683,7 +683,6 @@ func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
 func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 	c := newConfig()
 	c.EnableCacheAwareScheduling = true
-	c.KvCacheBlockSize = 1
 	policy := newDispatchPolicy(t, c, "prefill")
 
 	// Test prefill/decode mode scheduling
@@ -696,8 +695,8 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-1",
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  10,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  10,
 					Schedulable:       true,
 					TimestampMs:       time.Now().UnixMilli(),
 				},
@@ -718,8 +717,8 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-2",
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  30,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  30,
 					Schedulable:       true,
 					TimestampMs:       time.Now().UnixMilli(),
 				},
@@ -740,8 +739,8 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-3",
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  20,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  20,
 					Schedulable:       true,
 					TimestampMs:       time.Now().UnixMilli(),
 				},
@@ -762,9 +761,9 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      40,
-					NumUncomputedBlocksAllWaitingPrefills: 20,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      40,
+					NumUncomputedTokensAllWaitingPrefills: 20,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -812,7 +811,6 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 	c := newConfig()
 	c.EnableCacheAwareScheduling = true
-	c.KvCacheBlockSize = 1
 	c.DispatchTopK = 2
 	policy := newDispatchPolicy(t, c, "prefill")
 
@@ -826,8 +824,8 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-1",
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  10,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  10,
 					Schedulable:       true,
 					TimestampMs:       time.Now().UnixMilli(),
 				},
@@ -848,8 +846,8 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-2",
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  30,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  30,
 					Schedulable:       true,
 					TimestampMs:       time.Now().UnixMilli(),
 				},
@@ -870,8 +868,8 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-3",
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  20,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  20,
 					Schedulable:       true,
 					TimestampMs:       time.Now().UnixMilli(),
 				},
@@ -892,8 +890,8 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-4",
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  20,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  20,
 					Schedulable:       true,
 					TimestampMs:       time.Now().UnixMilli(),
 				},
@@ -914,9 +912,9 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      40,
-					NumUncomputedBlocksAllWaitingPrefills: 20,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      40,
+					NumUncomputedTokensAllWaitingPrefills: 20,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -980,7 +978,6 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 	c := newConfig()
 	c.EnableCacheAwareScheduling = true
-	c.KvCacheBlockSize = 1
 	policy := newDispatchPolicy(t, c, "neutral")
 
 	// Test neutral mode scheduling
@@ -993,8 +990,8 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-neutral-1",
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  10,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  10,
 					Schedulable:       true,
 					TimestampMs:       time.Now().UnixMilli(),
 				},
@@ -1015,8 +1012,8 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-neutral-2",
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  30,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  30,
 					Schedulable:       true,
 					TimestampMs:       time.Now().UnixMilli(),
 				},
@@ -1037,8 +1034,8 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-neutral-3",
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  20,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  20,
 					Schedulable:       true,
 					TimestampMs:       time.Now().UnixMilli(),
 				},
@@ -1087,9 +1084,9 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral1",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      30,
-					NumUncomputedBlocksAllWaitingPrefills: 10,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      30,
+					NumUncomputedTokensAllWaitingPrefills: 10,
 					Schedulable:                           false,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -1111,9 +1108,9 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral2",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      30,
-					NumUncomputedBlocksAllWaitingPrefills: 10,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      30,
+					NumUncomputedTokensAllWaitingPrefills: 10,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -1135,9 +1132,9 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral3",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      30,
-					NumUncomputedBlocksAllWaitingPrefills: 10,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      30,
+					NumUncomputedTokensAllWaitingPrefills: 10,
 					Schedulable:                           true,
 					TimestampMs:                           0, // stale
 				},
@@ -1159,9 +1156,9 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral4",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      30,
-					NumUncomputedBlocksAllWaitingPrefills: 10,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      30,
+					NumUncomputedTokensAllWaitingPrefills: 10,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -1183,9 +1180,9 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral5",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      30,
-					NumUncomputedBlocksAllWaitingPrefills: 10,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      30,
+					NumUncomputedTokensAllWaitingPrefills: 10,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -1238,9 +1235,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill1",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      30,
-					NumUncomputedBlocksAllWaitingPrefills: 10,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      30,
+					NumUncomputedTokensAllWaitingPrefills: 10,
 					Schedulable:                           false,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -1262,9 +1259,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill2",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      30,
-					NumUncomputedBlocksAllWaitingPrefills: 10,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      30,
+					NumUncomputedTokensAllWaitingPrefills: 10,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -1286,9 +1283,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill3",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      30,
-					NumUncomputedBlocksAllWaitingPrefills: 10,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      30,
+					NumUncomputedTokensAllWaitingPrefills: 10,
 					Schedulable:                           true,
 					TimestampMs:                           0, // stale
 				},
@@ -1310,9 +1307,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill4",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      30,
-					NumUncomputedBlocksAllWaitingPrefills: 10,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      30,
+					NumUncomputedTokensAllWaitingPrefills: 10,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -1334,9 +1331,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill5",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      30,
-					NumUncomputedBlocksAllWaitingPrefills: 10,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      30,
+					NumUncomputedTokensAllWaitingPrefills: 10,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -1358,9 +1355,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode1",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      40,
-					NumUncomputedBlocksAllWaitingPrefills: 20,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      40,
+					NumUncomputedTokensAllWaitingPrefills: 20,
 					Schedulable:                           false,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -1382,9 +1379,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode2",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      40,
-					NumUncomputedBlocksAllWaitingPrefills: 20,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      40,
+					NumUncomputedTokensAllWaitingPrefills: 20,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -1406,9 +1403,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode3",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      40,
-					NumUncomputedBlocksAllWaitingPrefills: 20,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      40,
+					NumUncomputedTokensAllWaitingPrefills: 20,
 					Schedulable:                           true,
 					TimestampMs:                           0, // stale
 				},
@@ -1430,9 +1427,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode4",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      40,
-					NumUncomputedBlocksAllWaitingPrefills: 20,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      40,
+					NumUncomputedTokensAllWaitingPrefills: 20,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -1454,9 +1451,9 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode5",
-					NumTotalGpuBlocks:                     100,
-					NumUsedGpuBlocks:                      40,
-					NumUncomputedBlocksAllWaitingPrefills: 20,
+					NumTotalGpuTokens:                     100,
+					NumUsedGpuTokens:                      40,
+					NumUncomputedTokensAllWaitingPrefills: 20,
 					Schedulable:                           true,
 					TimestampMs:                           time.Now().UnixMilli(),
 				},
@@ -1516,7 +1513,6 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 	c := newConfig()
 	c.EnableInstanceStatusLocalAccount = true
-	c.KvCacheBlockSize = 1
 	policy := newDispatchPolicy(t, c, "neutral")
 
 	// Test neutral mode scheduling
@@ -1529,8 +1525,8 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-neutral-1",
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  15,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  15,
 					Schedulable:       true,
 					TimestampMs:       time.Now().UnixMilli(),
 				},
@@ -1542,7 +1538,7 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 					RequestLocalAccount:                                map[string]*cms.RequestLocalAccount{},
 					NumInflightDispatchRequests:                        0,
 					NumInflightDispatchPrefillRequests:                 0,
-					NumUncomputedBlocksInflightDispatchPrefillRequests: 0,
+					NumUncomputedTokensInflightDispatchPrefillRequests: 0,
 				},
 			},
 			schedulingCtx: schedulingCtx{
@@ -1557,8 +1553,8 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-neutral-2",
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  30,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  30,
 					Schedulable:       true,
 					TimestampMs:       time.Now().UnixMilli(),
 				},
@@ -1570,7 +1566,7 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 					RequestLocalAccount:                                map[string]*cms.RequestLocalAccount{},
 					NumInflightDispatchRequests:                        0,
 					NumInflightDispatchPrefillRequests:                 0,
-					NumUncomputedBlocksInflightDispatchPrefillRequests: 0,
+					NumUncomputedTokensInflightDispatchPrefillRequests: 0,
 				},
 			},
 			schedulingCtx: schedulingCtx{
@@ -1595,9 +1591,9 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 
 	result1 := policy.schedule(req, clusterViewScheduling)
 	assert.Equal(t, int32(1), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
-	assert.Equal(t, int32(10), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests)
+	assert.Equal(t, int32(10), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumUncomputedTokensInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(0), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
-	assert.Equal(t, int32(0), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests)
+	assert.Equal(t, int32(0), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumUncomputedTokensInflightDispatchPrefillRequests)
 	assert.Equal(t, 8001, result1[0][0].GetInstance().Endpoint.Port)
 
 	// Clear metrics for next schedule
@@ -1606,9 +1602,9 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 
 	result2 := policy.schedule(req, clusterViewScheduling)
 	assert.Equal(t, int32(2), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
-	assert.Equal(t, int32(20), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests)
+	assert.Equal(t, int32(20), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumUncomputedTokensInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(0), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
-	assert.Equal(t, int32(0), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests)
+	assert.Equal(t, int32(0), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumUncomputedTokensInflightDispatchPrefillRequests)
 	assert.Equal(t, 8001, result2[0][0].GetInstance().Endpoint.Port)
 
 	// Clear metrics for next schedule
@@ -1617,8 +1613,8 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 
 	result3 := policy.schedule(req, clusterViewScheduling)
 	assert.Equal(t, int32(2), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
-	assert.Equal(t, int32(20), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests)
+	assert.Equal(t, int32(20), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumUncomputedTokensInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(1), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
-	assert.Equal(t, int32(10), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumUncomputedBlocksInflightDispatchPrefillRequests)
+	assert.Equal(t, int32(10), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumUncomputedTokensInflightDispatchPrefillRequests)
 	assert.Equal(t, 8002, result3[0][0].GetInstance().Endpoint.Port)
 }

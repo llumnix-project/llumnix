@@ -26,9 +26,9 @@ func genInstanceViewInternals() map[string]*instanceViewScheduling {
 			},
 			schedulingCtx: schedulingCtx{
 				metrics: map[string]instanceSchedulingMetric{
-					consts.SchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
+					consts.SchedulingMetricKVCacheUsageRatioProjected: &kvCacheUsageRatioProjected{
 						baseMetric{
-							name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+							name:  consts.SchedulingMetricKVCacheUsageRatioProjected,
 							value: 0.3,
 						},
 					},
@@ -50,9 +50,9 @@ func genInstanceViewInternals() map[string]*instanceViewScheduling {
 			},
 			schedulingCtx: schedulingCtx{
 				metrics: map[string]instanceSchedulingMetric{
-					consts.SchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
+					consts.SchedulingMetricKVCacheUsageRatioProjected: &kvCacheUsageRatioProjected{
 						baseMetric{
-							name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+							name:  consts.SchedulingMetricKVCacheUsageRatioProjected,
 							value: 0.5,
 						},
 					},
@@ -74,9 +74,9 @@ func genInstanceViewInternals() map[string]*instanceViewScheduling {
 			},
 			schedulingCtx: schedulingCtx{
 				metrics: map[string]instanceSchedulingMetric{
-					consts.SchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
+					consts.SchedulingMetricKVCacheUsageRatioProjected: &kvCacheUsageRatioProjected{
 						baseMetric{
-							name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+							name:  consts.SchedulingMetricKVCacheUsageRatioProjected,
 							value: 0.8,
 						},
 					},
@@ -97,7 +97,7 @@ func TestMetricBasedSelectorSelectMax(t *testing.T) {
 	// Test selector with selectMax = true (select highest value)
 	selectorMax := &metricBasedSelector{
 		topK:        1,
-		metricNames: []string{consts.SchedulingMetricKVBlocksRatioWithAllPrefills},
+		metricNames: []string{consts.SchedulingMetricKVCacheUsageRatioProjected},
 	}
 
 	selected := selectorMax.best(instances)
@@ -111,7 +111,7 @@ func TestMetricBasedSelectorRandomChoiceFromTopK(t *testing.T) {
 	// Test selector with selectMax = true (select highest value)
 	selector := &metricBasedSelector{
 		topK:        2,
-		metricNames: []string{consts.SchedulingMetricKVBlocksRatioWithAllPrefills},
+		metricNames: []string{consts.SchedulingMetricKVCacheUsageRatioProjected},
 	}
 
 	// Test multiple times to ensure randomness works

@@ -17,50 +17,50 @@ func TestBaseMetric(t *testing.T) {
 	assert.Equal(t, float32(37.0), metric.GetValue())
 }
 
-func TestKVBlocksRatioWithAllPrefillsCalculate(t *testing.T) {
-	metric := &kvBlocksRatioWithAllPrefills{
+func TestKVCacheUsageRatioProjectedCalculate(t *testing.T) {
+	metric := &kvCacheUsageRatioProjected{
 		baseMetric{
-			name: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			name: consts.SchedulingMetricKVCacheUsageRatioProjected,
 		},
 	}
 
 	instances := genInstanceViewInternals()
 	instance1 := instances["instance-1"]
-	instance1.cmsView.Status.NumTotalGpuBlocks = 100
-	instance1.cmsView.Status.NumUsedGpuBlocks = 30
-	instance1.cmsView.Status.NumUncomputedBlocksAllWaitingPrefills = 10
+	instance1.cmsView.Status.NumTotalGpuTokens = 100
+	instance1.cmsView.Status.NumUsedGpuTokens = 30
+	instance1.cmsView.Status.NumUncomputedTokensAllWaitingPrefills = 10
 
 	// Test normal case
 	metric.Calculate(instance1)
 	assert.Equal(t, float32(0.4), metric.GetValue()) // (30 + 10) / 100 = 0.4
 
-	// Test with zero total blocks
+	// Test with zero total tokens
 	instance2 := instances["instance-2"]
-	instance2.cmsView.Status.NumTotalGpuBlocks = 0
-	instance2.cmsView.Status.NumUsedGpuBlocks = 30
+	instance2.cmsView.Status.NumTotalGpuTokens = 0
+	instance2.cmsView.Status.NumUsedGpuTokens = 30
 	metric.Calculate(instance2)
 	assert.Equal(t, float32(3.4028235e+38), metric.GetValue()) // MaxFloat32
 
-	// Test with zero used and waiting blocks
+	// Test with zero used and waiting tokens
 	instance3 := instances["instance-2"]
-	instance3.cmsView.Status.NumTotalGpuBlocks = 100
-	instance3.cmsView.Status.NumUsedGpuBlocks = 0
-	instance3.cmsView.Status.NumUncomputedBlocksAllWaitingPrefills = 0
+	instance3.cmsView.Status.NumTotalGpuTokens = 100
+	instance3.cmsView.Status.NumUsedGpuTokens = 0
+	instance3.cmsView.Status.NumUncomputedTokensAllWaitingPrefills = 0
 	metric.Calculate(instance2)
 	assert.Equal(t, float32(0.0), metric.GetValue()) // (0 + 0) / 100 = 0.0
 }
 
-func TestKVBlocksRatioWithAllPrefillsCalculateLess(t *testing.T) {
-	metric1 := &kvBlocksRatioWithAllPrefills{
+func TestKVCacheUsageRatioProjectedLess(t *testing.T) {
+	metric1 := &kvCacheUsageRatioProjected{
 		baseMetric{
-			name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			name:  consts.SchedulingMetricKVCacheUsageRatioProjected,
 			value: 0.1,
 		},
 	}
 
-	metric2 := &kvBlocksRatioWithAllPrefills{
+	metric2 := &kvCacheUsageRatioProjected{
 		baseMetric{
-			name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			name:  consts.SchedulingMetricKVCacheUsageRatioProjected,
 			value: 0.2,
 		},
 	}
@@ -78,9 +78,9 @@ func TestDecodeBatchSizeCalculate(t *testing.T) {
 
 	instances := genInstanceViewInternals()
 	instance1 := instances["instance-1"]
-	instance1.cmsView.Status.NumTotalGpuBlocks = 100
-	instance1.cmsView.Status.NumUsedGpuBlocks = 30
-	instance1.cmsView.Status.NumUncomputedBlocksAllWaitingPrefills = 10
+	instance1.cmsView.Status.NumTotalGpuTokens = 100
+	instance1.cmsView.Status.NumUsedGpuTokens = 30
+	instance1.cmsView.Status.NumUncomputedTokensAllWaitingPrefills = 10
 	instance1.cmsView.Status.SchedulerRunningToDecodeRequestsNum = 10
 
 	metric.Calculate(instance1)
@@ -115,9 +115,9 @@ func TestNumWaitingRequestsCalculate(t *testing.T) {
 
 	instances := genInstanceViewInternals()
 	instance1 := instances["instance-1"]
-	instance1.cmsView.Status.NumTotalGpuBlocks = 100
-	instance1.cmsView.Status.NumUsedGpuBlocks = 30
-	instance1.cmsView.Status.NumUncomputedBlocksAllWaitingPrefills = 10
+	instance1.cmsView.Status.NumTotalGpuTokens = 100
+	instance1.cmsView.Status.NumUsedGpuTokens = 30
+	instance1.cmsView.Status.NumUncomputedTokensAllWaitingPrefills = 10
 	instance1.cmsView.Status.NumWaitingRequests = 10
 
 	metric.Calculate(instance1)
@@ -153,9 +153,9 @@ func TestNumRequestsCalculate(t *testing.T) {
 
 	instances := genInstanceViewInternals()
 	instance1 := instances["instance-1"]
-	instance1.cmsView.Status.NumTotalGpuBlocks = 100
-	instance1.cmsView.Status.NumUsedGpuBlocks = 30
-	instance1.cmsView.Status.NumUncomputedBlocksAllWaitingPrefills = 10
+	instance1.cmsView.Status.NumTotalGpuTokens = 100
+	instance1.cmsView.Status.NumUsedGpuTokens = 30
+	instance1.cmsView.Status.NumUncomputedTokensAllWaitingPrefills = 10
 	instance1.cmsView.Status.NumWaitingRequests = 10
 	instance1.cmsView.Status.NumRunningRequests = 10
 
@@ -174,7 +174,7 @@ func TestNumRequestsLess(t *testing.T) {
 
 	metric2 := &numWaitingRequests{
 		baseMetric{
-			name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			name:  consts.SchedulingMetricKVCacheUsageRatioProjected,
 			value: 2.0,
 		},
 	}
@@ -194,13 +194,13 @@ func TestKVCacheHitLen(t *testing.T) {
 
 	// Test normal case
 	instance1 := instances["instance-1"]
-	instance1.schedulingCtx.prefixHitLen = 100
+	instance1.schedulingCtx.prefixHitTokens = 100
 	metric.Calculate(instance1)
 	assert.Equal(t, float32(100), metric.GetValue())
 
-	// Test another case with different prefixHitLen
+	// Test another case with different prefixHitTokens
 	instance2 := instances["instance-2"]
-	instance2.schedulingCtx.prefixHitLen = 50
+	instance2.schedulingCtx.prefixHitTokens = 50
 	metric.Calculate(instance2)
 	assert.Equal(t, float32(50), metric.GetValue())
 

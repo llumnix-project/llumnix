@@ -18,7 +18,7 @@ message MigrateRequest {
   oneof migration_value {
     int64 num_reqs = 7;
     int64 num_tokens = 8;
-    float block_ratio = 9;
+    float kv_cache_usage_ratio = 9;
   }
 }
 

@@ -67,7 +67,7 @@ class MigrationParams:
     mig_req_policy:RequestMigrationPolicy = RequestMigrationPolicy.SR
     num_reqs: int = 1
     num_tokens: int = 0
-    block_ratio: float = 0
+    kv_cache_usage_ratio: float = 0
     trigger_policy: str = ""
 
 
@@ -78,8 +78,8 @@ class MigrationLimits:
     max_req_mig_out:int = 1
     max_token_mig_in:int = 10000
     max_token_mig_out:int = 10000
-    max_block_ratio_mig_in:float = 0.3
-    max_block_ratio_mig_out:float = 0.3
+    max_kv_cache_usage_ratio_mig_in:float = 0.3
+    max_kv_cache_usage_ratio_mig_out:float = 0.3
 
 def get_migration_limits(detailed: bool) -> MigrationLimits:
     mig_limits = MigrationLimits()
@@ -88,8 +88,8 @@ def get_migration_limits(detailed: bool) -> MigrationLimits:
     if detailed:
         mig_limits.max_token_mig_in = envs.LLUMNIX_MAX_TOKEN_MIG_IN
         mig_limits.max_token_mig_out = envs.LLUMNIX_MAX_TOKEN_MIG_OUT
-        mig_limits.max_block_ratio_mig_in = envs.LLUMNIX_MAX_BLOCK_RATIO_MIG_IN
-        mig_limits.max_block_ratio_mig_out = envs.LLUMNIX_MAX_BLOCK_RATIO_MIG_OUT
+        mig_limits.max_kv_cache_usage_ratio_mig_in = envs.LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_IN
+        mig_limits.max_kv_cache_usage_ratio_mig_out = envs.LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_OUT
     return mig_limits
 
 def get_rpc_port() -> int:

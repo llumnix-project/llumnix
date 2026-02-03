@@ -3,11 +3,6 @@ package schedule_policy
 import (
 	"context"
 	"fmt"
-	"llumnix/cmd/config"
-	"llumnix/cmd/scheduler/app/options"
-	"llumnix/pkg/cms"
-	"llumnix/pkg/consts"
-	"llumnix/pkg/scheduler/llumlet"
 	"net"
 	"os"
 	"strconv"
@@ -19,6 +14,12 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog/v2"
+
+	"llumnix/cmd/config"
+	"llumnix/cmd/scheduler/app/options"
+	"llumnix/pkg/cms"
+	"llumnix/pkg/consts"
+	"llumnix/pkg/scheduler/llumlet"
 )
 
 type MockLlumletServer struct {
@@ -132,9 +133,9 @@ func genInstanceViewScheduling(instanceId string, llumletPort int32, kvtPort int
 func TestExecuteMigrationsSuccess(t *testing.T) {
 	config := &options.SchedulerConfig{
 		FullModeScheduleConfig: config.FullModeScheduleConfig{
-			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
-			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
-			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
+			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
 			ReschedulePolicies:          "decode_load,prefill_failover,decode_failover,neutral_failover",
 			RescheduleLoadBalanceScope:  consts.RescheduleLoadBalanceScopeCluster,
 		},
@@ -160,9 +161,9 @@ func TestExecuteMigrationsSuccess(t *testing.T) {
 func TestExecuteMigrationsGrpcConnectFailed(t *testing.T) {
 	config := &options.SchedulerConfig{
 		FullModeScheduleConfig: config.FullModeScheduleConfig{
-			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
-			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
-			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
+			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
 			ReschedulePolicies:          "decode_load,prefill_failover,decode_failover,neutral_failover",
 			RescheduleLoadBalanceScope:  consts.RescheduleLoadBalanceScopeCluster,
 		},
@@ -189,9 +190,9 @@ func TestExecuteMigrationsGrpcConnectFailed(t *testing.T) {
 func TestExecuteMigrationsLlumletMigrateFailed(t *testing.T) {
 	config := &options.SchedulerConfig{
 		FullModeScheduleConfig: config.FullModeScheduleConfig{
-			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
-			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
-			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
+			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
 			ReschedulePolicies:          "decode_load,prefill_failover,decode_failover,neutral_failover",
 			RescheduleLoadBalanceScope:  consts.RescheduleLoadBalanceScopeCluster,
 		},

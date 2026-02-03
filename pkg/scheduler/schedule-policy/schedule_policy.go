@@ -1,17 +1,17 @@
 package schedule_policy
 
 import (
-	"llumnix/cmd/scheduler/app/options"
-	"llumnix/pkg/cms"
-	"llumnix/pkg/lrs"
-	"llumnix/pkg/metrics"
-	"llumnix/pkg/scheduler/kvs"
 	"time"
 
 	"golang.org/x/exp/maps"
 	"k8s.io/klog/v2"
 
+	"llumnix/cmd/scheduler/app/options"
+	"llumnix/pkg/cms"
 	"llumnix/pkg/consts"
+	"llumnix/pkg/lrs"
+	"llumnix/pkg/metrics"
+	"llumnix/pkg/scheduler/kvs"
 	"llumnix/pkg/types"
 	"llumnix/pkg/utils"
 )
@@ -37,12 +37,10 @@ type schedulingCtx struct {
 	metrics map[string]instanceSchedulingMetric
 	// needsFailover indicates whether the instance needs failover by failover filter.
 	needsFailover                     bool
-	prefixHitLen                      int
-	prefixHitNumBlocks                int
+	prefixHitTokens                   int
 	prefixHitRatio                    float32
-	prefixMissLen                     int
-	prefixMissNumBlocks               int
-	numComputedPrefillBlocksPredicted int32
+	prefixMissTokens                  int
+	numComputedPrefillTokensPredicted int32
 }
 
 type clusterViewScheduling struct {
@@ -59,6 +57,27 @@ type ClusterViewClientInterface interface {
 	RUnlock()
 	Lock()
 	Unlock()
+}
+
+type SchedulePolicy interface {
+	// Name schedule policy name
+	Name() string
+
+	// Schedule attempts to acquire an instance for processing a new request.
+	Schedule(*types.ScheduleRequest) error
+}
+
+func NewSchedulePolicy(
+	policy string,
+	config *options.SchedulerConfig,
+	lrsClient *lrs.LocalRealtimeStateClient) SchedulePolicy {
+	if len(policy) == 0 {
+		panic("create schedule policy exception, policy is empty.")
+	}
+
+	klog.Infof("create scheduler with policy: %v", policy)
+
+	return NewDispatchPolicy(config, policy, lrsClient)
 }
 
 type DispatchPolicy struct {
@@ -96,7 +115,6 @@ func NewDispatchPolicy(
 			c.RequestLocalAccountStalenessSeconds,
 			c.CmsRecordMetricsInterval,
 			c.EnablePredictorEnhancedScheduling,
-			c.KvCacheBlockSize,
 			c.NumPredictorWarmupSamples)
 		if err != nil {
 			panic(err)
@@ -242,24 +260,22 @@ func (p *DispatchPolicy) schedule(
 		if !p.c.AllowConcurrentSchedule {
 			p.cmsClient.Unlock()
 		}
-		// Write prefixHitLen in scheduling ctx of instance view.
+		// Write prefixHitTokens in scheduling ctx of instance view.
 		calcInstancesPrefixCacheHitLen(
-			p.kvsClient, p.cmsClient, promptTokenIds, clusterView.instanceViews, p.c.KvCacheBlockSize)
+			p.kvsClient, p.cmsClient, promptTokenIds, clusterView.instanceViews)
 		if !p.c.AllowConcurrentSchedule {
 			p.cmsClient.Lock()
 		}
 	}
 
-	numBlocks := int32(0)
+	numTokens := int32(0)
 	if p.c.EnableInstanceStatusLocalAccount {
-		numBlocks =
-			(int32(len(promptTokenIds)) + p.c.KvCacheBlockSize - 1) / p.c.KvCacheBlockSize
+		numTokens = int32(len(promptTokenIds))
 	}
 
 	if p.c.EnablePredictorEnhancedScheduling {
-		predictNumComputedPrefillBlocks(
-			clusterView.groupedInstanceViews[consts.PrefillInferMode], p.cmsClient.TTFTPredictor,
-			p.c.KvCacheBlockSize, int32(p.c.MaxNumBatchedTokens))
+		predictNumComputedPrefillTokens(
+			clusterView.groupedInstanceViews[consts.PrefillInferMode], p.cmsClient.TTFTPredictor, int32(p.c.MaxNumBatchedTokens))
 	}
 	for inferMode, instanceViews := range clusterView.groupedInstanceViews {
 		klog.V(3).Infof(
@@ -276,8 +292,8 @@ func (p *DispatchPolicy) schedule(
 				selectedInstances = append(selectedInstances, []*instanceViewScheduling{normal})
 				if p.c.EnableInstanceStatusLocalAccount {
 					p.cmsClient.AddRequestLocalAccount(
-						normal.cmsView, consts.NormalInferMode, numBlocks,
-						int32(normal.schedulingCtx.prefixHitNumBlocks), requestId, true)
+						normal.cmsView, consts.NormalInferMode, numTokens,
+						int32(normal.schedulingCtx.prefixHitTokens), requestId, true)
 				}
 			} else {
 				klog.V(4).Info("No normal instance selected")
@@ -301,8 +317,8 @@ func (p *DispatchPolicy) schedule(
 		} else {
 			if p.c.EnableInstanceStatusLocalAccount {
 				p.cmsClient.AddRequestLocalAccount(
-					prefill.cmsView, consts.PrefillInferMode, numBlocks,
-					int32(prefill.schedulingCtx.prefixHitNumBlocks), requestId, true)
+					prefill.cmsView, consts.PrefillInferMode, numTokens,
+					int32(prefill.schedulingCtx.prefixHitTokens), requestId, true)
 			}
 		}
 	}
@@ -315,12 +331,12 @@ func (p *DispatchPolicy) schedule(
 			klog.V(4).Info("No decode instance selected, return")
 			if p.c.EnableInstanceStatusLocalAccount && prefill != nil {
 				p.cmsClient.RevertRequestPrefillLocalAccount(
-					prefill.cmsView, numBlocks, int32(prefill.schedulingCtx.prefixHitNumBlocks), requestId)
+					prefill.cmsView, numTokens, int32(prefill.schedulingCtx.prefixHitTokens), requestId)
 			}
 		} else {
 			if p.c.EnableInstanceStatusLocalAccount {
 				p.cmsClient.AddRequestLocalAccount(
-					decode.cmsView, consts.DecodeInferMode, numBlocks, int32(decode.schedulingCtx.prefixHitNumBlocks),
+					decode.cmsView, consts.DecodeInferMode, numTokens, int32(decode.schedulingCtx.prefixHitTokens),
 					requestId, decode != prefill)
 			}
 		}

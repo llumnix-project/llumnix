@@ -77,26 +77,26 @@ class SchedulerLlumnixMixin:
         ret["num_running_requests"] = len(self.running_batch.reqs)
         ret["num_waiting_requests"] = len(self.waiting_queue)
 
-        ret["num_total_gpu_blocks"] = self.max_total_num_tokens // self.page_size
-        num_blocks_all_waiting_requests = 0
+        ret["num_total_gpu_tokens"] = self.max_total_num_tokens
+        num_tokens_all_waiting_requests = 0
         for req in self.waiting_queue:
             tokens_needed = len(req.origin_input_ids) + len(req.output_ids)
-            num_blocks_all_waiting_requests += math.ceil(tokens_needed // self.page_size)
-        ret["num_blocks_all_waiting_requests"] = num_blocks_all_waiting_requests
+            num_tokens_all_waiting_requests += tokens_needed
+        ret["num_tokens_all_waiting_requests"] = num_tokens_all_waiting_requests
 
         if self.is_hybrid:
             full_num_used, swa_num_used, _, _, _, _, _, _ = self._get_swa_token_info()
-            ret["num_used_gpu_blocks"] = max(full_num_used, swa_num_used) // self.page_size
+            ret["num_used_gpu_tokens"] = max(full_num_used, swa_num_used)
         else:
             num_used, _, _, _ = self._get_token_info()
-            ret["num_used_gpu_blocks"] = num_used // self.page_size
+            ret["num_used_gpu_tokens"] = num_used
 
         if len(self.waiting_queue) > 0:
             first_req = self.waiting_queue[0]
             tokens_needed = len(first_req.origin_input_ids)
-            ret["num_blocks_first_waiting_request"] = math.ceil(tokens_needed // self.page_size)
+            ret["num_tokens_first_waiting_request"] = tokens_needed
         else:
-            ret["num_blocks_first_waiting_request"] = 0
+            ret["num_tokens_first_waiting_request"] = 0
 
         ret["decode_batch_size"] = 0
         for req in self.running_batch.reqs:

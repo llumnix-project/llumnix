@@ -85,21 +85,21 @@ class InstanceStatus:
     num_running_requests: int = 0
     num_loading_requests: int = 0
 
-    # num blocks status from kv manager
-    num_total_gpu_blocks: int = 0
-    num_used_gpu_blocks: int = 0
+    # num tokens status from kv manager
+    num_total_gpu_tokens: int = 0
+    num_used_gpu_tokens: int = 0
 
-    # num blocks status from scheduler and hybrid scheduler
-    num_uncomputed_blocks_hybrid_scheduler_waiting_prefills: int = 0
-    num_unallocated_blocks_hybrid_scheduler_waiting_decodes: int = 0
-    hybrid_scheduler_waiting_to_decode_blocks_num: int = 0
-    num_uncomputed_blocks_scheduler_waiting_prefills: int = 0
-    scheduler_waiting_to_decode_blocks_num: int = 0
-    num_uncomputed_blocks_scheduler_running_prefills: int = 0
-    num_unallocated_blocks_scheduler_running_prefills: int = 0
-    scheduler_running_to_decode_blocks_num: int = 0
-    num_blocks_loading_requests: int = 0
-    num_uncomputed_blocks_all_waiting_prefills: int = 0
+    # num tokens status from scheduler and hybrid scheduler
+    num_uncomputed_tokens_hybrid_scheduler_waiting_prefills: int = 0
+    num_unallocated_tokens_hybrid_scheduler_waiting_decodes: int = 0
+    hybrid_scheduler_waiting_to_decode_tokens_num: int = 0
+    num_uncomputed_tokens_scheduler_waiting_prefills: int = 0
+    scheduler_waiting_to_decode_tokens_num: int = 0
+    num_uncomputed_tokens_scheduler_running_prefills: int = 0
+    num_unallocated_tokens_scheduler_running_prefills: int = 0
+    scheduler_running_to_decode_tokens_num: int = 0
+    num_tokens_loading_requests: int = 0
+    num_uncomputed_tokens_all_waiting_prefills: int = 0
 
     # migration status
     num_migrate_in_reqs: int = 0
@@ -110,10 +110,10 @@ class InstanceStatus:
     num_migrate_out_tokens: int = 0
     num_available_migrate_in_tokens: int = 0
     num_available_migrate_out_tokens: int = 0
-    block_ratio_migrate_in: float = 0
-    block_ratio_migrate_out: float = 0
-    available_block_ratio_migrate_in: float = 0
-    available_block_ratio_migrate_out: float = 0
+    kv_cache_usage_ratio_migrate_in: float = 0
+    kv_cache_usage_ratio_migrate_out: float = 0
+    available_kv_cache_usage_ratio_migrate_in: float = 0
+    available_kv_cache_usage_ratio_migrate_out: float = 0
 
     # profiling status
     profiling_id: int = -1

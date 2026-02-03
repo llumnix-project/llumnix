@@ -18,15 +18,15 @@ class BaseConnectorStatusCollector(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_connector_num_unallocated_blocks_waiting_decodes(self) -> int:
+    def get_connector_num_unallocated_tokens_waiting_decodes(self) -> int:
         raise NotImplementedError
 
     @abstractmethod
-    def get_connector_waiting_to_decode_blocks_num(self) -> int:
+    def get_connector_waiting_to_decode_tokens_num(self) -> int:
         raise NotImplementedError
 
     @abstractmethod
-    def get_connector_num_uncomputed_blocks_waiting_prefills(self) -> int:
+    def get_connector_num_uncomputed_tokens_waiting_prefills(self) -> int:
         raise NotImplementedError
 
     @abstractmethod
@@ -38,5 +38,5 @@ class BaseConnectorStatusCollector(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_connector_num_blocks_loading_requests(self) -> int:
+    def get_connector_num_tokens_loading_requests(self) -> int:
         raise NotImplementedError

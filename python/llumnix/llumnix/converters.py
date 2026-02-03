@@ -107,33 +107,33 @@ def to_cms_status(llumlet_status: LlumletInstanceStatus) -> CMSInstanceStatus:  
     if llumlet_status.num_loading_requests is not None:
         cms_status.num_loading_requests = llumlet_status.num_loading_requests
 
-    # num blocks status from kv manager
-    if llumlet_status.num_total_gpu_blocks is not None:
-        cms_status.num_total_gpu_blocks = llumlet_status.num_total_gpu_blocks
-    if llumlet_status.num_used_gpu_blocks is not None:
-        cms_status.num_used_gpu_blocks = llumlet_status.num_used_gpu_blocks
+    # num tokens status from kv manager
+    if llumlet_status.num_total_gpu_tokens is not None:
+        cms_status.num_total_gpu_tokens = llumlet_status.num_total_gpu_tokens
+    if llumlet_status.num_used_gpu_tokens is not None:
+        cms_status.num_used_gpu_tokens = llumlet_status.num_used_gpu_tokens
 
-    # num blocks status from scheduler and hybrid scheduler
-    if llumlet_status.num_uncomputed_blocks_hybrid_scheduler_waiting_prefills is not None:
-        cms_status.num_uncomputed_blocks_hybrid_scheduler_waiting_prefills = llumlet_status.num_uncomputed_blocks_hybrid_scheduler_waiting_prefills
-    if llumlet_status.num_unallocated_blocks_hybrid_scheduler_waiting_decodes is not None:
-        cms_status.num_unallocated_blocks_hybrid_scheduler_waiting_decodes = llumlet_status.num_unallocated_blocks_hybrid_scheduler_waiting_decodes
-    if llumlet_status.hybrid_scheduler_waiting_to_decode_blocks_num is not None:
-        cms_status.hybrid_scheduler_waiting_to_decode_blocks_num = llumlet_status.hybrid_scheduler_waiting_to_decode_blocks_num
-    if llumlet_status.num_uncomputed_blocks_scheduler_waiting_prefills is not None:
-        cms_status.num_uncomputed_blocks_scheduler_waiting_prefills = llumlet_status.num_uncomputed_blocks_scheduler_waiting_prefills
-    if llumlet_status.scheduler_waiting_to_decode_blocks_num is not None:
-        cms_status.scheduler_waiting_to_decode_blocks_num = llumlet_status.scheduler_waiting_to_decode_blocks_num
-    if llumlet_status.num_uncomputed_blocks_scheduler_running_prefills is not None:
-        cms_status.num_uncomputed_blocks_scheduler_running_prefills = llumlet_status.num_uncomputed_blocks_scheduler_running_prefills
-    if llumlet_status.num_unallocated_blocks_scheduler_running_prefills is not None:
-        cms_status.num_unallocated_blocks_scheduler_running_prefills = llumlet_status.num_unallocated_blocks_scheduler_running_prefills
-    if llumlet_status.scheduler_running_to_decode_blocks_num is not None:
-        cms_status.scheduler_running_to_decode_blocks_num = llumlet_status.scheduler_running_to_decode_blocks_num
-    if llumlet_status.num_blocks_loading_requests is not None:
-        cms_status.num_blocks_loading_requests = llumlet_status.num_blocks_loading_requests
-    if llumlet_status.num_uncomputed_blocks_all_waiting_prefills is not None:
-        cms_status.num_uncomputed_blocks_all_waiting_prefills = llumlet_status.num_uncomputed_blocks_all_waiting_prefills
+    # num tokens status from scheduler and hybrid scheduler
+    if llumlet_status.num_uncomputed_tokens_hybrid_scheduler_waiting_prefills is not None:
+        cms_status.num_uncomputed_tokens_hybrid_scheduler_waiting_prefills = llumlet_status.num_uncomputed_tokens_hybrid_scheduler_waiting_prefills
+    if llumlet_status.num_unallocated_tokens_hybrid_scheduler_waiting_decodes is not None:
+        cms_status.num_unallocated_tokens_hybrid_scheduler_waiting_decodes = llumlet_status.num_unallocated_tokens_hybrid_scheduler_waiting_decodes
+    if llumlet_status.hybrid_scheduler_waiting_to_decode_tokens_num is not None:
+        cms_status.hybrid_scheduler_waiting_to_decode_tokens_num = llumlet_status.hybrid_scheduler_waiting_to_decode_tokens_num
+    if llumlet_status.num_uncomputed_tokens_scheduler_waiting_prefills is not None:
+        cms_status.num_uncomputed_tokens_scheduler_waiting_prefills = llumlet_status.num_uncomputed_tokens_scheduler_waiting_prefills
+    if llumlet_status.scheduler_waiting_to_decode_tokens_num is not None:
+        cms_status.scheduler_waiting_to_decode_tokens_num = llumlet_status.scheduler_waiting_to_decode_tokens_num
+    if llumlet_status.num_uncomputed_tokens_scheduler_running_prefills is not None:
+        cms_status.num_uncomputed_tokens_scheduler_running_prefills = llumlet_status.num_uncomputed_tokens_scheduler_running_prefills
+    if llumlet_status.num_unallocated_tokens_scheduler_running_prefills is not None:
+        cms_status.num_unallocated_tokens_scheduler_running_prefills = llumlet_status.num_unallocated_tokens_scheduler_running_prefills
+    if llumlet_status.scheduler_running_to_decode_tokens_num is not None:
+        cms_status.scheduler_running_to_decode_tokens_num = llumlet_status.scheduler_running_to_decode_tokens_num
+    if llumlet_status.num_tokens_loading_requests is not None:
+        cms_status.num_tokens_loading_requests = llumlet_status.num_tokens_loading_requests
+    if llumlet_status.num_uncomputed_tokens_all_waiting_prefills is not None:
+        cms_status.num_uncomputed_tokens_all_waiting_prefills = llumlet_status.num_uncomputed_tokens_all_waiting_prefills
 
     # migration status
     if llumlet_status.num_migrate_in_reqs is not None:
@@ -152,14 +152,14 @@ def to_cms_status(llumlet_status: LlumletInstanceStatus) -> CMSInstanceStatus:  
         cms_status.num_available_migrate_in_tokens = llumlet_status.num_available_migrate_in_tokens
     if llumlet_status.num_available_migrate_out_tokens is not None:
         cms_status.num_available_migrate_out_tokens = llumlet_status.num_available_migrate_out_tokens
-    if llumlet_status.block_ratio_migrate_in is not None:
-        cms_status.block_ratio_migrate_in = llumlet_status.block_ratio_migrate_in
-    if llumlet_status.block_ratio_migrate_out is not None:
-        cms_status.block_ratio_migrate_out = llumlet_status.block_ratio_migrate_out
-    if llumlet_status.available_block_ratio_migrate_in is not None:
-        cms_status.available_block_ratio_migrate_in = llumlet_status.available_block_ratio_migrate_in
-    if llumlet_status.available_block_ratio_migrate_out is not None:
-        cms_status.available_block_ratio_migrate_out = llumlet_status.available_block_ratio_migrate_out
+    if llumlet_status.kv_cache_usage_ratio_migrate_in is not None:
+        cms_status.kv_cache_usage_ratio_migrate_in = llumlet_status.kv_cache_usage_ratio_migrate_in
+    if llumlet_status.kv_cache_usage_ratio_migrate_out is not None:
+        cms_status.kv_cache_usage_ratio_migrate_out = llumlet_status.kv_cache_usage_ratio_migrate_out
+    if llumlet_status.available_kv_cache_usage_ratio_migrate_in is not None:
+        cms_status.available_kv_cache_usage_ratio_migrate_in = llumlet_status.available_kv_cache_usage_ratio_migrate_in
+    if llumlet_status.available_kv_cache_usage_ratio_migrate_out is not None:
+        cms_status.available_kv_cache_usage_ratio_migrate_out = llumlet_status.available_kv_cache_usage_ratio_migrate_out
 
     if llumlet_status.profiling_id is not None:
         cms_status.profiling_id = llumlet_status.profiling_id

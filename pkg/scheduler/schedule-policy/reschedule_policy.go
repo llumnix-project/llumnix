@@ -19,6 +19,10 @@ import (
 
 const DefaultLlumletGrpcTimeoutSeconds = 5
 
+type RescheduleInterface interface {
+	RescheduleLoop()
+}
+
 type ReschedulePolicy struct {
 	c                    *options.SchedulerConfig
 	cmsClient            *cms.CMSReadClient
@@ -28,6 +32,10 @@ type ReschedulePolicy struct {
 	rescheduleIntervalMs int32
 	grpcTimeoutSeconds   int
 	stopChan             chan bool
+}
+
+func NewReschedulePolicy(config *options.SchedulerConfig) RescheduleInterface {
+	return newReschedulePolicy(config)
 }
 
 func newReschedulePolicy(c *options.SchedulerConfig) *ReschedulePolicy {
@@ -46,7 +54,6 @@ func newReschedulePolicy(c *options.SchedulerConfig) *ReschedulePolicy {
 		c.RequestLocalAccountStalenessSeconds,
 		c.CmsRecordMetricsInterval,
 		c.EnablePredictorEnhancedScheduling,
-		c.KvCacheBlockSize,
 		c.NumPredictorWarmupSamples)
 	if err != nil {
 		panic(err)
@@ -209,7 +216,7 @@ func (p *ReschedulePolicy) executeMigrations(reschedulePairs []*reschedulePair) 
 			case consts.MigrationReqSelectRuleToken:
 				migrationRequest.MigrationValue = &llumlet.MigrateRequest_NumTokens{NumTokens: int64(rp.reqSelectValue)}
 			case consts.MigrationReqSelectRuleRatio:
-				migrationRequest.MigrationValue = &llumlet.MigrateRequest_BlockRatio{BlockRatio: rp.reqSelectValue}
+				migrationRequest.MigrationValue = &llumlet.MigrateRequest_KvCacheUsageRatio{KvCacheUsageRatio: rp.reqSelectValue}
 			default:
 				klog.Errorf("unknown migration type: %s, skip", rp.reqSelectRule)
 				err = fmt.Errorf("unknown migration type: %s", rp.reqSelectRule)

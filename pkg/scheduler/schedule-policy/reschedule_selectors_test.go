@@ -14,8 +14,8 @@ func TestMetricBalanceSelector(t *testing.T) {
 		"src1": {
 			cmsView: &cms.InstanceView{
 				Status: &cms.InstanceStatus{
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  60,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  60,
 				},
 				Metadata: &cms.InstanceMetadata{
 					InstanceId: "src1",
@@ -28,8 +28,8 @@ func TestMetricBalanceSelector(t *testing.T) {
 		"src2": {
 			cmsView: &cms.InstanceView{
 				Status: &cms.InstanceStatus{
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  80,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  80,
 				},
 				Metadata: &cms.InstanceMetadata{
 					InstanceId: "src2",
@@ -42,8 +42,8 @@ func TestMetricBalanceSelector(t *testing.T) {
 		"src3": {
 			cmsView: &cms.InstanceView{
 				Status: &cms.InstanceStatus{
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  40,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  40,
 				},
 				Metadata: &cms.InstanceMetadata{
 					InstanceId: "src3",
@@ -62,8 +62,8 @@ func TestMetricBalanceSelector(t *testing.T) {
 		"dst1": {
 			cmsView: &cms.InstanceView{
 				Status: &cms.InstanceStatus{
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  40,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  40,
 				},
 				Metadata: &cms.InstanceMetadata{
 					InstanceId: "dst1",
@@ -76,8 +76,8 @@ func TestMetricBalanceSelector(t *testing.T) {
 		"dst2": {
 			cmsView: &cms.InstanceView{
 				Status: &cms.InstanceStatus{
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  20,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  20,
 				},
 				Metadata: &cms.InstanceMetadata{
 					InstanceId: "dst2",
@@ -90,8 +90,8 @@ func TestMetricBalanceSelector(t *testing.T) {
 		"dst3": {
 			cmsView: &cms.InstanceView{
 				Status: &cms.InstanceStatus{
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  60,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  60,
 				},
 				Metadata: &cms.InstanceMetadata{
 					InstanceId: "dst3",
@@ -107,8 +107,8 @@ func TestMetricBalanceSelector(t *testing.T) {
 	}
 
 	selector := &metricBalanceSelector{
-		srcMetric:          consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
-		dstMetric:          consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+		srcMetric:          consts.SchedulingMetricKVCacheUsageRatioProjected,
+		dstMetric:          consts.SchedulingMetricKVCacheUsageRatioProjected,
 		forceHigherToLower: true,
 		balanceScope:       consts.RescheduleLoadBalanceScopeCluster,
 	}
@@ -140,8 +140,8 @@ func TestAggregateSelector(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Status: &cms.InstanceStatus{
 					InstanceId:        "i1",
-					NumTotalGpuBlocks: 100,
-					NumUsedGpuBlocks:  120,
+					NumTotalGpuTokens: 100,
+					NumUsedGpuTokens:  120,
 				},
 				Metadata: &cms.InstanceMetadata{
 					InstanceId: "i1",
@@ -158,8 +158,8 @@ func TestAggregateSelector(t *testing.T) {
 
 	dstCandidates := srcCandidates
 	selector := &aggregateSelector{
-		srcMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
-		dstMetric: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+		srcMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
+		dstMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
 	}
 
 	config := newConfig()
@@ -178,8 +178,8 @@ func TestAggregateSelector(t *testing.T) {
 		cmsView: &cms.InstanceView{
 			Status: &cms.InstanceStatus{
 				InstanceId:        "i2",
-				NumTotalGpuBlocks: 100,
-				NumUsedGpuBlocks:  80,
+				NumTotalGpuTokens: 100,
+				NumUsedGpuTokens:  80,
 			},
 			Metadata: &cms.InstanceMetadata{
 				InstanceId: "i2",
@@ -194,8 +194,8 @@ func TestAggregateSelector(t *testing.T) {
 		cmsView: &cms.InstanceView{
 			Status: &cms.InstanceStatus{
 				InstanceId:        "i3",
-				NumTotalGpuBlocks: 100,
-				NumUsedGpuBlocks:  60,
+				NumTotalGpuTokens: 100,
+				NumUsedGpuTokens:  60,
 			},
 			Metadata: &cms.InstanceMetadata{
 				InstanceId: "i3",

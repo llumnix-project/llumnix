@@ -22,8 +22,8 @@ if TYPE_CHECKING:
     LLUMNIX_DETAILED_MIG_STATUS: bool = False
     LLUMNIX_MAX_TOKEN_MIG_IN: int = -1
     LLUMNIX_MAX_TOKEN_MIG_OUT: int = -1
-    LLUMNIX_MAX_BLOCK_RATIO_MIG_IN: float = -1
-    LLUMNIX_MAX_BLOCK_RATIO_MIG_OUT: float = -1
+    LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_IN: float = -1
+    LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_OUT: float = -1
     LLUMNIX_UPDATE_INSTANCE_STATUS_MODE: str = "push"
     LLUMNIX_ENABLE_PROFILING: int = 0
     LLUMNIX_PROFILING_STEPS: int = 50
@@ -68,10 +68,10 @@ environment_variables: Dict[str, Callable[[], Any]] = {
     "LLUMNIX_MAX_TOKEN_MIG_IN": lambda: int(os.getenv("LLUMNIX_MAX_TOKEN_MIG_IN", "100000")),
     # if set, llumnix will limit the number of migrate out tokens
     "LLUMNIX_MAX_TOKEN_MIG_OUT": lambda: int(os.getenv("LLUMNIX_MAX_TOKEN_MIG_OUT", "100000")),
-    # if set, llumnix will limit the ratio of migrate in blocks
-    "LLUMNIX_MAX_BLOCK_RATIO_MIG_IN": lambda: float(os.getenv("LLUMNIX_MAX_BLOCK_RATIO_MIG_IN", "0.3")),
-    # if set, llumnix will limit the ratio of migrate out blocks
-    "LLUMNIX_MAX_BLOCK_RATIO_MIG_OUT": lambda: float(os.getenv("LLUMNIX_MAX_BLOCK_RATIO_MIG_OUT", "0.3")),
+    # if set, llumnix will limit the kv cache usage ratio of migrate in tokens
+    "LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_IN": lambda: float(os.getenv("LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_IN", "0.3")),
+    # if set, llumnix will limit the kv cache usage atio of migrate out tokens
+    "LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_OUT": lambda: float(os.getenv("LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_OUT", "0.3")),
 
     # this is used for configuring the timeout for migrate_in engine call
     "LLUMNIX_ENGINE_MIGRATE_IN_TIMEOUT": lambda: float(os.getenv("LLUMNIX_ENGINE_MIGRATE_IN_TIMEOUT", "5.0")),

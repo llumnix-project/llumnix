@@ -422,8 +422,8 @@ class LlumletProc:
             if self.detailed_mig:
                 instance_status.num_available_migrate_in_tokens = self.mig_limits.max_token_mig_in - instance_status.num_migrate_in_tokens
                 instance_status.num_available_migrate_out_tokens = self.mig_limits.max_token_mig_out - instance_status.num_migrate_out_tokens
-                instance_status.available_block_ratio_migrate_in = self.mig_limits.max_block_ratio_mig_in - instance_status.block_ratio_migrate_in
-                instance_status.available_block_ratio_migrate_out = self.mig_limits.max_block_ratio_mig_out - instance_status.block_ratio_migrate_out
+                instance_status.available_kv_cache_usage_ratio_migrate_in = self.mig_limits.max_kv_cache_usage_ratio_mig_in - instance_status.kv_cache_usage_ratio_migrate_in
+                instance_status.available_kv_cache_usage_ratio_migrate_out = self.mig_limits.max_kv_cache_usage_ratio_mig_out - instance_status.kv_cache_usage_ratio_migrate_out
         if self.last_report_instance_status_timestamp is None or \
             time.time() - self.last_report_instance_status_timestamp >= envs.LLUMNIX_REPORT_INSTANCE_STATUS_INTERVAL_S:
             self.last_report_instance_status_timestamp = time.time()
@@ -437,9 +437,9 @@ class LlumletProc:
         if self.detailed_mig and migration_params.num_tokens > self.instance_status.num_available_migrate_out_tokens:
             raise NotEnoughSlotsError(f"Number of migration tokens exceeds engine migration limits. Max_migrate_out_tokens: "
                                       f"{self.instance_status.num_available_migrate_out_tokens} , got {migration_params.num_tokens}")
-        if self.detailed_mig and migration_params.block_ratio > self.instance_status.available_block_ratio_migrate_out:
-            raise NotEnoughSlotsError(f"Block ratio of migration request exceeds engine migration limits. Max_migrate_out_block_ratio: "
-                                      f"{self.instance_status.available_block_ratio_migrate_out} , got {migration_params.block_ratio}")
+        if self.detailed_mig and migration_params.kv_cache_usage_ratio > self.instance_status.available_kv_cache_usage_ratio_migrate_out:
+            raise NotEnoughSlotsError(f"KV cache usage ratio of migration request exceeds engine migration limits. Max_migrate_out_kv_cache_usage_ratio: "
+                                      f"{self.instance_status.available_kv_cache_usage_ratio_migrate_out} , got {migration_params.kv_cache_usage_ratio}")
         if  self.engine_type !=BackendType.VLLM_V1 or self.connector_type != ConnectorType.HYBRID or \
             (migration_params.migration_type == MigrationType.NUM_REQ and migration_params.num_reqs == -1):
             # Pre-stop migration, attempting twice to drain most of requests.

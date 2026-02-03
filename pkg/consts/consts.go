@@ -41,16 +41,16 @@ const (
 )
 
 const (
-	SchedulingMetricKVBlocksRatioWithAllPrefills         = "kv_blocks_ratio_with_all_prefills"
-	SchedulingMetricDecodeBatchSize                      = "decode_batch_size"
-	SchedulingMetricNumWaitingRequests                   = "num_waiting_requests"
-	SchedulingMetricAllPrefillsKVBlocksNum               = "all_prefills_kv_blocks_num"
-	SchedulingMetricKVCacheHitLen                        = "kv_cache_hit_len"
-	SchedulingMetricCacheAwareAllPrefillsKVBlocksNum     = "cache_aware_all_prefills_kv_blocks_num"
-	SchedulingMetricAdaptiveDecodeBatchSize              = "adaptive_decode_batch_size"
-	SchedulingMetricNumRequests                          = "num_requests"
-	SchedulingMetricAllDecodesKVBlocksNumWithAllPrefills = "all_decodes_kv_blocks_num_with_all_prefills"
-	SchedulingMetricNumTokens                            = "num_tokens"
+	SchedulingMetricKVCacheUsageRatioProjected     = "kv_cache_usage_ratio_projected"
+	SchedulingMetricDecodeBatchSize                = "decode_batch_size"
+	SchedulingMetricNumWaitingRequests             = "num_waiting_requests"
+	SchedulingMetricAllPrefillsTokensNum           = "all_prefills_tokens_num"
+	SchedulingMetricKVCacheHitLen                  = "kv_cache_hit_len"
+	SchedulingMetricCacheAwareAllPrefillsTokensNum = "cache_aware_all_prefills_tokens_num"
+	SchedulingMetricAdaptiveDecodeBatchSize        = "adaptive_decode_batch_size"
+	SchedulingMetricNumRequests                    = "num_requests"
+	SchedulingMetricAllDecodesTokensNum            = "all_decodes_tokens_num"
+	SchedulingMetricNumTokens                      = "num_tokens"
 )
 
 const (
@@ -140,15 +140,14 @@ const (
 
 	// Schedule defaults
 	DefaultDispatchTopK                        = 1
-	DefaultDispatchNeutralLoadMetric           = SchedulingMetricAllPrefillsKVBlocksNum
+	DefaultDispatchNeutralLoadMetric           = SchedulingMetricAllPrefillsTokensNum
 	DefaultDispatchNeutralLoadThreshold        = 8192
-	DefaultDispatchPrefillLoadMetric           = SchedulingMetricAllPrefillsKVBlocksNum
+	DefaultDispatchPrefillLoadMetric           = SchedulingMetricAllPrefillsTokensNum
 	DefaultDispatchPrefillLoadThreshold        = 2048
-	DefaultDispatchDecodeLoadMetric            = SchedulingMetricKVBlocksRatioWithAllPrefills
+	DefaultDispatchDecodeLoadMetric            = SchedulingMetricKVCacheUsageRatioProjected
 	DefaultDispatchDecodeLoadThreshold         = 1.0
-	DefaultDispatchPrefillCacheLocalityMetric  = SchedulingMetricCacheAwareAllPrefillsKVBlocksNum
+	DefaultDispatchPrefillCacheLocalityMetric  = SchedulingMetricCacheAwareAllPrefillsTokensNum
 	DefaultEnableInstanceStatusLocalAccount    = true
-	DefaultKvCacheBlockSize                    = 64
 	DefaultRequestLocalAccountStalenessSeconds = 10
 	DefaultAllowConcurrentSchedule             = false
 	DefaultEnablePredictorEnhancedScheduling   = false
@@ -159,7 +158,7 @@ const (
 	DefaultEnableAdaptivePD                     = false
 	DefaultDispatchPrefillAsDecodeLoadMetric    = SchedulingMetricAdaptiveDecodeBatchSize
 	DefaultDispatchPrefillAsDecodeLoadThreshold = 256.0
-	DefaultDispatchDecodeAsPrefillLoadMetric    = SchedulingMetricKVBlocksRatioWithAllPrefills
+	DefaultDispatchDecodeAsPrefillLoadMetric    = SchedulingMetricKVCacheUsageRatioProjected
 	DefaultDispatchDecodeAsPrefillLoadThreshold = 1.0
 	DefaultDecodeComputeBoundBatchSize          = 128
 
@@ -171,10 +170,10 @@ const (
 	DefaultEnableRescheduling             = false
 	DefaultReschedulePolicies             = "decode_load,prefill_failover,decode_failover,neutral_failover"
 	DefaultRescheduleIntervalMs           = 500
-	DefaultRescheduleDecodeLoadMetric     = SchedulingMetricKVBlocksRatioWithAllPrefills
+	DefaultRescheduleDecodeLoadMetric     = SchedulingMetricKVCacheUsageRatioProjected
 	DefaultRescheduleDecodeLoadThreshold  = 1.0
-	DefaultReschedulePrefillLoadMetric    = SchedulingMetricKVBlocksRatioWithAllPrefills
-	DefaultRescheduleNeutralLoadMetric    = SchedulingMetricKVBlocksRatioWithAllPrefills
+	DefaultReschedulePrefillLoadMetric    = SchedulingMetricKVCacheUsageRatioProjected
+	DefaultRescheduleNeutralLoadMetric    = SchedulingMetricKVCacheUsageRatioProjected
 	DefaultRescheduleNeutralLoadThreshold = 1.0
 	DefaultRescheduleReqSelectOrder       = MigrationReqSelectOrderSR
 	DefaultRescheduleReqSelectRule        = MigrationReqSelectRuleToken
