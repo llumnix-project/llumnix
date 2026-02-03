@@ -70,7 +70,7 @@ discovery-install:
 
 .PHONY: blade-kvt-install
 blade-kvt-install:
-	cd ./python/blade-kvt && rm -rf build dist *.egg-info && bash ./tools/install_barex.sh && python3 setup.py bdist_wheel && pip install dist/*.whl
+	./scripts/install_blade_kvt.sh
 
 .PHONY: simple-tests
 simple-tests: discovery-proto-build gateway-build scheduler-build
