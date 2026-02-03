@@ -2,11 +2,13 @@ package types
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"llm-gateway/pkg/consts"
 	"llm-gateway/pkg/metrics"
 	reasoning_parser "llm-gateway/pkg/processor/reasoning-parser"
 	"llm-gateway/pkg/protocol"
@@ -126,7 +128,6 @@ type HttpRequest struct {
 	// downstream http request information
 	Request *http.Request
 	Writer  http.ResponseWriter
-	Stream  bool // whether the response is streamed
 
 	StatusCode      int
 	HeaderResponded bool
@@ -134,17 +135,16 @@ type HttpRequest struct {
 
 // OpenAI API Request
 type LLMRequest struct {
-	// model name
-	Model string
-
 	// raw request body data
 	RawData string
 
 	// request type
-	Protocol protocol.ProtocolType
+	Protocol        protocol.ProtocolType
+	BackendProtocol protocol.ProtocolType
 
-	// whether the response is streamed
-	ClientStream bool
+	// original request
+	OriginCompletionRequest     *protocol.CompletionRequest
+	OriginChatCompletionRequest *protocol.ChatCompletionRequest
 
 	// chat completion API
 	ChatCompletionRequest        *protocol.ChatCompletionRequest
@@ -165,15 +165,62 @@ type LLMRequest struct {
 	LastChatStreamResp *protocol.ChatCompletionStreamResponse
 }
 
-func (req *LLMRequest) GetPromptTokens() ([]uint32, bool) {
-	return req.CompletionRequest.Prompt.GetUint32Slice()
-}
-func (req *LLMRequest) GetPromptString() (string, bool) {
-	return req.CompletionRequest.Prompt.GetString()
+func (req *LLMRequest) getRequestModel() string {
+	switch req.Protocol {
+	case protocol.OpenAICompletion:
+		return req.OriginCompletionRequest.Model
+	case protocol.OpenAIChatCompletion:
+		return req.OriginChatCompletionRequest.Model
+	default:
+		klog.Errorf("get model unsupported protocol: %v", req.Protocol)
+		return ""
+	}
 }
 
-func (req *LLMRequest) Stream() bool {
+func (req *LLMRequest) getPromptTokens() ([]uint32, error) {
+	// Here we read CompletionRequest.Prompt because after being processed by the tokenizer,
+	// it becomes token IDs, not the original prompt string
+	if tokens, ok := req.CompletionRequest.Prompt.GetUint32Slice(); ok {
+		return tokens, nil
+	} else {
+		return nil, fmt.Errorf("failed to get prompt tokens")
+	}
+}
+
+func (req *LLMRequest) getPromptString() (string, error) {
 	switch req.Protocol {
+	case protocol.OpenAICompletion:
+		if promptStr, ok := req.OriginCompletionRequest.Prompt.GetString(); ok {
+			return promptStr, nil
+		} else {
+			return "", fmt.Errorf("failed to get prompt string")
+		}
+	case protocol.OpenAIChatCompletion:
+		jsonData, err := json.Marshal(req.OriginChatCompletionRequest.Messages)
+		if err != nil {
+			klog.Errorf("failed to marshal messages: %v", err)
+			return "", fmt.Errorf("failed to marshal messages: %v", err)
+		}
+		// Here we remove the last ] mainly to ensure correct prefix matching, as the last ] may affect the matching result
+		return string(jsonData[0 : len(jsonData)-1]), nil
+	default:
+		return "", fmt.Errorf("failed to get prompt string: unsupported protocol %v", req.Protocol)
+	}
+}
+
+func (req *LLMRequest) clientStream() bool {
+	switch req.Protocol {
+	case protocol.OpenAICompletion:
+		return req.OriginCompletionRequest.Stream
+	case protocol.OpenAIChatCompletion:
+		return req.OriginChatCompletionRequest.Stream
+	default:
+		return false
+	}
+}
+
+func (req *LLMRequest) inferenceStream() bool {
+	switch req.BackendProtocol {
 	case protocol.OpenAICompletion:
 		return req.CompletionRequest.Stream
 	case protocol.OpenAIChatCompletion:
@@ -189,8 +236,8 @@ type AnthropicRequest struct {
 	RawData string
 
 	// Anthropic Request
-	AnthropicRequest      *anthropic.Request
-	AnthropicResponseData []byte
+	Request      *anthropic.Request
+	ResponseData []byte
 	// The reason Anthropic Response is not defined here is that the relevant
 	// Anthropic conversion directly converts into the returned sequence data,
 	// and it does not rely on the related data structures
@@ -204,7 +251,16 @@ type AnthropicRequest struct {
 	IsNotFirst bool // default value is false
 
 	// streaming response buffer
-	AnthropicStreamingResponseBuffer *anthropic.StreamingResponseBuffer
+	StreamResponseBuffer *anthropic.StreamingResponseBuffer
+}
+
+func (req *AnthropicRequest) getPromptString() (string, error) {
+	jsonData, err := json.Marshal(req.Request.Messages)
+	if err != nil {
+		klog.Errorf("failed to marshal messages: %v", err)
+		return "", fmt.Errorf("failed to marshal messages: %v", err)
+	}
+	return string(jsonData[0 : len(jsonData)-1]), nil
 }
 
 // RequestLifecycleHandler handles lifecycle events for a request.
@@ -274,6 +330,7 @@ type RequestContext struct {
 
 	// Currently, the design is that a Handler uses one data structure for communication between processors,
 	// but this may change in the future, and some processor adapters may be added for adaptation
+	RequestType      string
 	LLMRequest       *LLMRequest       // OpenAI
 	AnthropicRequest *AnthropicRequest // Anthropic
 
@@ -288,6 +345,124 @@ type RequestContext struct {
 
 	// Lifecycle handler for scheduling and resource management
 	lifecycleHandler RequestLifecycleHandler
+}
+
+func (req *RequestContext) ClientStream() bool {
+	switch req.RequestType {
+	case consts.OpenAIHandlerName:
+		return req.LLMRequest.clientStream()
+	case consts.AnthropicHandlerName:
+		return req.AnthropicRequest.Request.Stream
+	default:
+		klog.Errorf("client stream: unsupported request type: %v", req.RequestType)
+		return false
+	}
+}
+
+// InferenceStream returns whether the request is an inference stream.
+func (req *RequestContext) InferenceStream() bool {
+	switch req.RequestType {
+	case consts.OpenAIHandlerName:
+		return req.LLMRequest.inferenceStream()
+	case consts.AnthropicHandlerName:
+		return req.AnthropicRequest.OpenAIRequest.Stream
+	default:
+		klog.Errorf("inference stream: unsupported request type: %v", req.RequestType)
+		return false
+	}
+}
+
+func (req *RequestContext) marshalOpenAIRequest(args map[string]interface{}) ([]byte, error) {
+	oaiReq := req.LLMRequest
+	switch oaiReq.BackendProtocol {
+	case protocol.OpenAICompletion:
+		protocol.ApplyRequestArgs(oaiReq.CompletionRequest, args)
+		data, err := json.Marshal(oaiReq.CompletionRequest)
+		return data, err
+	case protocol.OpenAIChatCompletion:
+		protocol.ApplyRequestArgs(oaiReq.ChatCompletionRequest, args)
+		data, err := json.Marshal(oaiReq.ChatCompletionRequest)
+		return data, err
+	default:
+		klog.Errorf("unsupported protocol type: %v", req.LLMRequest.Protocol)
+		return nil, fmt.Errorf("unsupported protocol type: %v", req.LLMRequest.Protocol)
+	}
+}
+
+func (req *RequestContext) marshalAnthropicRequest(args map[string]interface{}) ([]byte, error) {
+	protocol.ApplyRequestArgs(req.AnthropicRequest.OpenAIRequest, args)
+	data, err := json.Marshal(req.AnthropicRequest.OpenAIRequest)
+	return data, err
+}
+
+// MarshalRequestWithArgs marshals the request with the given args.
+func (req *RequestContext) MarshalRequestWithArgs(args map[string]interface{}) ([]byte, error) {
+	switch req.RequestType {
+	case consts.OpenAIHandlerName:
+		return req.marshalOpenAIRequest(args)
+	case consts.AnthropicHandlerName:
+		return req.marshalAnthropicRequest(args)
+	default:
+		return nil, fmt.Errorf("marshal request: unsupported request type: %v", req.RequestType)
+	}
+}
+
+// GetRequestRawData returns the raw data of the request.
+func (req *RequestContext) GetRequestRawData() string {
+	switch req.RequestType {
+	case consts.OpenAIHandlerName:
+		return req.LLMRequest.RawData
+	case consts.AnthropicHandlerName:
+		return req.AnthropicRequest.RawData
+	default:
+		klog.Errorf("unsupported request type: %v to get request raw data", req.RequestType)
+		return ""
+	}
+}
+
+// GetRequestURL returns the request url of the request.
+func (req *RequestContext) GetRequestURL() string {
+	switch req.RequestType {
+	case consts.OpenAIHandlerName:
+		return protocol.CompletionsPath
+	case consts.AnthropicHandlerName:
+		return protocol.ChatCompletionsPath
+	default:
+		klog.Errorf("unsupported request type: %v to get request url", req.RequestType)
+		return ""
+	}
+}
+
+// GetModel returns the model name of the request.
+func (req *RequestContext) GetRequestModel() string {
+	switch req.RequestType {
+	case consts.OpenAIHandlerName:
+		return req.LLMRequest.getRequestModel()
+	case consts.AnthropicHandlerName:
+		return req.AnthropicRequest.Request.Model
+	default:
+		klog.Errorf("unsupported request type: %v to get model", req.RequestType)
+		return ""
+	}
+}
+
+// GetPromptTokens returns the prompt tokens of the request.
+func (req *RequestContext) GetPromptTokens() ([]uint32, error) {
+	if req.RequestType == consts.OpenAIHandlerName {
+		return req.LLMRequest.getPromptTokens()
+	}
+	return nil, fmt.Errorf("not support get tokens")
+}
+
+// GetPromptString returns the prompt string of the request.
+func (req *RequestContext) GetPromptString() (string, error) {
+	switch req.RequestType {
+	case consts.OpenAIHandlerName:
+		return req.LLMRequest.getPromptString()
+	case consts.AnthropicHandlerName:
+		return req.AnthropicRequest.getPromptString()
+	}
+	return "", fmt.Errorf("not support get prompt string")
 }
 
 // SetLifecycleHandler sets the lifecycle handler for the request.

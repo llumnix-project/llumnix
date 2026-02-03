@@ -140,3 +140,160 @@ type CompletionResponse struct {
 	KvTransferParams  map[string]interface{} `json:"kv_transfer_params,omitempty"`
 	SystemFingerprint string                 `json:"system_fingerprint"`
 }
+
+// Clone creates a deep copy of the CompletionRequest.
+func (r *CompletionRequest) Clone() *CompletionRequest {
+	if r == nil {
+		return nil
+	}
+
+	// Direct value copy for all primitive fields
+	cloned := &CompletionRequest{
+		Id:               r.Id,
+		Rid:              r.Rid,
+		Model:            r.Model,
+		BestOf:           r.BestOf,
+		Echo:             r.Echo,
+		FrequencyPenalty: r.FrequencyPenalty,
+		LogProbs:         r.LogProbs,
+		N:                r.N,
+		PresencePenalty:  r.PresencePenalty,
+		Stream:           r.Stream,
+		Suffix:           r.Suffix,
+		Temperature:      r.Temperature,
+		TopP:             r.TopP,
+		User:             r.User,
+		BootStrapHost:    r.BootStrapHost,
+		BootStrapRoom:    r.BootStrapRoom,
+	}
+
+	// Deep copy Prompt (PromptValue contains interface{} field)
+	cloned.Prompt = clonePromptValue(&r.Prompt)
+
+	// Deep copy LogitBias map with pre-allocated capacity
+	if len(r.LogitBias) > 0 {
+		cloned.LogitBias = make(map[string]int, len(r.LogitBias))
+		for k, v := range r.LogitBias {
+			cloned.LogitBias[k] = v
+		}
+	}
+
+	// Deep copy MaxTokens pointer
+	if r.MaxTokens != nil {
+		val := *r.MaxTokens
+		cloned.MaxTokens = &val
+	}
+
+	// Deep copy MaxCompletionTokens pointer
+	if r.MaxCompletionTokens != nil {
+		val := *r.MaxCompletionTokens
+		cloned.MaxCompletionTokens = &val
+	}
+
+	// Deep copy Seed pointer
+	if r.Seed != nil {
+		val := *r.Seed
+		cloned.Seed = &val
+	}
+
+	// Deep copy Stop slice
+	if len(r.Stop) > 0 {
+		cloned.Stop = make([]string, len(r.Stop))
+		copy(cloned.Stop, r.Stop)
+	}
+
+	// Deep copy StreamOptions pointer
+	if r.StreamOptions != nil {
+		cloned.StreamOptions = &StreamOptions{
+			IncludeUsage:           r.StreamOptions.IncludeUsage,
+			IncludeContinuousUsage: r.StreamOptions.IncludeContinuousUsage,
+		}
+	}
+
+	// Shallow copy KvTransferParams map values (interface{} deep copy requires reflection)
+	if len(r.KvTransferParams) > 0 {
+		cloned.KvTransferParams = make(map[string]interface{}, len(r.KvTransferParams))
+		for k, v := range r.KvTransferParams {
+			cloned.KvTransferParams[k] = v
+		}
+	}
+
+	return cloned
+}
+
+// clonePromptValue performs deep copy of PromptValue.
+// The internal value is copied based on its runtime type (string, []string, []uint32, [][]uint32).
+func clonePromptValue(p *PromptValue) PromptValue {
+	if p == nil || p.value == nil {
+		return PromptValue{}
+	}
+
+	// Type switch to handle different prompt value types
+	switch v := p.value.(type) {
+	case string:
+		// String is immutable, direct copy is safe
+		return PromptValue{value: v}
+
+	case []string:
+		// Deep copy string slice
+		if len(v) > 0 {
+			cloned := make([]string, len(v))
+			copy(cloned, v)
+			return PromptValue{value: cloned}
+		}
+		return PromptValue{value: []string{}}
+
+	case []uint32:
+		// Deep copy uint32 slice
+		if len(v) > 0 {
+			cloned := make([]uint32, len(v))
+			copy(cloned, v)
+			return PromptValue{value: cloned}
+		}
+		return PromptValue{value: []uint32{}}
+
+	case [][]uint32:
+		// Deep copy 2D uint32 matrix
+		if len(v) > 0 {
+			cloned := make([][]uint32, len(v))
+			for i := range v {
+				if len(v[i]) > 0 {
+					cloned[i] = make([]uint32, len(v[i]))
+					copy(cloned[i], v[i])
+				}
+			}
+			return PromptValue{value: cloned}
+		}
+		return PromptValue{value: [][]uint32{}}
+
+	default:
+		// Fallback for unexpected types (should not happen in normal usage)
+		return PromptValue{value: v}
+	}
+}
+
+// Setter methods for CompletionRequest to support unified field assignment
+
+func (r *CompletionRequest) SetKvTransferParams(params map[string]interface{}) {
+	r.KvTransferParams = params
+}
+
+func (r *CompletionRequest) SetRid(rid string) {
+	r.Rid = rid
+}
+
+func (r *CompletionRequest) SetBootStrapHost(host string) {
+	r.BootStrapHost = host
+}
+
+func (r *CompletionRequest) SetBootStrapRoom(room string) {
+	r.BootStrapRoom = room
+}
+
+func (r *CompletionRequest) SetMaxTokens(maxTokens int) {
+	r.MaxTokens = &maxTokens
+}
+
+func (r *CompletionRequest) SetStream(stream bool) {
+	r.Stream = stream
+}

@@ -1,9 +1,12 @@
 package processor
 
 import (
+	"encoding/json"
 	"fmt"
 	claude_code "llm-gateway/pkg/processor/claude-code"
 	"llm-gateway/pkg/types"
+
+	"k8s.io/klog/v2"
 )
 
 // RequestAnthropicConverter is a pre-processor that converts Anthropic API requests to OpenAI format.
@@ -33,13 +36,18 @@ func (a *RequestAnthropicConverter) Name() string {
 //   - Sets req.AnthropicRequest.OpenAIRequest with the converted OpenAI format request
 func (a *RequestAnthropicConverter) PreProcess(req *types.RequestContext) error {
 	// Extract the original Anthropic request
-	anthropicReq := req.AnthropicRequest.AnthropicRequest
+	anthropicReq := req.AnthropicRequest.Request
 
 	// Convert Anthropic request to OpenAI format
 	// This handles message format, tool definitions, system prompts, and other protocol differences
 	openaiReq, err := claude_code.ConvertAnthropicRequestToOpenAI(anthropicReq)
 	if err != nil {
 		return fmt.Errorf("req %v failed to convert anthropic to openai, err: %v", req.Id, err)
+	}
+
+	if klog.V(3).Enabled() {
+		jsonData, _ := json.Marshal(openaiReq)
+		klog.V(3).Infof("req %v converted anthropic to openai: %s", req.Id, jsonData)
 	}
 
 	// Store the converted request for downstream processors and handlers

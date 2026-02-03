@@ -54,27 +54,41 @@ func NewSchedulerClient(config *options.Config) *SchedulerClient {
 	return cb
 }
 
+func needPromptTokens(c *options.Config) bool {
+	return c.LlumnixConfig.EnableFullModeScheduling &&
+		(c.LlumnixConfig.EnableCacheAwareScheduling || c.LlumnixConfig.EnableInstanceStatusLocalAccount)
+}
+
+func needPromptString(c *options.Config) bool {
+	return c.SchedulePolicy == consts.SchedulePolicyPrefixCache
+}
+
 func (cb *SchedulerClient) createScheduleRequest(req *types.RequestContext) *types.ScheduleRequest {
 	localEndpoint := cb.kac.GetLocalEndpoint()
 	// create scheduler request
 	schRequest := &types.ScheduleRequest{
 		Id:           req.Id,
-		Model:        req.LLMRequest.Model,
+		Model:        req.GetRequestModel(),
 		GatewayId:    localEndpoint.String(),
 		ScheduleMode: req.ScheduleCtx.ScheduleMode,
 		InferStage:   req.ScheduleCtx.InferStage,
 	}
 
-	if tokenIds, ok := req.LLMRequest.GetPromptTokens(); ok {
-		if cb.config.LlumnixConfig.EnableFullModeScheduling &&
-			(cb.config.LlumnixConfig.EnableCacheAwareScheduling || cb.config.LlumnixConfig.EnableInstanceStatusLocalAccount) {
+	// In the case of tokenizer, prefer to use token ids, otherwise use string length as an alternative.
+	if tokenIds, err := req.GetPromptTokens(); err == nil {
+		schRequest.PromptNumTokens = len(tokenIds)
+		if needPromptTokens(cb.config) {
 			schRequest.PromptTokenIds = tokenIds
-		} else {
-			schRequest.PromptNumTokens = len(tokenIds)
+		}
+	} else if promptText, err := req.GetPromptString(); err == nil {
+		schRequest.PromptNumTokens = len(promptText)
+		if needPromptString(cb.config) {
+			schRequest.PromptText = promptText
 		}
 	} else {
-		klog.Warningf("schedule request %s prompt string and token ids are empty or not support: %v", req.Id, req.LLMRequest.CompletionRequest.Prompt)
+		klog.Warningf("schedule request %s prompt string and token ids are empty or not support.", req.Id)
 	}
+
 	// record the borrow gateway
 	req.ScheduleCtx.GatewayId = localEndpoint.String()
 	return schRequest
@@ -194,7 +208,7 @@ func (cb *SchedulerClient) createReleaseRequest(req *types.RequestContext, worke
 	localEndpoint := cb.kac.GetLocalEndpoint()
 	return &types.ScheduleRequest{
 		Id:             req.Id,
-		Model:          req.LLMRequest.Model,
+		Model:          req.GetRequestModel(),
 		GatewayId:      localEndpoint.String(),
 		ScheduleMode:   req.ScheduleCtx.ScheduleMode,
 		InferStage:     req.ScheduleCtx.InferStage,

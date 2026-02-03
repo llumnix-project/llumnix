@@ -381,8 +381,8 @@ func (rp *ResponseChunkProcessor) trySetParser(req *types.RequestContext) error 
 	return nil
 }
 
-func (rp *ResponseChunkProcessor) PostProcess(req *types.RequestContext, done bool) error {
-	stream := req.LLMRequest.ClientStream
+func (rp *ResponseChunkProcessor) PostStreamProcess(req *types.RequestContext, done bool) error {
+	stream := req.ClientStream()
 	p := req.LLMRequest.Protocol
 	switch p {
 	case protocol.OpenAIChatCompletion: // completion -> chat completion
@@ -416,6 +416,10 @@ func (rp *ResponseChunkProcessor) PostProcess(req *types.RequestContext, done bo
 		klog.Warningf("Unknown protocol: %s", p)
 		return fmt.Errorf("Unknown protocol")
 	}
+}
+
+func (rp *ResponseChunkProcessor) PostProcess(req *types.RequestContext) error {
+	return nil
 }
 
 type toolParseResult struct {

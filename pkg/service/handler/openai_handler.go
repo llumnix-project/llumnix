@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"llm-gateway/cmd/llm-gateway/app/options"
+	"llm-gateway/pkg/consts"
 	"llm-gateway/pkg/processor"
 	"llm-gateway/pkg/protocol"
 	"llm-gateway/pkg/types"
@@ -17,7 +18,7 @@ import (
 
 // init registers the OpenAI handler factory function with the handler registry.
 func init() {
-	RegisterHandler("openai", func(config *options.Config) (RequestHandler, error) {
+	RegisterHandler(consts.OpenAIHandlerName, func(config *options.Config) (RequestHandler, error) {
 		return NewOpenAIHandler(config)
 	})
 }
@@ -81,6 +82,11 @@ func NewOpenAIHandler(config *options.Config) (RequestHandler, error) {
 	return handler, nil
 }
 
+// Name returns the name of the handler.
+func (h *OpenAIHandler) Name() string {
+	return consts.OpenAIHandlerName
+}
+
 // unmarshalRequest reads and parses the HTTP request body into the appropriate LLM request structure.
 // It validates the request schema and determines the protocol type (chat completion or text completion).
 // Returns an error if the request body cannot be read or parsed.
@@ -106,10 +112,9 @@ func (h *OpenAIHandler) unmarshalRequest(reqCtx *types.RequestContext) error {
 			klog.Warningf("not support ChatCompletionRequest failed: %v, data: %s", err, string(data))
 			return fmt.Errorf("Invalid ChatCompletionRequest format")
 		}
-		reqCtx.LLMRequest.Model = chatCompletion.Model
 		reqCtx.LLMRequest.Protocol = protocol.OpenAIChatCompletion
 		reqCtx.LLMRequest.ChatCompletionRequest = &chatCompletion
-		reqCtx.HttpRequest.Stream = chatCompletion.Stream
+		reqCtx.LLMRequest.OriginChatCompletionRequest = chatCompletion.Clone()
 	case protocol.IsCompletionsURL(url):
 		// Parse text completion request (e.g., /v1/completions)
 		var completionRequest protocol.CompletionRequest
@@ -118,10 +123,9 @@ func (h *OpenAIHandler) unmarshalRequest(reqCtx *types.RequestContext) error {
 			klog.Warningf("not support CompletionRequest failed: %v: data: %s", err, string(data))
 			return fmt.Errorf("Invalid CompletionRequest format")
 		}
-		reqCtx.LLMRequest.Model = completionRequest.Model
 		reqCtx.LLMRequest.Protocol = protocol.OpenAICompletion
 		reqCtx.LLMRequest.CompletionRequest = &completionRequest
-		reqCtx.HttpRequest.Stream = completionRequest.Stream
+		reqCtx.LLMRequest.OriginCompletionRequest = completionRequest.Clone()
 	default:
 		// Unsupported URL path
 		klog.Warningf("not support URL: %s", url)
@@ -182,9 +186,9 @@ func (h *OpenAIHandler) ParseChunk(reqCtx *types.RequestContext, data []byte) er
 // The response structure is cleared after marshaling to prevent memory leaks.
 // Returns the marshaled JSON bytes or an error if marshaling fails.
 func (h *OpenAIHandler) marshalResponse(reqCtx *types.RequestContext) ([]byte, error) {
+	stream := reqCtx.ClientStream()
 	switch reqCtx.LLMRequest.Protocol {
 	case protocol.OpenAIChatCompletion:
-		stream := reqCtx.LLMRequest.ClientStream
 		klog.V(3).Infof("[%s] marshalResponse: streaming=%v chat completion response", reqCtx.Id, stream)
 		if stream {
 			// Handle streaming chat completion response
@@ -207,7 +211,6 @@ func (h *OpenAIHandler) marshalResponse(reqCtx *types.RequestContext) ([]byte, e
 		}
 	case protocol.OpenAICompletion:
 		// Handle text completion response (both streaming and non-streaming)
-		stream := reqCtx.LLMRequest.ClientStream
 		klog.V(3).Infof("[%s] marshalResponse: streaming=%v completion response", reqCtx.Id, stream)
 		if reqCtx.LLMRequest.CompletionResponse == nil {
 			klog.Warningf("[%s] marshalResponse: no completion response to marshal", reqCtx.Id)
@@ -232,7 +235,6 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 	if err != nil {
 		klog.Errorf("failed to stream inference: %v", err)
 		WriteErrorResponse(req, err)
-		close(req.ResponseChan)
 		req.TriggerPostRequest()
 		return
 	}
@@ -248,13 +250,10 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 // Returns an error if post-processing, marshaling, or writing fails.
 func (h *OpenAIHandler) ProcessAndWriteChunk(req *types.RequestContext, done bool) error {
 	// Execute post-processing chain and measure duration
-	tStart := time.Now()
-	err := h.postProcessors.Process(req, done)
+	err := h.postProcessors.ProcessStream(req, done)
 	if err != nil {
 		return fmt.Errorf("post-processor failed: %w", err)
 	}
-	tCost := time.Since(tStart)
-	req.RequestStats.PostprocessCost += tCost
 
 	// Marshal the response structure to JSON
 	data, err := h.marshalResponse(req)

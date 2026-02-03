@@ -14,7 +14,10 @@ const (
 	ChatMessageRoleTool      = "tool"
 )
 
-const ChatCompletionsSuffix = "/chat/completions"
+const (
+	ChatCompletionsPath   = "/v1/chat/completions"
+	ChatCompletionsSuffix = "/chat/completions"
+)
 
 func IsChatCompletionsURL(url string) bool {
 	return len(url) >= len(ChatCompletionsSuffix) && url[len(url)-len(ChatCompletionsSuffix):] == ChatCompletionsSuffix
@@ -230,6 +233,8 @@ type ChatCompletionRequest struct {
 	StreamOptions *StreamOptions `json:"stream_options,omitempty"`
 	// Disable the default behavior of parallel tool calls by setting it: false.
 	ParallelToolCalls interface{} `json:"parallel_tool_calls,omitempty"`
+	// kv transfer params
+	KvTransferParams map[string]interface{} `json:"kv_transfer_params,omitempty"`
 
 	// ChatTemplateKwargs provides a way to add non-standard parameters to the request body.
 	// Additional kwargs to pass to the template renderer. Will be accessible by the chat template.
@@ -248,6 +253,11 @@ type ChatCompletionRequestExtensions struct {
 	// ensuring predictable and consistent outputs in scenarios where specific
 	// choices are required.
 	GuidedChoice []string `json:"guided_choice,omitempty"`
+
+	// Sglang PD disaggregation related fields
+	Rid           string `json:"rid,omitempty"`            // sglang
+	BootStrapHost string `json:"bootstrap_host,omitempty"` // sglang
+	BootStrapRoom string `json:"bootstrap_room,omitempty"` // sglang
 }
 
 type StreamOptions struct {
@@ -399,4 +409,223 @@ type ChatCompletionStreamResponse struct {
 	// An optional field that will only be present when you set stream_options: {"include_usage": true} in your request.
 	// When present, it contains a null value except for the last chunk which contains the token usage statistics
 	// for the entire request.
+}
+
+// Clone creates a deep copy of the ChatCompletionRequest.
+func (r *ChatCompletionRequest) Clone() *ChatCompletionRequest {
+	if r == nil {
+		return nil
+	}
+
+	// Direct value copy for all primitive fields (compiler optimizes to efficient memcpy)
+	cloned := &ChatCompletionRequest{
+		Model:             r.Model,
+		MaxTokens:         r.MaxTokens,
+		Temperature:       r.Temperature,
+		TopP:              r.TopP,
+		N:                 r.N,
+		Stream:            r.Stream,
+		PresencePenalty:   r.PresencePenalty,
+		FrequencyPenalty:  r.FrequencyPenalty,
+		LogProbs:          r.LogProbs,
+		TopLogProbs:       r.TopLogProbs,
+		User:              r.User,
+		FunctionCall:      r.FunctionCall,
+		ToolChoice:        r.ToolChoice,
+		ParallelToolCalls: r.ParallelToolCalls,
+	}
+
+	// Copy embedded ChatCompletionRequestExtensions fields
+	cloned.Rid = r.Rid
+	cloned.BootStrapHost = r.BootStrapHost
+	cloned.BootStrapRoom = r.BootStrapRoom
+
+	// Deep copy Messages slice with pre-allocated capacity
+	if len(r.Messages) > 0 {
+		cloned.Messages = make([]ChatCompletionMessage, len(r.Messages))
+		for i := range r.Messages {
+			cloned.Messages[i] = cloneChatCompletionMessage(&r.Messages[i])
+		}
+	}
+
+	// Deep copy Stop slice (compiler optimizes copy() to memmove for string slices)
+	if len(r.Stop) > 0 {
+		cloned.Stop = make([]string, len(r.Stop))
+		copy(cloned.Stop, r.Stop)
+	}
+
+	// Deep copy ResponseFormat pointer with nested JSONSchema
+	if r.ResponseFormat != nil {
+		cloned.ResponseFormat = &ChatCompletionResponseFormat{
+			Type: r.ResponseFormat.Type,
+		}
+		if r.ResponseFormat.JSONSchema != nil {
+			cloned.ResponseFormat.JSONSchema = &ChatCompletionResponseFormatJSONSchema{
+				Name:        r.ResponseFormat.JSONSchema.Name,
+				Description: r.ResponseFormat.JSONSchema.Description,
+				Schema:      r.ResponseFormat.JSONSchema.Schema,
+				Strict:      r.ResponseFormat.JSONSchema.Strict,
+			}
+		}
+	}
+
+	// Deep copy Seed pointer (dereference-and-repoint pattern)
+	if r.Seed != nil {
+		val := *r.Seed
+		cloned.Seed = &val
+	}
+
+	// Deep copy LogitBias map with pre-allocated capacity to avoid rehashing
+	if len(r.LogitBias) > 0 {
+		cloned.LogitBias = make(map[string]int, len(r.LogitBias))
+		for k, v := range r.LogitBias {
+			cloned.LogitBias[k] = v
+		}
+	}
+
+	// Deep copy Functions slice (deprecated field, kept for backward compatibility)
+	if len(r.Functions) > 0 {
+		cloned.Functions = make([]FunctionDefinition, len(r.Functions))
+		for i := range r.Functions {
+			cloned.Functions[i] = cloneFunctionDefinition(&r.Functions[i])
+		}
+	}
+
+	// Deep copy Tools slice with nested Function pointers
+	if len(r.Tools) > 0 {
+		cloned.Tools = make([]Tool, len(r.Tools))
+		for i := range r.Tools {
+			cloned.Tools[i] = Tool{Type: r.Tools[i].Type}
+			if r.Tools[i].Function != nil {
+				funcDef := cloneFunctionDefinition(r.Tools[i].Function)
+				cloned.Tools[i].Function = &funcDef
+			}
+		}
+	}
+
+	// Deep copy StreamOptions pointer
+	if r.StreamOptions != nil {
+		cloned.StreamOptions = &StreamOptions{
+			IncludeUsage:           r.StreamOptions.IncludeUsage,
+			IncludeContinuousUsage: r.StreamOptions.IncludeContinuousUsage,
+		}
+	}
+
+	// Shallow copy KvTransferParams map values (interface{} deep copy requires reflection)
+	if len(r.KvTransferParams) > 0 {
+		cloned.KvTransferParams = make(map[string]interface{}, len(r.KvTransferParams))
+		for k, v := range r.KvTransferParams {
+			cloned.KvTransferParams[k] = v
+		}
+	}
+
+	// Shallow copy ChatTemplateKwargs map values
+	if len(r.ChatTemplateKwargs) > 0 {
+		cloned.ChatTemplateKwargs = make(map[string]any, len(r.ChatTemplateKwargs))
+		for k, v := range r.ChatTemplateKwargs {
+			cloned.ChatTemplateKwargs[k] = v
+		}
+	}
+
+	// Deep copy GuidedChoice slice
+	if len(r.GuidedChoice) > 0 {
+		cloned.GuidedChoice = make([]string, len(r.GuidedChoice))
+		copy(cloned.GuidedChoice, r.GuidedChoice)
+	}
+
+	return cloned
+}
+
+// cloneChatCompletionMessage performs deep copy of a single message structure.
+// Recursively clones all nested slices and pointer fields to ensure complete isolation.
+func cloneChatCompletionMessage(m *ChatCompletionMessage) ChatCompletionMessage {
+	cloned := ChatCompletionMessage{
+		Role:             m.Role,
+		Content:          m.Content,
+		ReasoningContent: m.ReasoningContent,
+		Name:             m.Name,
+		ToolCallID:       m.ToolCallID,
+	}
+
+	// Deep copy MultiContent slice with nested ImageURL pointers
+	if len(m.MultiContent) > 0 {
+		cloned.MultiContent = make([]ChatMessagePart, len(m.MultiContent))
+		for i := range m.MultiContent {
+			cloned.MultiContent[i] = ChatMessagePart{
+				Type: m.MultiContent[i].Type,
+				Text: m.MultiContent[i].Text,
+			}
+			if m.MultiContent[i].ImageURL != nil {
+				cloned.MultiContent[i].ImageURL = &ChatMessageImageURL{
+					URL:    m.MultiContent[i].ImageURL.URL,
+					Detail: m.MultiContent[i].ImageURL.Detail,
+				}
+			}
+		}
+	}
+
+	// Deep copy FunctionCall pointer
+	if m.FunctionCall != nil {
+		cloned.FunctionCall = &FunctionCall{
+			Name:      m.FunctionCall.Name,
+			Arguments: m.FunctionCall.Arguments,
+		}
+	}
+
+	// Deep copy ToolCalls slice with nested Function and Index pointer
+	if len(m.ToolCalls) > 0 {
+		cloned.ToolCalls = make([]ToolCall, len(m.ToolCalls))
+		for i := range m.ToolCalls {
+			cloned.ToolCalls[i] = ToolCall{
+				ID:   m.ToolCalls[i].ID,
+				Type: m.ToolCalls[i].Type,
+				Function: FunctionCall{
+					Name:      m.ToolCalls[i].Function.Name,
+					Arguments: m.ToolCalls[i].Function.Arguments,
+				},
+			}
+			if m.ToolCalls[i].Index != nil {
+				val := *m.ToolCalls[i].Index
+				cloned.ToolCalls[i].Index = &val
+			}
+		}
+	}
+
+	return cloned
+}
+
+// cloneFunctionDefinition performs deep copy of function definition.
+func cloneFunctionDefinition(f *FunctionDefinition) FunctionDefinition {
+	return FunctionDefinition{
+		Name:        f.Name,
+		Description: f.Description,
+		Strict:      f.Strict,
+		Parameters:  f.Parameters, // Shallow copy (safe for typical immutable schemas)
+	}
+}
+
+// Setter methods for ChatCompletionRequest to support unified field assignment
+
+func (r *ChatCompletionRequest) SetKvTransferParams(params map[string]interface{}) {
+	r.KvTransferParams = params
+}
+
+func (r *ChatCompletionRequest) SetRid(rid string) {
+	r.Rid = rid
+}
+
+func (r *ChatCompletionRequest) SetBootStrapHost(host string) {
+	r.BootStrapHost = host
+}
+
+func (r *ChatCompletionRequest) SetBootStrapRoom(room string) {
+	r.BootStrapRoom = room
+}
+
+func (r *ChatCompletionRequest) SetMaxTokens(maxTokens int) {
+	r.MaxTokens = maxTokens
+}
+
+func (r *ChatCompletionRequest) SetStream(stream bool) {
+	r.Stream = stream
 }

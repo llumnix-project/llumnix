@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
 	"llm-gateway/pkg/types"
 	"net/http"
@@ -43,35 +42,30 @@ func (b *SimpleBackend) StreamInference(req *types.RequestContext) (<-chan Strea
 	go func() {
 		defer close(chunkChan)
 
-		body, err := json.Marshal(req.LLMRequest.CompletionRequest)
+		body, err := req.MarshalRequestWithArgs(nil)
 		if err != nil {
 			klog.Errorf("failed to marshal request body: %v", err)
 			chunkChan <- StreamChunk{err: err}
 			return
 		}
 
-		// Build backend request
-		newReq, err := MakeNewBackendRequest(req, body, worker)
-		if err != nil {
-			klog.Errorf("failed to create new backend request: %v", err)
-			chunkChan <- StreamChunk{err: err}
-			return
-		}
-
-		// Execute request with retry
-		respBody, err := DoRequest(newReq, b.client, body)
-		if err != nil {
-			klog.Errorf("failed to do backend request: %v", err)
-			chunkChan <- StreamChunk{err: err}
-			return
-		}
-		defer respBody.Close()
-
-		// Stream read response
-		if err := StreamRead(req, chunkChan, respBody); err != nil {
-			chunkChan <- StreamChunk{err: err}
-		}
+		StreamReadFromBackend(req, b.client, body, worker, chunkChan)
 	}()
 
 	return chunkChan, nil
+}
+
+func (b *SimpleBackend) Inference(req *types.RequestContext) ([]byte, error) {
+	worker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleNormal)
+	if worker == nil {
+		return nil, fmt.Errorf("no available worker for role: %s", types.InferRoleNormal)
+	}
+
+	body, err := req.MarshalRequestWithArgs(nil)
+	if err != nil {
+		klog.Errorf("failed to marshal request body: %v", err)
+		return nil, err
+	}
+
+	return ReadFromBackend(req, b.client, body, worker)
 }

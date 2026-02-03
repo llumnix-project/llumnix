@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"llm-gateway/pkg/utils"
+
 	"github.com/spf13/pflag"
 	"k8s.io/klog/v2"
 
@@ -83,6 +85,18 @@ type Config struct {
 	// backend services are actively discovered through the scheduler, which can
 	// only be used in the scenario where BackendService are set
 	UseDiscovery string
+
+	// time to live of the prefix cache, unit is second
+	PrefixCacheTTL int
+	// max size of the prefix cache, unit is byte
+	PrefixCacheLimit int64
+	// load tolerance factor for prefix cache worker selection (0.0-1.0)
+	// determines acceptable load deviation above mean when selecting cache-hit workers
+	// e.g., 0.5 means workers with load <= (mean * 1.5) are acceptable
+	PrefixCacheLoadTolerance float64
+	// if the number of requests for an instance exceeds this value when the prefix
+	// cache is satisfied, a new instance will be selected to be a more suitable one
+	RequestsThreshold int
 
 	// Tokenizer related configuration
 	// builtin tokenizer name
@@ -253,6 +267,9 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&c.ColocatedRescheduleMode, "colocated-reschedule-mode", false, "work as a scheduler with a colocated rescheduler")
 	flags.BoolVar(&c.StandaloneRescheduleMode, "standalone-reschedule-mode", false, "work as a standalone rescheduler")
 	flags.StringVar(&c.SchedulePolicy, "schedule-policy", "least-token", "schedule policy, now support round-robin, load-balance, flood")
+	flags.IntVar(&c.PrefixCacheTTL, "prefix-cache-ttl", 1800, "prefix cache time to live")
+	flags.Float64Var(&c.PrefixCacheLoadTolerance, "prefix-cache-load-tolerance", 0.3, "load tolerance factor (0.0-1.0) for prefix cache worker selection")
+	flags.IntVar(&c.RequestsThreshold, "requests-threshold", 10, "the threshold of try to choose other instance, 0 indicates the average value of usage requests")
 
 	flags.StringVar(&c.PDSplitMode, "pdsplit-mode", "", "pd split mode, this configuration only takes effect under the pd-split policy, now support vllm-vineyard, vllm-kvt, sglang-mooncake")
 
@@ -408,47 +425,6 @@ func (c *Config) IsPDSplitMode() bool {
 	return c.PDSplitMode != ""
 }
 
-func ProcessLlumnixConfig(flags *pflag.FlagSet) {
-	// use a deprecated args to hack
-	hackArgs := flags.Lookup("prefill-policy")
-	if hackArgs != nil && strings.HasPrefix(hackArgs.Value.String(), "llumnix-") {
-		parts := strings.SplitN(hackArgs.Value.String(), ",", 2)
-
-		fullPolicyName := parts[0]
-		realPolicyName := strings.TrimPrefix(fullPolicyName, "llumnix-")
-		schedulePolicy := flags.Lookup("schedule-policy")
-		err := schedulePolicy.Value.Set(realPolicyName)
-		if err != nil {
-			klog.Errorf("Failed to set schedule-policy to %s: %v", realPolicyName, err)
-			return
-		}
-		klog.Infof("Set schedule-policy to %s", realPolicyName)
-
-		if len(parts) == 2 {
-			llumnixArgs := strings.Split(parts[1], ",")
-			for _, arg := range llumnixArgs {
-				kv := strings.SplitN(strings.TrimSpace(arg), "=", 2)
-				if len(kv) == 2 {
-					key := strings.TrimSpace(kv[0])
-					value := strings.TrimSpace(kv[1])
-
-					flag := flags.Lookup(key)
-					if flag != nil {
-						klog.Infof("Set flag %s with value %s", key, value)
-						err := flag.Value.Set(value)
-						if err != nil {
-							klog.Errorf("Failed to set flag %s to value %s: %v", key, value, err)
-						}
-					} else {
-						flags.String(key, value, "Auto-generated flag from schedule-policy")
-						klog.Infof("Created new flag %s with value %s", key, value)
-					}
-				}
-			}
-		}
-	}
-}
-
 func (c *Config) IsPDRoundRobin() bool {
 	return c.IsPDSplitMode() && c.SchedulePolicy == consts.SchedulePolicyRoundRobin
 }
@@ -481,16 +457,338 @@ func (c *Config) GetModelName(origName string) string {
 	}
 }
 func (c *Config) UseTokenizerProcessor() bool {
-	return strings.ToLower(c.ProcessorType) == strings.ToLower(consts.TokenizerProcessor) ||
+	return strings.EqualFold(c.ProcessorType, consts.TokenizerProcessor) ||
 		c.TokenizerName != "" || c.TokenizerPath != ""
 }
 
 func (c *Config) UseResponseFormatterProcessor() bool {
-	return strings.ToLower(c.ProcessorType) == strings.ToLower(consts.RESPONSEFORMATTER)
+	return strings.EqualFold(c.ProcessorType, consts.RESPONSEFORMATTER)
 }
 
 func (c *Config) EnableRequestReport() bool {
 	return c.RequestsReporterDuration > 0 && !c.LlumnixConfig.EnableFullModeScheduling
+}
+
+// getPrefixCacheLimit configures the prefix cache size based on available memory.
+// It reserves a fixed amount (consts.DefaultPrefixCacheReservedSize = 1GB) for program runtime,
+// and allocates the remaining memory to the prefix cache.
+//
+// Memory calculation:
+//
+//	PrefixCacheLimit = (TotalMemory - ReservedSize) / MB
+func (c *Config) getPrefixCacheLimit() (int64, error) {
+	memLimit := utils.GetLimitMemory()
+
+	if memLimit == 0 {
+		klog.Infof("No memory limit detected, using default value: %d MB", c.PrefixCacheLimit/consts.MB)
+		return consts.DefaultPrefixCacheMaxSize, nil
+	}
+
+	// Reserve memory for program runtime (heap, stack, goroutines, OS buffers, etc.)
+	cacheSize := memLimit - consts.DefaultPrefixCacheReservedSize
+	if cacheSize < 0 {
+		klog.Errorf("Memory limit (%d bytes) is smaller than reserved size (%d bytes), prefix cache cannot be initialized",
+			memLimit, consts.DefaultPrefixCacheReservedSize)
+		return 0, fmt.Errorf("memory limit is smaller than reserved size")
+	}
+
+	// Convert bytes to MB for storage
+	klog.Infof("Prefix cache size configured: %d MB (total memory: %d bytes, reserved: %d bytes)",
+		c.PrefixCacheLimit/consts.MB, memLimit, consts.DefaultPrefixCacheReservedSize)
+	return cacheSize, nil
+}
+
+// setupPrefixCacheSize configures the prefix cache size based on available memory.
+func (c *Config) setupPrefixCacheSize() error {
+	cacheSize, err := c.getPrefixCacheLimit()
+	if err != nil {
+		return err
+	}
+	if c.SchedulePolicy != consts.SchedulePolicyPDSplit {
+		c.PrefixCacheLimit = cacheSize
+	} else {
+		if c.PrefillPolicy == consts.SchedulePolicyPrefixCache && c.DecodePolicy == consts.SchedulePolicyPrefixCache {
+			c.PrefixCacheLimit = c.PrefixCacheLimit / 2
+			klog.Infof("Prefix cache size divided by 2, as both prefill and decode use prefix cache: %d MB", c.PrefixCacheLimit/consts.MB)
+		}
+		c.PrefixCacheLimit = consts.DefaultPrefixCacheMaxSize
+	}
+	return nil
+}
+
+// createConfigManager initializes the dynamic property manager for runtime config updates.
+func (c *Config) createConfigManager() error {
+	prefetchKeys := []prop.PrefetchKey{
+		{Key: "llm_gateway.traffic_mirror.enable", Type: prop.BoolType},
+		{Key: "llm_gateway.traffic_mirror.target", Type: prop.StringType},
+		{Key: "llm_gateway.traffic_mirror.ratio", Type: prop.FloatType},
+		{Key: "llm_gateway.traffic_mirror.token", Type: prop.StringType},
+		{Key: "llm_gateway.traffic_mirror.timeout", Type: prop.FloatType},
+		{Key: "llm_gateway.traffic_mirror.enable_log", Type: prop.BoolType},
+	}
+	c.configManager = prop.NewConfigManager([]string{consts.PropertyFile}, prefetchKeys)
+	return nil
+}
+
+// updateDiscoveryEndpoint overrides the discovery endpoint from the DISCOVERY_ENDPOINT environment variable.
+func (c *Config) updateDiscoveryEndpoint() error {
+	discoveryEndpoint := os.Getenv("DISCOVERY_ENDPOINT")
+	if len(discoveryEndpoint) > 0 {
+		c.DiscoveryEndpoint = discoveryEndpoint
+	}
+	return nil
+}
+
+// Complete performs post-initialization configuration setup in a well-defined sequence.
+// This function MUST be called after flag parsing and before the application starts.
+func (c *Config) Complete(flags *pflag.FlagSet) error {
+	// Load configuration from property files
+	c.loadCfgFromProperties()
+
+	// Initialize dynamic property manager for runtime config updates
+	if err := c.createConfigManager(); err != nil {
+		return fmt.Errorf("failed to create config manager: %w", err)
+	}
+
+	// Override discovery endpoint from environment variable
+	if err := c.updateDiscoveryEndpoint(); err != nil {
+		return fmt.Errorf("failed to update discovery endpoint: %w", err)
+	}
+
+	// Calculate prefix cache size based on system memory
+	if err := c.setupPrefixCacheSize(); err != nil {
+		return fmt.Errorf("failed to setup prefix cache size: %w", err)
+	}
+
+	// Parse llumnix-extra-args to override flag values (highest priority)
+	if err := c.ParseLlumnixExtraArgs(flags); err != nil {
+		return fmt.Errorf("failed to parse llumnix extra args: %w", err)
+	}
+
+	// Print comprehensive configuration summary for debugging and auditing
+	c.printConfigSummary()
+
+	return nil
+}
+
+// printConfigSummary logs all configuration values for debugging and auditing purposes.
+// Configuration is grouped into logical sections for better readability:
+// - Basic service settings (host, port, service names)
+// - Network and connection settings (retry, timeout, queue)
+// - Scheduling policies and algorithms
+// - Tokenizer and processor configuration
+// - Prefix cache settings
+// - Redis and batch processing configuration
+// - Llumnix full-mode scheduling configuration
+// - Feature flags and operational modes
+func (c *Config) printConfigSummary() {
+	// Helper function to log values (only skips empty strings)
+	logIfNotEmpty := func(format string, value interface{}) {
+		switch v := value.(type) {
+		case string:
+			if v != "" {
+				klog.Infof(format, v)
+			}
+		default:
+			klog.Infof(format, v) // Always print numbers and booleans
+		}
+	}
+
+	klog.Infof("========== Configuration Summary ==========")
+
+	// Basic service settings
+	klog.Infof("[Service]")
+	klog.Infof("  listen: %s:%d", c.Host, c.Port)
+	logIfNotEmpty("  service: %s", c.Service)
+	logIfNotEmpty("  llm-gateway: %s", c.LlmGateway)
+	logIfNotEmpty("  llm-scheduler: %s", c.LlmScheduler)
+	logIfNotEmpty("  backend-service: %s", c.BackendService)
+	logIfNotEmpty("  redis: %s", c.Redis)
+
+	// Discovery and test settings
+	klog.Infof("[Discovery]")
+	logIfNotEmpty("  use-discovery: %s", c.UseDiscovery)
+	logIfNotEmpty("  discovery-endpoint: %s", c.DiscoveryEndpoint)
+	logIfNotEmpty("  local-test-ips: %s", c.LocalTestIPs)
+	logIfNotEmpty("  local-test-scheduler-ip: %s", c.LocalTestSchedulerIP)
+
+	// Network and connection settings
+	klog.Infof("[Network]")
+	logIfNotEmpty("  retry-count: %d", c.RetryCount)
+	logIfNotEmpty("  wait-queue-threads: %d", c.WaitQueueThreads)
+	logIfNotEmpty("  wait-schedule-timeout: %dms", c.WaitScheduleTimeout)
+	logIfNotEmpty("  wait-schedule-try-period: %dms", c.WaitScheduleTryPeriod)
+	logIfNotEmpty("  max-queue-size: %d", c.MaxQueueSize)
+
+	// Scheduling policies
+	klog.Infof("[Scheduling]")
+	logIfNotEmpty("  schedule-policy: %s", c.SchedulePolicy)
+	logIfNotEmpty("  pd-split-mode: %s", c.PDSplitMode)
+	logIfNotEmpty("  separate-pd-schedule: %v", c.SeparatePDSchedule)
+	logIfNotEmpty("  infer-backend: %s", c.InferBackend)
+
+	// Legacy limit settings (TODO: remove)
+	if c.LimitRequests > 0 || c.PrefillLimitRequests > 0 || c.DecodeLimitRequests > 0 {
+		klog.Infof("[Legacy Limits - Requests]")
+		logIfNotEmpty("  limit-requests: %d", c.LimitRequests)
+		logIfNotEmpty("  prefill-limit-requests: %d", c.PrefillLimitRequests)
+		logIfNotEmpty("  decode-limit-requests: %d", c.DecodeLimitRequests)
+	}
+	if c.LimitTokens > 0 || c.PrefillLimitTokens > 0 || c.DecodeLimitTokens > 0 {
+		klog.Infof("[Legacy Limits - Tokens]")
+		logIfNotEmpty("  limit-tokens: %d", c.LimitTokens)
+		logIfNotEmpty("  prefill-limit-tokens: %d", c.PrefillLimitTokens)
+		logIfNotEmpty("  decode-limit-tokens: %d", c.DecodeLimitTokens)
+		logIfNotEmpty("  limit-tokens-threshold-scale: %.3f", c.LimitTokensThresholdScale)
+	}
+	logIfNotEmpty("  prompt-length-threshold: %d", c.PromptLengthThreshold)
+
+	// Tokenizer and processor
+	klog.Infof("[Tokenizer & Processor]")
+	logIfNotEmpty("  tokenizer-name: %s", c.TokenizerName)
+	logIfNotEmpty("  tokenizer-path: %s", c.TokenizerPath)
+	logIfNotEmpty("  tokenizer-mode: %s", c.TokenizerMode)
+	logIfNotEmpty("  chat-template: %s", c.ChatTemplatePath)
+	logIfNotEmpty("  tool-call-parser: %s", c.ToolCallParser)
+	logIfNotEmpty("  reasoning-parser: %s", c.ReasoningParser)
+	logIfNotEmpty("  processor-type: %s", c.ProcessorType)
+	logIfNotEmpty("  enable-token-filter: %v", c.EnableTokenFilter)
+
+	// Prefix cache
+	klog.Infof("[Prefix Cache]")
+	logIfNotEmpty("  prefix-cache-ttl: %ds", c.PrefixCacheTTL)
+	logIfNotEmpty("  prefix-cache-limit: %d MB", c.PrefixCacheLimit/consts.MB)
+	logIfNotEmpty("  prefix-cache-load-tolerance: %.2f", c.PrefixCacheLoadTolerance)
+	logIfNotEmpty("  requests-threshold: %d", c.RequestsThreshold)
+
+	// Redis and batch processing
+	if c.RedisAddrs != "" || c.BatchOSSPath != "" {
+		klog.Infof("[Redis & Batch]")
+		logIfNotEmpty("  redis-addrs: %s", c.RedisAddrs)
+		logIfNotEmpty("  redis-username: %s", c.RedisUsername)
+		logIfNotEmpty("  redis-retry-times: %d", c.RedisRetryTimes)
+		logIfNotEmpty("  redis-discovery-status-ttl: %dms", c.RedisDiscoveryStatusTTLMs)
+		logIfNotEmpty("  redis-discovery-refresh-interval: %dms", c.RedisDiscoveryRefreshIntervalMs)
+		logIfNotEmpty("  batch-oss-path: %s", c.BatchOSSPath)
+		logIfNotEmpty("  batch-oss-endpoint: %s", c.BatchOSSEndpoint)
+		logIfNotEmpty("  batch-parallel: %d", c.BatchParallel)
+		logIfNotEmpty("  batch-lines-per-shard: %d", c.BatchLinesPerShard)
+		logIfNotEmpty("  batch-request-timeout: %s", c.BatchRequestTimeout)
+		logIfNotEmpty("  batch-request-retry-times: %d", c.BatchRequestRetryTimes)
+	}
+
+	// Route policy
+	if c.RoutePolicy != "" {
+		klog.Infof("[Routing]")
+		logIfNotEmpty("  route-policy: %s", c.RoutePolicy)
+		logIfNotEmpty("  route-config: %s", c.RouteConfigRaw)
+	}
+
+	// Llumnix full-mode scheduling
+	if c.LlumnixConfig.EnableFullModeScheduling {
+		klog.Infof("[Llumnix Full-Mode Scheduling]")
+		klog.Infof("  enabled: %v", c.LlumnixConfig.EnableFullModeScheduling)
+
+		// CMS settings
+		klog.Infof("  [CMS]")
+		logIfNotEmpty("    redis-host: %s", c.LlumnixConfig.CmsRedisHost)
+		logIfNotEmpty("    redis-port: %s", c.LlumnixConfig.CmsRedisPort)
+		logIfNotEmpty("    redis-username: %s", c.LlumnixConfig.CmsRedisUsername)
+		logIfNotEmpty("    socket-timeout: %.1fs", c.LlumnixConfig.CmsRedisSocketTimeout)
+		logIfNotEmpty("    retry-times: %d", c.LlumnixConfig.CmsRedisRetryTimes)
+		logIfNotEmpty("    pull-status-interval: %dms", c.LlumnixConfig.CmsPullStatusIntervalMs)
+		logIfNotEmpty("    pull-metadata-interval: %dms", c.LlumnixConfig.CmsPullMetadataIntervalMs)
+		logIfNotEmpty("    record-metrics-interval: %dms", c.LlumnixConfig.CmsRecordMetricsInterval)
+
+		// KVS MetaService
+		if c.LlumnixConfig.EnableCacheAwareScheduling {
+			klog.Infof("  [KVS MetaService]")
+			klog.Infof("    cache-aware-scheduling: %v", c.LlumnixConfig.EnableCacheAwareScheduling)
+			logIfNotEmpty("    config-path: %s", c.LlumnixConfig.KvsMetaServiceConfigPath)
+			logIfNotEmpty("    chunk-size: %d", c.LlumnixConfig.KvsChunkSize)
+			logIfNotEmpty("    enable-save-unfull-chunk: %v", c.LlumnixConfig.KvsEnableSaveUnfullChunk)
+			logIfNotEmpty("    iris-meta-prefix: %s", c.LlumnixConfig.KvsIrisMetaPrefix)
+			logIfNotEmpty("    vllm-block-prefix: %s", c.LlumnixConfig.KvsVLLMBlockPrefix)
+			logIfNotEmpty("    retry-times: %d", c.LlumnixConfig.KvsRetryTimes)
+			logIfNotEmpty("    retry-interval: %dms", c.LlumnixConfig.KvsRetryIntervalMs)
+			logIfNotEmpty("    meta-service-down-duration: %ds", c.LlumnixConfig.KvsMetaServiceDownDurationS)
+			logIfNotEmpty("    redis-cluster-hosts: %s", c.LlumnixConfig.KvsMetaServiceRedisClusterHosts)
+		}
+
+		// Dispatch settings
+		klog.Infof("  [Dispatch]")
+		logIfNotEmpty("    top-k: %d", c.LlumnixConfig.DispatchTopK)
+		logIfNotEmpty("    neutral-load-metric: %s", c.LlumnixConfig.DispatchNeutralLoadMetric)
+		logIfNotEmpty("    neutral-load-threshold: %.1f", c.LlumnixConfig.DispatchNeutralLoadThreshold)
+		logIfNotEmpty("    prefill-load-metric: %s", c.LlumnixConfig.DispatchPrefillLoadMetric)
+		logIfNotEmpty("    prefill-load-threshold: %.1f", c.LlumnixConfig.DispatchPrefillLoadThreshold)
+		logIfNotEmpty("    decode-load-metric: %s", c.LlumnixConfig.DispatchDecodeLoadMetric)
+		logIfNotEmpty("    decode-load-threshold: %.2f", c.LlumnixConfig.DispatchDecodeLoadThreshold)
+		logIfNotEmpty("    prefill-cache-locality-metric: %s", c.LlumnixConfig.DispatchPrefillCacheLocalityMetric)
+		logIfNotEmpty("    kv-cache-block-size: %d", c.LlumnixConfig.KvCacheBlockSize)
+		logIfNotEmpty("    enable-instance-status-local-account: %v", c.LlumnixConfig.EnableInstanceStatusLocalAccount)
+		logIfNotEmpty("    request-local-account-staleness: %ds", c.LlumnixConfig.RequestLocalAccountStalenessSeconds)
+		logIfNotEmpty("    allow-concurrent-schedule: %v", c.LlumnixConfig.AllowConcurrentSchedule)
+		logIfNotEmpty("    enable-predictor-enhanced-scheduling: %v", c.LlumnixConfig.EnablePredictorEnhancedScheduling)
+		logIfNotEmpty("    max-num-batched-tokens: %d", c.LlumnixConfig.MaxNumBatchedTokens)
+		logIfNotEmpty("    num-predictor-warmup-samples: %d", c.LlumnixConfig.NumPredictorWarmupSamples)
+
+		// Adaptive PD
+		if c.LlumnixConfig.EnableAdaptivePD {
+			klog.Infof("  [Adaptive PD]")
+			klog.Infof("    enabled: %v", c.LlumnixConfig.EnableAdaptivePD)
+			logIfNotEmpty("    prefill-as-decode-load-metric: %s", c.LlumnixConfig.DispatchPrefillAsDecodeLoadMetric)
+			logIfNotEmpty("    prefill-as-decode-load-threshold: %.1f", c.LlumnixConfig.DispatchPrefillAsDecodeLoadThreshold)
+			logIfNotEmpty("    decode-as-prefill-load-metric: %s", c.LlumnixConfig.DispatchDecodeAsPrefillLoadMetric)
+			logIfNotEmpty("    decode-as-prefill-load-threshold: %.2f", c.LlumnixConfig.DispatchDecodeAsPrefillLoadThreshold)
+			logIfNotEmpty("    decode-compute-bound-batch-size: %d", c.LlumnixConfig.DecodeComputeBoundBatchSize)
+		}
+
+		// Failover settings
+		klog.Infof("  [Failover]")
+		logIfNotEmpty("    scope: %s", c.LlumnixConfig.FailoverScope)
+		logIfNotEmpty("    instance-staleness-seconds: %d", c.LlumnixConfig.InstanceStalenessSeconds)
+
+		// Rescheduling
+		if c.LlumnixConfig.EnableRescheduling {
+			klog.Infof("  [Rescheduling]")
+			klog.Infof("    enabled: %v", c.LlumnixConfig.EnableRescheduling)
+			logIfNotEmpty("    policies: %s", c.LlumnixConfig.ReschedulePolicies)
+			logIfNotEmpty("    interval: %dms", c.LlumnixConfig.RescheduleIntervalMs)
+			logIfNotEmpty("    decode-load-metric: %s", c.LlumnixConfig.RescheduleDecodeLoadMetric)
+			logIfNotEmpty("    decode-load-threshold: %.2f", c.LlumnixConfig.RescheduleDecodeLoadThreshold)
+			logIfNotEmpty("    prefill-load-metric: %s", c.LlumnixConfig.ReschedulePrefillLoadMetric)
+			logIfNotEmpty("    neutral-load-metric: %s", c.LlumnixConfig.RescheduleNeutralLoadMetric)
+			logIfNotEmpty("    neutral-load-threshold: %.2f", c.LlumnixConfig.RescheduleNeutralLoadThreshold)
+			logIfNotEmpty("    req-select-order: %s", c.LlumnixConfig.RescheduleReqSelectOrder)
+			logIfNotEmpty("    req-select-rule: %s", c.LlumnixConfig.RescheduleReqSelectRule)
+			logIfNotEmpty("    req-select-value: %.2f", c.LlumnixConfig.RescheduleReqSelectValue)
+			logIfNotEmpty("    load-balance-threshold: %.3f", c.LlumnixConfig.RescheduleLoadBalanceThreshold)
+			logIfNotEmpty("    load-balance-scope: %s", c.LlumnixConfig.RescheduleLoadBalanceScope)
+		}
+
+		// Llumlet
+		klog.Infof("  [Llumlet]")
+		logIfNotEmpty("    grpc-connection-pool-size: %d", c.LlumnixConfig.LlumletGrpcConnectionPoolSize)
+		logIfNotEmpty("    grpc-timeout-seconds: %d", c.LlumnixConfig.LlumletGrpcTimeoutSeconds)
+
+		// Metrics
+		logIfNotEmpty("  enable-metrics: %v", c.LlumnixConfig.EnableMetrics)
+		logIfNotEmpty("  extra-args: %s", c.LlumnixConfig.ExtraArgs)
+	}
+
+	// Feature flags and operational modes
+	klog.Infof("[Features & Modes]")
+	logIfNotEmpty("  schedule-mode: %v", c.ScheduleMode)
+	logIfNotEmpty("  colocated-reschedule-mode: %v", c.ColocatedRescheduleMode)
+	logIfNotEmpty("  standalone-reschedule-mode: %v", c.StandaloneRescheduleMode)
+	logIfNotEmpty("  serverless-mode: %v", c.ServerlessMode)
+	logIfNotEmpty("  enable-access-log: %v", c.EnableAccessLog)
+	logIfNotEmpty("  enable-log-input: %v", c.EnableLogInput)
+	logIfNotEmpty("  enable-pprof: %v", c.EnablePprof)
+	logIfNotEmpty("  requests-report-duration: %ds", c.RequestsReporterDuration)
+
+	klog.Infof("===========================================")
 }
 
 type LlmSchedulerProperty struct {
@@ -531,12 +829,11 @@ type Properties struct {
 
 var prePropertyByte []byte
 
-func (c *Config) LoadCfgFromProperties() {
-	const propertyFile = "/etc/eas/override.properties"
+func (c *Config) loadCfgFromProperties() {
 	var err error
-	prePropertyByte, err = os.ReadFile(propertyFile)
+	prePropertyByte, err = os.ReadFile(consts.PropertyFile)
 	if err != nil {
-		klog.Warningf("load properties(%s) failed: %v", propertyFile, err)
+		klog.Warningf("load properties(%s) failed: %v", consts.PropertyFile, err)
 		return
 	}
 	var property Properties
@@ -545,16 +842,6 @@ func (c *Config) LoadCfgFromProperties() {
 		klog.Warningf("load properties, un marshal(%s) failed: %v", string(prePropertyByte), err)
 		return
 	}
-
-	prefetchKeys := []prop.PrefetchKey{
-		{Key: "llm_gateway.traffic_mirror.enable", Type: prop.BoolType},
-		{Key: "llm_gateway.traffic_mirror.target", Type: prop.StringType},
-		{Key: "llm_gateway.traffic_mirror.ratio", Type: prop.FloatType},
-		{Key: "llm_gateway.traffic_mirror.token", Type: prop.StringType},
-		{Key: "llm_gateway.traffic_mirror.timeout", Type: prop.FloatType},
-		{Key: "llm_gateway.traffic_mirror.enable_log", Type: prop.BoolType},
-	}
-	c.configManager = prop.NewConfigManager([]string{propertyFile}, prefetchKeys)
 
 	if property.LlmScheduler.Name != nil && property.LlmScheduler.Group != nil {
 		c.LlmScheduler = fmt.Sprintf("%s.%s", *property.LlmScheduler.Group, *property.LlmScheduler.Name)
@@ -592,61 +879,6 @@ func (c *Config) LoadCfgFromProperties() {
 	if property.RPC.ServiceToken != nil {
 		c.ServiceToken = *property.RPC.ServiceToken
 	}
-
-	// Helper function to log values (only skips empty strings)
-	logIfNotEmpty := func(format string, value interface{}) {
-		switch v := value.(type) {
-		case string:
-			if v != "" {
-				klog.Infof(format, v)
-			}
-		default:
-			klog.Infof(format, v) // Always print numbers and booleans
-		}
-	}
-
-	discoveryEndpoint := os.Getenv("DISCOVERY_ENDPOINT")
-	if len(discoveryEndpoint) > 0 {
-		c.DiscoveryEndpoint = discoveryEndpoint
-	}
-
-	// Basic service settings
-	klog.Infof("service listen host and port: %s:%d", c.Host, c.Port)
-	logIfNotEmpty("service: %s", c.Service)
-	logIfNotEmpty("llm gateway: %s", c.LlmGateway)
-	logIfNotEmpty("llm scheduler: %s", c.LlmScheduler)
-	logIfNotEmpty("llm backend service: %s", c.BackendService)
-	logIfNotEmpty("use discovery: %s", c.UseDiscovery)
-	logIfNotEmpty("discovery endpoint: %s", c.DiscoveryEndpoint)
-	logIfNotEmpty("local test ips: %s", c.LocalTestIPs)
-	logIfNotEmpty("builtin tokenizer: %s", c.TokenizerName)
-	logIfNotEmpty("tokenizer path: %s", c.TokenizerPath)
-
-	// Network/connection settings
-	logIfNotEmpty("retry count: %d", c.RetryCount)
-	logIfNotEmpty("wait queue threads: %d", c.WaitQueueThreads)
-	logIfNotEmpty("wait schedule timeout: %dms", c.WaitScheduleTimeout)
-	logIfNotEmpty("wait schedule try period: %dms", c.WaitScheduleTryPeriod)
-	logIfNotEmpty("max queue size: %d", c.MaxQueueSize)
-
-	// Scheduling policies
-	logIfNotEmpty("schedule policy: %s", c.SchedulePolicy)
-	logIfNotEmpty("pd split mode: %s", c.PDSplitMode)
-	// TODO(sunbiao.sun): remove
-	logIfNotEmpty("limit requests: %d", c.LimitRequests)
-	logIfNotEmpty("prefill limit requests: %d", c.PrefillLimitRequests)
-	logIfNotEmpty("decode limit requests: %d", c.DecodeLimitRequests)
-	logIfNotEmpty("limit tokens: %d", c.LimitTokens)
-	logIfNotEmpty("prefill limit tokens: %d", c.PrefillLimitTokens)
-	logIfNotEmpty("decode limit decode tokens: %d", c.DecodeLimitRequests)
-	logIfNotEmpty("limit tokens threshold scale: %f", c.LimitTokensThresholdScale)
-	logIfNotEmpty("prompt length threshold: %d", c.PromptLengthThreshold)
-	logIfNotEmpty("requests report duration: %d", c.RequestsReporterDuration)
-
-	// Feature flags
-	logIfNotEmpty("llm serverless mode: %v", c.ServerlessMode)
-	logIfNotEmpty("enable access log: %v", c.EnableAccessLog)
-	logIfNotEmpty("schedule mode: %v", c.ScheduleMode)
 }
 
 // safeSplitArgs safely splits a string by comma, handling quotes and square brackets.

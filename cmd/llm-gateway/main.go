@@ -51,10 +51,12 @@ func NewCommand() *cobra.Command {
 					klog.Infoln(http.ListenAndServe(":6061", nil))
 				}()
 			}
-			cfg.LoadCfgFromProperties()
-			// Process llumnix config after flags are parsed
-			options.ProcessLlumnixConfig(cmd.Flags())
-			klog.Infof("llm-gateway config: %+v", cfg)
+
+			// Complete the configuration
+			if err := cfg.Complete(cmd.Flags()); err != nil {
+				klog.Fatalf("Failed to complete configuration: %v", err)
+			}
+
 			if cfg.ScheduleMode {
 				cs := service.NewScheduleService(cfg)
 				klog.Info("llm scheduler start ...")

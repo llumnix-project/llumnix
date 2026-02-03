@@ -82,7 +82,7 @@ func (r *RequestReporter) report() {
 	for _, rs := range r.reqTokenState {
 		reportDatas = append(reportDatas, ReqReportData{
 			Id:         rs.req.Id,
-			Model:      rs.req.LLMRequest.Model,
+			Model:      rs.req.GetRequestModel(),
 			InferMode:  rs.InferMode,
 			InstanceId: rs.InstanceId,
 			GatewayId:  rs.GatewayId,
@@ -156,9 +156,9 @@ type ReqTokenState struct {
 
 func NewReqTokenState(
 	req *types.RequestContext, model string, inferMode string, instanceId string, gatewayId string) *ReqTokenState {
-	promptTokens, ok := req.LLMRequest.GetPromptTokens()
-	if !ok {
-		klog.Errorf("Failed to get prompt tokens.")
+	promptTokens, err := req.GetPromptTokens()
+	if err != nil {
+		klog.Errorf("Failed to get prompt tokens: %v", err)
 		return nil
 	}
 

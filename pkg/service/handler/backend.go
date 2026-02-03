@@ -24,6 +24,10 @@ type InferenceBackend interface {
 	// StreamInference sends the request to backend inference engine and returns a channel
 	// that streams response chunks back to the caller
 	StreamInference(req *types.RequestContext) (<-chan StreamChunk, error)
+
+	// Inference sends a non-streaming request to backend inference engine and returns
+	// the complete response data as a single byte slice
+	Inference(req *types.RequestContext) ([]byte, error)
 }
 
 // BackendFactory is a factory function that creates an InferenceBackend instance

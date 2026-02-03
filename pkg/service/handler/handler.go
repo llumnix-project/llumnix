@@ -22,6 +22,9 @@ const (
 // RequestHandler defines the interface for handling LLM inference requests
 // Implementations should provide request parsing and processing logic
 type RequestHandler interface {
+	// Name returns the name of the request handler
+	Name() string
+
 	// ParseRequest validates and parses the incoming request into internal format
 	ParseRequest(req *types.RequestContext) error
 

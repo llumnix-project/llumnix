@@ -6,19 +6,19 @@ import (
 	"fmt"
 	"io"
 	"llm-gateway/cmd/llm-gateway/app/options"
+	"llm-gateway/pkg/consts"
 	"llm-gateway/pkg/processor"
 	"llm-gateway/pkg/protocol"
 	"llm-gateway/pkg/protocol/anthropic"
 	"llm-gateway/pkg/types"
 	"net/http"
-	"time"
 
 	"k8s.io/klog/v2"
 )
 
 // init registers the OpenAI handler factory function with the handler registry.
 func init() {
-	RegisterHandler("anthropic", func(config *options.Config) (RequestHandler, error) {
+	RegisterHandler(consts.AnthropicHandlerName, func(config *options.Config) (RequestHandler, error) {
 		return NewAnthropicHandler(config)
 	})
 }
@@ -82,6 +82,11 @@ func NewAnthropicHandler(config *options.Config) (RequestHandler, error) {
 	return handler, nil
 }
 
+// Name returns the name of the handler.
+func (h *AnthropicHandler) Name() string {
+	return consts.AnthropicHandlerName
+}
+
 // unmarshalRequest reads and parses the HTTP request body into the appropriate LLM request structure.
 // It validates the request schema and determines the protocol type (chat completion or text completion).
 // Returns an error if the request body cannot be read or parsed.
@@ -101,7 +106,7 @@ func (h *AnthropicHandler) unmarshalRequest(reqCtx *types.RequestContext) error 
 	if err := json.Unmarshal(data, &anthropicReq); err != nil {
 		return fmt.Errorf("error parsing request data: %v", err)
 	}
-	reqCtx.AnthropicRequest.AnthropicRequest = &anthropicReq
+	reqCtx.AnthropicRequest.Request = &anthropicReq
 	return nil
 }
 
@@ -111,7 +116,11 @@ func (h *AnthropicHandler) unmarshalRequest(reqCtx *types.RequestContext) error 
 // Returns an error if unmarshaling or preprocessing fails.
 func (h *AnthropicHandler) ParseRequest(reqCtx *types.RequestContext) error {
 	// In the entry point of the Anthropic handler, define the structure of AnthropicRequest used by this handler
-	reqCtx.AnthropicRequest = &types.AnthropicRequest{}
+	reqCtx.AnthropicRequest = &types.AnthropicRequest{
+		StreamResponseBuffer: &anthropic.StreamingResponseBuffer{
+			ToolCalls: make(map[string]*anthropic.ToolCall),
+		},
+	}
 
 	// Unmarshal and validate the request
 	err := h.unmarshalRequest(reqCtx)
@@ -120,13 +129,11 @@ func (h *AnthropicHandler) ParseRequest(reqCtx *types.RequestContext) error {
 	}
 
 	// Execute pre-processing chain and measure duration
-	tStart := time.Now()
 	err = h.preProcessors.Process(reqCtx)
 	if err != nil {
 		klog.Errorf("pre-processor failed: %v", err)
 		return err
 	}
-	reqCtx.RequestStats.PreprocessCost = time.Since(tStart)
 
 	return nil
 }
@@ -151,23 +158,65 @@ func (h *AnthropicHandler) ParseChunk(reqCtx *types.RequestContext, data []byte)
 	return nil
 }
 
-// Handle processes the LLM inference request and streams the response back to the client.
+// handleStream processes the LLM inference request and streams the response back to the client.
 // It delegates to the generic StreamProcessor which encapsulates the streaming mechanism,
 // while this handler provides Anthropic-specific parsing and writing strategies.
 // Timing metrics like TTFT and ITL are tracked by the StreamProcessor.
-func (h *AnthropicHandler) Handle(req *types.RequestContext) {
+func (h *AnthropicHandler) handleStream(req *types.RequestContext) {
 	// Initiate streaming inference from the backend
 	chunkChan, err := h.backend.StreamInference(req)
 	if err != nil {
 		klog.Errorf("failed to stream inference: %v", err)
 		WriteErrorResponse(req, err)
-		close(req.ResponseChan)
 		req.TriggerPostRequest()
 		return
 	}
 
 	// Delegate to the generic streaming processor with Anthropic-specific strategies
 	h.streamProcessor.ProcessStream(req, chunkChan)
+}
+
+func (h *AnthropicHandler) handleMessage(req *types.RequestContext) {
+	data, err := h.backend.Inference(req)
+	if err != nil {
+		klog.Errorf("failed to get inference result: %v", err)
+		WriteErrorResponse(req, err)
+		return
+	}
+
+	var response protocol.ChatCompletionResponse
+
+	err = json.Unmarshal(data, &response)
+	if err != nil {
+		klog.Errorf("failed to unmarshal inference result: %v", err)
+		WriteErrorResponse(req, err)
+		return
+	}
+
+	req.AnthropicRequest.OpenAIResponse = &response
+
+	// Execute post-processing chain and measure duration
+	err = h.postProcessors.Process(req)
+	if err != nil {
+		klog.Errorf("post-processor failed: %v", err)
+		WriteErrorResponse(req, err)
+		return
+	}
+
+	// Write response chunk if there's data to send
+	if len(req.AnthropicRequest.ResponseData) > 0 {
+		klog.V(3).Infof("writing response chunk: %s", string(req.AnthropicRequest.ResponseData))
+		// The reason for using WriteRawResponse is that the relevant converters from Anthropic already involve specific protocol data.
+		WriteRawResponse(req, req.AnthropicRequest.ResponseData)
+	}
+}
+
+func (h *AnthropicHandler) Handle(req *types.RequestContext) {
+	if req.InferenceStream() {
+		h.handleStream(req)
+	} else {
+		h.handleMessage(req)
+	}
 }
 
 // ProcessAndWriteChunk implements ChunkWriter interface for Anthropic protocol.
@@ -177,18 +226,15 @@ func (h *AnthropicHandler) Handle(req *types.RequestContext) {
 // Returns an error if post-processing, marshaling, or writing fails.
 func (h *AnthropicHandler) ProcessAndWriteChunk(req *types.RequestContext, done bool) error {
 	// Execute post-processing chain and measure duration
-	tStart := time.Now()
-	err := h.postProcessors.Process(req, done)
+	err := h.postProcessors.ProcessStream(req, done)
 	if err != nil {
 		return fmt.Errorf("post-processor failed: %w", err)
 	}
-	tCost := time.Since(tStart)
-	req.RequestStats.PostprocessCost += tCost
 
 	// Write response chunk if there's data to send
-	if len(req.AnthropicRequest.AnthropicResponseData) > 0 {
-		klog.V(3).Infof("writing response chunk: %s", string(req.AnthropicRequest.AnthropicResponseData))
-		WriteResponse(req, req.AnthropicRequest.AnthropicResponseData)
+	if len(req.AnthropicRequest.ResponseData) > 0 {
+		klog.V(3).Infof("writing response chunk: %s", string(req.AnthropicRequest.ResponseData))
+		WriteRawResponse(req, req.AnthropicRequest.ResponseData)
 	}
 
 	return nil

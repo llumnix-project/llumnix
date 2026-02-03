@@ -2,10 +2,10 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
-	"llm-gateway/pkg/protocol"
 	"llm-gateway/pkg/types"
 	"net"
 	"net/http"
@@ -49,7 +49,15 @@ func WriteErrorResponse(req *types.RequestContext, err error) {
 	req.ResponseChan <- &types.ResponseMsg{Err: err}
 }
 
+func WriteRawResponse(req *types.RequestContext, chunk []byte) {
+	req.ResponseChan <- &types.ResponseMsg{Err: nil, Message: chunk}
+}
+
 func WriteResponse(req *types.RequestContext, chunk []byte) {
+	if !req.ClientStream() {
+		req.ResponseChan <- &types.ResponseMsg{Err: nil, Message: chunk}
+		return
+	}
 	// "data: " (6 bytes) + chunk + "\n\n" (2 bytes)
 	body := make([]byte, 0, 6+len(chunk)+2)
 	body = append(body, "data: "...)
@@ -65,7 +73,7 @@ func MakeNewBackendRequest(req *types.RequestContext, body []byte, worker *types
 		klog.Errorf("failed to get worker for request: %s", req.Id)
 		return nil, errors.New("failed to get worker")
 	}
-	url := fmt.Sprintf("http://%s%s", worker.Endpoint.String(), protocol.CompletionsPath)
+	url := fmt.Sprintf("http://%s%s", worker.Endpoint.String(), req.GetRequestURL())
 	klog.V(3).Infof("Forwarding request to %s body: %s", url, string(body))
 
 	// Create a new request to forward to the backend
@@ -124,6 +132,9 @@ func DoRequest(req *http.Request, client *http.Client, body []byte) (io.ReadClos
 		body, _ := io.ReadAll(resp.Body)
 		return nil, fmt.Errorf("failed to forward request to %s, status code: %d, body: %s", req.URL, resp.StatusCode, string(body))
 	}
+
+	klog.V(3).Infof("req %s content-type header: %s", req.URL, resp.Header.Get("Content-Type"))
+
 	return resp.Body, nil
 }
 
@@ -139,6 +150,9 @@ func StreamRead(req *types.RequestContext, chunkChan chan StreamChunk, r io.Read
 		if err != nil {
 			if err == io.EOF {
 				return nil
+			} else if errors.Is(err, context.Canceled) {
+				// Not print error for context canceled as the request may be closed normally.
+				return err
 			} else if errors.Is(err, io.ErrShortBuffer) {
 				klog.V(3).Infof("expanding buffer from %d to %d bytes", len(buf), n)
 				buf = make([]byte, n)
@@ -155,21 +169,45 @@ func StreamRead(req *types.RequestContext, chunkChan chan StreamChunk, r io.Read
 	}
 }
 
-// StreamResponseFromBackend starts streaming read from backend and sends chunks to channel
-func StreamResponseFromBackend(req *types.RequestContext, client *http.Client, body []byte, worker *types.LLMWorker, chunkChan chan StreamChunk) {
+// StreamReadFromBackend starts streaming read from backend and sends chunks to channel
+func StreamReadFromBackend(req *types.RequestContext, client *http.Client, body []byte, worker *types.LLMWorker, chunkChan chan StreamChunk) {
+	// Build backend request
 	newReq, err := MakeNewBackendRequest(req, body, worker)
 	if err != nil {
+		klog.Errorf("failed to create new backend request: %v", err)
 		chunkChan <- StreamChunk{err: err}
 		return
 	}
+
 	// Execute request with retry
 	respBody, err := DoRequest(newReq, client, body)
 	if err != nil {
+		klog.Errorf("failed to do backend request: %v", err)
 		chunkChan <- StreamChunk{err: err}
 		return
 	}
+	defer respBody.Close()
+
 	// Stream read response
 	if err := StreamRead(req, chunkChan, respBody); err != nil {
 		chunkChan <- StreamChunk{err: err}
 	}
+}
+
+// ReadFromBackend reads the response from the backend and returns the body as a byte slice
+func ReadFromBackend(req *types.RequestContext, client *http.Client, body []byte, worker *types.LLMWorker) ([]byte, error) {
+	newReq, err := MakeNewBackendRequest(req, body, worker)
+	if err != nil {
+		klog.Errorf("failed to create new backend request: %v", err)
+		return nil, err
+	}
+
+	respBody, err := DoRequest(newReq, client, body)
+	if err != nil {
+		klog.Errorf("failed to do backend request: %v", err)
+		return nil, err
+	}
+	defer respBody.Close()
+
+	return io.ReadAll(respBody)
 }

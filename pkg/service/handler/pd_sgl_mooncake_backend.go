@@ -135,3 +135,7 @@ func (b *PdSplitSglMoonCakeBackend) BatchScheduleStreamInference(req *types.Requ
 func (b *PdSplitSglMoonCakeBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
 	return b.BatchScheduleStreamInference(req)
 }
+
+func (b *PdSplitSglMoonCakeBackend) Inference(req *types.RequestContext) ([]byte, error) {
+	return nil, fmt.Errorf("Inference is not implemented for %s", consts.SplitModeSGlangMooncake)
+}

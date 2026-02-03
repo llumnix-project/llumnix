@@ -116,7 +116,7 @@ func (b *PdSplitVllmMoonCakeBackend) BatchScheduleStreamInference(req *types.Req
 			chunkChan <- StreamChunk{err: err}
 			return
 		}
-		StreamResponseFromBackend(req, b.client, data, dWorker, chunkChan)
+		StreamReadFromBackend(req, b.client, data, dWorker, chunkChan)
 	}()
 
 	return chunkChan, nil
@@ -126,4 +126,8 @@ func (b *PdSplitVllmMoonCakeBackend) BatchScheduleStreamInference(req *types.Req
 // Performs streaming inference by forwarding request to backend and streaming response chunks
 func (b *PdSplitVllmMoonCakeBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
 	return b.BatchScheduleStreamInference(req)
+}
+
+func (b *PdSplitVllmMoonCakeBackend) Inference(req *types.RequestContext) ([]byte, error) {
+	return nil, fmt.Errorf("Inference is not implemented for %s", consts.SplitModeVllmMooncake)
 }

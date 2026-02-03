@@ -126,7 +126,7 @@ func (sr *ServiceRouter) selectByWeight() (*RouteConfig, RouteType) {
 
 // selectByPrefix selects a routing config based on model prefix matching
 func (sr *ServiceRouter) selectByPrefix(req *types.RequestContext) (*RouteConfig, RouteType) {
-	model := req.LLMRequest.Model
+	model := req.GetRequestModel()
 	klog.V(3).Infof("service router select model by prefix, request model:%s", model)
 	if model == "" {
 		return nil, RouteInternal

@@ -36,3 +36,45 @@ const (
 	OpenAIChatCompletion ProtocolType = iota
 	OpenAICompletion
 )
+
+// FieldSetter defines the interface for setting request fields.
+// CompletionRequest and ChatCompletionRequest should implement this interface
+// to support unified field assignment logic.
+type FieldSetter interface {
+	SetKvTransferParams(params map[string]interface{})
+	SetRid(rid string)
+	SetBootStrapHost(host string)
+	SetBootStrapRoom(room string)
+	SetMaxTokens(maxTokens int)
+	SetStream(stream bool)
+}
+
+// ApplyRequestArgs applies key-value arguments to any request type that implements FieldSetter.
+// This eliminates repetitive switch-case logic by using a dispatch table pattern.
+// Example:
+//
+//	args := map[string]interface{}{"rid": "req-123", "max_tokens": 100}
+//	ApplyRequestArgs(completionReq, args)
+func ApplyRequestArgs[T FieldSetter](req T, args map[string]interface{}) {
+	// Check if there are any arguments to process
+	if len(args) == 0 {
+		return
+	}
+	// Dispatch table: map field names to setter functions
+	// This approach avoids deep switch nesting and improves readability.
+	type fieldHandler func(T, interface{})
+	dispatchTable := map[string]fieldHandler{
+		"kv_transfer_params": func(r T, v interface{}) { r.SetKvTransferParams(v.(map[string]interface{})) },
+		"rid":                func(r T, v interface{}) { r.SetRid(v.(string)) },
+		"bootstrap_host":     func(r T, v interface{}) { r.SetBootStrapHost(v.(string)) },
+		"bootstrap_room":     func(r T, v interface{}) { r.SetBootStrapRoom(v.(string)) },
+		"max_tokens":         func(r T, v interface{}) { r.SetMaxTokens(v.(int)) },
+		"stream":             func(r T, v interface{}) { r.SetStream(v.(bool)) },
+	}
+
+	for key, value := range args {
+		if handler, exists := dispatchTable[key]; exists {
+			handler(req, value)
+		}
+	}
+}

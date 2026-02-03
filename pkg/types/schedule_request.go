@@ -50,6 +50,7 @@ type ScheduleRequest struct {
 	// LLM Prompt
 	PromptNumTokens int      `json:"prompt_num_tokens,omitempty"`
 	PromptTokenIds  []uint32 `json:"prompt_token_ids"`
+	PromptText      string   `json:"prompt_text,omitempty"`
 
 	// schedule result
 	ScheduleResult ScheduledResult `json:"schedule_result,omitempty"`

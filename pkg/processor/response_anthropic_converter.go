@@ -38,10 +38,10 @@ func (c *ResponseAnthropicConverter) Name() string {
 //   - error: Returns an error if conversion fails, nil on success
 //
 // Side effects:
-//   - Sets req.AnthropicRequest.AnthropicResponseData with converted Anthropic SSE event data
+//   - Sets req.AnthropicRequest.ResponseData with converted Anthropic SSE event data
 //   - Updates req.AnthropicRequest.IsNotFirst flag to track streaming state
-//   - Modifies req.AnthropicRequest.AnthropicStreamingResponseBuffer to accumulate state across chunks
-func (c *ResponseAnthropicConverter) PostProcess(req *types.RequestContext, done bool) error {
+//   - Modifies req.AnthropicRequest.StreamResponseBuffer to accumulate state across chunks
+func (c *ResponseAnthropicConverter) PostStreamProcess(req *types.RequestContext, done bool) error {
 	// Extract request context and OpenAI streaming response
 	anthropicReq := req.AnthropicRequest
 	oaiStreamResp := anthropicReq.OpenAIStreamResponse
@@ -60,8 +60,8 @@ func (c *ResponseAnthropicConverter) PostProcess(req *types.RequestContext, done
 		isFirst,
 		done,
 		req.Id,
-		anthropicReq.AnthropicRequest.Model,
-		anthropicReq.AnthropicStreamingResponseBuffer)
+		anthropicReq.Request.Model,
+		anthropicReq.StreamResponseBuffer)
 
 	// Mark that the first chunk has been processed
 	// Subsequent chunks will skip initial event generation
@@ -73,6 +73,21 @@ func (c *ResponseAnthropicConverter) PostProcess(req *types.RequestContext, done
 	}
 
 	// Store the converted Anthropic SSE data for downstream response writing
-	anthropicReq.AnthropicResponseData = modifiedData
+	anthropicReq.ResponseData = modifiedData
+	return nil
+}
+
+func (c *ResponseAnthropicConverter) PostProcess(req *types.RequestContext) error {
+	// Extract request context and OpenAI streaming response
+	anthropicReq := req.AnthropicRequest
+	oaiResp := anthropicReq.OpenAIResponse
+
+	anthropicResp, err := claude_code.ConvertOpenAIResponseToAnthropic(oaiResp, req.Id, anthropicReq.Request.Model)
+	if err != nil {
+		klog.Errorf("failed to convert openai to anthropic, err: %v", err)
+		return nil
+	}
+
+	anthropicReq.ResponseData = anthropicResp
 	return nil
 }

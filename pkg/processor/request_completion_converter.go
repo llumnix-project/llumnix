@@ -55,24 +55,25 @@ func (rt *RequestCompletionConverter) generateMaxTokens(req *types.RequestContex
 
 // PreProcess performs request transformation if needed.
 func (rt *RequestCompletionConverter) PreProcess(req *types.RequestContext) error {
-	switch req.LLMRequest.Protocol {
+	oaiReq := req.LLMRequest
+	oaiReq.BackendProtocol = protocol.OpenAICompletion
+	switch oaiReq.Protocol {
 	case protocol.OpenAICompletion:
-		req.LLMRequest.ClientStream = req.LLMRequest.CompletionRequest.Stream
-		req.LLMRequest.CompletionRequest.Stream = true
-		req.LLMRequest.CompletionRequest.Id = req.Id
+		oaiReq.CompletionRequest.Stream = true
+		oaiReq.CompletionRequest.Id = req.Id
 		// only do tokenization for completions request with prompt as string or []string
-		prompt, ok := req.LLMRequest.CompletionRequest.Prompt.GetString()
+		prompt, ok := oaiReq.CompletionRequest.Prompt.GetString()
 		if ok {
 			ids, err := rt.TokenizerEncode(prompt, true)
 			if err != nil {
 				klog.Warningf("[%s] Tokenize prompt to ids failed: %v, prompt: %s", req.Id, err, prompt)
 				return fmt.Errorf("Tokenize prompt to ids failed")
 			}
-			req.LLMRequest.CompletionRequest.Prompt.SetValue(ids)
+			oaiReq.CompletionRequest.Prompt.SetValue(ids)
 			return nil
 		}
 
-		prompts, ok := req.LLMRequest.CompletionRequest.Prompt.GetStringSlice()
+		prompts, ok := oaiReq.CompletionRequest.Prompt.GetStringSlice()
 		if ok {
 			var allIds [][]uint32
 			for _, prompt := range prompts {
@@ -83,20 +84,19 @@ func (rt *RequestCompletionConverter) PreProcess(req *types.RequestContext) erro
 				}
 				allIds = append(allIds, ids)
 			}
-			req.LLMRequest.CompletionRequest.Prompt.SetValue(allIds)
+			oaiReq.CompletionRequest.Prompt.SetValue(allIds)
 			return nil
 		}
-		klog.Warningf("[%s] Unsupported prompt type in completion request: %v", req.Id, req.LLMRequest.CompletionRequest.Prompt)
+		klog.Warningf("[%s] Unsupported prompt type in completion request: %v", req.Id, oaiReq.CompletionRequest.Prompt)
 		// nothing todo when request with prompt as []int or [][]int
 		return nil
 	case protocol.OpenAIChatCompletion:
-		req.LLMRequest.ClientStream = req.LLMRequest.ChatCompletionRequest.Stream
 		tokenIds, err := rt.applyTokenizerTemplate(req)
 		if err != nil {
-			klog.Warningf("[%s] apply tokenizer template failed: %v, request: %v", req.Id, err, req.LLMRequest.RawData)
+			klog.Warningf("[%s] apply tokenizer template failed: %v, request: %v", req.Id, err, oaiReq.RawData)
 			return fmt.Errorf("Failed to apply tokenizer template")
 		}
-		chatCompletions := req.LLMRequest.ChatCompletionRequest
+		chatCompletions := oaiReq.ChatCompletionRequest
 		completionsRequest := &protocol.CompletionRequest{
 			Id:               req.Id,
 			Model:            chatCompletions.Model,
@@ -114,10 +114,10 @@ func (rt *RequestCompletionConverter) PreProcess(req *types.RequestContext) erro
 		maxTokens := rt.generateMaxTokens(req, chatCompletions.MaxTokens)
 		completionsRequest.MaxTokens = &maxTokens
 		completionsRequest.Prompt.SetValue(tokenIds)
-		req.LLMRequest.CompletionRequest = completionsRequest
+		oaiReq.CompletionRequest = completionsRequest
 		return nil
 	default:
-		klog.Warningf("[%s] Unsupported protocol: %v", req.Id, req.LLMRequest.Protocol)
+		klog.Warningf("[%s] Unsupported protocol: %v", req.Id, oaiReq.Protocol)
 		return fmt.Errorf("Unsupported protocol")
 	}
 }

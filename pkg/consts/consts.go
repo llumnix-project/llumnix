@@ -4,9 +4,7 @@ import (
 	"time"
 )
 
-const (
-	StatusDisConnection = 499
-)
+const PropertyFile = "/etc/eas/override.properties"
 
 const (
 	MetricRecordDuration = 5 * time.Second
@@ -34,12 +32,22 @@ const (
 
 // llm scheduler policy with use a remote concertized scheduler
 const (
-	SchedulePolicyRoundRobin  = "round-robin"
+	SchedulePolicyRoundRobin     = "round-robin"
+	SchedulePolicyLeastRequest   = "least-request"
+	SchedulePolicyLeastToken     = "least-token"
+	SchedulePolicyPrefixCache    = "prefix-cache"
+	SchedulePolicyLlmMetricBased = "llm-metric-based"
+	SchedulePolicyPDSplit        = "pd-split"
+
 	SchedulePolicyLoadBalance = "load-balance"
 	SchedulePolicyFlood       = "flood"
 )
 
-// TODO(sunbiao.sun): remove llumnix prefix
+// handler name
+const (
+	OpenAIHandlerName    = "openai"
+	AnthropicHandlerName = "anthropic"
+)
 
 // TODO(sunbiao.sun): rename metric
 
@@ -116,6 +124,14 @@ const (
 	TokenizerProcessor = "TOKENIZER"
 	RESPONSEFORMATTER  = "RESPONSEFORMATTER"
 )
+
+const (
+	KB int64 = 1024
+	MB int64 = 1024 * KB
+	GB int64 = 1024 * MB
+)
+const DefaultPrefixCacheReservedSize = 1 * GB
+const DefaultPrefixCacheMaxSize = 3 * GB
 
 // default value
 const (

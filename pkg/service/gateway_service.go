@@ -244,22 +244,25 @@ func (lgs *LlmGatewayService) writeResponseUntilDone(reqCtx *types.RequestContex
 					klog.Warningf("request %s response channel closed before response sent", reqCtx.Id)
 					writer.WriteHeader(http.StatusBadRequest)
 				}
+				klog.V(3).Infof("request %s write response end", reqCtx.Id)
 				return
 			}
-			stream := reqCtx.HttpRequest.Stream
+			stream := reqCtx.ClientStream()
 			if stream {
+				klog.V(3).Infof("request %s write stream response", reqCtx.Id)
 				needClose := lgs.writeStreamResponse(reqCtx, response, reqCtx.HttpRequest.HeaderResponded)
 				reqCtx.HttpRequest.HeaderResponded = true
 				if needClose {
 					return
 				}
 			} else {
+				klog.V(3).Infof("request %s write response", reqCtx.Id)
 				lgs.writeResponse(reqCtx, response)
 				return
 			}
 		case <-reqCtx.Context.Done():
 			// Client disconnected or request timeout
-			klog.Infof("request %s disconnected by client", reqCtx.Id)
+			klog.Errorf("request %s disconnected by client", reqCtx.Id)
 			reqCtx.HttpRequest.StatusCode = 499
 			return
 		}
@@ -267,11 +270,17 @@ func (lgs *LlmGatewayService) writeResponseUntilDone(reqCtx *types.RequestContex
 }
 
 func (lgs *LlmGatewayService) externalRouteRequest(reqCtx *types.RequestContext, dst *router.RouteEndpoint) {
+	defer close(reqCtx.ResponseChan)
+
 	originURL := reqCtx.HttpRequest.Request.URL.String()
 	url := dst.JoinURL(originURL)
 	SimpleHTTPProxy(lgs.simpleClient, url, reqCtx.HttpRequest.Writer, reqCtx.HttpRequest.Request)
 	reqCtx.HttpRequest.HeaderResponded = true
-	close(reqCtx.ResponseChan)
+}
+
+func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext, handler handler.RequestHandler) {
+	defer close(reqCtx.ResponseChan)
+	handler.Handle(reqCtx)
 }
 
 // dispatchRequest routes the request and dispatches it to appropriate handler
@@ -292,7 +301,7 @@ func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext, hand
 		}
 		klog.V(3).Infof("request [%s] scheduled to %s", reqCtx.Id, schResult.String())
 		reqCtx.ScheduleCtx.ScheduleResults = schResult
-		go handler.Handle(reqCtx)
+		go lgs.internalRouteRequest(reqCtx, handler)
 	case router.RouteExternal:
 		// Match external route
 		go lgs.externalRouteRequest(reqCtx, dst)
@@ -397,7 +406,10 @@ func (lgs *LlmGatewayService) HandleAPIEntry(w http.ResponseWriter, r *http.Requ
 	scheduleMode := lgs.scheduleMode()
 	reqCtx.ScheduleCtx.ScheduleMode = scheduleMode
 	reqCtx.ScheduleCtx.InferStage = types.InferStagePrefill
+	// Inject hooks for lifecycle of the request
 	reqCtx.SetLifecycleHandler(&balancerLifecycleHandler{balancer: lgs.balancer})
+	// Set request type based on handler name
+	reqCtx.RequestType = handler.Name()
 
 	// Parse and validate OpenAI format request parameters
 	if err := handler.ParseRequest(reqCtx); err != nil {
@@ -540,7 +552,7 @@ func (lgs *LlmGatewayService) Start() (err error) {
 //   - req: Request context
 func (lgs *LlmGatewayService) LogRequestInput(req *types.RequestContext) {
 	if lgs.logInputEnabled {
-		logging.AsyncLogf("Received request [%s] %s", req.Id, string(req.LLMRequest.RawData))
+		logging.AsyncLogf("Received request [%s] %s", req.Id, req.GetRequestRawData())
 	} else {
 		logging.Logf("Received request [%s]", req.Id)
 	}
@@ -584,5 +596,5 @@ func (lgs *LlmGatewayService) LogRequestAccess(req *types.RequestContext) {
 		schSize,
 		workSize,
 		stats.RetryCount,
-		req.LLMRequest.Model)
+		req.GetRequestModel())
 }

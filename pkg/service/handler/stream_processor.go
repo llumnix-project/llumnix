@@ -57,10 +57,7 @@ func NewStreamProcessor(parser ChunkParser, writer ChunkWriter) *StreamProcessor
 //
 // The actual parsing and writing logic is delegated to the injected strategy implementations.
 func (sp *StreamProcessor) ProcessStream(req *types.RequestContext, chunkChan <-chan StreamChunk) {
-	defer func() {
-		close(req.ResponseChan)
-		req.TriggerPostRequest()
-	}()
+	defer req.TriggerPostRequest()
 
 	isFirst := true
 	for chunk := range chunkChan {
@@ -76,7 +73,7 @@ func (sp *StreamProcessor) ProcessStream(req *types.RequestContext, chunkChan <-
 
 		// Handle unexpected streaming errors (early return for exception path)
 		if chunk.err != nil && chunk.err != io.EOF {
-			klog.Errorf("error during stream inference: %v", chunk.err)
+			klog.Errorf("request %s error during stream inference: %v", req.Id, chunk.err)
 			WriteErrorResponse(req, chunk.err)
 			return
 		}

@@ -2,6 +2,7 @@ package processor
 
 import (
 	"llm-gateway/pkg/types"
+	"time"
 
 	"k8s.io/klog/v2"
 )
@@ -52,7 +53,9 @@ type PostProcessor interface {
 	// Name returns the name of the post-processor.
 	Name() string
 	// PostProcess processes the request and returns a error.
-	PostProcess(request *types.RequestContext, done bool) error
+	PostProcess(request *types.RequestContext) error
+	// PostStreamProcess processes the request stream and returns a error.
+	PostStreamProcess(request *types.RequestContext, done bool) error
 }
 
 // PreProcessorChain implements a chain of pre-processors.
@@ -74,6 +77,12 @@ func (pc *PreProcessorChain) Register(p PreProcessor) {
 // Process runs all registered pre-processors sequentially on the request.
 // If any pre-processor returns an error, execution stops and that result is returned.
 func (pc *PreProcessorChain) Process(req *types.RequestContext) error {
+	tStart := time.Now()
+	defer func() {
+		tCost := time.Since(tStart)
+		req.RequestStats.PreprocessCost = tCost
+	}()
+
 	for _, p := range pc.preProcessors {
 		if err := p.PreProcess(req); err != nil {
 			klog.Errorf("[%s] pre-processor %s execute failed: %v", req.Id, p.Name(), err)
@@ -102,10 +111,33 @@ func (post *PostProcessorChain) Register(p PostProcessor) {
 // Process runs all registered post-processors sequentially on the request.
 // If any post-processor returns a result other than ProcessContinue,
 // execution stops and that result is returned.
-func (post *PostProcessorChain) Process(req *types.RequestContext, done bool) error {
+func (post *PostProcessorChain) Process(req *types.RequestContext) error {
+	tStart := time.Now()
+	defer func() {
+		tCost := time.Since(tStart)
+		req.RequestStats.PostprocessCost += tCost
+	}()
+
 	for _, p := range post.postProcessors {
-		if err := p.PostProcess(req, done); err != nil {
+		if err := p.PostProcess(req); err != nil {
 			klog.Errorf("[%s] post-processor %s execute failed: %v", req.Id, p.Name(), err)
+			return err
+		}
+	}
+	return nil
+}
+
+// ProcessStream runs all registered post-processors sequentially on the request stream.
+func (post *PostProcessorChain) ProcessStream(req *types.RequestContext, done bool) error {
+	tStart := time.Now()
+	defer func() {
+		tCost := time.Since(tStart)
+		req.RequestStats.PostprocessCost += tCost
+	}()
+
+	for _, p := range post.postProcessors {
+		if err := p.PostStreamProcess(req, done); err != nil {
+			klog.Errorf("[%s] stream post-processor %s execute failed: %v", req.Id, p.Name(), err)
 			return err
 		}
 	}

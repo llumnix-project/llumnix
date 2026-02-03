@@ -16,12 +16,12 @@ import (
 	"llm-gateway/cmd/llm-gateway/app/options"
 	"llm-gateway/pkg/consts"
 	"llm-gateway/pkg/keepalive"
+	"llm-gateway/pkg/logging"
 	"llm-gateway/pkg/lrs"
 	"llm-gateway/pkg/metrics"
 	"llm-gateway/pkg/resolver"
 	schedule_policy "llm-gateway/pkg/schedule-policy"
 	"llm-gateway/pkg/types"
-	"llm-gateway/pkg/utils"
 )
 
 type ScheduleService struct {
@@ -80,54 +80,6 @@ func NewScheduleService(c *options.Config) *ScheduleService {
 	}()
 
 	return ss
-}
-
-type WriteMessage struct {
-	data      []byte
-	needClose bool
-}
-
-type wsConn struct {
-	conn         *websocket.Conn
-	writeMessage chan *WriteMessage
-}
-
-// writeWithPingPong do ping pong with service or gateway
-func (ss *ScheduleService) writeWithPingPong(wsConn *wsConn) {
-	var missedPongs atomic.Int32
-	conn := wsConn.conn
-	conn.SetPongHandler(func(appData string) error {
-		missedPongs.Store(0)
-		return nil
-	})
-
-	ticker := time.NewTicker(3 * time.Second) // send ping every 3 seconds
-	defer func() {
-		ticker.Stop()
-		conn.Close()
-	}()
-OuterLoop:
-	for {
-		select {
-		case message := <-wsConn.writeMessage:
-			if err := conn.WriteMessage(websocket.TextMessage, message.data); err != nil {
-				break OuterLoop
-			}
-			if message.needClose {
-				break OuterLoop
-			}
-		case <-ticker.C:
-			if missedPongs.Load() >= 2 {
-				// two pongs missed, the connection may be broken
-				klog.V(3).Infof("2 pongs missed: %v", wsConn.conn.LocalAddr().String())
-				break OuterLoop
-			}
-			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				break OuterLoop
-			}
-			missedPongs.Add(1)
-		}
-	}
 }
 
 // handleWsToken do keepalive with gateway
@@ -202,7 +154,7 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(statusCode)
 		w.Write([]byte(err.Error()))
 		if ss.config.EnableAccessLog {
-			utils.LogAccess("[%s] status_code:%d,response_time:%vms,error:%s", schReq.Id, statusCode, time.Since(tStart).Milliseconds(), err.Error())
+			logging.Logf("[%s] status_code:%d,response_time:%vms,error:%s", schReq.Id, statusCode, time.Since(tStart).Milliseconds(), err.Error())
 		}
 		return
 	}
@@ -221,7 +173,7 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusOK)
 	w.Write(retBytes)
 	if ss.config.EnableAccessLog {
-		utils.LogAccess("[%s] status_code:%d,response_time:%vms,schedule results:%s", schReq.Id, http.StatusOK, time.Since(tStart).Milliseconds(), schReq.String())
+		logging.Logf("[%s] status_code:%d,response_time:%vms,schedule results:%s", schReq.Id, http.StatusOK, time.Since(tStart).Milliseconds(), schReq.String())
 	}
 }
 
@@ -288,6 +240,8 @@ func (ss *ScheduleService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ss.handleKeepalive(w, r)
 	// case "/request_report":
 	// 	ss.handleRequestReport(w, r)
+	case "/ws/keepalive":
+		ss.handleServiceKeepAlive(w, r)
 	case "/healthz":
 		w.WriteHeader(http.StatusOK)
 	default:
@@ -308,3 +262,127 @@ func (ss *ScheduleService) Start() error {
 
 	return nil
 }
+
+// //////////////////////////////////////////////////////////////////
+//
+//	handleServiceKeepAlive do keepalive with the backend service,
+//
+// This feature has been DEPRECATED. To ensure compatibility with older servers,
+// the interface has been retained here.
+type StatsResponse struct {
+	Success bool   `json:"success"`
+	Data    string `json:"data,omitempty"`
+}
+
+func (ss *ScheduleService) getServiceInstanceStats(wsConn *websocket.Conn) error {
+	_, _, err := wsConn.ReadMessage()
+	if err != nil {
+		klog.Errorf("could not read message from backend service: %v", err)
+		return err
+	}
+	return nil
+}
+
+// handleServiceKeepAlive do keepalive with the backend service and check the service token
+// URL: /ws/keepalive
+func (ss *ScheduleService) handleServiceKeepAlive(w http.ResponseWriter, r *http.Request) {
+	if len(ss.config.UseDiscovery) > 0 {
+		klog.Warningf("enable use discovery: statistics reported by service instances are not processed")
+		return
+	}
+
+	// upgrade WebSocket connection.
+	defaultUpgrader := websocket.Upgrader{}
+	conn, err := defaultUpgrader.Upgrade(w, r, http.Header{})
+	if err != nil {
+		klog.Warningf("do keepalive: couldn't upgrade %s", err)
+		return
+	}
+
+	wsConn := &wsConn{
+		conn:         conn,
+		writeMessage: make(chan *WriteMessage, 100),
+	}
+
+	err = ss.getServiceInstanceStats(conn)
+	if err != nil {
+		closeMessage := websocket.FormatCloseMessage(websocket.CloseAbnormalClosure, string(err.Error()))
+		conn.WriteMessage(websocket.CloseMessage, closeMessage)
+		conn.Close()
+		return
+	}
+
+	response := StatsResponse{Success: true}
+	response.Success = true
+	str, _ := json.Marshal(response)
+	wsConn.writeMessage <- &WriteMessage{data: str, needClose: false}
+
+	go func() {
+		for {
+			err := ss.getServiceInstanceStats(conn)
+			if err != nil {
+				wsConn.writeMessage <- &WriteMessage{data: []byte(err.Error()), needClose: true}
+				break
+			}
+
+			needClose := false
+			response := StatsResponse{Success: true}
+			str, _ := json.Marshal(response)
+			wsConn.writeMessage <- &WriteMessage{data: str, needClose: needClose}
+			if needClose {
+				break
+			}
+		}
+	}()
+	ss.writeWithPingPong(wsConn)
+}
+
+type WriteMessage struct {
+	data      []byte
+	needClose bool
+}
+
+type wsConn struct {
+	conn         *websocket.Conn
+	writeMessage chan *WriteMessage
+}
+
+// writeWithPingPong do ping pong with service or gateway
+func (ss *ScheduleService) writeWithPingPong(wsConn *wsConn) {
+	var missedPongs atomic.Int32
+	conn := wsConn.conn
+	conn.SetPongHandler(func(appData string) error {
+		missedPongs.Store(0)
+		return nil
+	})
+
+	ticker := time.NewTicker(3 * time.Second) // send ping every 3 seconds
+	defer func() {
+		ticker.Stop()
+		conn.Close()
+	}()
+OuterLoop:
+	for {
+		select {
+		case message := <-wsConn.writeMessage:
+			if err := conn.WriteMessage(websocket.TextMessage, message.data); err != nil {
+				break OuterLoop
+			}
+			if message.needClose {
+				break OuterLoop
+			}
+		case <-ticker.C:
+			if missedPongs.Load() >= 2 {
+				// two pongs missed, the connection may be broken
+				klog.V(3).Infof("2 pongs missed: %v", wsConn.conn.LocalAddr().String())
+				break OuterLoop
+			}
+			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				break OuterLoop
+			}
+			missedPongs.Add(1)
+		}
+	}
+}
+
+/////////////////////////////////////////////////////////////////

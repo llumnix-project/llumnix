@@ -66,7 +66,7 @@ func (b *PdSplitVllmKvtBackend) BatchScheduleStreamInference(req *types.RequestC
 		}
 
 		// build new backend request and stream read
-		StreamResponseFromBackend(req, b.client, body, dWorker, chunkChan)
+		StreamReadFromBackend(req, b.client, body, dWorker, chunkChan)
 	}()
 
 	return chunkChan, nil
@@ -123,7 +123,7 @@ func (b *PdSplitVllmKvtBackend) doDecode(req *types.RequestContext, chunkChan ch
 		chunkChan <- StreamChunk{err: err}
 		return
 	}
-	StreamResponseFromBackend(req, b.client, data, dWorker, chunkChan)
+	StreamReadFromBackend(req, b.client, data, dWorker, chunkChan)
 }
 
 func (b *PdSplitVllmKvtBackend) StagedScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
@@ -173,4 +173,8 @@ func (b *PdSplitVllmKvtBackend) StreamInference(req *types.RequestContext) (<-ch
 	} else {
 		return nil, fmt.Errorf("[%s] unsupported schedule mode: %s", req.Id, b.scheduleMode)
 	}
+}
+
+func (b *PdSplitVllmKvtBackend) Inference(req *types.RequestContext) ([]byte, error) {
+	return nil, fmt.Errorf("Inference is not implemented for %s", consts.SplitModeVllmKvt)
 }
