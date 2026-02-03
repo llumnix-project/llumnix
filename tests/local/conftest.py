@@ -7,7 +7,7 @@ from typing import Generator, List, Dict, Any
 
 from modelscope import snapshot_download
 
-from .utils import (wait_for_service, start_process, cleanup_processes,
+from utils import (wait_for_service, start_process, cleanup_processes,
                     get_redis_command, get_gateway_command, get_scheduler_command, 
                     get_vllm_command, get_runtime_command, VLLM_BASE_PORT, LOG_DIR,
                     NAMING_DIR, MODEL_PATH)
@@ -132,7 +132,6 @@ def setup_environment():
                 print(f"Error deleting file {log_file}: {e}")
     os.makedirs(NAMING_DIR, exist_ok=True)
     yield
-
 
 @pytest.fixture
 def setup_services(setup_environment, redis_server, scheduler_server, gateway_server, vllm_servers):
