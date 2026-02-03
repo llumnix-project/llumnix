@@ -39,11 +39,11 @@ class MooncakeMigrationFrontend(BaseMigrationFrontend):
 
         self.enable_detailed_mig = envs.LLUMNIX_DETAILED_MIG_STATUS
         max_migrate_in_tokens = envs.LLUMNIX_MAX_TOKEN_MIG_IN
-        max_migrate_in_block_ratio = envs.LLUMNIX_MAX_BLOCK_RATIO_MIG_IN
+        max_migrate_in_kv_cache_usage_ratio = envs.LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_IN
         total_tokens = self._cfg.cache_config.num_gpu_blocks * self._cfg.cache_config.block_size
         self.max_migrate_in_tokens = min(
             max_migrate_in_tokens,
-            int(total_tokens * max_migrate_in_block_ratio))
+            int(total_tokens * max_migrate_in_kv_cache_usage_ratio))
 
         self.remote_call_queue = queue.Queue()
         self.migrate_thread = threading.Thread(
@@ -87,10 +87,10 @@ class MooncakeMigrationFrontend(BaseMigrationFrontend):
                 instance_status.num_migrate_in_tokens = sum(g_migrate_in_tokens.values())
             with g_migrate_out_req_info_lock:
                 instance_status.num_migrate_out_tokens = sum(g_migrate_out_tokens.values())
-            instance_status.block_ratio_migrate_in = round(cdiv(instance_status.num_migrate_in_tokens, self.scheduler.cache_config.block_size)
-                                                        / instance_status.num_total_gpu_blocks, 4)
-            instance_status.block_ratio_migrate_out = round(cdiv(instance_status.num_migrate_out_tokens, self.scheduler.cache_config.block_size)
-                                                        / instance_status.num_total_gpu_blocks, 4)
+            instance_status.kv_cache_usage_ratio_migrate_in = \
+                round(instance_status.num_migrate_in_tokens / instance_status.num_total_gpu_tokens, 4)
+            instance_status.kv_cache_usage_ratio_migrate_out = \
+                round(instance_status.num_migrate_out_tokens / instance_status.num_total_gpu_tokens, 4)
 
     def iter_scheduler_requests(self) -> List[Tuple[Request, int]]:
         migrated_out_requests: List[Request]= []

@@ -164,7 +164,7 @@ class BaseMigrationFrontend(ABC):
             return migration_params.num_tokens
         if migration_params.migration_type == MigrationType.RATIO:
             total_tokens = self.scheduler.cache_config.num_gpu_blocks * self.scheduler.cache_config.block_size
-            return int(total_tokens * migration_params.block_ratio)
+            return int(total_tokens * migration_params.kv_cache_usage_ratio)
         if migration_params.migration_type == MigrationType.NUM_REQ:
             return migration_params.num_reqs
         raise NotImplementedError("Not Implemented MigrationType")

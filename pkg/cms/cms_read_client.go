@@ -113,7 +113,6 @@ type CMSReadClient struct {
 	recordMetricsInterval int32
 
 	enablePredictorEnhancedScheduling bool
-	kvCacheBlockSize                  int32
 	TTFTPredictor                     *predictor.QuadraticPredictor
 }
 
@@ -136,7 +135,6 @@ func CreateOrGetClient(
 	requestLocalAccountStalenessSeconds int32,
 	recordMetricsInterval int32,
 	enablePredictorEnhancedScheduling bool,
-	kvCacheBlockSize int32,
 	numPredictorWarmupSamples int) (*CMSReadClient, error) {
 
 	mu.Lock()
@@ -153,7 +151,7 @@ func CreateOrGetClient(
 	client, err = NewCMSReadClient(
 		redisClient, pullStatusIntervalMs, pullMetadataIntervalMs, allowConcurrentSchedule, enableInstanceStatusLocalAccount,
 		enableCacheAwareScheduling, requestLocalAccountStalenessSeconds, recordMetricsInterval,
-		enablePredictorEnhancedScheduling, kvCacheBlockSize, numPredictorWarmupSamples)
+		enablePredictorEnhancedScheduling, numPredictorWarmupSamples)
 
 	return client, err
 }
@@ -168,7 +166,6 @@ func NewCMSReadClient(
 	requestLocalAccountStalenessSeconds int32,
 	recordMetricsInterval int32,
 	enablePredictorEnhancedScheduling bool,
-	kvCacheBlockSize int32,
 	numPredictorWarmupSamples int) (*CMSReadClient, error) {
 
 	if redisClient == nil {
@@ -193,7 +190,6 @@ func NewCMSReadClient(
 		enableInstanceStatusLocalAccount:  enableInstanceStatusLocalAccount,
 		recordMetricsInterval:             recordMetricsInterval,
 		enablePredictorEnhancedScheduling: enablePredictorEnhancedScheduling,
-		kvCacheBlockSize:                  kvCacheBlockSize,
 	}
 
 	if enableInstanceStatusLocalAccount {
@@ -520,8 +516,8 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 					NumInflightDispatchPrefillRequests:                 0,
 					NumInflightDispatchDecodeRequests:                  0,
 					NumInflightDispatchRequests:                        0,
-					NumUncomputedBlocksInflightDispatchPrefillRequests: 0,
-					NumBlocksInflightDispatchDecodeRequests:            0,
+					NumUncomputedTokensInflightDispatchPrefillRequests: 0,
+					NumTokensInflightDispatchDecodeRequests:            0,
 				},
 			}
 			if c.groupedInstanceViews[instanceRole] == nil {
@@ -574,12 +570,12 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 		}
 
 		if needRecordMetrics {
-			metrics.SetLlumnixStatusValue(metrics.LlumnixMetricInstanceNumUncomputedBlocksAllWaitingPrefills,
+			metrics.SetLlumnixStatusValue(metrics.LlumnixMetricInstanceNumUncomputedTokensAllWaitingPrefills,
 				metrics.Labels{{"instance_id", c.instanceStatuses[instanceID].InstanceId}},
-				float32(c.instanceStatuses[instanceID].NumUncomputedBlocksAllWaitingPrefills))
-			metrics.SetLlumnixStatusValue(metrics.LlumnixMetricInstanceNumUsedGpuBlocks,
+				float32(c.instanceStatuses[instanceID].NumUncomputedTokensAllWaitingPrefills))
+			metrics.SetLlumnixStatusValue(metrics.LlumnixMetricInstanceNumUsedGpuTokens,
 				metrics.Labels{{"instance_id", c.instanceStatuses[instanceID].InstanceId}},
-				float32(c.instanceStatuses[instanceID].NumUsedGpuBlocks))
+				float32(c.instanceStatuses[instanceID].NumUsedGpuTokens))
 		}
 	}
 
@@ -589,7 +585,7 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 }
 
 func (c *CMSReadClient) AddRequestLocalAccount(
-	instanceInfo *InstanceView, inferMode string, numBlocks int32, prefixHitNumBlocks int32, requestId string, firstUpdate bool) {
+	instanceInfo *InstanceView, inferMode string, numTokens int32, prefixHitNumTokens int32, requestId string, firstUpdate bool) {
 	if c.allowConcurrentSchedule {
 		c.RUnlock()
 		defer c.RLock()
@@ -597,11 +593,11 @@ func (c *CMSReadClient) AddRequestLocalAccount(
 		defer c.Unlock()
 	}
 	c.instanceStatusLocalAccountEditor.addRequestLocalAccount(
-		instanceInfo, inferMode, numBlocks, prefixHitNumBlocks, requestId, firstUpdate)
+		instanceInfo, inferMode, numTokens, prefixHitNumTokens, requestId, firstUpdate)
 }
 
 func (c *CMSReadClient) RevertRequestPrefillLocalAccount(
-	instanceInfo *InstanceView, numBlocks int32, prefixHitNumBlocks int32, requestId string) {
+	instanceInfo *InstanceView, numTokens int32, prefixHitNumTokens int32, requestId string) {
 	if c.allowConcurrentSchedule {
 		c.RUnlock()
 		defer c.RLock()
@@ -609,7 +605,7 @@ func (c *CMSReadClient) RevertRequestPrefillLocalAccount(
 		defer c.Unlock()
 	}
 	c.instanceStatusLocalAccountEditor.revertRequestPrefillLocalAccount(
-		instanceInfo, numBlocks, prefixHitNumBlocks, requestId)
+		instanceInfo, numTokens, prefixHitNumTokens, requestId)
 }
 
 func (c *CMSReadClient) addSampleToTTFTPredictor(instanceID string) {
@@ -626,8 +622,7 @@ func (c *CMSReadClient) addSampleToTTFTPredictor(instanceID string) {
 		return
 	}
 	c.TTFTPredictor.AddSample(
-		float64((c.instanceViews[instanceID].Status.NumScheduledPrefillTokens+c.kvCacheBlockSize-1)/
-			c.kvCacheBlockSize), c.instanceViews[instanceID].Status.StepDuration)
+		float64(c.instanceViews[instanceID].Status.NumScheduledPrefillTokens), c.instanceViews[instanceID].Status.StepDuration)
 }
 
 func (c *CMSReadClient) fitTTFTPredictor() {

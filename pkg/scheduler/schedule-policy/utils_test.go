@@ -20,7 +20,7 @@ func TestCalculateMetrics(t *testing.T) {
 		result := &instanceViewScheduling{
 			cmsView: &cms.InstanceView{
 				Status: &cms.InstanceStatus{
-					NumTotalGpuBlocks: 0, // make kvBlocksRatioWithAllPrefills metric value equal to math.MaxFloat32
+					NumTotalGpuTokens: 0, // make kvCacheUsageRatioProjected metric value equal to math.MaxFloat32
 				},
 				Metadata: &cms.InstanceMetadata{
 					InstanceId: "0",
@@ -39,11 +39,11 @@ func TestCalculateMetrics(t *testing.T) {
 	}
 	config := newConfig()
 	metrics := map[string]func() instanceSchedulingMetric{
-		consts.SchedulingMetricKVBlocksRatioWithAllPrefills: getSchedulingMetric(
-			config, consts.SchedulingMetricKVBlocksRatioWithAllPrefills),
+		consts.SchedulingMetricKVCacheUsageRatioProjected: getSchedulingMetric(
+			config, consts.SchedulingMetricKVCacheUsageRatioProjected),
 	}
 	calculateMetrics(instances, metrics)
-	assert.Equal(t, float32(math.MaxFloat32), instances["0"].metrics[consts.SchedulingMetricKVBlocksRatioWithAllPrefills].GetValue())
+	assert.Equal(t, float32(math.MaxFloat32), instances["0"].metrics[consts.SchedulingMetricKVCacheUsageRatioProjected].GetValue())
 }
 
 func TestFilter(t *testing.T) {
@@ -129,9 +129,9 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 							Role:     consts.NormalInferMode,
 						},
 						Status: &cms.InstanceStatus{
-							NumTotalGpuBlocks:                     100,
-							NumUsedGpuBlocks:                      50,
-							NumUncomputedBlocksAllWaitingPrefills: 10,
+							NumTotalGpuTokens:                     100,
+							NumUsedGpuTokens:                      50,
+							NumUncomputedTokensAllWaitingPrefills: 10,
 							Schedulable:                           true,
 							TimestampMs:                           time.Now().UnixMilli(),
 						},
@@ -148,9 +148,9 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 							Role:     consts.NormalInferMode,
 						},
 						Status: &cms.InstanceStatus{
-							NumTotalGpuBlocks:                     100,
-							NumUsedGpuBlocks:                      50,
-							NumUncomputedBlocksAllWaitingPrefills: 10,
+							NumTotalGpuTokens:                     100,
+							NumUsedGpuTokens:                      50,
+							NumUncomputedTokensAllWaitingPrefills: 10,
 							Schedulable:                           true,
 							TimestampMs:                           time.Now().UnixMilli(),
 						},
@@ -182,9 +182,9 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 							Role:     consts.NormalInferMode,
 						},
 						Status: &cms.InstanceStatus{
-							NumTotalGpuBlocks:                     100,
-							NumUsedGpuBlocks:                      50,
-							NumUncomputedBlocksAllWaitingPrefills: 10,
+							NumTotalGpuTokens:                     100,
+							NumUsedGpuTokens:                      50,
+							NumUncomputedTokensAllWaitingPrefills: 10,
 							Schedulable:                           true,
 							TimestampMs:                           time.Now().UnixMilli(),
 						},
@@ -218,9 +218,9 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 							Role:     consts.NormalInferMode,
 						},
 						Status: &cms.InstanceStatus{
-							NumTotalGpuBlocks:                     100,
-							NumUsedGpuBlocks:                      50,
-							NumUncomputedBlocksAllWaitingPrefills: 10,
+							NumTotalGpuTokens:                     100,
+							NumUsedGpuTokens:                      50,
+							NumUncomputedTokensAllWaitingPrefills: 10,
 							Schedulable:                           true,
 							TimestampMs:                           time.Now().UnixMilli(),
 						},
@@ -244,14 +244,13 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 			}
 			mockCMSClient := &MockCMSReadClient{}
 			blockSize := int32(16)
-			calcInstancesPrefixCacheHitLen(tt.mockResponses, mockCMSClient, tt.promptTokenIds, tt.instanceViews,
-				blockSize)
+			calcInstancesPrefixCacheHitLen(tt.mockResponses, mockCMSClient, tt.promptTokenIds, tt.instanceViews)
 
-			// Verify the prefixHitLen is set correctly in instance view
+			// Verify the prefixHitTokens is set correctly in instance view
 			for instanceID, expectedLen := range tt.expectedHitLen {
 				if view, exists := tt.instanceViews[instanceID]; exists {
-					assert.Equal(t, expectedLen, view.schedulingCtx.prefixHitLen)
-					assert.Equal(t, expectedLen/int(blockSize), view.schedulingCtx.prefixHitLen/int(blockSize))
+					assert.Equal(t, expectedLen, view.schedulingCtx.prefixHitTokens)
+					assert.Equal(t, expectedLen/int(blockSize), view.schedulingCtx.prefixHitTokens/int(blockSize))
 					assert.Equal(t, float32(expectedLen)/float32(len(tt.promptTokenIds)), view.schedulingCtx.prefixHitRatio)
 				}
 			}

@@ -24,8 +24,7 @@ func calcInstancesPrefixCacheHitLen(
 	kvsClient kvs.KVSClientInterface,
 	cmsClient cms.CMSReadClientInterface,
 	promptTokenIds []int64,
-	instanceViews map[string]*instanceViewScheduling,
-	blockSize int32) {
+	instanceViews map[string]*instanceViewScheduling) {
 
 	totalStart := time.Now()
 	defer func() {
@@ -66,18 +65,15 @@ func calcInstancesPrefixCacheHitLen(
 	updateCount := 0
 	for instanceId, prefixHitLen := range instancePrefixHitLen {
 		if instanceView, ok := instanceViews[instanceId]; ok {
-			instanceView.schedulingCtx.prefixHitLen = prefixHitLen
-			instanceView.schedulingCtx.prefixHitNumBlocks = prefixHitLen / int(blockSize)
+			instanceView.schedulingCtx.prefixHitTokens = prefixHitLen
 			if len(promptTokenIds) > 0 {
 				instanceView.schedulingCtx.prefixHitRatio = float32(prefixHitLen) / float32(len(promptTokenIds))
 			} else {
 				instanceView.schedulingCtx.prefixHitRatio = 0.0
 			}
-			instanceView.schedulingCtx.prefixMissLen = len(promptTokenIds) - prefixHitLen
-			instanceView.schedulingCtx.prefixMissNumBlocks =
-				(instanceView.schedulingCtx.prefixMissLen + int(blockSize) - 1) / int(blockSize)
+			instanceView.schedulingCtx.prefixMissTokens = len(promptTokenIds) - prefixHitLen
 			updateCount++
-			klog.V(4).Infof("Updated instance %s with prefixHitLen: %d", instanceId, prefixHitLen)
+			klog.V(4).Infof("Updated instance %s with prefixHitTokens: %d", instanceId, prefixHitLen)
 		} else {
 			klog.Warningf("Instance %s not found in instanceViews", instanceId)
 		}

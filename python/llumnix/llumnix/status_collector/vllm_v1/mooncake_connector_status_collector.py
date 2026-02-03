@@ -12,13 +12,13 @@ class MooncakeConnectorStatusCollector(BaseConnectorStatusCollector):
     def get_connector_waiting_to_decode_reqs_num(self) -> int:
         return 0
 
-    def get_connector_num_unallocated_blocks_waiting_decodes(self) -> int:
+    def get_connector_num_unallocated_tokens_waiting_decodes(self) -> int:
         return 0
 
-    def get_connector_waiting_to_decode_blocks_num(self) -> int:
+    def get_connector_waiting_to_decode_tokens_num(self) -> int:
         return 0
 
-    def get_connector_num_uncomputed_blocks_waiting_prefills(self) -> int:
+    def get_connector_num_uncomputed_tokens_waiting_prefills(self) -> int:
         return 0
 
     def is_migrating(self, req: Request) -> bool:
@@ -29,5 +29,5 @@ class MooncakeConnectorStatusCollector(BaseConnectorStatusCollector):
     def get_connector_loading_requests_num(self) -> int:
         return 0
 
-    def get_connector_num_blocks_loading_requests(self) -> int:
+    def get_connector_num_tokens_loading_requests(self) -> int:
         return 0

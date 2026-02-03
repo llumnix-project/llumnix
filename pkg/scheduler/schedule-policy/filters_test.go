@@ -50,7 +50,7 @@ func TestSchedulabilityFilter(t *testing.T) {
 
 func TestMetricBasedFilter(t *testing.T) {
 	filter1 := &metricBasedFilter{
-		metricName: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+		metricName: consts.SchedulingMetricKVCacheUsageRatioProjected,
 		threshold:  0.6,
 	}
 
@@ -60,9 +60,9 @@ func TestMetricBasedFilter(t *testing.T) {
 		cmsView: &cms.InstanceView{Metadata: &cms.InstanceMetadata{InstanceId: "instance-1"}},
 		schedulingCtx: schedulingCtx{
 			metrics: map[string]instanceSchedulingMetric{
-				consts.SchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
+				consts.SchedulingMetricKVCacheUsageRatioProjected: &kvCacheUsageRatioProjected{
 					baseMetric{
-						name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+						name:  consts.SchedulingMetricKVCacheUsageRatioProjected,
 						value: 0.5,
 					},
 				},
@@ -75,9 +75,9 @@ func TestMetricBasedFilter(t *testing.T) {
 		cmsView: &cms.InstanceView{Metadata: &cms.InstanceMetadata{InstanceId: "instance-2"}},
 		schedulingCtx: schedulingCtx{
 			metrics: map[string]instanceSchedulingMetric{
-				consts.SchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
+				consts.SchedulingMetricKVCacheUsageRatioProjected: &kvCacheUsageRatioProjected{
 					baseMetric{
-						name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+						name:  consts.SchedulingMetricKVCacheUsageRatioProjected,
 						value: 0.8,
 					},
 				},
@@ -90,9 +90,9 @@ func TestMetricBasedFilter(t *testing.T) {
 		cmsView: &cms.InstanceView{Metadata: &cms.InstanceMetadata{InstanceId: "instance-3"}},
 		schedulingCtx: schedulingCtx{
 			metrics: map[string]instanceSchedulingMetric{
-				consts.SchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
+				consts.SchedulingMetricKVCacheUsageRatioProjected: &kvCacheUsageRatioProjected{
 					baseMetric{
-						name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+						name:  consts.SchedulingMetricKVCacheUsageRatioProjected,
 						value: 0.3,
 					},
 				},
@@ -432,7 +432,7 @@ func TestFailoverMigrationSrcFilter(t *testing.T) {
 func TestInvertedSingleInstanceFilterWrapper(t *testing.T) {
 	filter1 := &invertedSingleInstanceFilterWrapper{
 		innerFilter: &metricBasedFilter{
-			metricName: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+			metricName: consts.SchedulingMetricKVCacheUsageRatioProjected,
 			threshold:  1.0,
 		},
 	}
@@ -449,9 +449,9 @@ func TestInvertedSingleInstanceFilterWrapper(t *testing.T) {
 		},
 		schedulingCtx: schedulingCtx{
 			metrics: map[string]instanceSchedulingMetric{
-				consts.SchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
+				consts.SchedulingMetricKVCacheUsageRatioProjected: &kvCacheUsageRatioProjected{
 					baseMetric: baseMetric{
-						name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+						name:  consts.SchedulingMetricKVCacheUsageRatioProjected,
 						value: 2.0,
 					},
 				},
@@ -471,9 +471,9 @@ func TestInvertedSingleInstanceFilterWrapper(t *testing.T) {
 		},
 		schedulingCtx: schedulingCtx{
 			metrics: map[string]instanceSchedulingMetric{
-				consts.SchedulingMetricKVBlocksRatioWithAllPrefills: &kvBlocksRatioWithAllPrefills{
+				consts.SchedulingMetricKVCacheUsageRatioProjected: &kvCacheUsageRatioProjected{
 					baseMetric: baseMetric{
-						name:  consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+						name:  consts.SchedulingMetricKVCacheUsageRatioProjected,
 						value: 0.5,
 					},
 				},

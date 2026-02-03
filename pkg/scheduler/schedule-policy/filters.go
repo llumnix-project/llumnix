@@ -34,7 +34,7 @@ func filter(
 		}
 	}
 
-	klog.V(4).Infof("After single instance filters, available instances: %v", mapKeys(availableInstanceViews))
+	klog.V(4).Infof("After single instance filters, available instances: %v", getKeySliceFromMap(availableInstanceViews))
 
 	// NOTE(sunbiao.sun): global filters should be employed after single instance filters,
 	// because failover filter (global) requires to read the needsFailover field in instance view written by
@@ -49,7 +49,7 @@ func filter(
 		}
 	}
 
-	klog.V(4).Infof("Final available instances after all filters: %v", mapKeys(availableInstanceViews))
+	klog.V(4).Infof("Final available instances after all filters: %v", getKeySliceFromMap(availableInstanceViews))
 	return availableInstanceViews
 }
 

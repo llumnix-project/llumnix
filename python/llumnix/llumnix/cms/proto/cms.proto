@@ -56,21 +56,21 @@ message InstanceStatus {
   int32 num_running_requests = 12;
   int32 num_loading_requests = 13;
 
-  // num blocks status from kv manager
-  int32 num_total_gpu_blocks = 14;
-  int32 num_used_gpu_blocks = 15;
+  // num tokens status from kv manager
+  int32 num_total_gpu_tokens = 14;
+  int32 num_used_gpu_tokens = 15;
 
-  // num blocks status from scheduler and hybrid scheduler
-  int32 num_uncomputed_blocks_hybrid_scheduler_waiting_prefills = 16;
-  int32 num_unallocated_blocks_hybrid_scheduler_waiting_decodes = 17;
-  int32 hybrid_scheduler_waiting_to_decode_blocks_num = 18;
-  int32 num_uncomputed_blocks_scheduler_waiting_prefills = 19;
-  int32 scheduler_waiting_to_decode_blocks_num = 20;
-  int32 num_uncomputed_blocks_scheduler_running_prefills = 21;
-  int32 num_unallocated_blocks_scheduler_running_prefills = 22;
-  int32 scheduler_running_to_decode_blocks_num = 23;
-  int32 num_blocks_loading_requests = 24;
-  int32 num_uncomputed_blocks_all_waiting_prefills = 25;
+  // num tokens status from scheduler and hybrid scheduler
+  int32 num_uncomputed_tokens_hybrid_scheduler_waiting_prefills = 16;
+  int32 num_unallocated_tokens_hybrid_scheduler_waiting_decodes = 17;
+  int32 hybrid_scheduler_waiting_to_decode_tokens_num = 18;
+  int32 num_uncomputed_tokens_scheduler_waiting_prefills = 19;
+  int32 scheduler_waiting_to_decode_tokens_num = 20;
+  int32 num_uncomputed_tokens_scheduler_running_prefills = 21;
+  int32 num_unallocated_tokens_scheduler_running_prefills = 22;
+  int32 scheduler_running_to_decode_tokens_num = 23;
+  int32 num_tokens_loading_requests = 24;
+  int32 num_uncomputed_tokens_all_waiting_prefills = 25;
 
   // migration status
   int32 num_migrate_in_reqs = 26;
@@ -81,10 +81,10 @@ message InstanceStatus {
   int32 num_migrate_out_tokens = 31;
   int32 num_available_migrate_in_tokens = 32;
   int32 num_available_migrate_out_tokens = 33;
-  double block_ratio_migrate_in = 34;
-  double block_ratio_migrate_out = 35;
-  double available_block_ratio_migrate_in = 36;
-  double available_block_ratio_migrate_out = 37;
+  double kv_cache_usage_ratio_migrate_in = 34;
+  double kv_cache_usage_ratio_migrate_out = 35;
+  double available_kv_cache_usage_ratio_migrate_in = 36;
+  double available_kv_cache_usage_ratio_migrate_out = 37;
 
   // profiling status
   int32 profiling_id = 38;

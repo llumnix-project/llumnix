@@ -5,8 +5,8 @@ const (
 	LlumnixMetricRescheduleFailedCount                         = "llumnix_reschedule_failed_count"
 	LlumnixMetricScheduleFailedCount                           = "llumnix_schedule_failed_count"
 	LlumnixMetricScheduleLatencyMicroseconds                   = "llumnix_schedule_latency_us"
-	LlumnixMetricInstanceNumUncomputedBlocksAllWaitingPrefills = "llumnix_instance_uncomputed_blocks_all_waiting_prefills"
-	LlumnixMetricInstanceNumUsedGpuBlocks                      = "llumnix_instance_blocks_used"
+	LlumnixMetricInstanceNumUncomputedTokensAllWaitingPrefills = "llumnix_instance_uncomputed_tokens_all_waiting_prefills"
+	LlumnixMetricInstanceNumUsedGpuTokens                      = "llumnix_instance_tokens_used"
 	LlumnixMetricCmsRefreshInstanceMetadataLatencyMicroseconds = "llumnix_cms_refresh_metadata_latency_us"
 	LlumnixMetricCmsRefreshInstanceStatusLatencyMicroseconds   = "llumnix_cms_refresh_status_latency_us"
 )

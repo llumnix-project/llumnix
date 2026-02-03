@@ -2,18 +2,17 @@ package schedule_policy
 
 import (
 	"fmt"
-	"llumnix/cmd/scheduler/app/options"
-	"llumnix/pkg/cms"
-	"llumnix/pkg/lrs"
-	"llumnix/pkg/types"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 
+	"llumnix/cmd/scheduler/app/options"
+	"llumnix/pkg/cms"
 	"llumnix/pkg/consts"
+	"llumnix/pkg/lrs"
 )
 
-func mapKeys[M ~map[K]V, K comparable, V any](m M) []K {
+func getKeySliceFromMap[M ~map[K]V, K comparable, V any](m M) []K {
 	keys := make([]K, 0, len(m))
 	for k := range m {
 		keys = append(keys, k)
@@ -72,11 +71,11 @@ func verifyDispatchLoadMetric(c *options.SchedulerConfig) {
 	liteModeSchedulingMetricSet := sets.NewString(
 		consts.SchedulingMetricNumRequests, consts.SchedulingMetricNumTokens)
 	fullModeSchedulingMetricSet := sets.NewString(
-		consts.SchedulingMetricKVBlocksRatioWithAllPrefills, consts.SchedulingMetricDecodeBatchSize,
-		consts.SchedulingMetricNumWaitingRequests, consts.SchedulingMetricAllPrefillsKVBlocksNum,
-		consts.SchedulingMetricKVCacheHitLen, consts.SchedulingMetricCacheAwareAllPrefillsKVBlocksNum,
+		consts.SchedulingMetricKVCacheUsageRatioProjected, consts.SchedulingMetricDecodeBatchSize,
+		consts.SchedulingMetricNumWaitingRequests, consts.SchedulingMetricAllPrefillsTokensNum,
+		consts.SchedulingMetricKVCacheHitLen, consts.SchedulingMetricCacheAwareAllPrefillsTokensNum,
 		consts.SchedulingMetricAdaptiveDecodeBatchSize, consts.SchedulingMetricNumRequests,
-		consts.SchedulingMetricAllDecodesKVBlocksNumWithAllPrefills)
+		consts.SchedulingMetricAllDecodesTokensNum)
 
 	if !c.EnableFullModeScheduling {
 		if !liteModeSchedulingMetricSet.Has(c.DispatchNeutralLoadMetric) {
@@ -97,18 +96,18 @@ func verifyDispatchLoadMetric(c *options.SchedulerConfig) {
 	} else {
 		if !fullModeSchedulingMetricSet.Has(c.DispatchNeutralLoadMetric) {
 			klog.Warningf("The neutral dispatch load metric %s is not supported when enable full-mode scheduling, "+
-				"forcefully set metric to %s here", c.DispatchNeutralLoadMetric, consts.SchedulingMetricKVBlocksRatioWithAllPrefills)
-			c.DispatchNeutralLoadMetric = consts.SchedulingMetricKVBlocksRatioWithAllPrefills
+				"forcefully set metric to %s here", c.DispatchNeutralLoadMetric, consts.SchedulingMetricKVCacheUsageRatioProjected)
+			c.DispatchNeutralLoadMetric = consts.SchedulingMetricKVCacheUsageRatioProjected
 		}
 		if !fullModeSchedulingMetricSet.Has(c.DispatchPrefillLoadMetric) {
 			klog.Warningf("The prefill dispatch load metric %s is not supported when enable full-mode scheduling, "+
-				"forcefully set metric to %s here", c.DispatchPrefillLoadMetric, consts.SchedulingMetricAllPrefillsKVBlocksNum)
-			c.DispatchPrefillLoadMetric = consts.SchedulingMetricAllPrefillsKVBlocksNum
+				"forcefully set metric to %s here", c.DispatchPrefillLoadMetric, consts.SchedulingMetricAllPrefillsTokensNum)
+			c.DispatchPrefillLoadMetric = consts.SchedulingMetricAllPrefillsTokensNum
 		}
 		if !fullModeSchedulingMetricSet.Has(c.DispatchDecodeLoadMetric) {
 			klog.Warningf("The decode dispatch load metric %s is not supported when enable full-mode scheduling, "+
-				"forcefully set metric to %s here", c.DispatchDecodeLoadMetric, consts.SchedulingMetricKVBlocksRatioWithAllPrefills)
-			c.DispatchDecodeLoadMetric = consts.SchedulingMetricKVBlocksRatioWithAllPrefills
+				"forcefully set metric to %s here", c.DispatchDecodeLoadMetric, consts.SchedulingMetricKVCacheUsageRatioProjected)
+			c.DispatchDecodeLoadMetric = consts.SchedulingMetricKVCacheUsageRatioProjected
 		}
 	}
 }
@@ -143,13 +142,11 @@ func toClusterViewScheduling(cv clusterView) clusterViewScheduling {
 			groupedInstanceViews[inferMode][instanceID] = &instanceViewScheduling{
 				InstanceViewInterface: view,
 				schedulingCtx: schedulingCtx{
-					metrics:             map[string]instanceSchedulingMetric{},
-					needsFailover:       false,
-					prefixHitLen:        0,
-					prefixHitNumBlocks:  0,
-					prefixHitRatio:      0.0,
-					prefixMissLen:       0,
-					prefixMissNumBlocks: 0,
+					metrics:          map[string]instanceSchedulingMetric{},
+					needsFailover:    false,
+					prefixHitTokens:  0,
+					prefixHitRatio:   0.0,
+					prefixMissTokens: 0,
 				},
 			}
 			switch v := view.(type) {
@@ -192,9 +189,9 @@ func logSelectedInstance(
 	instance *instanceViewScheduling, requestId string, requestInferMode string, enableFullModeScheduling bool) {
 	var loadMetric instanceSchedulingMetric
 	if enableFullModeScheduling {
-		loadMetric = &kvBlocksRatioWithAllPrefills{
+		loadMetric = &kvCacheUsageRatioProjected{
 			baseMetric: baseMetric{
-				name: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+				name: consts.SchedulingMetricKVCacheUsageRatioProjected,
 			},
 		}
 	} else {
@@ -208,33 +205,4 @@ func logSelectedInstance(
 	klog.V(3).Infof("[GetToken] dispatch request %s to %s instance %s for %s, %s: %.4f",
 		requestId, instance.GetInferMode(), instance.GetInstanceId(), requestInferMode,
 		loadMetric.GetName(), loadMetric.GetValue())
-}
-
-type SchedulePolicy interface {
-	// Name schedule policy name
-	Name() string
-
-	// Schedule attempts to acquire an instance for processing a new request.
-	Schedule(*types.ScheduleRequest) error
-}
-
-func NewSchedulePolicy(
-	policy string,
-	config *options.SchedulerConfig,
-	lrsClient *lrs.LocalRealtimeStateClient) SchedulePolicy {
-	if len(policy) == 0 {
-		panic("create schedule policy exception, policy is empty.")
-	}
-
-	klog.Infof("create scheduler with policy: %v", policy)
-
-	return NewDispatchPolicy(config, policy, lrsClient)
-}
-
-func NewReschedulePolicy(config *options.SchedulerConfig) RescheduleInterface {
-	return newReschedulePolicy(config)
-}
-
-type RescheduleInterface interface {
-	RescheduleLoop()
 }

@@ -24,29 +24,27 @@ class HybridConnectorStatusCollector(BaseConnectorStatusCollector):
                     count += 1
         return count
 
-    def get_connector_num_unallocated_blocks_waiting_decodes(self) -> int:
-        num_unallocated_blocks_waiting_decodes = 0
+    def get_connector_num_unallocated_tokens_waiting_decodes(self) -> int:
+        num_unallocated_tokens_waiting_decodes = 0
         if self.scheduler.connector is not None:
             # pylint: disable=protected-access
             for req, load, _ in self.scheduler.connector._sched._waiting:
                 _, num_new_local_computed_tokens = \
                     self.scheduler.kv_cache_manager.get_computed_blocks(req)
                 if load:
-                    num_unallocated_blocks_waiting_decodes += \
-                        cdiv(req.num_tokens - num_new_local_computed_tokens, self.scheduler.cache_config.block_size)
-        return num_unallocated_blocks_waiting_decodes
+                    num_unallocated_tokens_waiting_decodes += req.num_tokens - num_new_local_computed_tokens
+        return num_unallocated_tokens_waiting_decodes
 
-    def get_connector_waiting_to_decode_blocks_num(self) -> int:
+    def get_connector_waiting_to_decode_tokens_num(self) -> int:
         num_waiting_to_decode_tokens = 0
         if self.scheduler.connector is not None:
             # pylint: disable=protected-access
             for req, load, _ in self.scheduler.connector._sched._waiting:
                 if load:
                     num_waiting_to_decode_tokens += req.num_tokens
-        num_blocks_waiting_to_decode_tokens = cdiv(num_waiting_to_decode_tokens, self.scheduler.cache_config.block_size)
-        return num_blocks_waiting_to_decode_tokens
+        return num_waiting_to_decode_tokens
 
-    def get_connector_num_uncomputed_blocks_waiting_prefills(self) -> int:
+    def get_connector_num_uncomputed_tokens_waiting_prefills(self) -> int:
         num_uncomputed_tokens_waiting_prefills = 0
         if self.scheduler.connector is not None:
             # pylint: disable=protected-access
@@ -67,11 +65,10 @@ class HybridConnectorStatusCollector(BaseConnectorStatusCollector):
             num_loading_requests = len(self.scheduler.connector._sched._loading)
         return num_loading_requests
 
-    def get_connector_num_blocks_loading_requests(self) -> int:
+    def get_connector_num_tokens_loading_requests(self) -> int:
         num_tokens_loading_requests = 0
         if self.scheduler.connector is not None:
             # pylint: disable=protected-access
             for loading_info in self.scheduler.connector._sched._loading.values():
                 num_tokens_loading_requests += loading_info._req.num_tokens
-        num_blocks_loading_requests = cdiv(num_tokens_loading_requests, self.scheduler.cache_config.block_size)
-        return num_blocks_loading_requests
+        return num_tokens_loading_requests

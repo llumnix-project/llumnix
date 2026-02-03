@@ -31,9 +31,9 @@ def random_uuid() -> str:
 
 
 def init_instance_status_with_scheduler(scheduler):
-    num_total_gpu_blocks = scheduler.cache_config.num_gpu_blocks
+    num_total_gpu_tokens = scheduler.cache_config.num_gpu_blocks * scheduler.cache_config.block_size
     return InstanceStatus(
-        num_total_gpu_blocks=num_total_gpu_blocks,
+        num_total_gpu_tokens=num_total_gpu_tokens,
         timestamp_ms=int(time.time() * 1000),
         step_id=0
     )

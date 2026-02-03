@@ -53,7 +53,7 @@ class TestAsyncLlumletRPCServer(unittest.IsolatedAsyncioTestCase):
         )
         response = await self.stub.Migrate(migrate_request)
 
-        self.mock_handler.migrate.assert_awaited_once_with("192.168.1.200", 9999, MigrationParams(migration_type='NUM_REQ', mig_req_policy='SR', num_reqs=1, num_tokens=0, block_ratio=0, trigger_policy='NEUTRAL_LOAD'))
+        self.mock_handler.migrate.assert_awaited_once_with("192.168.1.200", 9999, MigrationParams(migration_type='NUM_REQ', mig_req_policy='SR', num_reqs=1, num_tokens=0, kv_cache_usage_ratio=0, trigger_policy='NEUTRAL_LOAD'))
         expected_message = "Migrate requests from %s to %s." % (src_engine_id, dst_engine_id)
         self.assertEqual(response.message, expected_message)
 
@@ -80,7 +80,7 @@ class TestAsyncLlumletRPCServer(unittest.IsolatedAsyncioTestCase):
         except grpc.aio.AioRpcError as e:
             self.assertEqual(e.code(), grpc.StatusCode.INTERNAL)
             self.assertIn("Error", e.details())
-        self.mock_handler.migrate.assert_awaited_once_with("192.168.1.200", 9999, MigrationParams(migration_type='NUM_REQ', mig_req_policy='SR', num_reqs=1, num_tokens=0, block_ratio=0, trigger_policy='NEUTRAL_LOAD'))
+        self.mock_handler.migrate.assert_awaited_once_with("192.168.1.200", 9999, MigrationParams(migration_type='NUM_REQ', mig_req_policy='SR', num_reqs=1, num_tokens=0, kv_cache_usage_ratio=0, trigger_policy='NEUTRAL_LOAD'))
 
     async def test_migrate_timeout(self):
         """Test handler.migrate timeout."""
@@ -145,7 +145,7 @@ class TestAsyncLlumletRPCServer(unittest.IsolatedAsyncioTestCase):
         )
         response = await self.stub.Migrate(migrate_request)
 
-        self.mock_handler.migrate.assert_awaited_once_with("192.168.1.200", 9999, MigrationParams(migration_type='NUM_REQ', mig_req_policy='SR', num_reqs=num_reqs, num_tokens=0, block_ratio=0, trigger_policy='NEUTRAL_LOAD'))
+        self.mock_handler.migrate.assert_awaited_once_with("192.168.1.200", 9999, MigrationParams(migration_type='NUM_REQ', mig_req_policy='SR', num_reqs=num_reqs, num_tokens=0, kv_cache_usage_ratio=0, trigger_policy='NEUTRAL_LOAD'))
         expected_message = f"Migrate requests from {src_engine_id} to {dst_engine_id}."
         self.assertEqual(response.message, expected_message)
 

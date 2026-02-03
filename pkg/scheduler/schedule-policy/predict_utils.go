@@ -2,41 +2,40 @@ package schedule_policy
 
 import (
 	"fmt"
-	"llumnix/pkg/consts"
-	"llumnix/pkg/scheduler/predictor"
 	"math"
 	"time"
 
 	"k8s.io/klog/v2"
+
+	"llumnix/pkg/consts"
+	"llumnix/pkg/scheduler/predictor"
 )
 
-func predictNumComputedPrefillBlocks(
-	instances map[string]*instanceViewScheduling, ttftPredictor *predictor.QuadraticPredictor, kvCacheBlockSize int32,
-	maxNumBatchedTokens int32) {
+func predictNumComputedPrefillTokens(
+	instances map[string]*instanceViewScheduling, ttftPredictor *predictor.QuadraticPredictor, maxNumBatchedTokens int32) {
 	if ttftPredictor.Fitted() == false {
-		klog.V(4).Info("[predictNumComputedPrefillBlocks] TTFT predictor not fitted, skip prediction")
+		klog.V(4).Info("[predictNumComputedPrefillTokens] TTFT predictor not fitted, skip prediction")
 		return
 	}
 	now := time.Now().UnixMilli()
-	allPrefillsKVBlocksNumMetric := AllPrefillsKVBlocksNum{
+	allPrefillsTokensNumMetric := allPrefillsTokensNum{
 		baseMetric: baseMetric{
-			name: consts.SchedulingMetricAllPrefillsKVBlocksNum,
+			name: consts.SchedulingMetricAllPrefillsTokensNum,
 		},
 	}
 	for _, instance := range instances {
 		// There may be an error of the order of 1ms to 10ms.
 		elapsedTimeMs := float64(now - instance.cmsView.Status.TimestampMs)
 		if elapsedTimeMs <= 0 {
-			klog.Warningf("[predictNumComputedPrefillBlocks] Instance %s elapsed time is negative, "+
+			klog.Warningf("[predictNumComputedPrefillTokens] Instance %s elapsed time is negative, "+
 				"skip prediction", instance.GetInstanceId())
-			instance.schedulingCtx.numComputedPrefillBlocksPredicted = 0
+			instance.schedulingCtx.numComputedPrefillTokensPredicted = 0
 			continue
 		}
-		allPrefillsKVBlocksNumMetric.Calculate(instance)
-		numUncomputedPrefillBlocks := int32(allPrefillsKVBlocksNumMetric.GetValue())
-		numUncomputedPrefillTokens := numUncomputedPrefillBlocks * kvCacheBlockSize
+		allPrefillsTokensNumMetric.Calculate(instance)
+		numUncomputedPrefillTokens := int32(allPrefillsTokensNumMetric.GetValue())
 		numUncomputedRunningPrefillTokens :=
-			instance.cmsView.Status.NumUncomputedBlocksSchedulerRunningPrefills * kvCacheBlockSize
+			instance.cmsView.Status.NumUncomputedTokensSchedulerRunningPrefills
 		numComputedPrefillTokensPredicted := int32(0)
 		for elapsedTimeMs > 0 && numUncomputedPrefillTokens > 0 {
 			currNumBatchedTokens := int32(0)
@@ -49,18 +48,15 @@ func predictNumComputedPrefillBlocks(
 			} else {
 				currNumBatchedTokens = min(numUncomputedPrefillTokens, maxNumBatchedTokens)
 			}
-			currStepDurationMs, err :=
-				ttftPredictor.Predict(
-					float64((currNumBatchedTokens + kvCacheBlockSize - 1) /
-						kvCacheBlockSize))
+			currStepDurationMs, err := ttftPredictor.Predict(float64(currNumBatchedTokens))
 			if err != nil {
-				klog.Warningf("[predictNumComputedPrefillBlocks] Predict error: %v", err)
+				klog.Warningf("[predictNumComputedPrefillTokens] Predict error: %v", err)
 				numComputedPrefillTokensPredicted = 0
 				break
 			}
 			if ok, reason := validateStepDurationMs(currStepDurationMs); !ok {
 				klog.Warningf(
-					"[predictNumComputedPrefillBlocks] invalid step duration %f ms for batch=%d, reason=%s",
+					"[predictNumComputedPrefillTokens] invalid step duration %f ms for batch=%d, reason=%s",
 					currStepDurationMs, currNumBatchedTokens, reason)
 				numComputedPrefillTokensPredicted = 0
 				break
@@ -77,15 +73,13 @@ func predictNumComputedPrefillBlocks(
 				numUncomputedPrefillTokens = 0
 			}
 		}
-		currNumComputedPrefillBlocksPredicted :=
-			(numComputedPrefillTokensPredicted + kvCacheBlockSize - 1) / kvCacheBlockSize
-		instance.schedulingCtx.numComputedPrefillBlocksPredicted = currNumComputedPrefillBlocksPredicted
-		if currNumComputedPrefillBlocksPredicted > numUncomputedPrefillBlocks {
+		instance.schedulingCtx.numComputedPrefillTokensPredicted = numComputedPrefillTokensPredicted
+		if numComputedPrefillTokensPredicted > numUncomputedPrefillTokens {
 			klog.Warningf(
-				"[predictNumComputedPrefillBlocks] predicted computed prefill blocks %v is larger than "+
-					"uncomputed prefill blocks %v, truncate to uncomputed prefill blocks",
-				currNumComputedPrefillBlocksPredicted, numUncomputedPrefillBlocks)
-			instance.schedulingCtx.numComputedPrefillBlocksPredicted = numUncomputedPrefillBlocks
+				"[predictNumComputedPrefillTokens] predicted computed prefill tokens %v is larger than "+
+					"uncomputed prefill tokens %v, truncate to uncomputed prefill tokens",
+				numComputedPrefillTokensPredicted, numUncomputedPrefillTokens)
+			instance.schedulingCtx.numComputedPrefillTokensPredicted = numUncomputedPrefillTokens
 		}
 	}
 }

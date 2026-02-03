@@ -77,20 +77,20 @@ simple-tests: discovery-proto-build gateway-build scheduler-build
 	pytest -x -v -s ./tests/local/vllm_e2e.py::test_simple_requests
 
 .PHONY: migration-tests
-migration-tests: gateway-build
+migration-tests: gateway-build scheduler-build
 	pytest -x -v -s ./tests/local/vllm_e2e.py::test_migration
 
 .PHONY: migration-correctness-tests
-migration-correctness-tests: gateway-build
+migration-correctness-tests: gateway-build scheduler-build
 	pytest -x -v -s ./tests/local/vllm_mig_correctness.py::test_migration_correctness
 
 .PHONY: e2e-test
-e2e-test: discovery-proto-build gateway-build simple-tests migration-tests
+e2e-test: discovery-proto-build gateway-build scheduler-build simple-tests migration-tests
 
 TEST_DIRS := $(shell go list ./pkg/... | grep -v "/kvs/v6d" | grep -v "/kvs/mooncake")
 
 .PHONY: unit-test
-unit-test: discovery-proto-build gateway-build
+unit-test: discovery-proto-build gateway-build scheduler-build
 	CGO_ENABLED=1 \
 	CGO_LDFLAGS="-L./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release" \
 	go test -v -failfast $(TEST_DIRS) 2>&1 | grep -v "no test files"

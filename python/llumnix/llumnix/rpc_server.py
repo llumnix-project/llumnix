@@ -246,8 +246,8 @@ def generate_migration_params(request: llumlet_server_pb2.MigrateRequest):
             raise ValueError("Empty num_tokens. If migration_type is TOKEN, num_tokens is necessary.")
         migration_params.num_tokens = request.num_tokens
     if request.migration_type == MigrationType.RATIO.value:
-        if not request.HasField('block_ratio'):
-            raise ValueError("Empty block_ratio. If migration_type is RATIO, block_ratio is necessary.")
-        migration_params.block_ratio = request.block_ratio
+        if not request.HasField('kv_cache_usage_ratio'):
+            raise ValueError("Empty kv_cache_usage_ratio. If migration_type is RATIO, kv_cache_usage_ratio is necessary.")
+        migration_params.kv_cache_usage_ratio = request.kv_cache_usage_ratio
     logger.info("Received Migration request. migration_params: %s", migration_params)
     return migration_params

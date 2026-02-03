@@ -353,10 +353,10 @@ class KVTMigrationFrontend(BaseMigrationFrontend):
                 instance_status.num_migrate_in_tokens = sum(_g_migrate_in_req_info.values())
             with _g_migrate_out_req_info_lock:
                 instance_status.num_migrate_out_tokens = sum(_g_migrate_out_req_info.values())
-            instance_status.block_ratio_migrate_in = round(cdiv(instance_status.num_migrate_in_tokens, self.scheduler.cache_config.block_size)
-                                                        / instance_status.num_total_gpu_blocks, 4)
-            instance_status.block_ratio_migrate_out = round(cdiv(instance_status.num_migrate_out_tokens, self.scheduler.cache_config.block_size)
-                                                        / instance_status.num_total_gpu_blocks, 4)
+            instance_status.kv_cache_usage_ratio_migrate_in = \
+                round(instance_status.num_migrate_in_tokens / instance_status.num_total_gpu_tokens, 4)
+            instance_status.kv_cache_usage_ratio_migrate_out = \
+                round(instance_status.num_migrate_out_tokens / instance_status.num_total_gpu_tokens, 4)
 
     def update_req_status(self, new_state: Tuple[List[Request], List[Request]]):
         # push the latest request snapshot to migration_frontend

@@ -37,12 +37,12 @@ type instanceSchedulingMetric interface {
 func getSchedulingMetric(p *options.SchedulerConfig, metricName string) func() instanceSchedulingMetric {
 	klog.V(3).Infof("Getting scheduling metric factory for metric: %s", metricName)
 	switch metricName {
-	case consts.SchedulingMetricKVBlocksRatioWithAllPrefills:
-		klog.V(3).Infof("Creating KVBlocksRatioWithAllPrefills metric factory")
+	case consts.SchedulingMetricKVCacheUsageRatioProjected:
+		klog.V(3).Infof("Creating KVCacheUsageRatioProjected metric factory")
 		return func() instanceSchedulingMetric {
-			return &kvBlocksRatioWithAllPrefills{
+			return &kvCacheUsageRatioProjected{
 				baseMetric: baseMetric{
-					name: consts.SchedulingMetricKVBlocksRatioWithAllPrefills,
+					name: consts.SchedulingMetricKVCacheUsageRatioProjected,
 				},
 			}
 		}
@@ -64,12 +64,12 @@ func getSchedulingMetric(p *options.SchedulerConfig, metricName string) func() i
 				},
 			}
 		}
-	case consts.SchedulingMetricAllPrefillsKVBlocksNum:
-		klog.V(3).Infof("Creating AllPrefillsKVBlocksNum metric factory")
+	case consts.SchedulingMetricAllPrefillsTokensNum:
+		klog.V(3).Infof("Creating allPrefillsTokensNum metric factory")
 		return func() instanceSchedulingMetric {
-			return &AllPrefillsKVBlocksNum{
+			return &allPrefillsTokensNum{
 				baseMetric: baseMetric{
-					name: consts.SchedulingMetricAllPrefillsKVBlocksNum,
+					name: consts.SchedulingMetricAllPrefillsTokensNum,
 				},
 			}
 		}
@@ -82,16 +82,16 @@ func getSchedulingMetric(p *options.SchedulerConfig, metricName string) func() i
 				},
 			}
 		}
-	case consts.SchedulingMetricCacheAwareAllPrefillsKVBlocksNum:
-		klog.V(3).Infof("Creating CacheAwareAllPrefillsKVBlocksNum metric factory")
+	case consts.SchedulingMetricCacheAwareAllPrefillsTokensNum:
+		klog.V(3).Infof("Creating CacheAwareAllPrefillsTokensNum metric factory")
 		return func() instanceSchedulingMetric {
-			return &CacheAwareAllPrefillsKVBlocksNum{
+			return &CacheAwareAllPrefillsTokensNum{
 				baseMetric: baseMetric{
-					name: consts.SchedulingMetricCacheAwareAllPrefillsKVBlocksNum,
+					name: consts.SchedulingMetricCacheAwareAllPrefillsTokensNum,
 				},
-				allPrefillsKVBlocksNumMetric: AllPrefillsKVBlocksNum{
+				allPrefillsTokensNumMetric: allPrefillsTokensNum{
 					baseMetric: baseMetric{
-						name: consts.SchedulingMetricAllPrefillsKVBlocksNum,
+						name: consts.SchedulingMetricAllPrefillsTokensNum,
 					},
 				},
 			}
@@ -123,12 +123,12 @@ func getSchedulingMetric(p *options.SchedulerConfig, metricName string) func() i
 				enableFullModeScheduling: p.EnableFullModeScheduling,
 			}
 		}
-	case consts.SchedulingMetricAllDecodesKVBlocksNumWithAllPrefills:
-		klog.V(3).Infof("Creating AllDecodesKVBlocksNumWithAllPrefills metric factory")
+	case consts.SchedulingMetricAllDecodesTokensNum:
+		klog.V(3).Infof("Creating AllDecodesTokensNum metric factory")
 		return func() instanceSchedulingMetric {
-			return &allDecodesKVBlocksNumWithAllPrefills{
+			return &allDecodesTokensNum{
 				baseMetric: baseMetric{
-					name: consts.SchedulingMetricAllDecodesKVBlocksNumWithAllPrefills,
+					name: consts.SchedulingMetricAllDecodesTokensNum,
 				},
 			}
 		}
@@ -165,47 +165,47 @@ func (m *baseMetric) String() string {
 	return m.name + ":" + fmt.Sprintf("%.3f", m.value)
 }
 
-type kvBlocksRatioWithAllPrefills struct {
+type kvCacheUsageRatioProjected struct {
 	baseMetric
 }
 
-func (br *kvBlocksRatioWithAllPrefills) Calculate(instanceView *instanceViewScheduling) {
-	if instanceView.cmsView.Status.NumTotalGpuBlocks == 0 {
+func (br *kvCacheUsageRatioProjected) Calculate(instanceView *instanceViewScheduling) {
+	if instanceView.cmsView.Status.NumTotalGpuTokens == 0 {
 		br.value = float32(math.MaxFloat32)
 		klog.V(3).Infof(
-			"Instance %s has zero total GPU blocks, setting KVBlocksRatioWithAllPrefills to MaxFloat32: %f",
+			"Instance %s has zero total GPU tokens, setting KVCacheUsageRatioProjected to MaxFloat32: %f",
 			instanceView.GetInstanceId(), br.value)
 	} else {
-		numUnallocatedBlocks := instanceView.cmsView.Status.NumUncomputedBlocksAllWaitingPrefills +
-			instanceView.cmsView.Status.NumUnallocatedBlocksSchedulerRunningPrefills +
-			instanceView.cmsView.Status.NumUnallocatedBlocksHybridSchedulerWaitingDecodes
-		// NOTE(sunbiao.sun): This metric is still not completely correct, because the prefill blocks statuses
+		numUnallocatedTokens := instanceView.cmsView.Status.NumUncomputedTokensAllWaitingPrefills +
+			instanceView.cmsView.Status.NumUnallocatedTokensSchedulerRunningPrefills +
+			instanceView.cmsView.Status.NumUnallocatedTokensHybridSchedulerWaitingDecodes
+		// NOTE(sunbiao.sun): This metric is still not completely correct, because the prefill tokens statuses
 		// are computation amount, but this metric requires allocation amount. But the error is small, thus acceptable.
-		br.value = float32(instanceView.cmsView.Status.NumUsedGpuBlocks+
-			numUnallocatedBlocks+
-			instanceView.cmsView.NumBlocksInflightDispatchDecodeRequests) /
-			float32(instanceView.cmsView.Status.NumTotalGpuBlocks)
+		br.value = float32(instanceView.cmsView.Status.NumUsedGpuTokens+
+			numUnallocatedTokens+
+			instanceView.cmsView.NumTokensInflightDispatchDecodeRequests) /
+			float32(instanceView.cmsView.Status.NumTotalGpuTokens)
 		klog.V(3).Infof(
-			"Instance %s KVBlocksRatioWithAllPrefills calculated: "+
-				"(usedBlocks:%d + allWaitingPrefillsBlocks:%d + "+
-				"schedulerRunningPrefillsBlocks:%d + hybridSchedulerWaitingDecodesBlocks:%d + "+
-				"inflightDecodeBlocks:%d) / totalBlocks:%d = %f",
+			"Instance %s KVCacheUsageRatioProjected calculated: "+
+				"(usedTokens:%d + allWaitingPrefillsTokens:%d + "+
+				"schedulerRunningPrefillsTokens:%d + hybridSchedulerWaitingDecodesTokens:%d + "+
+				"inflightDecodeTokens:%d) / totalTokens:%d = %f",
 			instanceView.GetInstanceId(),
-			instanceView.cmsView.Status.NumUsedGpuBlocks,
-			instanceView.cmsView.Status.NumUncomputedBlocksAllWaitingPrefills,
-			instanceView.cmsView.Status.NumUnallocatedBlocksSchedulerRunningPrefills,
-			instanceView.cmsView.Status.NumUnallocatedBlocksHybridSchedulerWaitingDecodes,
-			instanceView.cmsView.NumBlocksInflightDispatchDecodeRequests,
-			instanceView.cmsView.Status.NumTotalGpuBlocks,
+			instanceView.cmsView.Status.NumUsedGpuTokens,
+			instanceView.cmsView.Status.NumUncomputedTokensAllWaitingPrefills,
+			instanceView.cmsView.Status.NumUnallocatedTokensSchedulerRunningPrefills,
+			instanceView.cmsView.Status.NumUnallocatedTokensHybridSchedulerWaitingDecodes,
+			instanceView.cmsView.NumTokensInflightDispatchDecodeRequests,
+			instanceView.cmsView.Status.NumTotalGpuTokens,
 			br.value)
 	}
 }
 
-func (br *kvBlocksRatioWithAllPrefills) ValueLess(value float32) bool {
+func (br *kvCacheUsageRatioProjected) ValueLess(value float32) bool {
 	return br.value < value
 }
 
-func (br *kvBlocksRatioWithAllPrefills) Less(metric instanceSchedulingMetric) bool {
+func (br *kvCacheUsageRatioProjected) Less(metric instanceSchedulingMetric) bool {
 	return br.value < metric.GetValue()
 }
 
@@ -264,34 +264,34 @@ func (nr *numWaitingRequests) Less(metric instanceSchedulingMetric) bool {
 	return nr.value < metric.GetValue()
 }
 
-type AllPrefillsKVBlocksNum struct {
+type allPrefillsTokensNum struct {
 	baseMetric
 }
 
-func (pb *AllPrefillsKVBlocksNum) Calculate(instanceView *instanceViewScheduling) {
+func (pb *allPrefillsTokensNum) Calculate(instanceView *instanceViewScheduling) {
 	pb.value = float32(
-		instanceView.cmsView.Status.NumUncomputedBlocksAllWaitingPrefills +
-			instanceView.cmsView.Status.NumUncomputedBlocksSchedulerRunningPrefills +
-			instanceView.cmsView.NumUncomputedBlocksInflightDispatchPrefillRequests -
-			instanceView.schedulingCtx.numComputedPrefillBlocksPredicted)
+		instanceView.cmsView.Status.NumUncomputedTokensAllWaitingPrefills +
+			instanceView.cmsView.Status.NumUncomputedTokensSchedulerRunningPrefills +
+			instanceView.cmsView.NumUncomputedTokensInflightDispatchPrefillRequests -
+			instanceView.schedulingCtx.numComputedPrefillTokensPredicted)
 	klog.V(3).Infof(
-		"Instance %s AllPrefillsKVBlocksNum calculated: "+
-			"(allWaitingPrefillsBlocks:%d + "+
-			"schedulerRunningPrefillsBlocks:%d + inflightDispatchPrefillBlocks:%d - "+
-			"predictedComputedPrefillBlocks:%d) = %f",
+		"Instance %s allPrefillsTokensNum calculated: "+
+			"(allWaitingPrefillsTokens:%d + "+
+			"schedulerRunningPrefillsTokens:%d + inflightDispatchPrefillTokens:%d - "+
+			"predictedComputedPrefillTokens:%d) = %f",
 		instanceView.GetInstanceId(),
-		instanceView.cmsView.Status.NumUncomputedBlocksAllWaitingPrefills,
-		instanceView.cmsView.Status.NumUncomputedBlocksSchedulerRunningPrefills,
-		instanceView.cmsView.NumUncomputedBlocksInflightDispatchPrefillRequests,
-		instanceView.schedulingCtx.numComputedPrefillBlocksPredicted,
+		instanceView.cmsView.Status.NumUncomputedTokensAllWaitingPrefills,
+		instanceView.cmsView.Status.NumUncomputedTokensSchedulerRunningPrefills,
+		instanceView.cmsView.NumUncomputedTokensInflightDispatchPrefillRequests,
+		instanceView.schedulingCtx.numComputedPrefillTokensPredicted,
 		pb.value)
 }
 
-func (pb *AllPrefillsKVBlocksNum) ValueLess(value float32) bool {
+func (pb *allPrefillsTokensNum) ValueLess(value float32) bool {
 	return pb.value < value
 }
 
-func (pb *AllPrefillsKVBlocksNum) Less(metric instanceSchedulingMetric) bool {
+func (pb *allPrefillsTokensNum) Less(metric instanceSchedulingMetric) bool {
 	return pb.value < metric.GetValue()
 }
 
@@ -338,13 +338,13 @@ type kvCacheHitLen struct {
 }
 
 func (hl *kvCacheHitLen) Calculate(instanceView *instanceViewScheduling) {
-	// prefixHitLen is written when calculating the prompt cache locality for each instances before.
-	hl.value = float32(instanceView.schedulingCtx.prefixHitLen)
+	// prefixHitTokens is written when calculating the prompt cache locality for each instances before.
+	hl.value = float32(instanceView.schedulingCtx.prefixHitTokens)
 	klog.V(3).Infof(
 		"Instance %s KVCacheHitLen calculated: "+
-			"(prefixHitLen:%d) = %f",
+			"(prefixHitTokens:%d) = %f",
 		instanceView.GetInstanceId(),
-		instanceView.schedulingCtx.prefixHitLen,
+		instanceView.schedulingCtx.prefixHitTokens,
 		hl.value)
 }
 
@@ -356,29 +356,29 @@ func (hl *kvCacheHitLen) Less(metric instanceSchedulingMetric) bool {
 	return hl.value > metric.GetValue()
 }
 
-type CacheAwareAllPrefillsKVBlocksNum struct {
+type CacheAwareAllPrefillsTokensNum struct {
 	baseMetric
-	allPrefillsKVBlocksNumMetric AllPrefillsKVBlocksNum
+	allPrefillsTokensNumMetric allPrefillsTokensNum
 }
 
-func (cpb *CacheAwareAllPrefillsKVBlocksNum) Calculate(instanceView *instanceViewScheduling) {
-	cpb.allPrefillsKVBlocksNumMetric.Calculate(instanceView)
-	allPrefillsKVBlocksNum := cpb.allPrefillsKVBlocksNumMetric.GetValue()
-	cpb.value = float32(instanceView.schedulingCtx.prefixMissNumBlocks) + allPrefillsKVBlocksNum
+func (cpb *CacheAwareAllPrefillsTokensNum) Calculate(instanceView *instanceViewScheduling) {
+	cpb.allPrefillsTokensNumMetric.Calculate(instanceView)
+	allPrefillsTokensNum := cpb.allPrefillsTokensNumMetric.GetValue()
+	cpb.value = float32(instanceView.schedulingCtx.prefixMissTokens) + allPrefillsTokensNum
 	klog.V(3).Infof(
-		"Instance %s CacheAwareNumKVBlocksAllPrefills calculated: "+
-			"(prefixMissBlocks:%d + allPrefillsBlocks:%f) = %f",
+		"Instance %s CacheAwareAllPrefillsTokensNum calculated: "+
+			"(prefixMissTokens:%d + allPrefillsTokens:%f) = %f",
 		instanceView.GetInstanceId(),
-		instanceView.schedulingCtx.prefixMissNumBlocks,
-		allPrefillsKVBlocksNum,
+		instanceView.schedulingCtx.prefixMissTokens,
+		allPrefillsTokensNum,
 		cpb.value)
 }
 
-func (cpb *CacheAwareAllPrefillsKVBlocksNum) ValueLess(value float32) bool {
+func (cpb *CacheAwareAllPrefillsTokensNum) ValueLess(value float32) bool {
 	return cpb.value < value
 }
 
-func (cpb *CacheAwareAllPrefillsKVBlocksNum) Less(metric instanceSchedulingMetric) bool {
+func (cpb *CacheAwareAllPrefillsTokensNum) Less(metric instanceSchedulingMetric) bool {
 	return cpb.value < metric.GetValue()
 }
 
@@ -419,36 +419,36 @@ func (adbs *adaptiveDecodeBatchSize) ValueLess(value float32) bool {
 	return adbs.value < value
 }
 
-type allDecodesKVBlocksNumWithAllPrefills struct {
+type allDecodesTokensNum struct {
 	baseMetric
 }
 
-func (adb *allDecodesKVBlocksNumWithAllPrefills) Calculate(instanceView *instanceViewScheduling) {
-	allDecodeBlocks := instanceView.cmsView.Status.HybridSchedulerWaitingToDecodeBlocksNum +
-		instanceView.cmsView.Status.SchedulerWaitingToDecodeBlocksNum +
-		instanceView.cmsView.Status.SchedulerRunningToDecodeBlocksNum +
-		instanceView.cmsView.Status.NumBlocksLoadingRequests
-	adb.value = float32(allDecodeBlocks +
-		instanceView.cmsView.NumBlocksInflightDispatchDecodeRequests)
+func (adb *allDecodesTokensNum) Calculate(instanceView *instanceViewScheduling) {
+	allDecodeTokens := instanceView.cmsView.Status.HybridSchedulerWaitingToDecodeTokensNum +
+		instanceView.cmsView.Status.SchedulerWaitingToDecodeTokensNum +
+		instanceView.cmsView.Status.SchedulerRunningToDecodeTokensNum +
+		instanceView.cmsView.Status.NumTokensLoadingRequests
+	adb.value = float32(allDecodeTokens +
+		instanceView.cmsView.NumTokensInflightDispatchDecodeRequests)
 	klog.V(3).Infof(
-		"Instance %s allDecodesKVBlocksNumWithAllPrefills calculated: "+
-			"(hybridSchedulerWaitingToDecodesBlocks:%d + schedulerWaitingToDecodeBlocks:%d + "+
-			"schedulerRunningToDecodesBlocks:%d + loadingBlocks:%d + inflightDecodesBlocks:%d = %f",
+		"Instance %s allDecodesTokensNum calculated: "+
+			"(hybridSchedulerWaitingToDecodesTokens:%d + schedulerWaitingToDecodeTokens:%d + "+
+			"schedulerRunningToDecodesTokens:%d + loadingTokens:%d + inflightDecodesTokens:%d = %f",
 		instanceView.GetInstanceId(),
-		instanceView.cmsView.Status.HybridSchedulerWaitingToDecodeBlocksNum,
-		instanceView.cmsView.Status.SchedulerWaitingToDecodeBlocksNum,
-		instanceView.cmsView.Status.SchedulerRunningToDecodeBlocksNum,
-		instanceView.cmsView.Status.NumBlocksLoadingRequests,
-		instanceView.cmsView.NumBlocksInflightDispatchDecodeRequests,
+		instanceView.cmsView.Status.HybridSchedulerWaitingToDecodeTokensNum,
+		instanceView.cmsView.Status.SchedulerWaitingToDecodeTokensNum,
+		instanceView.cmsView.Status.SchedulerRunningToDecodeTokensNum,
+		instanceView.cmsView.Status.NumTokensLoadingRequests,
+		instanceView.cmsView.NumTokensInflightDispatchDecodeRequests,
 		adb.value)
 }
 
-func (adb *allDecodesKVBlocksNumWithAllPrefills) ValueLess(value float32) bool {
-	return adb.value < value
+func (br *allDecodesTokensNum) ValueLess(value float32) bool {
+	return br.value < value
 }
 
-func (adb *allDecodesKVBlocksNumWithAllPrefills) Less(metric instanceSchedulingMetric) bool {
-	return adb.value < metric.GetValue()
+func (br *allDecodesTokensNum) Less(metric instanceSchedulingMetric) bool {
+	return br.value < metric.GetValue()
 }
 
 type numTokens struct {
