@@ -1,7 +1,7 @@
 ARG BASE_IMAGE=vllm/vllm-openai:v0.12.0
 FROM ${BASE_IMAGE}
 
-RUN apt-get update && apt-get install -y git curl wget protobuf-compiler vim pkg-config libssl-dev apt-transport-https ca-certificates redis-server net-tools libcurl4-openssl-dev python3.12-dev cmake ninja-build
+RUN apt-get update && apt-get install -y git curl wget protobuf-compiler vim pkg-config libssl-dev apt-transport-https ca-certificates redis-server net-tools libcurl4-openssl-dev python3.12-dev python3-dev cmake ninja-build
 
 RUN ln -s /usr/local/cuda/lib64/libnvrtc.so.12 /usr/local/cuda/lib64/libnvrtc.so
 
@@ -44,20 +44,21 @@ ENV PATH=$PATH:/usr/local/go/bin:/root/go/bin
 RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.5 \
     && go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
 
-# vscode can't set go env, so we need to set it manually
-RUN echo 'export GOROOT=/usr/local/go' >> ~/.bashrc && \
-    echo 'export GOPATH=/root/go' >> ~/.bashrc && \
-    echo 'export GOPROXY=https://goproxy.io,direct' >> ~/.bashrc && \
-    echo 'export PATH=$PATH:/usr/local/go/bin:/root/go/bin' >> ~/.bashrc
-
 # Set CUDA environment variables
 ENV CUDA_HOME=/usr/local/cuda \
     CUDA_PATH=/usr/local/cuda \
     LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH \
     PATH=/usr/local/cuda/bin:$PATH 
-   
-COPY ./container/setup_cuda_env.sh /tmp/setup_cuda_env.sh
-RUN cat /tmp/setup_cuda_env.sh >> ~/.bashrc && rm /tmp/setup_cuda_env.sh
+
+# vscode can't set env, so we need to set it manually
+RUN echo 'export GOROOT=/usr/local/go' >> ~/.bashrc && \
+echo 'export GOPATH=/root/go' >> ~/.bashrc && \
+echo 'export GOPROXY=https://goproxy.io,direct' >> ~/.bashrc && \
+echo 'export PATH=$PATH:/usr/local/go/bin:/root/go/bin' >> ~/.bashrc && \
+echo 'export CUDA_HOME=/usr/local/cuda' >> ~/.bashrc && \
+echo 'export CUDA_PATH=/usr/local/cuda' >> ~/.bashrc && \
+echo 'export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH' >> ~/.bashr && \
+echo 'export PATH=/usr/local/cuda/bin:$PATH' >> ~/.bashrc
 
 ENTRYPOINT [ "" ]
 

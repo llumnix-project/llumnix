@@ -11,7 +11,7 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-IMAGE="beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-20260130-105003"
+IMAGE="beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-20260203-172324"
 
 echo "Building ${TARGET} binary..."
 

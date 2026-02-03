@@ -1,6 +1,6 @@
 # Development Guide
 
-`beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-20260130-105003` is recommended for development. Then, you should run the following commands to set up the environment:
+`beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-20260203-172324` is recommended for development. Then, you should run the following commands to set up the environment:
 
 ```bash
 go mod tidy
@@ -21,16 +21,36 @@ make lib-tokenizers-build
 make blade-kvt-install
 ```
 
-Run `make gateway-build` to build the gateway binary and `make scheduler-build` to build the scheduler binary. And `make e2e-test` is used to run all tests. Please refer to [tests/local/utils.py](tests/local/utils.py) for the details of launching commands. `make unit-test` is used to run all go unit tests.
+Run `make gateway-build` to build the gateway binary and `make scheduler-build` to build the scheduler binary. And `make e2e-test` is used to run all end-to-end tests. Please refer to [tests/local/utils.py](tests/local/utils.py) for the details of launching commands. `make unit-test` is used to run all go unit tests.
 
 # How to deploy
 
 ```bash
-cd deploy
+
+# --------- build release images ----------
+# build lib-tokenizers, only need run once
+make lib-tokenizers-build
+
+# build gateway and scheduler bin and release
+bash scripts/build_component_bin.sh gateway
+bash scripts/build_component_release.sh gateway --push
+
+bash scripts/build_component_bin.sh gateway
+bash scripts/build_component_release.sh gateway --push
+
+# build discovery
+bash scripts/build_discovery_whl.sh
+bash scripts/build_discovery_release.sh --push
+
+# build llm backend
+bash scripts/build_llumnix_whl.sh
+bash scripts/scripts/build_vllm_release.sh --push
+
+# -------- deploy in k8s --------
 
 # deploy, $DEPLOY_MODE is the mode to deploy, can be "pb" or "normal"
 bash group_deploy.sh $NAMESPACE $DEPLOY_MODE
 
-# delete (if hang, please CTRL+C and re-run the delete command)
+# delete
 bash group_delete.sh $NAMESPACE
 ```
