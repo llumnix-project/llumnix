@@ -48,21 +48,24 @@ type OpenAIHandler struct {
 // It initializes pre-processors for request transformation and post-processors for response handling.
 // Returns the handler instance or an error if initialization fails.
 func NewOpenAIHandler(config *options.Config) (RequestHandler, error) {
-	// Setup pre-processor chain for request transformation
+	// Setup pre/post-processor chain for request transformation
 	preProcessors := processor.CreatePreProcessorChain()
-	convertor := processor.NewRequestCompletionConverter()
-	if convertor == nil {
-		return nil, fmt.Errorf("failed to create request completion converter")
-	}
-	preProcessors.Register(convertor)
-
-	// Setup post-processor chain for response handling
 	postProcessor := processor.CreatePostProcessorChain()
-	chunkProcessor := processor.NewResponseChunkProcessor(config)
-	if chunkProcessor == nil {
-		return nil, fmt.Errorf("failed to create response chunk processor")
+
+	if config.TokenizerEnabled() {
+		convertor := processor.NewRequestCompletionConverter()
+		if convertor == nil {
+			return nil, fmt.Errorf("failed to create request completion converter")
+		}
+		preProcessors.Register(convertor)
+
+		// Setup post-processor chain for response handling
+		chunkProcessor := processor.NewResponseChunkProcessor(config)
+		if chunkProcessor == nil {
+			return nil, fmt.Errorf("failed to create response chunk processor")
+		}
+		postProcessor.Register(chunkProcessor)
 	}
-	postProcessor.Register(chunkProcessor)
 
 	// Create the inference backend based on the configuration
 	backend, err := BuildBackend(config)
@@ -115,6 +118,10 @@ func (h *OpenAIHandler) unmarshalRequest(reqCtx *types.RequestContext) error {
 		reqCtx.LLMRequest.Protocol = protocol.OpenAIChatCompletion
 		reqCtx.LLMRequest.ChatCompletionRequest = &chatCompletion
 		reqCtx.LLMRequest.OriginChatCompletionRequest = chatCompletion.Clone()
+
+		// Now, the backend protocol here is consistent with the input protocol.
+		// If a converter is implemented later, it will be modified there.
+		reqCtx.LLMRequest.BackendProtocol = protocol.OpenAIChatCompletion
 	case protocol.IsCompletionsURL(url):
 		// Parse text completion request (e.g., /v1/completions)
 		var completionRequest protocol.CompletionRequest
@@ -126,6 +133,7 @@ func (h *OpenAIHandler) unmarshalRequest(reqCtx *types.RequestContext) error {
 		reqCtx.LLMRequest.Protocol = protocol.OpenAICompletion
 		reqCtx.LLMRequest.CompletionRequest = &completionRequest
 		reqCtx.LLMRequest.OriginCompletionRequest = completionRequest.Clone()
+		reqCtx.LLMRequest.BackendProtocol = protocol.OpenAICompletion
 	default:
 		// Unsupported URL path
 		klog.Warningf("not support URL: %s", url)
@@ -160,6 +168,41 @@ func (h *OpenAIHandler) ParseRequest(reqCtx *types.RequestContext) error {
 	return nil
 }
 
+func (h *OpenAIHandler) unMarshalResponse(reqCtx *types.RequestContext, data []byte) error {
+	stream := reqCtx.InferenceStream()
+	switch reqCtx.LLMRequest.BackendProtocol {
+	case protocol.OpenAIChatCompletion:
+		if stream {
+			var response protocol.ChatCompletionStreamResponse
+			err := json.Unmarshal(data, &response)
+			if err != nil {
+				klog.Warningf("failed to unmarshal response: %v, data: %s", err, string(data))
+				return fmt.Errorf("failed to unmarshal response")
+			}
+			reqCtx.LLMRequest.ChatCompletionStreamResponse = &response
+		} else {
+			var response protocol.ChatCompletionResponse
+			err := json.Unmarshal(data, &response)
+			if err != nil {
+				klog.Warningf("failed to unmarshal response: %v, data: %s", err, string(data))
+				return fmt.Errorf("failed to unmarshal response")
+			}
+			reqCtx.LLMRequest.ChatCompletionResponse = &response
+		}
+	case protocol.OpenAICompletion:
+		var response protocol.CompletionResponse
+		err := json.Unmarshal(data, &response)
+		if err != nil {
+			klog.Warningf("failed to unmarshal response: %v, data: %s", err, string(data))
+			return fmt.Errorf("failed to unmarshal response")
+		}
+		reqCtx.LLMRequest.CompletionResponse = &response
+	default:
+		return fmt.Errorf("Unsupported protocol: %s", reqCtx.LLMRequest.BackendProtocol)
+	}
+	return nil
+}
+
 // ParseChunk implements ChunkParser interface for OpenAI protocol.
 // It parses a raw response chunk from the backend into a CompletionResponse structure.
 // Handles the special "[DONE]" marker which indicates the end of a streaming response.
@@ -169,16 +212,7 @@ func (h *OpenAIHandler) ParseChunk(reqCtx *types.RequestContext, data []byte) er
 	if bytes.Equal(data, []byte("[DONE]")) {
 		return io.EOF
 	}
-
-	// Parse the response data into CompletionResponse structure
-	var response protocol.CompletionResponse
-	err := json.Unmarshal(data, &response)
-	if err != nil {
-		klog.Warningf("failed to unmarshal response: %v, data: %s", err, string(data))
-		return fmt.Errorf("failed to unmarshal response")
-	}
-	reqCtx.LLMRequest.CompletionResponse = &response
-	return nil
+	return h.unMarshalResponse(reqCtx, data)
 }
 
 // marshalResponse converts the response structure back to JSON bytes based on the protocol type.
@@ -229,7 +263,7 @@ func (h *OpenAIHandler) marshalResponse(reqCtx *types.RequestContext) ([]byte, e
 // It delegates to the generic StreamProcessor which encapsulates the streaming mechanism,
 // while this handler provides OpenAI-specific parsing and writing strategies.
 // Timing metrics like TTFT and ITL are tracked by the StreamProcessor.
-func (h *OpenAIHandler) Handle(req *types.RequestContext) {
+func (h *OpenAIHandler) handleStream(req *types.RequestContext) {
 	// Initiate streaming inference from the backend
 	chunkChan, err := h.backend.StreamInference(req)
 	if err != nil {
@@ -241,6 +275,50 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 
 	// Delegate to the generic streaming processor with OpenAI-specific strategies
 	h.streamProcessor.ProcessStream(req, chunkChan)
+}
+
+func (h *OpenAIHandler) handleMessage(req *types.RequestContext) {
+	data, err := h.backend.Inference(req)
+	if err != nil {
+		klog.Errorf("failed to get inference result: %v", err)
+		WriteErrorResponse(req, err)
+		return
+	}
+
+	err = h.unMarshalResponse(req, data)
+	if err != nil {
+		klog.Errorf("failed to unmarshal request: %v", err)
+		WriteErrorResponse(req, err)
+		return
+	}
+
+	err = h.postProcessors.Process(req)
+	if err != nil {
+		klog.Errorf("post-processor failed: %v", err)
+		WriteErrorResponse(req, err)
+		return
+	}
+
+	// Marshal the response structure to JSON
+	data, err = h.marshalResponse(req)
+	if err != nil {
+		klog.Errorf("marshal response failed: %v", err)
+		WriteErrorResponse(req, err)
+	}
+
+	// Write response chunk if there's data to send
+	if len(data) > 0 {
+		klog.V(3).Infof("writing response chunk: %s", string(data))
+		WriteResponse(req, data)
+	}
+}
+
+func (h *OpenAIHandler) Handle(req *types.RequestContext) {
+	if req.InferenceStream() {
+		h.handleStream(req)
+	} else {
+		h.handleMessage(req)
+	}
 }
 
 // ProcessAndWriteChunk implements ChunkWriter interface for OpenAI protocol.

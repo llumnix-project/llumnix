@@ -102,8 +102,13 @@ llm-gateway-proto-build:
        ./pkg/llumlet/proto/llumlet_server.proto
 
 .PHONY: llm-gateway-build
-llm-gateway-build: tokenizer-lib-download
+llm-gateway-build: lint-backend tokenizer-lib-download
 	CGO_ENABLED=1 $(GOBUILD) -ldflags="-extldflags '-L/tmp'" -o bin/llm-gateway $(PKG)/cmd/llm-gateway
+
+# ------------------- Lint -------------------
+.PHONY: lint-backend
+lint-backend:
+	@./scripts/lint-backend.sh
 
 .PHONY: llumnix-unit-test
 llumnix-unit-test: llm-gateway-proto-build

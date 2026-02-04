@@ -38,10 +38,15 @@ func (rt *RequestCompletionConverter) applyTokenizerTemplate(req *types.RequestC
 	return processedReq.TokenIDs, nil
 }
 
-func (rt *RequestCompletionConverter) generateMaxTokens(req *types.RequestContext, maxTokens int) int {
+func (rt *RequestCompletionConverter) generateMaxTokens(req *types.RequestContext, maxTokens *int) int {
 	stats := req.RequestStats
-	if maxTokens != 0 {
-		stats.MaxTokensLimit = uint64(maxTokens)
+	max := 0
+	if maxTokens != nil {
+		max = *maxTokens
+	}
+
+	if max != 0 {
+		stats.MaxTokensLimit = uint64(max)
 	} else {
 		// the default max_tokens in /completions api is 16k, in /chat/completions is none (get from model config), so we define it as 16k if user not set
 		stats.MaxTokensLimit = defaultMaxTokens

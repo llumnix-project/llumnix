@@ -199,7 +199,7 @@ type ChatCompletionResponseFormatJSONSchema struct {
 type ChatCompletionRequest struct {
 	Model            string                        `json:"model"`
 	Messages         []ChatCompletionMessage       `json:"messages"`
-	MaxTokens        int                           `json:"max_tokens,omitempty"`
+	MaxTokens        *int                          `json:"max_tokens,omitempty"`
 	Temperature      float32                       `json:"temperature,omitempty"`
 	TopP             float32                       `json:"top_p,omitempty"`
 	N                int                           `json:"n,omitempty"`
@@ -257,7 +257,7 @@ type ChatCompletionRequestExtensions struct {
 	// Sglang PD disaggregation related fields
 	Rid           string `json:"rid,omitempty"`            // sglang
 	BootStrapHost string `json:"bootstrap_host,omitempty"` // sglang
-	BootStrapRoom string `json:"bootstrap_room,omitempty"` // sglang
+	BootStrapRoom int    `json:"bootstrap_room,omitempty"` // sglang
 }
 
 type StreamOptions struct {
@@ -370,6 +370,7 @@ type ChatCompletionResponse struct {
 	SystemFingerprint string                 `json:"system_fingerprint"`
 	Choices           []ChatCompletionChoice `json:"choices"`
 	Usage             *Usage                 `json:"usage"`
+	KvTransferParams  map[string]interface{} `json:"kv_transfer_params,omitempty"`
 	//PromptLogprobs    string                 `json:"prompt_logprobs,omitempty"` // vllm specific
 }
 
@@ -420,7 +421,6 @@ func (r *ChatCompletionRequest) Clone() *ChatCompletionRequest {
 	// Direct value copy for all primitive fields (compiler optimizes to efficient memcpy)
 	cloned := &ChatCompletionRequest{
 		Model:             r.Model,
-		MaxTokens:         r.MaxTokens,
 		Temperature:       r.Temperature,
 		TopP:              r.TopP,
 		N:                 r.N,
@@ -439,6 +439,12 @@ func (r *ChatCompletionRequest) Clone() *ChatCompletionRequest {
 	cloned.Rid = r.Rid
 	cloned.BootStrapHost = r.BootStrapHost
 	cloned.BootStrapRoom = r.BootStrapRoom
+
+	// Deep copy MaxTokens pointer
+	if r.MaxTokens != nil {
+		val := *r.MaxTokens
+		cloned.MaxTokens = &val
+	}
 
 	// Deep copy Messages slice with pre-allocated capacity
 	if len(r.Messages) > 0 {
@@ -618,12 +624,12 @@ func (r *ChatCompletionRequest) SetBootStrapHost(host string) {
 	r.BootStrapHost = host
 }
 
-func (r *ChatCompletionRequest) SetBootStrapRoom(room string) {
+func (r *ChatCompletionRequest) SetBootStrapRoom(room int) {
 	r.BootStrapRoom = room
 }
 
 func (r *ChatCompletionRequest) SetMaxTokens(maxTokens int) {
-	r.MaxTokens = maxTokens
+	r.MaxTokens = &maxTokens
 }
 
 func (r *ChatCompletionRequest) SetStream(stream bool) {

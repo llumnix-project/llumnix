@@ -73,7 +73,7 @@ func MakeNewBackendRequest(req *types.RequestContext, body []byte, worker *types
 		klog.Errorf("failed to get worker for request: %s", req.Id)
 		return nil, errors.New("failed to get worker")
 	}
-	url := fmt.Sprintf("http://%s%s", worker.Endpoint.String(), req.GetRequestURL())
+	url := fmt.Sprintf("http://%s%s", worker.Endpoint.String(), req.GetBackendURLPath())
 	klog.V(3).Infof("Forwarding request to %s body: %s", url, string(body))
 
 	// Create a new request to forward to the backend

@@ -107,7 +107,7 @@ type CompletionRequest struct {
 	User                string                 `json:"user,omitempty"`
 	KvTransferParams    map[string]interface{} `json:"kv_transfer_params,omitempty"`
 	BootStrapHost       string                 `json:"bootstrap_host,omitempty"` // sglang
-	BootStrapRoom       string                 `json:"bootstrap_room,omitempty"` // sglang
+	BootStrapRoom       int                    `json:"bootstrap_room,omitempty"` // sglang
 }
 
 // CompletionChoice represents one of possible completions.
@@ -286,7 +286,7 @@ func (r *CompletionRequest) SetBootStrapHost(host string) {
 	r.BootStrapHost = host
 }
 
-func (r *CompletionRequest) SetBootStrapRoom(room string) {
+func (r *CompletionRequest) SetBootStrapRoom(room int) {
 	r.BootStrapRoom = room
 }
 

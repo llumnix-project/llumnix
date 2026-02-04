@@ -449,20 +449,8 @@ func (c *Config) IsPDProxySplitMode() bool {
 	return c.IsPDSplitMode() && c.IsSGLangMooncakeSplitMode()
 }
 
-func (c *Config) GetModelName(origName string) string {
-	if c.ServerlessMode {
-		return origName
-	} else {
-		return ""
-	}
-}
-func (c *Config) UseTokenizerProcessor() bool {
-	return strings.EqualFold(c.ProcessorType, consts.TokenizerProcessor) ||
-		c.TokenizerName != "" || c.TokenizerPath != ""
-}
-
-func (c *Config) UseResponseFormatterProcessor() bool {
-	return strings.EqualFold(c.ProcessorType, consts.RESPONSEFORMATTER)
+func (c *Config) TokenizerEnabled() bool {
+	return c.TokenizerName != "" || c.TokenizerPath != ""
 }
 
 func (c *Config) EnableRequestReport() bool {

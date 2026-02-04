@@ -7,6 +7,9 @@ import (
 	"sync"
 )
 
+// IMPORTANT: Backend implementations MUST NOT be coupled with handlers.
+// Do NOT reference handler-specific types (e.g., LLMRequest, AnthropicRequest) from RequestContext within backend code.
+
 // StreamChunk represents a single chunk of data from a streaming inference response
 // It contains either data bytes or an error that occurred during streaming
 type StreamChunk struct {

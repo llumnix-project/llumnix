@@ -165,6 +165,29 @@ type LLMRequest struct {
 	LastChatStreamResp *protocol.ChatCompletionStreamResponse
 }
 
+func (req *LLMRequest) setKvTransferParams(params map[string]interface{}) {
+	switch req.BackendProtocol {
+	case protocol.OpenAICompletion:
+		req.CompletionResponse.KvTransferParams = params
+	case protocol.OpenAIChatCompletion:
+		req.ChatCompletionResponse.KvTransferParams = params
+	default:
+		klog.Errorf("unsupported backend protocol: %v to get response kv transfer params", req.BackendProtocol)
+	}
+}
+
+func (req *LLMRequest) getBackendRequestURL() string {
+	switch req.BackendProtocol {
+	case protocol.OpenAICompletion:
+		return protocol.CompletionsPath
+	case protocol.OpenAIChatCompletion:
+		return protocol.ChatCompletionsPath
+	default:
+		klog.Errorf("unsupported backend protocol: %v to get backend request url", req.BackendProtocol)
+		return ""
+	}
+}
+
 func (req *LLMRequest) getRequestModel() string {
 	switch req.Protocol {
 	case protocol.OpenAICompletion:
@@ -407,6 +430,17 @@ func (req *RequestContext) MarshalRequestWithArgs(args map[string]interface{}) (
 	}
 }
 
+func (req *RequestContext) SetKvTransferParams(params map[string]interface{}) {
+	switch req.RequestType {
+	case consts.OpenAIHandlerName:
+		req.LLMRequest.setKvTransferParams(params)
+	case consts.AnthropicHandlerName:
+		req.AnthropicRequest.OpenAIRequest.KvTransferParams = params
+	default:
+		klog.Errorf("unsupported request type: %v to get kv transfer params", req.RequestType)
+	}
+}
+
 // GetRequestRawData returns the raw data of the request.
 func (req *RequestContext) GetRequestRawData() string {
 	switch req.RequestType {
@@ -420,8 +454,8 @@ func (req *RequestContext) GetRequestRawData() string {
 	}
 }
 
-// GetRequestURL returns the request url of the request.
-func (req *RequestContext) GetRequestURL() string {
+// GetURLPath returns the request url of the request.
+func (req *RequestContext) GetURLPath() string {
 	switch req.RequestType {
 	case consts.OpenAIHandlerName:
 		return protocol.CompletionsPath
@@ -429,6 +463,19 @@ func (req *RequestContext) GetRequestURL() string {
 		return protocol.ChatCompletionsPath
 	default:
 		klog.Errorf("unsupported request type: %v to get request url", req.RequestType)
+		return ""
+	}
+}
+
+// GetBackendURLPath returns the backend request url of the request.
+func (req *RequestContext) GetBackendURLPath() string {
+	switch req.RequestType {
+	case consts.OpenAIHandlerName:
+		return req.LLMRequest.getBackendRequestURL()
+	case consts.AnthropicHandlerName:
+		return protocol.ChatCompletionsPath
+	default:
+		klog.Errorf("unsupported request type: %v to get backend request url", req.RequestType)
 		return ""
 	}
 }

@@ -44,7 +44,7 @@ type FieldSetter interface {
 	SetKvTransferParams(params map[string]interface{})
 	SetRid(rid string)
 	SetBootStrapHost(host string)
-	SetBootStrapRoom(room string)
+	SetBootStrapRoom(room int)
 	SetMaxTokens(maxTokens int)
 	SetStream(stream bool)
 }
@@ -67,7 +67,7 @@ func ApplyRequestArgs[T FieldSetter](req T, args map[string]interface{}) {
 		"kv_transfer_params": func(r T, v interface{}) { r.SetKvTransferParams(v.(map[string]interface{})) },
 		"rid":                func(r T, v interface{}) { r.SetRid(v.(string)) },
 		"bootstrap_host":     func(r T, v interface{}) { r.SetBootStrapHost(v.(string)) },
-		"bootstrap_room":     func(r T, v interface{}) { r.SetBootStrapRoom(v.(string)) },
+		"bootstrap_room":     func(r T, v interface{}) { r.SetBootStrapRoom(v.(int)) },
 		"max_tokens":         func(r T, v interface{}) { r.SetMaxTokens(v.(int)) },
 		"stream":             func(r T, v interface{}) { r.SetStream(v.(bool)) },
 	}

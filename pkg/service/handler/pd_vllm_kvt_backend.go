@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"llm-gateway/pkg/consts"
@@ -56,9 +55,10 @@ func (b *PdSplitVllmKvtBackend) BatchScheduleStreamInference(req *types.RequestC
 	chunkChan := make(chan StreamChunk, 100)
 	go func() {
 		defer close(chunkChan)
-		req.LLMRequest.CompletionRequest.KvTransferParams = b.buildTransferParams(req, pWorker, dWorker)
-
-		body, err := json.Marshal(req.LLMRequest.CompletionRequest)
+		kvTransferParams := b.buildTransferParams(req, pWorker, dWorker)
+		body, err := req.MarshalRequestWithArgs(map[string]interface{}{
+			"kv_transfer_params": kvTransferParams,
+		})
 		if err != nil {
 			klog.Errorf("failed to marshal request body: %v", err)
 			chunkChan <- StreamChunk{err: err}
@@ -73,11 +73,11 @@ func (b *PdSplitVllmKvtBackend) BatchScheduleStreamInference(req *types.RequestC
 }
 
 func (b *PdSplitVllmKvtBackend) buildPrefillRequestData(req *types.RequestContext) ([]byte, error) {
-	cmplReq := *(req.LLMRequest.CompletionRequest)
-	maxTokens := 1
-	cmplReq.MaxTokens = &maxTokens
-	cmplReq.KvTransferParams["do_remote_decode"] = true
-	return json.Marshal(cmplReq)
+	kvTransferParams := map[string]interface{}{"do_remote_decode": true}
+	return req.MarshalRequestWithArgs(map[string]interface{}{
+		"kv_transfer_params": kvTransferParams,
+		"max_tokens":         1,
+	})
 }
 
 func (b *PdSplitVllmKvtBackend) doPrefill(req *types.RequestContext, pWorker *types.LLMWorker) error {
@@ -108,12 +108,15 @@ func (b *PdSplitVllmKvtBackend) doPrefill(req *types.RequestContext, pWorker *ty
 }
 
 func (b *PdSplitVllmKvtBackend) buildDecodeRequestData(req *types.RequestContext, worker *types.LLMWorker) ([]byte, error) {
-	cmplReq := req.LLMRequest.CompletionRequest
 	// TODO(wingo.zwt): may need to use kvtIP
-	cmplReq.KvTransferParams["remote_host"] = worker.Endpoint.Host
-	cmplReq.KvTransferParams["remote_port"] = worker.AuxPort
-	cmplReq.KvTransferParams["do_remote_prefill"] = true
-	return json.Marshal(cmplReq)
+	kvTransferParams := map[string]interface{}{
+		"remote_host":       worker.Endpoint.Host,
+		"remote_port":       worker.AuxPort,
+		"do_remote_prefill": true,
+	}
+	return req.MarshalRequestWithArgs(map[string]interface{}{
+		"kv_transfer_params": kvTransferParams,
+	})
 }
 
 func (b *PdSplitVllmKvtBackend) doDecode(req *types.RequestContext, chunkChan chan StreamChunk, dWorker *types.LLMWorker) {
@@ -166,15 +169,77 @@ func (b *PdSplitVllmKvtBackend) StagedScheduleStreamInference(req *types.Request
 // StreamInference implements InferBackend interface
 // Performs streaming inference by forwarding request to backend and streaming response chunks
 func (b *PdSplitVllmKvtBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	if b.scheduleMode == types.ScheduleModePDBatch {
+	switch b.scheduleMode {
+	case types.ScheduleModePDBatch:
 		return b.BatchScheduleStreamInference(req)
-	} else if b.scheduleMode == types.ScheduleModePDStaged {
+	case types.ScheduleModePDStaged:
 		return b.StagedScheduleStreamInference(req)
-	} else {
+	default:
 		return nil, fmt.Errorf("[%s] unsupported schedule mode: %s", req.Id, b.scheduleMode)
 	}
 }
 
+func (b *PdSplitVllmKvtBackend) BatchScheduleInference(req *types.RequestContext) ([]byte, error) {
+	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
+	if pWorker == nil {
+		return nil, fmt.Errorf("[%s] no scheduled prefill worker", req.Id)
+	}
+	dWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode)
+	if dWorker == nil {
+		return nil, fmt.Errorf("[%s] no scheduled decode worker", req.Id)
+	}
+
+	kvTransferParams := b.buildTransferParams(req, pWorker, dWorker)
+	body, err := req.MarshalRequestWithArgs(map[string]interface{}{
+		"kv_transfer_params": kvTransferParams,
+	})
+	if err != nil {
+		klog.Errorf("failed to marshal request body: %v", err)
+		return nil, err
+	}
+
+	return ReadFromBackend(req, b.client, body, dWorker)
+}
+
+func (b *PdSplitVllmKvtBackend) StagedScheduleInference(req *types.RequestContext) ([]byte, error) {
+	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
+	if pWorker == nil {
+		return nil, fmt.Errorf("[%s] no scheduled prefill worker", req.Id)
+	}
+
+	err := b.doPrefill(req, pWorker)
+	if err != nil {
+		return nil, err
+	}
+
+	// start decode scheduling
+	results, err := req.ScheduleDecode()
+	if err != nil {
+		klog.Errorf("[%s] decode scheduling failed: %v", req.Id, err)
+		return nil, err
+	}
+
+	dWorker := results.GetWorkerByRole(types.InferRoleDecode)
+	if dWorker == nil {
+		klog.Errorf("[%s] decode worker not found", req.Id)
+		return nil, fmt.Errorf("decode worker not found")
+	}
+
+	data, err := b.buildDecodeRequestData(req, dWorker)
+	if err != nil {
+		klog.Errorf("[%s] failed to build decode request data: %v", err, req.Id)
+		return nil, err
+	}
+	return ReadFromBackend(req, b.client, data, dWorker)
+}
+
 func (b *PdSplitVllmKvtBackend) Inference(req *types.RequestContext) ([]byte, error) {
-	return nil, fmt.Errorf("Inference is not implemented for %s", consts.SplitModeVllmKvt)
+	switch b.scheduleMode {
+	case types.ScheduleModePDBatch:
+		return b.BatchScheduleInference(req)
+	case types.ScheduleModePDStaged:
+		return b.StagedScheduleInference(req)
+	default:
+		return nil, fmt.Errorf("[%s] unsupported schedule mode: %s", req.Id, b.scheduleMode)
+	}
 }

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"llm-gateway/pkg/consts"
@@ -39,14 +38,14 @@ func (b *PdSplitSglMoonCakeBackend) buildRequestData(req *types.RequestContext, 
 	bootstrapRoom := rand.Intn(1<<63 - 1)
 	bootstrapRoom = bootstrapRoom/dpSize*dpSize + dpRank
 
-	cmplReq := req.LLMRequest.CompletionRequest
-	cmplReq.Rid = req.Id
-	cmplReq.BootStrapHost = pWorker.Endpoint.Host
-	cmplReq.BootStrapRoom = fmt.Sprintf("%d", bootstrapRoom)
-	return json.Marshal(cmplReq)
+	return req.MarshalRequestWithArgs(map[string]interface{}{
+		"rid":            req.Id,
+		"bootstrap_host": pWorker.Endpoint.Host,
+		"bootstrap_room": bootstrapRoom,
+	})
 }
 
-func (b *PdSplitSglMoonCakeBackend) requestDecodeResponse(req *types.RequestContext, data []byte, worker *types.LLMWorker) (io.ReadCloser, error) {
+func (b *PdSplitSglMoonCakeBackend) doRequest(req *types.RequestContext, data []byte, worker *types.LLMWorker) (io.ReadCloser, error) {
 	httpReq, err := MakeNewBackendRequest(req, data, worker)
 	if err != nil {
 		klog.Errorf("[%s] failed to make new backend request: %v", err, req.Id)
@@ -60,43 +59,51 @@ func (b *PdSplitSglMoonCakeBackend) requestDecodeResponse(req *types.RequestCont
 	return body, nil
 }
 
-func (b *PdSplitSglMoonCakeBackend) parallelRequestAndStream(req *types.RequestContext, body []byte, pWorker, dWorker *types.LLMWorker, chunkChan chan StreamChunk) {
-	var (
-		decodeResp  io.ReadCloser
-		prefillResp io.ReadCloser
-		eg          errgroup.Group
-	)
+// parallelDoRequests sends requests to prefill and decode workers in parallel.
+// IMPORTANT: Caller is responsible for closing the returned responses.
+func (b *PdSplitSglMoonCakeBackend) parallelDoRequests(req *types.RequestContext, body []byte, pWorker, dWorker *types.LLMWorker) (prefillResp, decodeResp io.ReadCloser, err error) {
+	var eg errgroup.Group
 
 	eg.Go(func() error {
-		body, err := b.requestDecodeResponse(req, body, pWorker)
-		if err != nil {
-			return err
+		resp, reqErr := b.doRequest(req, body, pWorker)
+		if reqErr != nil {
+			return reqErr
 		}
-		prefillResp = body
+		prefillResp = resp
 		return nil
 	})
 
 	eg.Go(func() error {
-		body, err := b.requestDecodeResponse(req, body, dWorker)
-		if err != nil {
-			return err
+		resp, reqErr := b.doRequest(req, body, dWorker)
+		if reqErr != nil {
+			return reqErr
 		}
-		decodeResp = body
+		decodeResp = resp
 		return nil
 	})
 
-	if err := eg.Wait(); err != nil {
-		chunkChan <- StreamChunk{err: err}
-		return
-	}
-
-	defer func() {
-		if decodeResp != nil {
-			decodeResp.Close()
-		}
+	if err = eg.Wait(); err != nil {
 		if prefillResp != nil {
 			prefillResp.Close()
 		}
+		if decodeResp != nil {
+			decodeResp.Close()
+		}
+		return nil, nil, err
+	}
+
+	return prefillResp, decodeResp, nil
+}
+
+func (b *PdSplitSglMoonCakeBackend) parallelRequestAndStream(req *types.RequestContext, body []byte, pWorker, dWorker *types.LLMWorker, chunkChan chan StreamChunk) {
+	prefillResp, decodeResp, err := b.parallelDoRequests(req, body, pWorker, dWorker)
+	if err != nil {
+		chunkChan <- StreamChunk{err: err}
+		return
+	}
+	defer func() {
+		prefillResp.Close()
+		decodeResp.Close()
 	}()
 
 	if err := StreamRead(req, chunkChan, decodeResp); err != nil {
@@ -105,25 +112,34 @@ func (b *PdSplitSglMoonCakeBackend) parallelRequestAndStream(req *types.RequestC
 	}
 }
 
-func (b *PdSplitSglMoonCakeBackend) BatchScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
+// getPDWorkersAndBuildRequest retrieves prefill/decode workers and builds request data.
+func (b *PdSplitSglMoonCakeBackend) getPDWorkersAndBuildRequest(req *types.RequestContext) (pWorker, dWorker *types.LLMWorker, body []byte, err error) {
+	pWorker = req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
 	if pWorker == nil {
-		return nil, fmt.Errorf("[%s] no scheduled prefill worker", req.Id)
+		return nil, nil, nil, fmt.Errorf("[%s] no scheduled prefill worker", req.Id)
 	}
-	dWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode)
+	dWorker = req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode)
 	if dWorker == nil {
-		return nil, fmt.Errorf("[%s] no scheduled decode worker", req.Id)
+		return nil, nil, nil, fmt.Errorf("[%s] no scheduled decode worker", req.Id)
+	}
+
+	body, err = b.buildRequestData(req, pWorker, dWorker)
+	if err != nil {
+		klog.Errorf("[%s] failed to build request data: %v", req.Id, err)
+		return nil, nil, nil, err
+	}
+	return pWorker, dWorker, body, nil
+}
+
+func (b *PdSplitSglMoonCakeBackend) BatchScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
+	pWorker, dWorker, body, err := b.getPDWorkersAndBuildRequest(req)
+	if err != nil {
+		return nil, err
 	}
 
 	chunkChan := make(chan StreamChunk, 100)
 	go func() {
 		defer close(chunkChan)
-		body, err := b.buildRequestData(req, pWorker, dWorker)
-		if err != nil {
-			klog.Errorf("[%s] failed to build request data: %v", req.Id, err)
-			chunkChan <- StreamChunk{err: err}
-			return
-		}
 		b.parallelRequestAndStream(req, body, pWorker, dWorker, chunkChan)
 	}()
 
@@ -133,9 +149,36 @@ func (b *PdSplitSglMoonCakeBackend) BatchScheduleStreamInference(req *types.Requ
 // StreamInference implements InferBackend interface
 // Performs streaming inference by forwarding request to backend and streaming response chunks
 func (b *PdSplitSglMoonCakeBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	return b.BatchScheduleStreamInference(req)
+	switch b.scheduleMode {
+	case types.ScheduleModePDBatch:
+		return b.BatchScheduleStreamInference(req)
+	default:
+		return nil, fmt.Errorf("[%s] unsupported schedule mode: %s", req.Id, b.scheduleMode)
+	}
+}
+
+func (b *PdSplitSglMoonCakeBackend) BatchScheduleInference(req *types.RequestContext) ([]byte, error) {
+	pWorker, dWorker, body, err := b.getPDWorkersAndBuildRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	prefillResp, decodeResp, err := b.parallelDoRequests(req, body, pWorker, dWorker)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		prefillResp.Close()
+		decodeResp.Close()
+	}()
+
+	return io.ReadAll(decodeResp)
 }
 
 func (b *PdSplitSglMoonCakeBackend) Inference(req *types.RequestContext) ([]byte, error) {
-	return nil, fmt.Errorf("Inference is not implemented for %s", consts.SplitModeSGlangMooncake)
+	switch b.scheduleMode {
+	case types.ScheduleModePDBatch:
+		return b.BatchScheduleInference(req)
+	default:
+		return nil, fmt.Errorf("[%s] unsupported schedule mode: %s", req.Id, b.scheduleMode)
+	}
 }

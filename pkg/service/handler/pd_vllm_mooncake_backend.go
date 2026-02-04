@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"llm-gateway/pkg/consts"
-	"llm-gateway/pkg/protocol"
 	"llm-gateway/pkg/types"
 	"net/http"
 
@@ -34,12 +33,6 @@ func NewPdSplitVllmMoonCakeBackend(schMode types.ScheduleMode) (InferenceBackend
 }
 
 func (b *PdSplitVllmMoonCakeBackend) buildPrefillRequestData(req *types.RequestContext) ([]byte, error) {
-	cmplReq := *(req.LLMRequest.CompletionRequest)
-	maxTokens := 1
-	cmplReq.MaxTokens = &maxTokens
-	cmplReq.Stream = false
-	cmplReq.StreamOptions = nil
-
 	// Set kv_transfer_params
 	kvTransferParams := map[string]interface{}{
 		"do_remote_decode":  true,
@@ -49,8 +42,11 @@ func (b *PdSplitVllmMoonCakeBackend) buildPrefillRequestData(req *types.RequestC
 		"remote_host":       nil,
 		"remote_port":       nil,
 	}
-	cmplReq.KvTransferParams = kvTransferParams
-	return json.Marshal(cmplReq)
+	return req.MarshalRequestWithArgs(map[string]interface{}{
+		"kv_transfer_params": kvTransferParams,
+		"max_tokens":         1,
+		"stream":             false,
+	})
 }
 
 func (b *PdSplitVllmMoonCakeBackend) doPrefill(req *types.RequestContext, pWorker *types.LLMWorker) error {
@@ -79,12 +75,15 @@ func (b *PdSplitVllmMoonCakeBackend) doPrefill(req *types.RequestContext, pWorke
 		return err
 	}
 
-	var completionResponse protocol.CompletionResponse
-	if err := json.Unmarshal(data, &completionResponse); err != nil {
+	type tmpResponse struct {
+		KvTransferParams map[string]interface{} `json:"kv_transfer_params,omitempty"`
+	}
+	var tResp tmpResponse
+	if err := json.Unmarshal(data, &tResp); err != nil {
 		klog.Errorf("[%s] failed to unmarshal completion response: %v", req.Id, err)
 		return err
 	}
-	req.LLMRequest.CompletionRequest.KvTransferParams = completionResponse.KvTransferParams
+	req.SetKvTransferParams(tResp.KvTransferParams)
 
 	return nil
 }
@@ -109,8 +108,7 @@ func (b *PdSplitVllmMoonCakeBackend) BatchScheduleStreamInference(req *types.Req
 			chunkChan <- StreamChunk{err: err}
 			return
 		}
-		cmplReq := req.LLMRequest.CompletionRequest
-		data, err := json.Marshal(cmplReq)
+		data, err := req.MarshalRequestWithArgs(nil)
 		if err != nil {
 			klog.Errorf("[%s] failed to marshal completion request: %v", req.Id, err)
 			chunkChan <- StreamChunk{err: err}
@@ -125,9 +123,42 @@ func (b *PdSplitVllmMoonCakeBackend) BatchScheduleStreamInference(req *types.Req
 // StreamInference implements InferBackend interface
 // Performs streaming inference by forwarding request to backend and streaming response chunks
 func (b *PdSplitVllmMoonCakeBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	return b.BatchScheduleStreamInference(req)
+	switch b.scheduleMode {
+	case types.ScheduleModePDBatch:
+		return b.BatchScheduleStreamInference(req)
+	default:
+		return nil, fmt.Errorf("[%s] unsupported schedule mode: %s", req.Id, b.scheduleMode)
+	}
+}
+
+func (b *PdSplitVllmMoonCakeBackend) BatchScheduleInference(req *types.RequestContext) ([]byte, error) {
+	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
+	if pWorker == nil {
+		return nil, fmt.Errorf("[%s] no scheduled prefill worker", req.Id)
+	}
+
+	dWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode)
+	if dWorker == nil {
+		return nil, fmt.Errorf("[%s] no scheduled decode worker", req.Id)
+	}
+
+	err := b.doPrefill(req, pWorker)
+	if err != nil {
+		return nil, err
+	}
+	data, err := req.MarshalRequestWithArgs(nil)
+	if err != nil {
+		klog.Errorf("[%s] failed to marshal completion request: %v", req.Id, err)
+		return nil, err
+	}
+	return ReadFromBackend(req, b.client, data, dWorker)
 }
 
 func (b *PdSplitVllmMoonCakeBackend) Inference(req *types.RequestContext) ([]byte, error) {
-	return nil, fmt.Errorf("Inference is not implemented for %s", consts.SplitModeVllmMooncake)
+	switch b.scheduleMode {
+	case types.ScheduleModePDBatch:
+		return b.BatchScheduleInference(req)
+	default:
+		return nil, fmt.Errorf("[%s] unsupported schedule mode: %s", req.Id, b.scheduleMode)
+	}
 }
