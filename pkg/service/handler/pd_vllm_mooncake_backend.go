@@ -120,12 +120,55 @@ func (b *PdSplitVllmMoonCakeBackend) BatchScheduleStreamInference(req *types.Req
 	return chunkChan, nil
 }
 
+func (b *PdSplitVllmMoonCakeBackend) doDecode(req *types.RequestContext, chunkChan chan StreamChunk, dWorker *types.LLMWorker) {
+	data, err := req.MarshalRequestWithArgs(nil)
+	if err != nil {
+		klog.Errorf("[%s] failed to build decode request data: %v", err, req.Id)
+		chunkChan <- StreamChunk{err: err}
+		return
+	}
+	StreamReadFromBackend(req, b.client, data, dWorker, chunkChan)
+}
+
+func (b *PdSplitVllmMoonCakeBackend) StagedScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
+	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
+	if pWorker == nil {
+		return nil, fmt.Errorf("[%s] no scheduled prefill worker", req.Id)
+	}
+	chunkChan := make(chan StreamChunk, 100)
+	go func() {
+		defer close(chunkChan)
+		err := b.doPrefill(req, pWorker)
+		if err != nil {
+			chunkChan <- StreamChunk{err: err}
+			return
+		}
+		// start decode scheduling
+		results, err := req.ScheduleDecode()
+		if err != nil {
+			klog.Errorf("[%s] decode scheduling failed: %v", req.Id, err)
+			chunkChan <- StreamChunk{err: err}
+			return
+		}
+		dWorker := results.GetWorkerByRole(types.InferRoleDecode)
+		if dWorker == nil {
+			klog.Errorf("[%s] decode worker not found", req.Id)
+			chunkChan <- StreamChunk{err: fmt.Errorf("decode worker not found")}
+			return
+		}
+		b.doDecode(req, chunkChan, dWorker)
+	}()
+	return chunkChan, nil
+}
+
 // StreamInference implements InferBackend interface
 // Performs streaming inference by forwarding request to backend and streaming response chunks
 func (b *PdSplitVllmMoonCakeBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
 	switch b.scheduleMode {
 	case types.ScheduleModePDBatch:
 		return b.BatchScheduleStreamInference(req)
+	case types.ScheduleModePDStaged:
+		return b.StagedScheduleStreamInference(req)
 	default:
 		return nil, fmt.Errorf("[%s] unsupported schedule mode: %s", req.Id, b.scheduleMode)
 	}
@@ -154,10 +197,40 @@ func (b *PdSplitVllmMoonCakeBackend) BatchScheduleInference(req *types.RequestCo
 	return ReadFromBackend(req, b.client, data, dWorker)
 }
 
+func (b *PdSplitVllmMoonCakeBackend) StagedScheduleInference(req *types.RequestContext) ([]byte, error) {
+	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
+	if pWorker == nil {
+		return nil, fmt.Errorf("[%s] no scheduled prefill worker", req.Id)
+	}
+	err := b.doPrefill(req, pWorker)
+	if err != nil {
+		return nil, err
+	}
+	// start decode scheduling
+	results, err := req.ScheduleDecode()
+	if err != nil {
+		klog.Errorf("[%s] decode scheduling failed: %v", req.Id, err)
+		return nil, err
+	}
+	dWorker := results.GetWorkerByRole(types.InferRoleDecode)
+	if dWorker == nil {
+		klog.Errorf("[%s] decode worker not found", req.Id)
+		return nil, fmt.Errorf("decode worker not found")
+	}
+	data, err := req.MarshalRequestWithArgs(nil)
+	if err != nil {
+		klog.Errorf("[%s] failed to build decode request data: %v", err, req.Id)
+		return nil, err
+	}
+	return ReadFromBackend(req, b.client, data, dWorker)
+}
+
 func (b *PdSplitVllmMoonCakeBackend) Inference(req *types.RequestContext) ([]byte, error) {
 	switch b.scheduleMode {
 	case types.ScheduleModePDBatch:
 		return b.BatchScheduleInference(req)
+	case types.ScheduleModePDStaged:
+		return b.StagedScheduleInference(req)
 	default:
 		return nil, fmt.Errorf("[%s] unsupported schedule mode: %s", req.Id, b.scheduleMode)
 	}

@@ -81,7 +81,7 @@ func (bp *CompositeBalancer) setupNormalBalancer(config *options.Config) {
 	bp.balanceMode = LocalBalancer
 	r := resolver.CreateBackendServiceResolver(config, types.InferRoleNormal)
 	bp.localBalancer = NewRoundRobinBalancer(r)
-	if !config.IsPDRoundRobin() {
+	if config.SchedulePolicy != consts.SchedulePolicyRoundRobin {
 		bp.balanceMode = RemoteBalancer
 		bp.remoteBalancer = NewSchedulerClient(config)
 	}

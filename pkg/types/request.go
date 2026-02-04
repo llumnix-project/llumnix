@@ -160,7 +160,8 @@ type LLMRequest struct {
 	ToolParser      *sglang.ToolParser
 
 	// To convert from streaming to non-streaming, the returned results need to be merged.
-	BufferChatResp *protocol.ChatCompletionResponse
+	BufferCompletionResponse *protocol.CompletionResponse
+	BufferChatResp           *protocol.ChatCompletionResponse
 	// The last chunk of the streaming response, only include finish reason and not include content.
 	LastChatStreamResp *protocol.ChatCompletionStreamResponse
 }
