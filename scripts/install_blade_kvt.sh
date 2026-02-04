@@ -53,6 +53,9 @@ main() {
     setup_cuda_env
     
     cd "$work_dir"
+    cd tools && bash ./install_barex.sh
+
+    cd "$work_dir"
     python3 setup.py bdist_wheel
     pip install dist/*.whl
 }

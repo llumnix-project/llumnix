@@ -16,6 +16,7 @@ TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
 IMAGE_TAG="llumnix-vllm-dev-${TIMESTAMP}"
 
 DOCKER_BUILDKIT=1 docker build \
+    --no-cache \
     -t ${REPOSITORY}:${IMAGE_TAG} \
     -f ./container/Dockerfile.vllm_dev \
     .
