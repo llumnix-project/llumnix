@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-IMAGE="beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-20260203-172324"
+IMAGE="beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-20260204-140225"
 
 echo "Building tokenizers package..."
 

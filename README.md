@@ -1,6 +1,6 @@
 # Development Guide
 
-`beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-20260203-172324` is recommended for development. Then, you should run the following commands to set up the environment:
+`beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-20260204-140225` is recommended for development. Then, you should run the following commands to set up the environment:
 
 ```bash
 go mod tidy
@@ -29,14 +29,14 @@ Run `make gateway-build` to build the gateway binary and `make scheduler-build` 
 
 # --------- build release images ----------
 # build lib-tokenizers, only need run once
-make lib-tokenizers-build
+bash scripts/build_tokenizers.sh
 
 # build gateway and scheduler bin and release
 bash scripts/build_component_bin.sh gateway
 bash scripts/build_component_release.sh gateway --push
 
-bash scripts/build_component_bin.sh gateway
-bash scripts/build_component_release.sh gateway --push
+bash scripts/build_component_bin.sh scheduler
+bash scripts/build_component_release.sh scheduler --push
 
 # build discovery
 bash scripts/build_discovery_whl.sh
