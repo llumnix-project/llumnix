@@ -26,6 +26,19 @@ const (
 	RouteExternal
 )
 
+func (rt RouteType) String() string {
+	switch rt {
+	case RouteUnknown:
+		return "RouteUnknown"
+	case RouteInternal:
+		return "RouteInternal"
+	case RouteExternal:
+		return "RouteExternal"
+	default:
+		return "Invalid"
+	}
+}
+
 type RouteEndpoint struct {
 	URL    string
 	APIKey string
@@ -206,6 +219,7 @@ func (sr *ServiceRouter) Fallback(req *types.RequestContext) (*RouteEndpoint, er
 		Model:  fallbackConfig.Model,
 	}
 
-	klog.V(3).Infof("get fallback endpoint with external endpoint: %s", externalEndpoint.String())
+	klog.V(3).Infof("get fallback endpoint with external endpoint: %s, reqid: %s",
+		externalEndpoint.String(), req.Id)
 	return externalEndpoint, nil
 }
