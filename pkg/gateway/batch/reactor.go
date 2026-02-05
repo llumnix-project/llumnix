@@ -562,7 +562,9 @@ func (tr *TaskReactor) processRequest(ctx context.Context, httpClient *http.Clie
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-request-id", requestID)
-	req.Header.Set("Authorization", "Bearer "+*task.Token)
+	if task.Token != nil {
+		req.Header.Set("Authorization", "Bearer "+*task.Token)
+	}
 
 	// Retry logic for HTTP requests
 	for retryCount := range maxRetries + 1 {

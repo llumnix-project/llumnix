@@ -20,12 +20,6 @@ type OSSClient struct {
 
 // NewOSSClient creates a new OSS client
 func NewOSSClient(endpoint, bucketName string) (*OSSClient, error) {
-	config := new(credentials.Config).SetType("credentials_uri") // will get credentials from env ALIBABA_CLOUD_CREDENTIALS_URI
-	uriCredential, err := credentials.NewCredential(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to new uri credential: %v", err)
-	}
-
 	if endpoint == "" {
 		// Get region from environment variable
 		region := os.Getenv("REGION")
@@ -33,9 +27,21 @@ func NewOSSClient(endpoint, bucketName string) (*OSSClient, error) {
 		endpoint = fmt.Sprintf("oss-%s-internal.aliyuncs.com", region)
 	}
 
-	// Create OSS client with custom credentials provider
-	clientOptions := []oss.ClientOption{
-		oss.SetCredentialsProvider(newCredentialsUriCredentialsProvider(uriCredential)),
+	clientOptions := []oss.ClientOption{}
+	if len(os.Getenv("ALIBABA_CLOUD_CREDENTIALS_URI")) > 0 {
+		config := new(credentials.Config).SetType("credentials_uri") // will get credentials from env ALIBABA_CLOUD_CREDENTIALS_URI
+		uriCredential, err := credentials.NewCredential(config)
+		if err != nil {
+			return nil, fmt.Errorf("failed to new uri credential: %v", err)
+		}
+		provider := newCredentialsUriCredentialsProvider(uriCredential)
+		clientOptions = append(clientOptions, oss.SetCredentialsProvider(&provider))
+	} else {
+		provider, err := oss.NewEnvironmentVariableCredentialsProvider()
+		if err != nil {
+			return nil, fmt.Errorf("failed to new env credential: %v", err)
+		}
+		clientOptions = append(clientOptions, oss.SetCredentialsProvider(&provider))
 	}
 
 	client, err := oss.New(endpoint, "", "", clientOptions...)
