@@ -254,7 +254,7 @@ func (lgs *LlmGatewayService) writeResponseUntilDone(reqCtx *types.RequestContex
 func (lgs *LlmGatewayService) externalRouteRequest(reqCtx *types.RequestContext, dst *router.RouteEndpoint) {
 	originURL := reqCtx.HttpRequest.Request.URL.String()
 	url := dst.JoinURL(originURL)
-	// reset request body and content length
+	// reset request body
 	reqCtx.HttpRequest.Request.Body = io.NopCloser(strings.NewReader(reqCtx.LLMRequest.RawData))
 
 	SimpleHTTPProxy(lgs.simpleClient, url, reqCtx.HttpRequest.Writer, reqCtx.HttpRequest.Request)
