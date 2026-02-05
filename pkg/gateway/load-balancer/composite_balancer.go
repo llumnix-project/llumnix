@@ -40,7 +40,7 @@ type CompositeBalancer struct {
 	localBalancer  Balancer
 	remoteBalancer Balancer
 
-	// prefillLocalBalancer and decodeLocalBalancer are used in PD-split mode
+	// prefillLocalBalancer and decodeLocalBalancer are used in PD-disagg mode
 	// to separately balance prefill and decode stage requests
 	prefillLocalBalancer Balancer
 	decodeLocalBalancer  Balancer
@@ -52,17 +52,17 @@ func NewCompositeBalancer(config *options.GatewayConfig) *CompositeBalancer {
 	bp := &CompositeBalancer{
 		config: config,
 	}
-	if config.IsPDSplitMode() {
-		bp.setupPDSplitBalancer(config)
+	if config.IsPDDisagg() {
+		bp.setupPDDisaggBalancer(config)
 	} else {
 		bp.setupNormalBalancer(config)
 	}
 	return bp
 }
 
-// setupPDSplitBalancer initializes balancers for prefill-decode split mode.
+// setupPDDisaggBalancer initializes balancers for prefill-decode split mode.
 // It creates separate balancers for prefill and decode stages.
-func (bp *CompositeBalancer) setupPDSplitBalancer(config *options.GatewayConfig) {
+func (bp *CompositeBalancer) setupPDDisaggBalancer(config *options.GatewayConfig) {
 	prefillResolver := resolver.CreateBackendServiceResolver(&config.DiscoveryConfig, types.InferRolePrefill)
 	bp.prefillLocalBalancer = NewRoundRobinBalancer(prefillResolver)
 	decodeResolver := resolver.CreateBackendServiceResolver(&config.DiscoveryConfig, types.InferRoleDecode)
@@ -88,18 +88,18 @@ func (bp *CompositeBalancer) setupNormalBalancer(config *options.GatewayConfig) 
 	}
 }
 
-// pDSplitLocalGet handles endpoint selection in PD-split mode.
+// pdDisaggLocalGet handles endpoint selection in PD-disagg mode.
 // For staged scheduling, it routes to the appropriate stage balancer.
 // For non-staged, it combines results from both prefill and decode balancers.
-func (bp *CompositeBalancer) pDSplitLocalGet(req *types.RequestContext) (types.ScheduledResult, error) {
+func (bp *CompositeBalancer) pdDisaggLocalGet(req *types.RequestContext) (types.ScheduledResult, error) {
 	if req.ScheduleCtx.ScheduleMode == types.ScheduleModePDStaged {
-		switch req.ScheduleCtx.InferStage {
-		case types.InferStagePrefill:
+		switch req.ScheduleCtx.ScheduleStage {
+		case types.ScheduleStagePrefill:
 			return bp.prefillLocalBalancer.Get(req)
-		case types.InferStageDecode:
+		case types.ScheduleStageDecode:
 			return bp.decodeLocalBalancer.Get(req)
 		default:
-			return nil, fmt.Errorf("invalid schedule stage: %s", req.ScheduleCtx.InferStage)
+			return nil, fmt.Errorf("invalid schedule stage: %s", req.ScheduleCtx.ScheduleStage)
 		}
 	} else {
 		pResult, err := bp.prefillLocalBalancer.Get(req)
@@ -127,7 +127,7 @@ func (bp *CompositeBalancer) getWithFallback(req *types.RequestContext) (types.S
 	case RemoteBalancer:
 		result, err = bp.localBalancer.Get(req)
 	case PDRemoteBalancer:
-		result, err = bp.pDSplitLocalGet(req)
+		result, err = bp.pdDisaggLocalGet(req)
 	default:
 		panic("unsupported balance mode for fallback")
 	}
@@ -143,7 +143,7 @@ func (bp *CompositeBalancer) localGet(req *types.RequestContext) (types.Schedule
 	case LocalBalancer, RemoteBalancer:
 		return bp.localBalancer.Get(req)
 	case PDLocalBalancer, PDRemoteBalancer:
-		return bp.pDSplitLocalGet(req)
+		return bp.pdDisaggLocalGet(req)
 	default:
 		panic("unsupported balance mode")
 	}
@@ -162,7 +162,7 @@ func (bp *CompositeBalancer) Get(req *types.RequestContext) (types.ScheduledResu
 	case LocalBalancer:
 		return bp.localBalancer.Get(req)
 	case PDLocalBalancer:
-		return bp.pDSplitLocalGet(req)
+		return bp.pdDisaggLocalGet(req)
 	default:
 		panic("unsupported balance mode")
 	}

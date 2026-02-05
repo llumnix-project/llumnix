@@ -13,27 +13,27 @@ import (
 )
 
 func init() {
-	RegisterBackend(consts.SplitModeVllmMooncake, func(scheduleMode types.ScheduleMode) (InferenceBackend, error) {
-		return NewPdSplitVllmMoonCakeBackend(scheduleMode)
+	RegisterBackend(consts.PDDisaggProtocolVllmMooncake, func(scheduleMode types.ScheduleMode) (InferenceBackend, error) {
+		return NewPDDisaggVllmMoonCakeBackend(scheduleMode)
 	})
 }
 
-type PdSplitVllmMoonCakeBackend struct {
+type PDDisaggVllmMoonCakeBackend struct {
 	client       *http.Client
 	scheduleMode types.ScheduleMode
 }
 
-func NewPdSplitVllmMoonCakeBackend(schMode types.ScheduleMode) (InferenceBackend, error) {
+func NewPDDisaggVllmMoonCakeBackend(schMode types.ScheduleMode) (InferenceBackend, error) {
 	if schMode != types.ScheduleModePDBatch && schMode != types.ScheduleModePDStaged {
 		return nil, fmt.Errorf("unsupported schedule mode: %s", schMode)
 	}
-	return &PdSplitVllmMoonCakeBackend{
+	return &PDDisaggVllmMoonCakeBackend{
 		client:       NewLlmForwardClient(),
 		scheduleMode: schMode,
 	}, nil
 }
 
-func (b *PdSplitVllmMoonCakeBackend) buildPrefillRequestData(req *types.RequestContext) ([]byte, error) {
+func (b *PDDisaggVllmMoonCakeBackend) buildPrefillRequestData(req *types.RequestContext) ([]byte, error) {
 	cmplReq := *(req.LLMRequest.CompletionRequest)
 	maxTokens := uint64(1)
 	cmplReq.MaxTokens = &maxTokens
@@ -53,7 +53,7 @@ func (b *PdSplitVllmMoonCakeBackend) buildPrefillRequestData(req *types.RequestC
 	return json.Marshal(cmplReq)
 }
 
-func (b *PdSplitVllmMoonCakeBackend) doPrefill(req *types.RequestContext, pInstance *types.LLMInstance) error {
+func (b *PDDisaggVllmMoonCakeBackend) doPrefill(req *types.RequestContext, pInstance *types.LLMInstance) error {
 	// build prefill request
 	data, err := b.buildPrefillRequestData(req)
 	if err != nil {
@@ -89,7 +89,7 @@ func (b *PdSplitVllmMoonCakeBackend) doPrefill(req *types.RequestContext, pInsta
 	return nil
 }
 
-func (b *PdSplitVllmMoonCakeBackend) doDecode(req *types.RequestContext, chunkChan chan StreamChunk, dInstance *types.LLMInstance) {
+func (b *PDDisaggVllmMoonCakeBackend) doDecode(req *types.RequestContext, chunkChan chan StreamChunk, dInstance *types.LLMInstance) {
 	data, err := json.Marshal(req.LLMRequest.CompletionRequest)
 	if err != nil {
 		klog.Errorf("[%s] failed to build decode request data: %v", err, req.Id)
@@ -99,7 +99,7 @@ func (b *PdSplitVllmMoonCakeBackend) doDecode(req *types.RequestContext, chunkCh
 	StreamResponseFromBackend(req, b.client, data, dInstance, chunkChan)
 }
 
-func (b *PdSplitVllmMoonCakeBackend) BatchScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
+func (b *PDDisaggVllmMoonCakeBackend) BatchScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
 	pInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRolePrefill)
 	if pInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
@@ -132,7 +132,7 @@ func (b *PdSplitVllmMoonCakeBackend) BatchScheduleStreamInference(req *types.Req
 	return chunkChan, nil
 }
 
-func (b *PdSplitVllmMoonCakeBackend) StagedScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
+func (b *PDDisaggVllmMoonCakeBackend) StagedScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
 	pInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRolePrefill)
 	if pInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
@@ -171,7 +171,7 @@ func (b *PdSplitVllmMoonCakeBackend) StagedScheduleStreamInference(req *types.Re
 
 // StreamInference implements InferBackend interface
 // Performs streaming inference by forwarding request to backend and streaming response chunks
-func (b *PdSplitVllmMoonCakeBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
+func (b *PDDisaggVllmMoonCakeBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
 	switch b.scheduleMode {
 	case types.ScheduleModePDBatch:
 		return b.BatchScheduleStreamInference(req)

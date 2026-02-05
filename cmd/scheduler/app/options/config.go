@@ -26,7 +26,7 @@ type SchedulerConfig struct {
 	ExtraArgs string
 
 	config.DiscoveryConfig
-	config.PDSplitConfig
+	config.PDDisaggConfig
 	config.ScheduleBaseConfig
 	config.LiteModeScheduleConfig
 	config.FullModeScheduleConfig
@@ -35,7 +35,7 @@ type SchedulerConfig struct {
 func (c *SchedulerConfig) AddFlags(flags *pflag.FlagSet) {
 	c.AddConfigFlags(flags)
 	c.DiscoveryConfig.AddDiscoveryConfigFlags(flags)
-	c.PDSplitConfig.AddPDSplitConfigFlags(flags)
+	c.PDDisaggConfig.AddPDDisaggConfigFlags(flags)
 	c.ScheduleBaseConfig.AddScheduleBaseConfigFlags(flags)
 	c.LiteModeScheduleConfig.AddLiteModeScheduleConfigFlags(flags)
 	c.FullModeScheduleConfig.AddFullModeScheduleConfigFlags(flags)

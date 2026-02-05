@@ -39,7 +39,7 @@ type GatewayConfig struct {
 	config.DiscoveryConfig
 	config.ProcessorConfig
 	config.RouteConfig
-	config.PDSplitConfig
+	config.PDDisaggConfig
 	config.ScheduleBaseConfig
 	config.LiteModeScheduleConfig
 	config.BatchServiceConfig
@@ -50,7 +50,7 @@ func (c *GatewayConfig) AddFlags(flags *pflag.FlagSet) {
 	c.AddDiscoveryConfigFlags(flags)
 	c.AddScheduleBaseConfigFlags(flags)
 	c.AddLiteModeScheduleConfigFlags(flags)
-	c.AddPDSplitConfigFlags(flags)
+	c.AddPDDisaggConfigFlags(flags)
 	c.AddRouteConfigFlags(flags)
 	c.AddProcessorConfigFlags(flags)
 	c.AddBatchServiceConfigFlags(flags)
@@ -78,12 +78,12 @@ func (c *GatewayConfig) GetConfigManager() *property.ConfigManager {
 	return c.configManager
 }
 
-func (c *GatewayConfig) IsPDSplitMode() bool {
-	return c.PDSplitMode != ""
+func (c *GatewayConfig) IsPDDisagg() bool {
+	return c.PDDisaggProtocol != ""
 }
 
 func (c *GatewayConfig) IsPDRoundRobin() bool {
-	return c.IsPDSplitMode() && c.SchedulePolicy == consts.SchedulePolicyRoundRobin
+	return c.IsPDDisagg() && c.SchedulePolicy == consts.SchedulePolicyRoundRobin
 }
 
 func (c *GatewayConfig) EnableRequestStateTracking() bool {

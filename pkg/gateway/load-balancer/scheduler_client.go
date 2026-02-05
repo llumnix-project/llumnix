@@ -52,11 +52,11 @@ func (cb *SchedulerClient) createScheduleRequest(req *types.RequestContext) *typ
 	localEndpoint := cb.kac.GetLocalEndpoint()
 	// create scheduler request
 	schRequest := &types.ScheduleRequest{
-		Id:           req.Id,
-		Model:        req.LLMRequest.Model,
-		GatewayId:    localEndpoint.String(),
-		ScheduleMode: req.ScheduleCtx.ScheduleMode,
-		InferStage:   req.ScheduleCtx.InferStage,
+		Id:            req.Id,
+		Model:         req.LLMRequest.Model,
+		GatewayId:     localEndpoint.String(),
+		ScheduleMode:  req.ScheduleCtx.ScheduleMode,
+		ScheduleStage: req.ScheduleCtx.ScheduleStage,
 	}
 
 	if tokenIds, ok := req.LLMRequest.GetPromptTokens(); ok {
@@ -180,7 +180,7 @@ func (cb *SchedulerClient) createReleaseRequest(req *types.RequestContext, insta
 		Model:          req.LLMRequest.Model,
 		GatewayId:      localEndpoint.String(),
 		ScheduleMode:   req.ScheduleCtx.ScheduleMode,
-		InferStage:     req.ScheduleCtx.InferStage,
+		ScheduleStage:  req.ScheduleCtx.ScheduleStage,
 		ScheduleResult: types.ScheduledResult{*instance},
 	}
 }

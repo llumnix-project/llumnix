@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"llumnix/pkg/gateway/batch/redis"
+	"llumnix/pkg/redis"
 	"strconv"
 	"time"
 

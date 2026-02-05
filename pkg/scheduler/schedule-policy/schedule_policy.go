@@ -309,7 +309,7 @@ func (p *DispatchPolicy) schedule(
 	}
 
 	var prefill *instanceViewScheduling
-	needPrefill := request.ScheduleMode == types.ScheduleModePDBatch || (request.ScheduleMode == types.ScheduleModePDStaged && request.InferStage == types.InferStagePrefill)
+	needPrefill := request.ScheduleMode == types.ScheduleModePDBatch || (request.ScheduleMode == types.ScheduleModePDStaged && request.ScheduleStage == types.ScheduleStagePrefill)
 	if needPrefill {
 		prefill = p.executeSchedulePipeline(p.schedulePipelines[consts.PrefillInferMode], clusterView.groupedInstanceViews)
 		if prefill == nil {
@@ -324,7 +324,7 @@ func (p *DispatchPolicy) schedule(
 	}
 
 	var decode *instanceViewScheduling
-	needDecode := request.ScheduleMode == types.ScheduleModePDBatch || (request.ScheduleMode == types.ScheduleModePDStaged && request.InferStage == types.InferStageDecode)
+	needDecode := request.ScheduleMode == types.ScheduleModePDBatch || (request.ScheduleMode == types.ScheduleModePDStaged && request.ScheduleStage == types.ScheduleStageDecode)
 	if needDecode {
 		decode = p.executeSchedulePipeline(p.schedulePipelines[consts.DecodeInferMode], clusterView.groupedInstanceViews)
 		if decode == nil {

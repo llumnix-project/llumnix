@@ -56,9 +56,9 @@ def get_gateway_command(
 
     if enable_pd:
         if connector_type == "MooncakeConnector":
-            command += "--pd-split-mode=vllm-mooncake "
+            command += "--pd-disagg-protocol=vllm-mooncake "
         else:
-            command += "--pd-split-mode=vllm-kvt "
+            command += "--pd-disagg-protocol=vllm-kvt "
 
     if separate_pd_schedule:
         command += "--separate-pd-schedule "
