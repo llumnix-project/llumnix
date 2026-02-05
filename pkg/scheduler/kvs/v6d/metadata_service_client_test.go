@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	redis "llumnix/pkg/gateway/batch/redis"
+	batch_service_redis "llumnix/pkg/redis"
 	"testing"
 	"time"
 
@@ -22,8 +22,8 @@ func TestV6dMetadataServiceClient(t *testing.T) {
 	db, mock := redismock.NewClusterMock()
 	client := &MetadataServiceClient{
 		redisClient: db,
-		config: &redis.Config{
-			RedisCluster: redis.RedisClusterConfig{
+		config: &batch_service_redis.Config{
+			RedisCluster: batch_service_redis.RedisClusterConfig{
 				QueryTimeout:         5,
 				MaxBatchSize:         500,
 				MaxConcurrentBatches: 10,
@@ -247,8 +247,8 @@ func TestV6dMetadataServiceClientBatch(t *testing.T) {
 
 		client := &MetadataServiceClient{
 			redisClient: db,
-			config: &redis.Config{
-				RedisCluster: redis.RedisClusterConfig{
+			config: &batch_service_redis.Config{
+				RedisCluster: batch_service_redis.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -327,8 +327,8 @@ func TestV6dMetadataServiceClientBatch(t *testing.T) {
 
 		client := &MetadataServiceClient{
 			redisClient: db,
-			config: &redis.Config{
-				RedisCluster: redis.RedisClusterConfig{
+			config: &batch_service_redis.Config{
+				RedisCluster: batch_service_redis.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -398,8 +398,8 @@ func TestV6dMetadataServiceClientBatch(t *testing.T) {
 
 		client := &MetadataServiceClient{
 			redisClient: db,
-			config: &redis.Config{
-				RedisCluster: redis.RedisClusterConfig{
+			config: &batch_service_redis.Config{
+				RedisCluster: batch_service_redis.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -470,8 +470,8 @@ func TestV6dMetadataServiceClientBatch(t *testing.T) {
 
 		client := &MetadataServiceClient{
 			redisClient: db,
-			config: &redis.Config{
-				RedisCluster: redis.RedisClusterConfig{
+			config: &batch_service_redis.Config{
+				RedisCluster: batch_service_redis.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -508,8 +508,8 @@ func TestV6dMetadataServiceClientBatch(t *testing.T) {
 
 		client := &MetadataServiceClient{
 			redisClient: db,
-			config: &redis.Config{
-				RedisCluster: redis.RedisClusterConfig{
+			config: &batch_service_redis.Config{
+				RedisCluster: batch_service_redis.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -545,8 +545,8 @@ func TestV6dMetadataServiceClientBatch(t *testing.T) {
 
 		client := &MetadataServiceClient{
 			redisClient: db,
-			config: &redis.Config{
-				RedisCluster: redis.RedisClusterConfig{
+			config: &batch_service_redis.Config{
+				RedisCluster: batch_service_redis.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -605,8 +605,8 @@ func TestV6dMetadataServiceClientBatch(t *testing.T) {
 
 		client := &MetadataServiceClient{
 			redisClient: db,
-			config: &redis.Config{
-				RedisCluster: redis.RedisClusterConfig{
+			config: &batch_service_redis.Config{
+				RedisCluster: batch_service_redis.RedisClusterConfig{
 					QueryTimeout:         1, // Short timeout
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -648,8 +648,8 @@ func TestV6dMetadataServiceClientBatch(t *testing.T) {
 
 		client := &MetadataServiceClient{
 			redisClient: db,
-			config: &redis.Config{
-				RedisCluster: redis.RedisClusterConfig{
+			config: &batch_service_redis.Config{
+				RedisCluster: batch_service_redis.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         2, // Small batch size to force multiple batches
 					MaxConcurrentBatches: 2,
@@ -696,8 +696,8 @@ func TestV6dMetadataServiceClientBatch(t *testing.T) {
 
 		client := &MetadataServiceClient{
 			redisClient: db,
-			config: &redis.Config{
-				RedisCluster: redis.RedisClusterConfig{
+			config: &batch_service_redis.Config{
+				RedisCluster: batch_service_redis.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         2,
 					MaxConcurrentBatches: 1,
@@ -759,8 +759,8 @@ func TestV6dMetadataServiceClientBatch(t *testing.T) {
 
 		client := &MetadataServiceClient{
 			redisClient: db,
-			config: &redis.Config{
-				RedisCluster: redis.RedisClusterConfig{
+			config: &batch_service_redis.Config{
+				RedisCluster: batch_service_redis.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -829,8 +829,8 @@ func TestV6dMetadataServiceClientBatch(t *testing.T) {
 
 		client := &MetadataServiceClient{
 			redisClient: db,
-			config: &redis.Config{
-				RedisCluster: redis.RedisClusterConfig{
+			config: &batch_service_redis.Config{
+				RedisCluster: batch_service_redis.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         2,
 					MaxConcurrentBatches: 1, // Test with single concurrent batch
@@ -864,8 +864,8 @@ func TestV6dMetadataServiceClientBatch(t *testing.T) {
 
 		client := &MetadataServiceClient{
 			redisClient: db,
-			config: &redis.Config{
-				RedisCluster: redis.RedisClusterConfig{
+			config: &batch_service_redis.Config{
+				RedisCluster: batch_service_redis.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         3,
 					MaxConcurrentBatches: 2,
@@ -904,8 +904,8 @@ func TestV6dMetadataServiceClientBatch(t *testing.T) {
 
 		client := &MetadataServiceClient{
 			redisClient: db,
-			config: &redis.Config{
-				RedisCluster: redis.RedisClusterConfig{
+			config: &batch_service_redis.Config{
+				RedisCluster: batch_service_redis.RedisClusterConfig{
 					QueryTimeout:         5,
 					MaxBatchSize:         2,
 					MaxConcurrentBatches: 2,
@@ -989,8 +989,8 @@ func TestMetadataServiceClient_QueryPrefixHashHitKVSInstances_ParseIP(t *testing
 	db, mock := redismock.NewClusterMock()
 	client := &MetadataServiceClient{
 		redisClient: db,
-		config: &redis.Config{
-			RedisCluster: redis.RedisClusterConfig{
+		config: &batch_service_redis.Config{
+			RedisCluster: batch_service_redis.RedisClusterConfig{
 				QueryTimeout:         5,
 				MaxBatchSize:         500,
 				MaxConcurrentBatches: 10,
@@ -1020,8 +1020,8 @@ func TestMetadataServiceClient_BatchQueryPrefixHashHitKVSInstances_ParseIPAndMis
 
 	client := &MetadataServiceClient{
 		redisClient: db,
-		config: &redis.Config{
-			RedisCluster: redis.RedisClusterConfig{
+		config: &batch_service_redis.Config{
+			RedisCluster: batch_service_redis.RedisClusterConfig{
 				QueryTimeout:         5,
 				MaxBatchSize:         500,
 				MaxConcurrentBatches: 10,
@@ -1056,8 +1056,8 @@ func TestMetadataServiceClient_BatchQueryPrefixHashHitKVSInstances_TopN(t *testi
 
 	client := &MetadataServiceClient{
 		redisClient: db,
-		config: &redis.Config{
-			RedisCluster: redis.RedisClusterConfig{
+		config: &batch_service_redis.Config{
+			RedisCluster: batch_service_redis.RedisClusterConfig{
 				QueryTimeout:         5,
 				MaxBatchSize:         500,
 				MaxConcurrentBatches: 10,
@@ -1083,8 +1083,8 @@ func TestMetadataServiceClient_QueryPrefixHashHitKVSInstances_MissingKey(t *test
 	db, mock := redismock.NewClusterMock()
 	client := &MetadataServiceClient{
 		redisClient: db,
-		config: &redis.Config{
-			RedisCluster: redis.RedisClusterConfig{
+		config: &batch_service_redis.Config{
+			RedisCluster: batch_service_redis.RedisClusterConfig{
 				QueryTimeout:         5,
 				MaxBatchSize:         500,
 				MaxConcurrentBatches: 10,

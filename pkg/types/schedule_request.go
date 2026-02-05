@@ -10,11 +10,11 @@ const (
 	ScheduleModePDStaged ScheduleMode = "pd_staged"
 )
 
-type InferStage string
+type ScheduleStage string
 
 const (
-	InferStagePrefill InferStage = "prefill"
-	InferStageDecode  InferStage = "decode"
+	ScheduleStagePrefill ScheduleStage = "prefill"
+	ScheduleStageDecode  ScheduleStage = "decode"
 )
 
 type ScheduledResult []LLMInstance
@@ -41,11 +41,11 @@ func (sr ScheduledResult) GetInstanceByRole(role InferRole) *LLMInstance {
 
 type ScheduleRequest struct {
 	// Schedule information
-	Id           string       `json:"id"`
-	Model        string       `json:"model"`
-	GatewayId    string       `json:"gateway_id,omitempty"`
-	ScheduleMode ScheduleMode `json:"schedule_mode"`
-	InferStage   InferStage   `json:"infer_stage"`
+	Id            string        `json:"id"`
+	Model         string        `json:"model"`
+	GatewayId     string        `json:"gateway_id,omitempty"`
+	ScheduleMode  ScheduleMode  `json:"schedule_mode"`
+	ScheduleStage ScheduleStage `json:"schedule_stage"`
 
 	// LLM Prompt
 	PromptNumTokens int      `json:"prompt_num_tokens,omitempty"`
@@ -75,18 +75,18 @@ func (req *ScheduleRequest) String() string {
 		str += req.GatewayId
 	}
 
-	// Add schedule mode and infer stage
+	// Add schedule mode and schedule stage
 	if req.ScheduleMode != "" {
 		if len(str) > 0 {
 			str += " "
 		}
 		str += string(req.ScheduleMode)
 	}
-	if req.InferStage != "" {
+	if req.ScheduleStage != "" {
 		if len(str) > 0 {
 			str += "/"
 		}
-		str += string(req.InferStage)
+		str += string(req.ScheduleStage)
 	}
 
 	// Add prompt info (truncated if too long)

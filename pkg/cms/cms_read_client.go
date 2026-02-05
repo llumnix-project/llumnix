@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	LOG_INTERVAL_S = 10
+	LogIntervalS = 10
 )
 
 var (
@@ -235,7 +235,7 @@ func (c *CMSReadClient) refreshMetadataLoop() {
 		start := time.Now()
 		c.refreshInstanceMetadata()
 		elapsed := time.Since(start)
-		if time.Since(lastLogTime) > LOG_INTERVAL_S*time.Second {
+		if time.Since(lastLogTime) > LogIntervalS*time.Second {
 			klog.V(3).Infof("[refreshMetadataLoop] refreshInstanceMetadata took %v", elapsed)
 			lastLogTime = time.Now()
 		}
@@ -272,7 +272,7 @@ func (c *CMSReadClient) refreshStatusLoop() {
 		}
 		c.refreshInstanceStatus(needRecordMetrics)
 		elapsed := time.Since(start)
-		if time.Since(lastLogTime) > LOG_INTERVAL_S*time.Second {
+		if time.Since(lastLogTime) > LogIntervalS*time.Second {
 			klog.V(4).Infof("[refreshStatusLoop] refreshInstanceStatus took %v", elapsed)
 			lastLogTime = time.Now()
 		}

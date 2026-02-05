@@ -13,27 +13,27 @@ import (
 )
 
 func init() {
-	RegisterBackend(consts.SplitModeVllmKvt, func(scheduleMode types.ScheduleMode) (InferenceBackend, error) {
-		return NewPdSplitVllmKvtBackend(scheduleMode)
+	RegisterBackend(consts.PDDisaggProtocolVllmKvt, func(scheduleMode types.ScheduleMode) (InferenceBackend, error) {
+		return NewPDDisaggVllmKvtBackend(scheduleMode)
 	})
 }
 
-type PdSplitVllmKvtBackend struct {
+type PDDisaggVllmKvtBackend struct {
 	client       *http.Client
 	scheduleMode types.ScheduleMode
 }
 
-func NewPdSplitVllmKvtBackend(schMode types.ScheduleMode) (InferenceBackend, error) {
+func NewPDDisaggVllmKvtBackend(schMode types.ScheduleMode) (InferenceBackend, error) {
 	if schMode != types.ScheduleModePDBatch && schMode != types.ScheduleModePDStaged {
 		return nil, fmt.Errorf("unsupported schedule mode: %s", schMode)
 	}
-	return &PdSplitVllmKvtBackend{
+	return &PDDisaggVllmKvtBackend{
 		client:       NewLlmForwardClient(),
 		scheduleMode: schMode,
 	}, nil
 }
 
-func (b *PdSplitVllmKvtBackend) buildTransferParams(pInstance *types.LLMInstance) map[string]interface{} {
+func (b *PDDisaggVllmKvtBackend) buildTransferParams(pInstance *types.LLMInstance) map[string]interface{} {
 	p := map[string]interface{}{
 		"remote_host": pInstance.AuxIp,
 		"remote_port": pInstance.AuxPort,
@@ -44,7 +44,7 @@ func (b *PdSplitVllmKvtBackend) buildTransferParams(pInstance *types.LLMInstance
 	return p
 }
 
-func (b *PdSplitVllmKvtBackend) BatchScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
+func (b *PDDisaggVllmKvtBackend) BatchScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
 	pInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRolePrefill)
 	if pInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
@@ -73,7 +73,7 @@ func (b *PdSplitVllmKvtBackend) BatchScheduleStreamInference(req *types.RequestC
 	return chunkChan, nil
 }
 
-func (b *PdSplitVllmKvtBackend) buildPrefillRequestData(req *types.RequestContext) ([]byte, error) {
+func (b *PDDisaggVllmKvtBackend) buildPrefillRequestData(req *types.RequestContext) ([]byte, error) {
 	cmplReq := *(req.LLMRequest.CompletionRequest)
 	maxTokens := uint64(1)
 	cmplReq.MaxTokens = &maxTokens
@@ -84,7 +84,7 @@ func (b *PdSplitVllmKvtBackend) buildPrefillRequestData(req *types.RequestContex
 	return json.Marshal(cmplReq)
 }
 
-func (b *PdSplitVllmKvtBackend) doPrefill(req *types.RequestContext, pInstance *types.LLMInstance) error {
+func (b *PDDisaggVllmKvtBackend) doPrefill(req *types.RequestContext, pInstance *types.LLMInstance) error {
 	// build prefill request
 	data, err := b.buildPrefillRequestData(req)
 	if err != nil {
@@ -111,7 +111,7 @@ func (b *PdSplitVllmKvtBackend) doPrefill(req *types.RequestContext, pInstance *
 	return nil
 }
 
-func (b *PdSplitVllmKvtBackend) buildDecodeRequestData(req *types.RequestContext, instance *types.LLMInstance) ([]byte, error) {
+func (b *PDDisaggVllmKvtBackend) buildDecodeRequestData(req *types.RequestContext, instance *types.LLMInstance) ([]byte, error) {
 	cmplReq := req.LLMRequest.CompletionRequest
 	if cmplReq.KvTransferParams == nil {
 		cmplReq.KvTransferParams = make(map[string]interface{})
@@ -122,7 +122,7 @@ func (b *PdSplitVllmKvtBackend) buildDecodeRequestData(req *types.RequestContext
 	return json.Marshal(cmplReq)
 }
 
-func (b *PdSplitVllmKvtBackend) doDecode(
+func (b *PDDisaggVllmKvtBackend) doDecode(
 	req *types.RequestContext,
 	chunkChan chan StreamChunk,
 	pInstance *types.LLMInstance,
@@ -136,7 +136,7 @@ func (b *PdSplitVllmKvtBackend) doDecode(
 	StreamResponseFromBackend(req, b.client, data, dInstance, chunkChan)
 }
 
-func (b *PdSplitVllmKvtBackend) StagedScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
+func (b *PDDisaggVllmKvtBackend) StagedScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
 	pInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRolePrefill)
 	if pInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
@@ -175,7 +175,7 @@ func (b *PdSplitVllmKvtBackend) StagedScheduleStreamInference(req *types.Request
 
 // StreamInference implements InferBackend interface
 // Performs streaming inference by forwarding request to backend and streaming response chunks
-func (b *PdSplitVllmKvtBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
+func (b *PDDisaggVllmKvtBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
 	switch b.scheduleMode {
 	case types.ScheduleModePDBatch:
 		return b.BatchScheduleStreamInference(req)

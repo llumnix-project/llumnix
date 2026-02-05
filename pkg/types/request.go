@@ -58,15 +58,15 @@ func (req *RequestStats) OutputExceedMaxTokens() bool {
 }
 
 func Avg(itls []int64) int64 {
-	len := len(itls)
-	if len == 0 {
+	length := len(itls)
+	if length == 0 {
 		return 0
 	}
 	var sum int64
 	for _, itl := range itls {
 		sum += itl
 	}
-	return sum / int64(len)
+	return sum / int64(length)
 }
 
 func (m *RequestStats) TTFT() int64 {
@@ -192,7 +192,7 @@ type ScheduleContext struct {
 	ScheduleMode ScheduleMode
 
 	// inference stage, prefill or decode
-	InferStage InferStage
+	ScheduleStage ScheduleStage
 
 	// after the gateway obtains resources from the scheduler, it may return them. However,
 	// due to network partitioning between the gateway and scheduler, the gateway's address

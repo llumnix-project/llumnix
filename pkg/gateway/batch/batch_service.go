@@ -3,7 +3,7 @@ package batch
 import (
 	"context"
 	"llumnix/cmd/gateway/app/options"
-	"llumnix/pkg/gateway/batch/redis"
+	"llumnix/pkg/redis"
 	"os"
 	"strconv"
 	"strings"

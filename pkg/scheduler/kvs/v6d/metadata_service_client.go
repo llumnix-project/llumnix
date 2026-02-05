@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	batch_service_redis "llumnix/pkg/gateway/batch/redis"
+	batch_service_redis "llumnix/pkg/redis"
 	"strconv"
 	"strings"
 	"sync"

@@ -291,7 +291,7 @@ func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext) {
 }
 
 func (lgs *LlmGatewayService) scheduleMode() types.ScheduleMode {
-	if !lgs.config.IsPDSplitMode() {
+	if !lgs.config.IsPDDisagg() {
 		return types.ScheduleModeNormal
 	}
 	if lgs.config.SeparatePDSchedule {
@@ -316,7 +316,7 @@ func (lgs *LlmGatewayService) HandleOpenAIRequest(w http.ResponseWriter, r *http
 	// Set schedule mode based on configuration
 	scheduleMode := lgs.scheduleMode()
 	reqCtx.ScheduleCtx.ScheduleMode = scheduleMode
-	reqCtx.ScheduleCtx.InferStage = types.InferStagePrefill
+	reqCtx.ScheduleCtx.ScheduleStage = types.ScheduleStagePrefill
 	reqCtx.SetPDSeparateScheduleHooks(&PDSeparateScheduleHooks{balancer: lgs.balancer})
 	reqCtx.SetRequestStateManagementHooks(&RequestStateManagementHooks{gateway: lgs, balancer: lgs.balancer})
 
@@ -506,7 +506,7 @@ func (h *PDSeparateScheduleHooks) ScheduleDecode(req *types.RequestContext) (typ
 		klog.Warningf("request %s is not in staged schedule mode, decode does not need to be scheduled separately.", req.Id)
 		return nil, fmt.Errorf("not in staged schedule mode")
 	}
-	req.ScheduleCtx.InferStage = types.InferStageDecode
+	req.ScheduleCtx.ScheduleStage = types.ScheduleStageDecode
 	results, err := h.balancer.Get(req)
 	if err != nil {
 		return nil, err
@@ -530,7 +530,7 @@ func (h *RequestStateManagementHooks) OnPostPrefill(req *types.RequestContext) {
 		if pInstance != nil {
 			h.balancer.Release(req, pInstance)
 		}
-		req.ScheduleCtx.InferStage = types.InferStageDecode
+		req.ScheduleCtx.ScheduleStage = types.ScheduleStageDecode
 	}
 }
 

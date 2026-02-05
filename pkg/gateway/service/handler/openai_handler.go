@@ -61,7 +61,7 @@ func NewOpenAIHandler(config *options.GatewayConfig) (RequestHandler, error) {
 	}
 	postProcessor.Register(chunkProcessor)
 
-	name := config.PDSplitMode
+	name := config.PDDisaggProtocol
 	if name == "" {
 		name = "simple"
 	}

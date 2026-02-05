@@ -88,7 +88,7 @@ spec:
         - "load-balance"
         - "--tokenizer-path"
         - "/tokenizers/deepseek-ai/deepseek-moe-16b-base"
-        - "--pd-split-mode"
+        - "--pd-disagg-protocol"
         - "vllm-mooncake"
         - "--enable-full-mode-scheduling"
         - "True"

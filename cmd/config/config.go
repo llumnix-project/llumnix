@@ -92,17 +92,17 @@ func (c *RouteConfig) AddRouteConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.RouteConfigRaw, "route-config", "", "route config, include api key, base url, weight/prefix and fallback priority")
 }
 
-type PDSplitConfig struct {
-	// The configuration of pd split
+type PDDisaggConfig struct {
+	// The configuration of pd disaggregation
 	// LLM Gateway currently supports a variety of separate implementations of the prefill
 	// and decode phases, which can be distinguished by this configuration
-	PDSplitMode string
+	PDDisaggProtocol string
 	// separate scheduling for p and d or not
 	SeparatePDSchedule bool
 }
 
-func (c *PDSplitConfig) AddPDSplitConfigFlags(flags *pflag.FlagSet) {
-	flags.StringVar(&c.PDSplitMode, "pd-split-mode", "", "pd split mode, this configuration only takes effect under the pd-split policy, now support vllm-mooncake, vllm-kvt, sglang-mooncake")
+func (c *PDDisaggConfig) AddPDDisaggConfigFlags(flags *pflag.FlagSet) {
+	flags.StringVar(&c.PDDisaggProtocol, "pd-disagg-protocol", "", "pd disaggregation protocol, this configuration only takes effect under the pd-disagg policy, now support vllm-mooncake, vllm-kvt, sglang-mooncake")
 	flags.BoolVar(&c.SeparatePDSchedule, "separate-pd-schedule", false, "Specify whether to separate pd schedule")
 }
 
@@ -173,7 +173,7 @@ type FullModeScheduleConfig struct {
 	CmsPullStatusIntervalMs   int32
 	CmsPullMetadataIntervalMs int32
 
-	// KvsMetadataService
+	// Kvs
 	EnableCacheAwareScheduling             bool
 	KvsBackend                             string
 	KvsMetadataServiceConfigPath           string

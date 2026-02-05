@@ -14,27 +14,27 @@ import (
 )
 
 func init() {
-	RegisterBackend(consts.SplitModeSGlangMooncake, func(scheduleMode types.ScheduleMode) (InferenceBackend, error) {
-		return NewPdSplitSglMoonCakeBackend(scheduleMode)
+	RegisterBackend(consts.PDDisaggProtocolSGlangMooncake, func(scheduleMode types.ScheduleMode) (InferenceBackend, error) {
+		return NewPDDisaggSglMoonCakeBackend(scheduleMode)
 	})
 }
 
-type PdSplitSglMoonCakeBackend struct {
+type PDDisaggSglMoonCakeBackend struct {
 	client       *http.Client
 	scheduleMode types.ScheduleMode
 }
 
-func NewPdSplitSglMoonCakeBackend(schMode types.ScheduleMode) (InferenceBackend, error) {
+func NewPDDisaggSglMoonCakeBackend(schMode types.ScheduleMode) (InferenceBackend, error) {
 	if schMode != types.ScheduleModePDBatch {
 		return nil, fmt.Errorf("unsupported schedule mode: %s", schMode)
 	}
-	return &PdSplitSglMoonCakeBackend{
+	return &PDDisaggSglMoonCakeBackend{
 		client:       NewLlmForwardClient(),
 		scheduleMode: schMode,
 	}, nil
 }
 
-func (b *PdSplitSglMoonCakeBackend) buildRequestData(req *types.RequestContext, pInstance, dInstance *types.LLMInstance) ([]byte, error) {
+func (b *PDDisaggSglMoonCakeBackend) buildRequestData(req *types.RequestContext, pInstance, dInstance *types.LLMInstance) ([]byte, error) {
 	dpRank, dpSize := dInstance.DPRank, dInstance.DPSize
 	bootstrapRoom := rand.Intn(1<<63 - 1)
 	bootstrapRoom = bootstrapRoom/dpSize*dpSize + dpRank
@@ -46,7 +46,7 @@ func (b *PdSplitSglMoonCakeBackend) buildRequestData(req *types.RequestContext, 
 	return json.Marshal(cmplReq)
 }
 
-func (b *PdSplitSglMoonCakeBackend) requestDecodeResponse(req *types.RequestContext, data []byte, instance *types.LLMInstance) (io.ReadCloser, error) {
+func (b *PDDisaggSglMoonCakeBackend) requestDecodeResponse(req *types.RequestContext, data []byte, instance *types.LLMInstance) (io.ReadCloser, error) {
 	httpReq, err := MakeNewBackendRequest(req, data, instance)
 	if err != nil {
 		klog.Errorf("[%s] failed to make new backend request: %v", err, req.Id)
@@ -60,7 +60,7 @@ func (b *PdSplitSglMoonCakeBackend) requestDecodeResponse(req *types.RequestCont
 	return body, nil
 }
 
-func (b *PdSplitSglMoonCakeBackend) parallelRequestAndStream(req *types.RequestContext, body []byte, pInstance, dInstance *types.LLMInstance, chunkChan chan StreamChunk) {
+func (b *PDDisaggSglMoonCakeBackend) parallelRequestAndStream(req *types.RequestContext, body []byte, pInstance, dInstance *types.LLMInstance, chunkChan chan StreamChunk) {
 	var (
 		decodeResp  io.ReadCloser
 		prefillResp io.ReadCloser
@@ -105,7 +105,7 @@ func (b *PdSplitSglMoonCakeBackend) parallelRequestAndStream(req *types.RequestC
 	}
 }
 
-func (b *PdSplitSglMoonCakeBackend) BatchScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
+func (b *PDDisaggSglMoonCakeBackend) BatchScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
 	pInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRolePrefill)
 	if pInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
@@ -132,6 +132,6 @@ func (b *PdSplitSglMoonCakeBackend) BatchScheduleStreamInference(req *types.Requ
 
 // StreamInference implements InferBackend interface
 // Performs streaming inference by forwarding request to backend and streaming response chunks
-func (b *PdSplitSglMoonCakeBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
+func (b *PDDisaggSglMoonCakeBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
 	return b.BatchScheduleStreamInference(req)
 }

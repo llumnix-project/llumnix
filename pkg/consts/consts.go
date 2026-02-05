@@ -83,11 +83,11 @@ const (
 	RescheduleLoadBalanceScopeUnit    = "unit"
 )
 
-// different pd-split mode
+// different pd-disagg protocol
 const (
-	SplitModeVllmKvt        = "vllm-kvt"
-	SplitModeSGlangMooncake = "sglang-mooncake"
-	SplitModeVllmMooncake   = "vllm-mooncake"
+	PDDisaggProtocolVllmKvt        = "vllm-kvt"
+	PDDisaggProtocolSGlangMooncake = "sglang-mooncake"
+	PDDisaggProtocolVllmMooncake   = "vllm-mooncake"
 )
 
 // gateway support different discovery mode

@@ -471,8 +471,8 @@ func mergeToolCalls(toolCalls *[]protocol.ToolCall, exts []protocol.ToolCall) {
 			*toolCalls = append(*toolCalls, ext)
 		}
 		if ext.Function.Arguments != "" && len(*toolCalls) > 0 {
-			len := len(*toolCalls)
-			(*toolCalls)[len-1].Function.Arguments += ext.Function.Arguments
+			length := len(*toolCalls)
+			(*toolCalls)[length-1].Function.Arguments += ext.Function.Arguments
 		}
 	}
 }

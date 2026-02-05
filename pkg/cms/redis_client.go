@@ -3,7 +3,6 @@ package cms
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -75,15 +74,6 @@ func NewRedisClient(host string,
 	}
 
 	return nil, fmt.Errorf("failed to connect to Redis after %d attempts", connectRetryTimes)
-}
-
-// getEnv retrieves environment variable with default value
-func getEnv(key, defaultValue string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
-	}
-	return value
 }
 
 // Connect establishes Redis connection and tests connection status
