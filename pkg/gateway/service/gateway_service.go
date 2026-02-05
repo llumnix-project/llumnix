@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"llumnix/pkg/lrs"
 	"llumnix/pkg/metrics"
+	"strings"
 
 	"llumnix/cmd/gateway/app/options"
 	"net/http"
@@ -252,6 +254,9 @@ func (lgs *LlmGatewayService) writeResponseUntilDone(reqCtx *types.RequestContex
 func (lgs *LlmGatewayService) externalRouteRequest(reqCtx *types.RequestContext, dst *router.RouteEndpoint) {
 	originURL := reqCtx.HttpRequest.Request.URL.String()
 	url := dst.JoinURL(originURL)
+	// reset request body and content length
+	reqCtx.HttpRequest.Request.Body = io.NopCloser(strings.NewReader(reqCtx.LLMRequest.RawData))
+
 	SimpleHTTPProxy(lgs.simpleClient, url, reqCtx.HttpRequest.Writer, reqCtx.HttpRequest.Request)
 	reqCtx.HttpRequest.HeaderResponded = true
 	close(reqCtx.ResponseChan)
@@ -265,6 +270,8 @@ func (lgs *LlmGatewayService) externalRouteRequest(reqCtx *types.RequestContext,
 func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext) {
 	// If the router policy is enabled, the router will be used first.
 	dst, rType := lgs.router.Route(reqCtx)
+	klog.V(3).Infof("Request [%s] routed to %s (type: %s)", reqCtx.Id, dst, rType)
+
 	switch rType {
 	case router.RouteInternal:
 		// schedule the request

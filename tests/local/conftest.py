@@ -9,7 +9,7 @@ from modelscope import snapshot_download
 
 from utils import (wait_for_service, start_process, cleanup_processes,
                     get_redis_command, get_gateway_command, get_scheduler_command, 
-                    get_vllm_command, get_runtime_command, VLLM_BASE_PORT, LOG_DIR,
+                    get_vllm_command, get_discovery_command, VLLM_BASE_PORT, LOG_DIR,
                     NAMING_DIR, MODEL_PATH)
 
 
@@ -91,7 +91,7 @@ def vllm_servers(test_config: Dict[str, Any]) -> Generator[List[subprocess.Popen
             f"vllm_{cuda}.log")
         runtime_proc = start_process(
             f"Runtime-{cuda}",
-            get_runtime_command(role, VLLM_BASE_PORT + cuda),
+            get_discovery_command(role, VLLM_BASE_PORT + cuda),
             f"runtime_{cuda}.log")
         processes.extend([vllm_proc, runtime_proc])
 

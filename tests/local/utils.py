@@ -168,7 +168,7 @@ def get_vllm_command(
     return command
 
 
-def get_runtime_command(
+def get_discovery_command(
     role: str = "normal",
     port: int = 8000,
     dp_size_local: int = 1,
@@ -181,7 +181,6 @@ def get_runtime_command(
         f"--entrypoint_port {port} " 
         f"--kv_transfer_ip {get_ip()} "
         f"--kv_transfer_port {port+KVT_PORT_OFFSET} "
-        f"--role {role} "
         f"--dp_size_local {dp_size_local} "
         f"--redis_address 127.0.0.1 "
         f"--redis_port 6379 "
