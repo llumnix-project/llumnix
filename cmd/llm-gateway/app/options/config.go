@@ -108,9 +108,6 @@ type Config struct {
 	ReasoningParser  string
 	TokenizerMode    string
 
-	// enable token filter
-	EnableTokenFilter bool
-
 	// requests token reporter duration (seconds)
 	RequestsReporterDuration int
 
@@ -297,7 +294,6 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.ReasoningParser, "reasoning-parser", "", "reasoning parser type")
 	flags.StringVar(&c.TokenizerMode, "tokenizer-mode", "", "builtin tokenizer mode, support formatter or leave null as vllmv0")
 
-	flags.BoolVar(&c.EnableTokenFilter, "enable-token-filter", false, "Specify whether to enable token filter")
 	flags.IntVar(&c.RequestsReporterDuration, "requests-report-duration", 0, "Specify requests reporter duration")
 
 	// TODO(sunbiao.sun): remove
@@ -640,7 +636,6 @@ func (c *Config) printConfigSummary() {
 	logIfNotEmpty("  tool-call-parser: %s", c.ToolCallParser)
 	logIfNotEmpty("  reasoning-parser: %s", c.ReasoningParser)
 	logIfNotEmpty("  processor-type: %s", c.ProcessorType)
-	logIfNotEmpty("  enable-token-filter: %v", c.EnableTokenFilter)
 
 	// Prefix cache
 	klog.Infof("[Prefix Cache]")

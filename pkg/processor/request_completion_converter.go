@@ -33,26 +33,26 @@ func (rt *RequestCompletionConverter) applyTokenizerTemplate(req *types.RequestC
 		klog.Warningf("PreProcess chat messages failed: %v", err)
 		return nil, err
 	}
-	req.RequestStats.InputTokensLen = uint64(processedReq.PromptTokens)
+	req.LLMRequest.InputTokensLen = uint64(processedReq.PromptTokens)
 	defer processedReq.Free()
 	return processedReq.TokenIDs, nil
 }
 
 func (rt *RequestCompletionConverter) generateMaxTokens(req *types.RequestContext, maxTokens *int) int {
-	stats := req.RequestStats
+	llmReq := req.LLMRequest
 	max := 0
 	if maxTokens != nil {
 		max = *maxTokens
 	}
 
 	if max != 0 {
-		stats.MaxTokensLimit = uint64(max)
+		llmReq.MaxTokensLimit = uint64(max)
 	} else {
 		// the default max_tokens in /completions api is 16k, in /chat/completions is none (get from model config), so we define it as 16k if user not set
-		stats.MaxTokensLimit = defaultMaxTokens
+		llmReq.MaxTokensLimit = defaultMaxTokens
 	}
-	if stats.MaxTokensLimit > defaultMaxTokens {
-		return int(stats.MaxTokensLimit)
+	if llmReq.MaxTokensLimit > defaultMaxTokens {
+		return int(llmReq.MaxTokensLimit)
 	} else {
 		return defaultMaxTokens
 	}

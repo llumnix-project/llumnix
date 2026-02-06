@@ -212,25 +212,30 @@ func (ss *ScheduleService) handleRelease(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusOK)
 }
 
-// func (ss *ScheduleService) handleRequestReport(w http.ResponseWriter, r *http.Request) {
-// 	body, err := io.ReadAll(r.Body)
-// 	if err != nil {
-// 		klog.Errorf("io read err: %v", err)
-// 		return
-// 	}
+// handleReport accepts the request reported by the gateway
+// URL: /report
+func (ss *ScheduleService) handleReport(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		klog.Errorf("io read err: %v", err)
+		return
+	}
 
-// 	var reqDatas realtime_stats.ReqReportDataArray
-// 	if err := json.Unmarshal(body, &reqDatas); err != nil {
-// 		klog.Warningf("invalid return token: %s", body)
-// 		http.Error(w, "invalid return token", http.StatusBadRequest)
-// 		return
-// 	}
+	var reports lrs.RequestTokenStateArray
+	if err := json.Unmarshal(body, &reports); err != nil {
+		klog.Warningf("invalid report request: %s", body)
+		http.Error(w, "invalid report request", http.StatusBadRequest)
+		return
+	}
 
-// 	for _, reqData := range reqDatas {
-// 		resourceReq := realtime_stats.NewResourceRequest(reqData.Id, int64(reqData.TotalTokens), string(reqData.WorkerId), string(reqData.BorrowerId))
-// 		ss.realtimeStats.UpdateResourceRequest(reqData.InferMode, resourceReq)
-// 	}
-// }
+	for _, reqData := range reports {
+		reqState := lrs.NewRequestState(reqData.Id, int64(reqData.NumTokens), reqData.InstanceId, reqData.GatewayId)
+		err := ss.lrsClient.UpdateRequestState(reqData.InferMode, reqState)
+		if err != nil {
+			klog.Errorf("update request state failed: %v", err)
+		}
+	}
+}
 
 func (ss *ScheduleService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {

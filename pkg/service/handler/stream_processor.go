@@ -57,7 +57,6 @@ func NewStreamProcessor(parser ChunkParser, writer ChunkWriter) *StreamProcessor
 //
 // The actual parsing and writing logic is delegated to the injected strategy implementations.
 func (sp *StreamProcessor) ProcessStream(req *types.RequestContext, chunkChan <-chan StreamChunk) {
-	defer req.TriggerPostRequest()
 
 	isFirst := true
 	for chunk := range chunkChan {
@@ -65,10 +64,10 @@ func (sp *StreamProcessor) ProcessStream(req *types.RequestContext, chunkChan <-
 
 		// Track timing metrics: first chunk triggers prefill completion, subsequent chunks trigger decode
 		if isFirst {
-			req.TriggerPostPrefill()
+			req.TriggerPostPrefillStream()
 			isFirst = false
 		} else {
-			req.TriggerPostDecode()
+			req.TriggerPostDecodeStreamChunk()
 		}
 
 		// Handle unexpected streaming errors (early return for exception path)
@@ -114,7 +113,7 @@ func (sp *StreamProcessor) ProcessStream(req *types.RequestContext, chunkChan <-
 		}
 
 		// Check if maximum token limit has been reached
-		if req.RequestStats.OutputExceedMaxTokens() {
+		if req.OutputExceedMaxTokens() {
 			// Send final chunk to gracefully end the stream
 			if err := sp.writer.ProcessAndWriteChunk(req, true); err != nil {
 				klog.Errorf("failed to write final chunk: %v", err)

@@ -37,13 +37,6 @@ type RequestStats struct {
 	// now we can not get the tokens, so only record the ITL metric
 	ITLs []int64
 
-	InputTokensLen     uint64
-	OutputTokensLen    uint64
-	ReasoningTokensLen uint64
-	MaxTokensLimit     uint64 // max_tokens for content tokens len
-
-	HasToolCalls bool
-
 	// Current fallback attempt using the i-th config
 	FallbackAttempt int
 
@@ -51,13 +44,6 @@ type RequestStats struct {
 	RetryCount int
 
 	DefaultLabels metrics.Labels
-}
-
-func (req *RequestStats) OutputExceedMaxTokens() bool {
-	if req.MaxTokensLimit == 0 {
-		return false
-	}
-	return req.OutputTokensLen-req.ReasoningTokensLen >= req.MaxTokensLimit
 }
 
 func Avg(itls []int64) int64 {
@@ -164,6 +150,16 @@ type LLMRequest struct {
 	BufferChatResp           *protocol.ChatCompletionResponse
 	// The last chunk of the streaming response, only include finish reason and not include content.
 	LastChatStreamResp *protocol.ChatCompletionStreamResponse
+
+	// Length of tokens calculated by the tokenizer
+	InputTokensLen     uint64
+	OutputTokensLen    uint64
+	ReasoningTokensLen uint64
+
+	// max_tokens for content tokens len
+	MaxTokensLimit uint64
+
+	HasToolCalls bool
 }
 
 func (req *LLMRequest) setKvTransferParams(params map[string]interface{}) {
@@ -254,6 +250,75 @@ func (req *LLMRequest) inferenceStream() bool {
 	}
 }
 
+func (req *LLMRequest) getTotalTokenLen() uint64 {
+	switch req.BackendProtocol {
+	case protocol.OpenAICompletion:
+		if req.InputTokensLen != 0 {
+			return req.InputTokensLen + req.OutputTokensLen
+		} else {
+			usage := req.CompletionResponse.Usage
+			if usage != nil {
+				return usage.TotalTokens
+			}
+		}
+	case protocol.OpenAIChatCompletion:
+		stream := req.inferenceStream()
+		if stream {
+			usage := req.ChatCompletionStreamResponse.Usage
+			if usage != nil {
+				return usage.TotalTokens
+			}
+		} else {
+			usage := req.ChatCompletionResponse.Usage
+			if usage != nil {
+				return usage.TotalTokens
+			}
+		}
+	default:
+		klog.Warningf("Unsupported protocol: %s", req.Protocol)
+		return 0
+	}
+	return 0
+}
+
+func (req *LLMRequest) getInputTokenLen() uint64 {
+	switch req.BackendProtocol {
+	case protocol.OpenAICompletion:
+		if req.InputTokensLen != 0 {
+			return req.InputTokensLen
+		} else {
+			usage := req.CompletionResponse.Usage
+			if usage != nil {
+				return usage.PromptTokens
+			}
+		}
+	case protocol.OpenAIChatCompletion:
+		stream := req.inferenceStream()
+		if stream {
+			usage := req.ChatCompletionStreamResponse.Usage
+			if usage != nil {
+				return usage.PromptTokens
+			}
+		} else {
+			usage := req.ChatCompletionResponse.Usage
+			if usage != nil {
+				return usage.PromptTokens
+			}
+		}
+	default:
+		klog.Warningf("Unsupported protocol: %s", req.Protocol)
+		return 0
+	}
+	return 0
+}
+
+func (req *LLMRequest) outputExceedMaxTokens() bool {
+	if req.MaxTokensLimit == 0 {
+		return false
+	}
+	return req.OutputTokensLen-req.ReasoningTokensLen >= req.MaxTokensLimit
+}
+
 // Anthropic API Request
 type AnthropicRequest struct {
 	// raw request body data
@@ -287,25 +352,24 @@ func (req *AnthropicRequest) getPromptString() (string, error) {
 	return string(jsonData[0 : len(jsonData)-1]), nil
 }
 
-// RequestLifecycleHandler handles lifecycle events for a request.
-// It provides unified interface for scheduling and resource management across different stages.
-type RequestLifecycleHandler interface {
+// PDSeparateScheduler handles scheduling operations for different inference stages.
+type PDSeparateScheduler interface {
 	// ScheduleDecode schedules the request for decoding stage.
 	ScheduleDecode(req *RequestContext) (ScheduledResult, error)
+}
 
+// RequestLifecycleHooks provides callback hooks for request lifecycle events.
+// These hooks are triggered at specific stages during request processing.
+type RequestLifecycleHooks interface {
 	// OnPreRequest is called before the request is processed.
 	OnPreRequest(req *RequestContext)
-
 	// OnPostRequest is called after the entire request completes.
 	// Used for final resource cleanup.
 	OnPostRequest(req *RequestContext)
-
-	// OnPostPrefill and OnPostDecode are called when the backend inference is streaming
-	// OnPostPrefill is called after prefill stage completes.
-	OnPostPrefill(req *RequestContext)
-
-	// OnPostDecode is called after every decode chunk completes.
-	OnPostDecode(req *RequestContext)
+	// OnPostPrefillStream is called after prefill stage completes (streaming only).
+	OnPostPrefillStream(req *RequestContext)
+	// OnPostDecodeStreamChunk is called after every decode chunk completes (streaming only).
+	OnPostDecodeStreamChunk(req *RequestContext)
 }
 
 type ScheduleContext struct {
@@ -367,8 +431,10 @@ type RequestContext struct {
 	// Some information forwarded to a specific inference backend
 	ScheduleCtx *ScheduleContext
 
-	// Lifecycle handler for scheduling and resource management
-	lifecycleHandler RequestLifecycleHandler
+	// Scheduler for decode stage scheduling
+	pDSeparateScheduler PDSeparateScheduler
+	// Lifecycle hooks for request events
+	requestHooks RequestLifecycleHooks
 }
 
 func (req *RequestContext) ClientStream() bool {
@@ -494,6 +560,51 @@ func (req *RequestContext) GetRequestModel() string {
 	}
 }
 
+func (req *RequestContext) OutputExceedMaxTokens() bool {
+	switch req.RequestType {
+	case consts.OpenAIHandlerName:
+		return req.LLMRequest.outputExceedMaxTokens()
+	case consts.AnthropicHandlerName:
+		return false
+	default:
+		klog.Errorf("unsupported request type: %v to check if output exceeds max tokens", req.RequestType)
+		return false
+	}
+}
+
+func (req *RequestContext) GetInputTokenLen() uint64 {
+	switch req.RequestType {
+	case consts.OpenAIHandlerName:
+		return req.LLMRequest.getInputTokenLen()
+	case consts.AnthropicHandlerName:
+		usage := req.AnthropicRequest.OpenAIResponse.Usage
+		if usage != nil {
+			return usage.PromptTokens
+		}
+		return 0
+	default:
+		klog.Errorf("unsupported request type: %v to get input tokens len", req.RequestType)
+		return 0
+	}
+}
+
+func (req *RequestContext) GetTotalTokenLen() uint64 {
+	switch req.RequestType {
+	case consts.OpenAIHandlerName:
+		return req.LLMRequest.getTotalTokenLen()
+	case consts.AnthropicHandlerName:
+		usage := req.AnthropicRequest.OpenAIResponse.Usage
+		if usage != nil {
+			return usage.TotalTokens
+		} else {
+			return 0
+		}
+	default:
+		klog.Errorf("unsupported request type: %v to get response usage", req.RequestType)
+		return 0
+	}
+}
+
 // GetPromptTokens returns the prompt tokens of the request.
 func (req *RequestContext) GetPromptTokens() ([]uint32, error) {
 	if req.RequestType == consts.OpenAIHandlerName {
@@ -513,44 +624,49 @@ func (req *RequestContext) GetPromptString() (string, error) {
 	return "", fmt.Errorf("not support get prompt string")
 }
 
-// SetLifecycleHandler sets the lifecycle handler for the request.
-func (req *RequestContext) SetLifecycleHandler(handler RequestLifecycleHandler) {
-	req.lifecycleHandler = handler
+// SetScheduler sets the scheduler for decode stage scheduling.
+func (req *RequestContext) SetPDSeparateScheduler(scheduler PDSeparateScheduler) {
+	req.pDSeparateScheduler = scheduler
+}
+
+// SetLifecycleHooks sets the lifecycle hooks for the request.
+func (req *RequestContext) SetLifecycleHooks(hooks RequestLifecycleHooks) {
+	req.requestHooks = hooks
 }
 
 // ScheduleDecode schedules the request for decoding stage.
 func (req *RequestContext) ScheduleDecode() (ScheduledResult, error) {
-	if req.lifecycleHandler != nil {
-		return req.lifecycleHandler.ScheduleDecode(req)
+	if req.pDSeparateScheduler != nil {
+		return req.pDSeparateScheduler.ScheduleDecode(req)
 	}
 	return nil, nil
 }
 
-// TriggerPostPrefill triggers the post-prefill lifecycle hook.
-func (req *RequestContext) TriggerPostPrefill() {
-	if req.lifecycleHandler != nil {
-		req.lifecycleHandler.OnPostPrefill(req)
+// TriggerPostPrefillStream triggers the post-prefill stream lifecycle hook.
+func (req *RequestContext) TriggerPostPrefillStream() {
+	if req.requestHooks != nil {
+		req.requestHooks.OnPostPrefillStream(req)
 	}
 }
 
-// TriggerPostDecode triggers the post-decode lifecycle hook.
-func (req *RequestContext) TriggerPostDecode() {
-	if req.lifecycleHandler != nil {
-		req.lifecycleHandler.OnPostDecode(req)
+// TriggerPostDecodeStreamChunk triggers the post-decode stream chunk lifecycle hook.
+func (req *RequestContext) TriggerPostDecodeStreamChunk() {
+	if req.requestHooks != nil {
+		req.requestHooks.OnPostDecodeStreamChunk(req)
 	}
 }
 
 // TriggerPreRequest triggers the pre-request lifecycle hook.
 func (req *RequestContext) TriggerPreRequest() {
-	if req.lifecycleHandler != nil {
-		req.lifecycleHandler.OnPreRequest(req)
+	if req.requestHooks != nil {
+		req.requestHooks.OnPreRequest(req)
 	}
 }
 
 // TriggerPostRequest triggers the post-request lifecycle hook.
 func (req *RequestContext) TriggerPostRequest() {
-	if req.lifecycleHandler != nil {
-		req.lifecycleHandler.OnPostRequest(req)
+	if req.requestHooks != nil {
+		req.requestHooks.OnPostRequest(req)
 	}
 }
 

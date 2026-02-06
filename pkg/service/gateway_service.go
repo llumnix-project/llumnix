@@ -18,6 +18,7 @@ import (
 	"llm-gateway/pkg/consts"
 	balancer "llm-gateway/pkg/load-balancer"
 	"llm-gateway/pkg/logging"
+	"llm-gateway/pkg/lrs"
 	"llm-gateway/pkg/metrics"
 	"llm-gateway/pkg/resolver"
 	"llm-gateway/pkg/service/handler"
@@ -39,6 +40,9 @@ type LlmGatewayService struct {
 	openaiHandler    handler.RequestHandler
 	anthropicHandler handler.RequestHandler
 
+	// Request state tracker for tracking request states
+	reqStateTracker *lrs.RequestStateTracker
+	// Load balancer for distributing requests to backend services
 	balancer balancer.Balancer
 	// Service router for request routing and load balancing
 	router *router.ServiceRouter
@@ -69,6 +73,7 @@ func NewGatewayService(c *options.Config) *LlmGatewayService {
 		config:          c,
 		logInputEnabled: c.EnableLogInput,
 		simpleClient:    &http.Client{Timeout: 30 * time.Second},
+		reqStateTracker: lrs.NewRequestStateTracker(c),
 	}
 
 	// Create request buffer queue for traffic control and request scheduling
@@ -280,7 +285,9 @@ func (lgs *LlmGatewayService) externalRouteRequest(reqCtx *types.RequestContext,
 
 func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext, handler handler.RequestHandler) {
 	defer close(reqCtx.ResponseChan)
+	reqCtx.TriggerPreRequest()
 	handler.Handle(reqCtx)
+	reqCtx.TriggerPostRequest()
 }
 
 // dispatchRequest routes the request and dispatches it to appropriate handler
@@ -327,15 +334,17 @@ func (lgs *LlmGatewayService) scheduleMode() types.ScheduleMode {
 	}
 }
 
-// balancerLifecycleHandler implements the RequestLifecycleHandler interface using a balancer
-type balancerLifecycleHandler struct {
+// PDSeparateSchedulerImpl implements the PDSeparateScheduler interface using a balancer.
+// In PD-Separate (Prefill-Decode Separate) mode, prefill and decode stages run on different
+// workers. This scheduler handles the decode-stage scheduling after prefill completes.
+//
+// NOTE: Only effective when ScheduleMode is ScheduleModePDStaged.
+type PDSeparateSchedulerImpl struct {
 	balancer balancer.Balancer
-
-	lastTime time.Time
 }
 
 // ScheduleDecode schedules the request for decoding using the balancer
-func (h *balancerLifecycleHandler) ScheduleDecode(req *types.RequestContext) (types.ScheduledResult, error) {
+func (h *PDSeparateSchedulerImpl) ScheduleDecode(req *types.RequestContext) (types.ScheduledResult, error) {
 	if req.ScheduleCtx.ScheduleMode != types.ScheduleModePDStaged {
 		klog.Warningf("request %s is not in staged schedule mode, decode does not need to be scheduled separately.", req.Id)
 		return nil, fmt.Errorf("not in staged schedule mode")
@@ -350,34 +359,58 @@ func (h *balancerLifecycleHandler) ScheduleDecode(req *types.RequestContext) (ty
 	return results, nil
 }
 
-func (h *balancerLifecycleHandler) OnPreRequest(req *types.RequestContext) {
-	klog.V(3).Infof("[%s] Pre-request lifecycle hook triggered", req.Id)
-
+// RequestLifecycleHooksImpl implements the RequestLifecycleHooks interface using a balancer.
+type RequestLifecycleHooksImpl struct {
+	reqStateTracker *lrs.RequestStateTracker
+	balancer        balancer.Balancer
+	lastTime        time.Time
+	firstDecode     bool
 }
 
-// OnPostPrefill is called after prefill stage completes
+func (h *RequestLifecycleHooksImpl) OnPreRequest(req *types.RequestContext) {
+	klog.V(3).Infof("[%s] Pre-request hook triggered", req.Id)
+
+	// init state variables
+	h.firstDecode = true
+}
+
+// OnPostPrefillStream is called after prefill stage completes
 // Mainly used for resource cleanup or state transition after the prefill phase is completed
-func (h *balancerLifecycleHandler) OnPostPrefill(req *types.RequestContext) {
-	klog.V(3).Infof("[%s] Post-prefill lifecycle hook triggered", req.Id)
+func (h *RequestLifecycleHooksImpl) OnPostPrefillStream(req *types.RequestContext) {
+	klog.V(3).Infof("[%s] Post-prefill hook triggered", req.Id)
 	h.lastTime = time.Now()
 	req.RequestStats.FirstTime = h.lastTime
+
+	h.reqStateTracker.ReportPrefillComplete(req)
 
 	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
 	if pWorker != nil {
 		h.balancer.Release(req, pWorker)
 	}
+
 	req.ScheduleCtx.InferStage = types.InferStageDecode
 }
 
-func (h *balancerLifecycleHandler) OnPostDecode(req *types.RequestContext) {
-	klog.V(3).Infof("[%s] Post-decode lifecycle hook triggered", req.Id)
+func (h *RequestLifecycleHooksImpl) OnPostDecodeStreamChunk(req *types.RequestContext) {
+	klog.V(3).Infof("[%s] Post-decode hook triggered", req.Id)
 	req.RequestStats.ITLs = append(req.RequestStats.ITLs, time.Since(h.lastTime).Milliseconds())
 	h.lastTime = time.Now()
+
+	if h.firstDecode {
+		h.reqStateTracker.CreateRequestState(req)
+		h.firstDecode = false
+	} else {
+		h.reqStateTracker.UpdateRequestState(req)
+	}
 }
 
 // OnPostRequest is called after the entire request completes
-func (h *balancerLifecycleHandler) OnPostRequest(req *types.RequestContext) {
-	klog.V(3).Infof("[%s] Post-request lifecycle hook triggered", req.Id)
+func (h *RequestLifecycleHooksImpl) OnPostRequest(req *types.RequestContext) {
+	klog.V(3).Infof("[%s] Post-request hook triggered", req.Id)
+
+	// Delete request state after request completes
+	h.reqStateTracker.DeleteRequestState(req.Id)
+
 	// For non-PD mode, resources also need to be released at the end of the request.
 	nWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleNormal)
 	if nWorker != nil {
@@ -406,8 +439,11 @@ func (lgs *LlmGatewayService) HandleAPIEntry(w http.ResponseWriter, r *http.Requ
 	scheduleMode := lgs.scheduleMode()
 	reqCtx.ScheduleCtx.ScheduleMode = scheduleMode
 	reqCtx.ScheduleCtx.InferStage = types.InferStagePrefill
-	// Inject hooks for lifecycle of the request
-	reqCtx.SetLifecycleHandler(&balancerLifecycleHandler{balancer: lgs.balancer})
+	// Inject scheduler and hooks for lifecycle of the request
+	schedulerImpl := &PDSeparateSchedulerImpl{balancer: lgs.balancer}
+	reqCtx.SetPDSeparateScheduler(schedulerImpl)
+	hooksImpl := &RequestLifecycleHooksImpl{reqStateTracker: lgs.reqStateTracker, balancer: lgs.balancer}
+	reqCtx.SetLifecycleHooks(hooksImpl)
 	// Set request type based on handler name
 	reqCtx.RequestType = handler.Name()
 
@@ -583,15 +619,15 @@ func (lgs *LlmGatewayService) LogRequestAccess(req *types.RequestContext) {
 	workSize := int(lgs.numReqs.Load()) - queueSize - schSize // Requests being inferred
 
 	// Log detailed request completion information
-	logging.Logf("Request completed [%s] status:%d,method:%s,schedule:%s,url:%s;%s;input_tokens:%d,output_tokens:%d;queue:%d,sch:%d,work:%d;retry:%d,model:%s",
+	logging.Logf("Request completed [%s] status:%d,method:%s,schedule:%s,url:%s;%s;input_tokens:%d,total_tokens:%d;queue:%d,sch:%d,work:%d;retry:%d,model:%s",
 		req.Id,
 		httpReq.StatusCode,
 		httpReq.Request.Method,
 		req.ScheduleCtx.ScheduleResults.String(),
 		httpReq.Request.URL.String(),
 		stats.String(),
-		stats.InputTokensLen,
-		stats.OutputTokensLen,
+		req.GetInputTokenLen(),
+		req.GetTotalTokenLen(),
 		queueSize,
 		schSize,
 		workSize,

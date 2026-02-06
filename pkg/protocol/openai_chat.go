@@ -266,7 +266,8 @@ type StreamOptions struct {
 	// and the choices field will always be an empty array.
 	// All other chunks will also include a usage field, but with a null value.
 	IncludeUsage           bool `json:"include_usage"`
-	IncludeContinuousUsage bool `json:"include_continuous_usage,omitempty"`
+	IncludeContinuousUsage bool `json:"include_continuous_usage,omitempty"` // vllm
+	ContinuousUsageStats   bool `json:"continuous_usage_stats,omitempty"`   // sglang
 }
 
 type ToolType string

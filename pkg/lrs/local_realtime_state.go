@@ -56,7 +56,8 @@ type RequestState struct {
 	instanceId string
 	gatewayId  string
 
-	numTokens int64
+	numTokens        int64
+	prefillCompleted bool
 
 	updateTime time.Time
 }
@@ -114,6 +115,15 @@ func (iv *InstanceView) AllocateRequestState(reqState *RequestState) {
 	iv.numTokens += reqState.numTokens
 	klog.V(3).Infof("instance %s add request %s, request num tokens: %d, instance num tokens: %d",
 		reqState.instanceId, reqState.reqId, reqState.numTokens, iv.numTokens)
+}
+
+func (iv *InstanceView) MarkPrefillComplete(reqState *RequestState) {
+	innerReqState := iv.requestStates[reqState.reqId]
+	if innerReqState == nil {
+		return
+	}
+	innerReqState.prefillCompleted = true
+	klog.V(3).Infof("instance %s mark request %s prefill complete", reqState.instanceId, reqState.reqId)
 }
 
 func (iv *InstanceView) UpdateRequestState(reqState *RequestState) {
@@ -346,6 +356,29 @@ func (lrs *LocalRealtimeState) UpdateRequestState(reqState *RequestState) error 
 	}
 
 	lrs.instanceViews[reqState.instanceId].UpdateRequestState(reqState)
+	return nil
+}
+
+// MarkPrefillComplete marks the prefill phase of a resource request as complete.
+func (lrs *LocalRealtimeState) MarkPrefillComplete(reqState *RequestState) error {
+	if !lrs.requestExists(reqState.reqId) {
+		klog.Errorf("update request %s not exist.", reqState.reqId)
+		return consts.ErrorRequestNotExits
+	}
+
+	if !lrs.instanceExists(reqState.instanceId) {
+		klog.Warningf("update request %s scheduled instance %s not exist.",
+			reqState.reqId, reqState.instanceId)
+		return consts.ErrorEndpointNotFound
+	}
+
+	if !lrs.gatewayExists(reqState.gatewayId) {
+		klog.Warningf("update request %s created gateway %s not exist.",
+			reqState.reqId, reqState.gatewayId)
+		return consts.ErrorGatewayNotFound
+	}
+
+	lrs.instanceViews[reqState.instanceId].MarkPrefillComplete(reqState)
 	return nil
 }
 

@@ -128,6 +128,18 @@ func (lrsClient *LocalRealtimeStateClient) UpdateRequestState(inferMode string, 
 	return s.UpdateRequestState(request)
 }
 
+func (lrsClient *LocalRealtimeStateClient) MarkPrefillComplete(inferMode string, request *RequestState) error {
+	lrsClient.mu.Lock()
+	defer lrsClient.mu.Unlock()
+
+	s := lrsClient.getLocalRealtimeState(inferMode)
+	if s == nil {
+		return consts.ErrorNoMatchInferMode
+	}
+
+	return s.MarkPrefillComplete(request)
+}
+
 func (lrsClient *LocalRealtimeStateClient) ReleaseRequestState(inferMode string, request *RequestState) {
 	lrsClient.mu.Lock()
 	defer lrsClient.mu.Unlock()

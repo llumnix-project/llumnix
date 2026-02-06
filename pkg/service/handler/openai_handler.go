@@ -269,7 +269,6 @@ func (h *OpenAIHandler) handleStream(req *types.RequestContext) {
 	if err != nil {
 		klog.Errorf("failed to stream inference: %v", err)
 		WriteErrorResponse(req, err)
-		req.TriggerPostRequest()
 		return
 	}
 
