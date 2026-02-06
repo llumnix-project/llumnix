@@ -1,8 +1,10 @@
 package cms
 
 import (
+	"context"
 	"fmt"
 	"llumnix/pkg/metrics"
+	"llumnix/pkg/redis"
 	"llumnix/pkg/scheduler/predictor"
 	"math"
 	"strings"
@@ -82,7 +84,8 @@ type CMSReadClientInterface interface {
 
 // CMSReadClient provides CMS read operation interfaces
 type CMSReadClient struct {
-	redisClient RedisClientInterface
+	redisClient redis.RedisClient
+	ctx         context.Context
 
 	// BE CAREFUL when reading the data from outside CMSReadClient, e.g., from the scheduling policy.
 	// You MUST call cms.RLock() and defer cms.RUnlock() before reading the data.
@@ -144,7 +147,7 @@ func CreateOrGetClient(
 		return client, nil
 	}
 
-	redisClient, err := NewRedisClient(host, port, username, password, socketTimeout, retryTimes)
+	redisClient, err := redis.NewRedisStandaloneClientWithRetry(host, port, username, password, socketTimeout, retryTimes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Redis client: %w", err)
 	}
@@ -157,7 +160,7 @@ func CreateOrGetClient(
 }
 
 func NewCMSReadClient(
-	redisClient RedisClientInterface,
+	redisClient redis.RedisClient,
 	pullStatusIntervalMs int32,
 	pullMetadataIntervalMs int32,
 	allowConcurrentSchedule bool,
@@ -174,6 +177,7 @@ func NewCMSReadClient(
 
 	client := &CMSReadClient{
 		redisClient:                       redisClient,
+		ctx:                               context.Background(),
 		instanceIDsSet:                    sets.NewString(),
 		instanceMetadatas:                 make(map[string]*InstanceMetadata),
 		instanceStatuses:                  make(map[string]*InstanceStatus),
@@ -302,7 +306,7 @@ func (c *CMSReadClient) refreshInstanceMetadata() {
 	}()
 
 	// get instance ids
-	instanceIDsInRedis, err := c.redisClient.GetKeysByPrefix(LlumnixInstanceMetadataPrefix)
+	instanceIDsInRedis, err := c.redisClient.GetKeysByPrefix(c.ctx, LlumnixInstanceMetadataPrefix)
 	if err != nil {
 		c.Lock()
 		defer c.Unlock()
@@ -320,7 +324,7 @@ func (c *CMSReadClient) refreshInstanceMetadata() {
 	}
 
 	// get instance metadata
-	instanceMetadataBytesList, err := c.redisClient.MGetBytes(instanceIDsInRedis)
+	instanceMetadataBytesList, err := c.redisClient.MGetBytes(c.ctx, instanceIDsInRedis)
 	c.Lock()
 	defer c.Unlock()
 	if err != nil {
@@ -448,7 +452,7 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 	for i, instanceID := range c.instanceIDs {
 		redisKeys[i] = LlumnixInstanceStatusPrefix + instanceID
 	}
-	instanceStatusBytesList, err := c.redisClient.MGetBytes(redisKeys)
+	instanceStatusBytesList, err := c.redisClient.MGetBytes(c.ctx, redisKeys)
 	if err != nil {
 		c.isAlive = false
 		klog.Errorf("[refreshInstanceStatus] Error getting status: %v", err)

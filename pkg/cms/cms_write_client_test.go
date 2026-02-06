@@ -1,6 +1,7 @@
 package cms
 
 import (
+	"context"
 	"strconv"
 	"testing"
 	"time"
@@ -31,6 +32,7 @@ func genInstanceStatus(instanceID string) *InstanceStatus {
 func TestCMSWriteClient(t *testing.T) {
 	redisClient := getRedisClient(t)
 	cmsWriteClient, _ := NewCMSWriteClient(redisClient)
+	ctx := context.Background()
 	instanceID1 := genInstanceId(1)
 	instanceID2 := genInstanceId(2)
 
@@ -41,7 +43,7 @@ func TestCMSWriteClient(t *testing.T) {
 		t.Fatalf("Failed to add instance: %v", err)
 	}
 
-	val, _ := redisClient.Get(LlumnixInstanceMetadataPrefix + instanceID1)
+	val, _ := redisClient.Get(ctx, LlumnixInstanceMetadataPrefix+instanceID1)
 	data1, _ := proto.Marshal(instanceMetadata1)
 	if val != string(data1) {
 		t.Error("Instance metadata not found in redis or mismatch")
@@ -53,13 +55,13 @@ func TestCMSWriteClient(t *testing.T) {
 		t.Fatalf("Failed to add instance: %v", err)
 	}
 
-	val1, _ := redisClient.Get(LlumnixInstanceMetadataPrefix + instanceID1)
+	val1, _ := redisClient.Get(ctx, LlumnixInstanceMetadataPrefix+instanceID1)
 	data1, _ = proto.Marshal(instanceMetadata1)
 	if val1 != string(data1) {
 		t.Error("Instance metadata 1 not found in redis or mismatch")
 	}
 
-	val2, _ := redisClient.Get(LlumnixInstanceMetadataPrefix + instanceID2)
+	val2, _ := redisClient.Get(ctx, LlumnixInstanceMetadataPrefix+instanceID2)
 	data2, _ := proto.Marshal(instanceMetadata2)
 	if val2 != string(data2) {
 		t.Error("Instance metadata 2 not found in redis or mismatch")
@@ -72,7 +74,7 @@ func TestCMSWriteClient(t *testing.T) {
 		t.Fatalf("Failed to update instance metadata: %v", err)
 	}
 
-	val, _ = redisClient.Get(LlumnixInstanceMetadataPrefix + instanceID1)
+	val, _ = redisClient.Get(ctx, LlumnixInstanceMetadataPrefix+instanceID1)
 	dataNew1, _ := proto.Marshal(newInstanceMetadata1)
 	if val != string(dataNew1) {
 		t.Error("Updated instance metadata not found in redis or mismatch")
@@ -86,7 +88,7 @@ func TestCMSWriteClient(t *testing.T) {
 		t.Fatalf("Failed to update instance status: %v", err)
 	}
 
-	val, _ = redisClient.Get(LlumnixInstanceStatusPrefix + instanceID1)
+	val, _ = redisClient.Get(ctx, LlumnixInstanceStatusPrefix+instanceID1)
 	statusData1, _ := proto.Marshal(instanceStatus1)
 	if val != string(statusData1) {
 		t.Error("Instance status not found in redis or mismatch")
@@ -98,13 +100,13 @@ func TestCMSWriteClient(t *testing.T) {
 		t.Fatalf("Failed to update instance status: %v", err)
 	}
 
-	val1, _ = redisClient.Get(LlumnixInstanceStatusPrefix + instanceID1)
+	val1, _ = redisClient.Get(ctx, LlumnixInstanceStatusPrefix+instanceID1)
 	statusData1, _ = proto.Marshal(instanceStatus1)
 	if val1 != string(statusData1) {
 		t.Error("Instance status 1 not found in redis or mismatch")
 	}
 
-	val2, _ = redisClient.Get(LlumnixInstanceStatusPrefix + instanceID2)
+	val2, _ = redisClient.Get(ctx, LlumnixInstanceStatusPrefix+instanceID2)
 	statusData2, _ := proto.Marshal(instanceStatus2)
 	if val2 != string(statusData2) {
 		t.Error("Instance status 2 not found in redis or mismatch")
@@ -116,12 +118,12 @@ func TestCMSWriteClient(t *testing.T) {
 		t.Fatalf("Failed to remove instance: %v", err)
 	}
 
-	val, _ = redisClient.Get(LlumnixInstanceMetadataPrefix + instanceID1)
+	val, _ = redisClient.Get(ctx, LlumnixInstanceMetadataPrefix+instanceID1)
 	if val != "" {
 		t.Error("Instance metadata should be removed from redis")
 	}
 
-	val, _ = redisClient.Get(LlumnixInstanceStatusPrefix + instanceID2)
+	val, _ = redisClient.Get(ctx, LlumnixInstanceStatusPrefix+instanceID2)
 	statusData2, _ = proto.Marshal(instanceStatus2)
 	if val != string(statusData2) {
 		t.Error("Instance status 2 should still exist in redis")
@@ -132,12 +134,12 @@ func TestCMSWriteClient(t *testing.T) {
 		t.Fatalf("Failed to remove instance: %v", err)
 	}
 
-	val, _ = redisClient.Get(LlumnixInstanceMetadataPrefix + instanceID1)
+	val, _ = redisClient.Get(ctx, LlumnixInstanceMetadataPrefix+instanceID1)
 	if val != "" {
 		t.Error("Instance metadata should be removed from redis")
 	}
 
-	val, _ = redisClient.Get(LlumnixInstanceStatusPrefix + instanceID2)
+	val, _ = redisClient.Get(ctx, LlumnixInstanceStatusPrefix+instanceID2)
 	if val != "" {
 		t.Error("Instance status should be removed from redis")
 	}

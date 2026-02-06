@@ -3,7 +3,7 @@ package resolver
 import (
 	"context"
 	"fmt"
-	"llumnix/pkg/cms"
+	"llumnix/pkg/redis"
 	"llumnix/pkg/types"
 	"runtime/debug"
 	"strings"
@@ -24,7 +24,8 @@ type redisResolver struct {
 
 	watcher *Watcher
 
-	redisClient       *cms.RedisClient
+	redisClient       redis.RedisClient
+	ctx               context.Context
 	refreshIntervalMs int
 	statusTTLMs       int
 }
@@ -40,7 +41,7 @@ func newRedisResolver(
 	refreshIntervalMs int,
 	StatusTTLMs int) (*redisResolver, error) {
 
-	redisClient, err := cms.NewRedisClient(host, port, username, password, socketTimeout, retryTimes)
+	redisClient, err := redis.NewRedisStandaloneClientWithRetry(host, port, username, password, socketTimeout, retryTimes)
 	if err != nil {
 		return nil, err
 	}
@@ -48,6 +49,7 @@ func newRedisResolver(
 	r := &redisResolver{
 		role:              role,
 		redisClient:       redisClient,
+		ctx:               context.Background(),
 		watcher:           NewWatcher(),
 		refreshIntervalMs: refreshIntervalMs,
 		statusTTLMs:       StatusTTLMs,
@@ -88,13 +90,13 @@ func (r *redisResolver) refreshLoop() {
 }
 
 func (r *redisResolver) refresh() {
-	PodInRedis, err := r.redisClient.GetKeysByPrefix(LlumnixDiscovery)
+	PodInRedis, err := r.redisClient.GetKeysByPrefix(r.ctx, LlumnixDiscovery)
 	if err != nil {
 		klog.Fatalf("Error getting keys by prefix: %v", err)
 		return
 	}
 
-	PodInfos, err := r.redisClient.MGetBytes(PodInRedis)
+	PodInfos, err := r.redisClient.MGetBytes(r.ctx, PodInRedis)
 	if err != nil {
 		klog.Fatalf("Error getting instance metadata: %v", err)
 		return
@@ -116,7 +118,7 @@ func (r *redisResolver) refresh() {
 
 		if podInfo.TimestampMs < time.Now().UnixMilli()-int64(r.statusTTLMs) {
 			klog.Warningf("Pod info for %s is expired", podInfo.PodName)
-			r.redisClient.Remove(PodInRedis[idx])
+			r.redisClient.Del(r.ctx, PodInRedis[idx])
 			continue
 		}
 

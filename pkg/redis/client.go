@@ -8,7 +8,7 @@ import (
 // RedisClient defines the interface for Redis client operations
 type RedisClient interface {
 	// Set sets the value of a key
-	Set(ctx context.Context, key, value string, expiration time.Duration) error
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error
 
 	// HSet sets the value of one or more fields in a hash
 	HSet(ctx context.Context, key string, values map[string]string) error
@@ -21,6 +21,15 @@ type RedisClient interface {
 
 	// Get gets the value of a key
 	Get(ctx context.Context, key string) (string, error)
+
+	// GetBytes gets the value of a key as bytes
+	GetBytes(ctx context.Context, key string) ([]byte, error)
+
+	// MGetBytes gets the values of multiple keys as bytes
+	MGetBytes(ctx context.Context, keys []string) ([][]byte, error)
+
+	// GetKeysByPrefix gets all keys matching a prefix
+	GetKeysByPrefix(ctx context.Context, prefix string) ([]string, error)
 
 	// SAdd adds one or more members to a set
 	SAdd(ctx context.Context, key string, members ...any) error
