@@ -78,23 +78,19 @@ func newConfig() *options.SchedulerConfig {
 			EnableFullModeScheduling: true,
 		},
 		FullModeScheduleConfig: config.FullModeScheduleConfig{
-			CmsPullStatusIntervalMs:              500,
-			CmsPullMetadataIntervalMs:            1000,
-			DispatchTopK:                         1,
-			DispatchNeutralLoadMetric:            consts.SchedulingMetricKVCacheUsageRatioProjected,
-			DispatchNeutralLoadThreshold:         1.0,
-			DispatchPrefillLoadMetric:            consts.SchedulingMetricKVCacheUsageRatioProjected,
-			DispatchPrefillLoadThreshold:         1.0,
-			DispatchDecodeLoadMetric:             consts.SchedulingMetricKVCacheUsageRatioProjected,
-			DispatchDecodeLoadThreshold:          1.0,
-			DispatchPrefillAsDecodeLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
-			DispatchPrefillAsDecodeLoadThreshold: 1.0,
-			DispatchDecodeAsPrefillLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
-			DispatchDecodeAsPrefillLoadThreshold: 1.0,
-			FailoverScope:                        consts.FailoverScopeNodeUnit,
-			InstanceStalenessSeconds:             60,
-			DispatchPrefillCacheLocalityMetric:   consts.SchedulingMetricKVCacheHitLen,
-			EnableCacheAwareScheduling:           false,
+			CmsPullStatusIntervalMs:            500,
+			CmsPullMetadataIntervalMs:          1000,
+			DispatchTopK:                       1,
+			DispatchNeutralLoadMetric:          consts.SchedulingMetricKVCacheUsageRatioProjected,
+			DispatchNeutralLoadThreshold:       1.0,
+			DispatchPrefillLoadMetric:          consts.SchedulingMetricKVCacheUsageRatioProjected,
+			DispatchPrefillLoadThreshold:       1.0,
+			DispatchDecodeLoadMetric:           consts.SchedulingMetricKVCacheUsageRatioProjected,
+			DispatchDecodeLoadThreshold:        1.0,
+			FailoverScope:                      consts.FailoverScopeNodeUnit,
+			InstanceStalenessSeconds:           60,
+			DispatchPrefillCacheLocalityMetric: consts.SchedulingMetricKVCacheHitLen,
+			EnableCacheAwareScheduling:         false,
 		},
 	}
 }
@@ -151,12 +147,11 @@ func newDispatchPolicy(t *testing.T, config *options.SchedulerConfig, inferMode 
 	}
 
 	return DispatchPolicy{
-		c:                 config,
-		schedulePolicy:    config.SchedulePolicy,
-		cmsClient:         cmsReadClient,
-		kvsClient:         kvsClient,
-		policyInternal:    newDispatchPolicyInternal(config),
-		schedulePipelines: newSchedulerPipeline(config),
+		c:              config,
+		schedulePolicy: config.SchedulePolicy,
+		cmsClient:      cmsReadClient,
+		kvsClient:      kvsClient,
+		policyInternal: newDispatchPolicyInternal(config),
 	}
 }
 
@@ -379,238 +374,6 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 
 	result2 := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch}, clusterViewScheduling2)
 	assert.Empty(t, result2)
-}
-
-func TestDispatchPolicyScheduleAdaptivePD(t *testing.T) {
-	c := newConfig()
-	c.EnableAdaptivePD = true
-	policy := newDispatchPolicy(t, c, "prefill")
-
-	// No available P instances, choose D for prefill
-	instanceViews1 := map[string]*instanceViewScheduling{
-		"instance-prefill": {
-			cmsView: &cms.InstanceView{
-				Instance: &types.LLMInstance{
-					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
-					Role:     consts.PrefillInferMode,
-				},
-				Status: &cms.InstanceStatus{
-					InstanceId:                            "instance-prefill",
-					NumTotalGpuTokens:                     100,
-					NumUsedGpuTokens:                      30,
-					NumUncomputedTokensAllWaitingPrefills: 100,
-					Schedulable:                           true,
-					TimestampMs:                           time.Now().UnixMilli(),
-				},
-				Metadata: &cms.InstanceMetadata{
-					InstanceId:   "instance-prefill",
-					InstanceType: "prefill",
-				},
-			},
-			schedulingCtx: schedulingCtx{
-				metrics: map[string]instanceSchedulingMetric{},
-			},
-		},
-		"instance-decode": {
-			cmsView: &cms.InstanceView{
-				Instance: &types.LLMInstance{
-					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
-					Role:     consts.DecodeInferMode,
-				},
-				Status: &cms.InstanceStatus{
-					InstanceId:                            "instance-decode",
-					NumTotalGpuTokens:                     100,
-					NumUsedGpuTokens:                      40,
-					NumUncomputedTokensAllWaitingPrefills: 20,
-					Schedulable:                           true,
-					TimestampMs:                           time.Now().UnixMilli(),
-				},
-				Metadata: &cms.InstanceMetadata{
-					InstanceId:   "instance-decode",
-					InstanceType: "decode",
-				},
-			},
-			schedulingCtx: schedulingCtx{
-				metrics: map[string]instanceSchedulingMetric{},
-			},
-		},
-	}
-	for _, instance := range instanceViews1 {
-		instance.InstanceViewInterface = instance.cmsView
-	}
-
-	groupedInstanceViews1 := make(map[string]map[string]*instanceViewScheduling)
-	groupedInstanceViews1[consts.PrefillInferMode] = map[string]*instanceViewScheduling{
-		"instance-prefill": instanceViews1["instance-prefill"],
-	}
-	groupedInstanceViews1[consts.DecodeInferMode] = map[string]*instanceViewScheduling{
-		"instance-decode": instanceViews1["instance-decode"],
-	}
-
-	clusterViewScheduling1 := clusterViewScheduling{
-		groupedInstanceViews: groupedInstanceViews1,
-		instanceViews:        instanceViews1,
-	}
-
-	result := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch}, clusterViewScheduling1)
-	assert.Len(t, result, 2)
-	assert.Len(t, result[0], 1)
-	assert.Len(t, result[1], 1)
-	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.Host)
-	assert.Equal(t, 8002, result[0][0].GetInstance().Endpoint.Port) // Choose D for prefill
-	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.Host)
-	assert.Equal(t, 8002, result[1][0].GetInstance().Endpoint.Port) // Choose D for decode
-
-	// No available P instances, No available D instances, fallback to P for prefill
-	// No available P instances, No available D instances, fallback to D for decode
-	instanceViews2 := map[string]*instanceViewScheduling{
-		"instance-prefill": {
-			cmsView: &cms.InstanceView{
-				Instance: &types.LLMInstance{
-					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
-					Role:     consts.PrefillInferMode,
-				},
-				Status: &cms.InstanceStatus{
-					InstanceId:                            "instance-prefill",
-					NumTotalGpuTokens:                     100,
-					NumUsedGpuTokens:                      30,
-					NumUncomputedTokensAllWaitingPrefills: 100,
-					Schedulable:                           true,
-					TimestampMs:                           time.Now().UnixMilli(),
-				},
-				Metadata: &cms.InstanceMetadata{
-					InstanceId:   "instance-prefill",
-					InstanceType: "prefill",
-				},
-			},
-			schedulingCtx: schedulingCtx{
-				metrics: map[string]instanceSchedulingMetric{},
-			},
-		},
-		"instance-decode": {
-			cmsView: &cms.InstanceView{
-				Instance: &types.LLMInstance{
-					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
-					Role:     consts.DecodeInferMode,
-				},
-				Status: &cms.InstanceStatus{
-					InstanceId:                            "instance-decode",
-					NumTotalGpuTokens:                     100,
-					NumUsedGpuTokens:                      40,
-					NumUncomputedTokensAllWaitingPrefills: 100,
-					Schedulable:                           true,
-					TimestampMs:                           time.Now().UnixMilli(),
-				},
-				Metadata: &cms.InstanceMetadata{
-					InstanceId:   "instance-decode",
-					InstanceType: "decode",
-				},
-			},
-			schedulingCtx: schedulingCtx{
-				metrics: map[string]instanceSchedulingMetric{},
-			},
-		},
-	}
-	for _, instance := range instanceViews2 {
-		instance.InstanceViewInterface = instance.cmsView
-	}
-
-	groupedInstanceViews2 := make(map[string]map[string]*instanceViewScheduling)
-	groupedInstanceViews2[consts.PrefillInferMode] = map[string]*instanceViewScheduling{
-		"instance-prefill": instanceViews2["instance-prefill"],
-	}
-	groupedInstanceViews2[consts.DecodeInferMode] = map[string]*instanceViewScheduling{
-		"instance-decode": instanceViews2["instance-decode"],
-	}
-
-	clusterViewScheduling2 := clusterViewScheduling{
-		groupedInstanceViews: groupedInstanceViews2,
-		instanceViews:        instanceViews2,
-	}
-
-	result = policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch}, clusterViewScheduling2)
-	assert.Len(t, result, 2)
-	assert.Len(t, result[0], 1)
-	assert.Len(t, result[1], 1)
-	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.Host)
-	assert.Equal(t, 8001, result[0][0].GetInstance().Endpoint.Port) // Fallback to P for prefill
-	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.Host)
-	assert.Equal(t, 8002, result[1][0].GetInstance().Endpoint.Port) // Fallback to D for decode
-
-	// No available D instances, choose P for decode
-	instanceViews3 := map[string]*instanceViewScheduling{
-		"instance-prefill": {
-			cmsView: &cms.InstanceView{
-				Instance: &types.LLMInstance{
-					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
-					Role:     consts.PrefillInferMode,
-				},
-				Status: &cms.InstanceStatus{
-					InstanceId:                            "instance-prefill",
-					NumTotalGpuTokens:                     100,
-					NumUsedGpuTokens:                      30,
-					NumUncomputedTokensAllWaitingPrefills: 10,
-					Schedulable:                           true,
-					TimestampMs:                           time.Now().UnixMilli(),
-				},
-				Metadata: &cms.InstanceMetadata{
-					InstanceId:   "instance-prefill",
-					InstanceType: "prefill",
-				},
-			},
-			schedulingCtx: schedulingCtx{
-				metrics: map[string]instanceSchedulingMetric{},
-			},
-		},
-		"instance-decode": {
-			cmsView: &cms.InstanceView{
-				Instance: &types.LLMInstance{
-					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
-					Role:     consts.DecodeInferMode,
-				},
-				Status: &cms.InstanceStatus{
-					InstanceId:                            "instance-decode",
-					NumTotalGpuTokens:                     100,
-					NumUsedGpuTokens:                      40,
-					NumUncomputedTokensAllWaitingPrefills: 100,
-					Schedulable:                           true,
-					TimestampMs:                           time.Now().UnixMilli(),
-				},
-				Metadata: &cms.InstanceMetadata{
-					InstanceId:   "instance-decode",
-					InstanceType: "decode",
-				},
-			},
-			schedulingCtx: schedulingCtx{
-				metrics: map[string]instanceSchedulingMetric{},
-			},
-		},
-	}
-	for _, instance := range instanceViews3 {
-		instance.InstanceViewInterface = instance.cmsView
-	}
-
-	groupedInstanceViews3 := make(map[string]map[string]*instanceViewScheduling)
-	groupedInstanceViews3[consts.PrefillInferMode] = map[string]*instanceViewScheduling{
-		"instance-prefill": instanceViews3["instance-prefill"],
-	}
-	groupedInstanceViews3[consts.DecodeInferMode] = map[string]*instanceViewScheduling{
-		"instance-decode": instanceViews3["instance-decode"],
-	}
-
-	clusterViewScheduling3 := clusterViewScheduling{
-		groupedInstanceViews: groupedInstanceViews3,
-		instanceViews:        instanceViews3,
-	}
-
-	result = policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch}, clusterViewScheduling3)
-	assert.Len(t, result, 2)
-	assert.Len(t, result[0], 1)
-	assert.Len(t, result[1], 1)
-	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.Host)
-	assert.Equal(t, 8001, result[0][0].GetInstance().Endpoint.Port) // Choose P for prefill
-	assert.Equal(t, "127.0.0.1", result[1][0].GetInstance().Endpoint.Host)
-	assert.Equal(t, 8001, result[1][0].GetInstance().Endpoint.Port) // Choose P for decode
 }
 
 func TestCacheAwareSchedulingSchedulePD(t *testing.T) {

@@ -40,23 +40,19 @@ func newLoadBalanceDispatchFullMode(p *options.SchedulerConfig) *loadBalanceDisp
 						failoverScope: p.FailoverScope,
 					},
 				},
-				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.PrefillInstanceType: {
-						&schedulabilityFilter{},
-						&stalenessFilter{
-							instanceStalenessSeconds: p.InstanceStalenessSeconds,
-						},
-						&metricBasedFilter{
-							metricName: p.DispatchPrefillLoadMetric,
-							threshold:  p.DispatchPrefillLoadThreshold,
-						},
+				singleInstanceFilters: []singleInstanceFilter{
+					&schedulabilityFilter{},
+					&stalenessFilter{
+						instanceStalenessSeconds: p.InstanceStalenessSeconds,
+					},
+					&metricBasedFilter{
+						metricName: p.DispatchPrefillLoadMetric,
+						threshold:  p.DispatchPrefillLoadThreshold,
 					},
 				},
-				selectors: map[string]dispatchSelector{
-					consts.PrefillInstanceType: &metricBasedSelector{
-						topK:        p.DispatchTopK,
-						metricNames: []string{p.DispatchPrefillLoadMetric},
-					},
+				selectors: &metricBasedSelector{
+					topK:        p.DispatchTopK,
+					metricNames: []string{p.DispatchPrefillLoadMetric},
 				},
 			},
 			consts.DecodeInferMode: {
@@ -68,23 +64,19 @@ func newLoadBalanceDispatchFullMode(p *options.SchedulerConfig) *loadBalanceDisp
 						failoverScope: p.FailoverScope,
 					},
 				},
-				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.DecodeInstanceType: {
-						&schedulabilityFilter{},
-						&stalenessFilter{
-							instanceStalenessSeconds: p.InstanceStalenessSeconds,
-						},
-						&metricBasedFilter{
-							metricName: p.DispatchDecodeLoadMetric,
-							threshold:  p.DispatchDecodeLoadThreshold,
-						},
+				singleInstanceFilters: []singleInstanceFilter{
+					&schedulabilityFilter{},
+					&stalenessFilter{
+						instanceStalenessSeconds: p.InstanceStalenessSeconds,
+					},
+					&metricBasedFilter{
+						metricName: p.DispatchDecodeLoadMetric,
+						threshold:  p.DispatchDecodeLoadThreshold,
 					},
 				},
-				selectors: map[string]dispatchSelector{
-					consts.DecodeInstanceType: &metricBasedSelector{
-						topK:        p.DispatchTopK,
-						metricNames: []string{p.DispatchDecodeLoadMetric},
-					},
+				selectors: &metricBasedSelector{
+					topK:        p.DispatchTopK,
+					metricNames: []string{p.DispatchDecodeLoadMetric},
 				},
 			},
 			consts.NormalInferMode: {
@@ -96,84 +88,34 @@ func newLoadBalanceDispatchFullMode(p *options.SchedulerConfig) *loadBalanceDisp
 						failoverScope: p.FailoverScope,
 					},
 				},
-				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.NeutralInstanceType: {
-						&schedulabilityFilter{},
-						&stalenessFilter{
-							instanceStalenessSeconds: p.InstanceStalenessSeconds,
-						},
-						&metricBasedFilter{
-							metricName: p.DispatchNeutralLoadMetric,
-							threshold:  p.DispatchNeutralLoadThreshold,
-						},
+				singleInstanceFilters: []singleInstanceFilter{
+					&schedulabilityFilter{},
+					&stalenessFilter{
+						instanceStalenessSeconds: p.InstanceStalenessSeconds,
+					},
+					&metricBasedFilter{
+						metricName: p.DispatchNeutralLoadMetric,
+						threshold:  p.DispatchNeutralLoadThreshold,
 					},
 				},
-				selectors: map[string]dispatchSelector{
-					consts.NeutralInstanceType: &metricBasedSelector{
-						topK:        p.DispatchTopK,
-						metricNames: []string{p.DispatchNeutralLoadMetric},
-					},
+				selectors: &metricBasedSelector{
+					topK:        p.DispatchTopK,
+					metricNames: []string{p.DispatchNeutralLoadMetric},
 				},
 			},
 		},
-	}
-
-	if p.EnableAdaptivePD {
-		prefillInferModeMetrics := policy.baseDispatchPolicy[consts.PrefillInferMode].metrics
-		if _, ok := prefillInferModeMetrics[p.DispatchDecodeAsPrefillLoadMetric]; !ok {
-			prefillInferModeMetrics[p.DispatchDecodeAsPrefillLoadMetric] =
-				getSchedulingMetric(p, p.DispatchDecodeAsPrefillLoadMetric)
-		}
-		policy.baseDispatchPolicy[consts.PrefillInferMode].singleInstanceFilters[consts.DecodeInstanceType] =
-			[]singleInstanceFilter{
-				&schedulabilityFilter{},
-				&stalenessFilter{
-					instanceStalenessSeconds: p.InstanceStalenessSeconds,
-				},
-				&metricBasedFilter{
-					metricName: p.DispatchDecodeAsPrefillLoadMetric,
-					threshold:  p.DispatchDecodeAsPrefillLoadThreshold,
-				},
-			}
-		policy.baseDispatchPolicy[consts.PrefillInferMode].selectors[consts.DecodeInstanceType] =
-			&metricBasedSelector{
-				topK:        p.DispatchTopK,
-				metricNames: []string{p.DispatchDecodeAsPrefillLoadMetric},
-			}
-
-		decodeInferModeMetrics := policy.baseDispatchPolicy[consts.DecodeInferMode].metrics
-		if _, ok := decodeInferModeMetrics[p.DispatchPrefillAsDecodeLoadMetric]; !ok {
-			decodeInferModeMetrics[p.DispatchPrefillAsDecodeLoadMetric] =
-				getSchedulingMetric(p, p.DispatchPrefillAsDecodeLoadMetric)
-		}
-		policy.baseDispatchPolicy[consts.DecodeInferMode].singleInstanceFilters[consts.PrefillInstanceType] =
-			[]singleInstanceFilter{
-				&schedulabilityFilter{},
-				&stalenessFilter{
-					instanceStalenessSeconds: p.InstanceStalenessSeconds,
-				},
-				&metricBasedFilter{
-					metricName: p.DispatchPrefillAsDecodeLoadMetric,
-					threshold:  p.DispatchPrefillAsDecodeLoadThreshold,
-				},
-			}
-		policy.baseDispatchPolicy[consts.DecodeInferMode].selectors[consts.PrefillInstanceType] =
-			&metricBasedSelector{
-				topK:        p.DispatchTopK,
-				metricNames: []string{p.DispatchPrefillAsDecodeLoadMetric},
-			}
 	}
 
 	// Placed the cache locality metric as the first metric to be used in the metric-based selector
 	if p.EnableCacheAwareScheduling {
 		prefillInferModeMetrics := policy.baseDispatchPolicy[consts.PrefillInferMode].metrics
 		prefillInferModeMetrics[p.DispatchPrefillCacheLocalityMetric] = getSchedulingMetric(p, p.DispatchPrefillCacheLocalityMetric)
-		prefillInstanceSelector := policy.baseDispatchPolicy[consts.PrefillInferMode].selectors[consts.PrefillInstanceType].(*metricBasedSelector)
+		prefillInstanceSelector := policy.baseDispatchPolicy[consts.PrefillInferMode].selectors.(*metricBasedSelector)
 		prefillInstanceSelector.metricNames = append([]string{p.DispatchPrefillCacheLocalityMetric}, prefillInstanceSelector.metricNames...)
 
 		normalInferModeMetrics := policy.baseDispatchPolicy[consts.NormalInferMode].metrics
 		normalInferModeMetrics[p.DispatchPrefillCacheLocalityMetric] = getSchedulingMetric(p, p.DispatchPrefillCacheLocalityMetric)
-		neutralInstanceSelector := policy.baseDispatchPolicy[consts.NormalInferMode].selectors[consts.NeutralInstanceType].(*metricBasedSelector)
+		neutralInstanceSelector := policy.baseDispatchPolicy[consts.NormalInferMode].selectors.(*metricBasedSelector)
 		neutralInstanceSelector.metricNames = append([]string{p.DispatchPrefillCacheLocalityMetric}, neutralInstanceSelector.metricNames...)
 	}
 
@@ -195,17 +137,13 @@ func newFloodDispatchPolicyFullMode(p *options.SchedulerConfig) *floodDispatchPo
 						failoverScope: p.FailoverScope,
 					},
 				},
-				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.PrefillInstanceType: {
-						&schedulabilityFilter{},
-						&stalenessFilter{
-							instanceStalenessSeconds: p.InstanceStalenessSeconds,
-						},
+				singleInstanceFilters: []singleInstanceFilter{
+					&schedulabilityFilter{},
+					&stalenessFilter{
+						instanceStalenessSeconds: p.InstanceStalenessSeconds,
 					},
 				},
-				selectors: map[string]dispatchSelector{
-					consts.PrefillInstanceType: &fixedPreferenceSelector{},
-				},
+				selectors: &fixedPreferenceSelector{},
 			},
 			consts.DecodeInferMode: {
 				metrics: map[string]func() instanceSchedulingMetric{},
@@ -214,17 +152,13 @@ func newFloodDispatchPolicyFullMode(p *options.SchedulerConfig) *floodDispatchPo
 						failoverScope: p.FailoverScope,
 					},
 				},
-				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.DecodeInstanceType: {
-						&schedulabilityFilter{},
-						&stalenessFilter{
-							instanceStalenessSeconds: p.InstanceStalenessSeconds,
-						},
+				singleInstanceFilters: []singleInstanceFilter{
+					&schedulabilityFilter{},
+					&stalenessFilter{
+						instanceStalenessSeconds: p.InstanceStalenessSeconds,
 					},
 				},
-				selectors: map[string]dispatchSelector{
-					consts.DecodeInstanceType: &fixedPreferenceSelector{},
-				},
+				selectors: &fixedPreferenceSelector{},
 			},
 			consts.NormalInferMode: {
 				metrics: map[string]func() instanceSchedulingMetric{},
@@ -233,17 +167,13 @@ func newFloodDispatchPolicyFullMode(p *options.SchedulerConfig) *floodDispatchPo
 						failoverScope: p.FailoverScope,
 					},
 				},
-				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.NeutralInstanceType: {
-						&schedulabilityFilter{},
-						&stalenessFilter{
-							instanceStalenessSeconds: p.InstanceStalenessSeconds,
-						},
+				singleInstanceFilters: []singleInstanceFilter{
+					&schedulabilityFilter{},
+					&stalenessFilter{
+						instanceStalenessSeconds: p.InstanceStalenessSeconds,
 					},
 				},
-				selectors: map[string]dispatchSelector{
-					consts.NeutralInstanceType: &fixedPreferenceSelector{},
-				},
+				selectors: &fixedPreferenceSelector{},
 			},
 		},
 	}
@@ -267,19 +197,15 @@ func newLoadBalanceDispatchLiteMode(p *options.SchedulerConfig) *loadBalanceDisp
 					p.DispatchPrefillLoadMetric: getSchedulingMetric(p, p.DispatchPrefillLoadMetric),
 				},
 				globalFilters: []globalFilter{},
-				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.PrefillInstanceType: {
-						&metricBasedFilter{
-							metricName: p.DispatchPrefillLoadMetric,
-							threshold:  p.DispatchPrefillLoadThreshold,
-						},
+				singleInstanceFilters: []singleInstanceFilter{
+					&metricBasedFilter{
+						metricName: p.DispatchPrefillLoadMetric,
+						threshold:  p.DispatchPrefillLoadThreshold,
 					},
 				},
-				selectors: map[string]dispatchSelector{
-					consts.PrefillInstanceType: &metricBasedSelector{
-						topK:        p.DispatchTopK,
-						metricNames: []string{p.DispatchPrefillLoadMetric},
-					},
+				selectors: &metricBasedSelector{
+					topK:        p.DispatchTopK,
+					metricNames: []string{p.DispatchPrefillLoadMetric},
 				},
 			},
 			consts.DecodeInferMode: {
@@ -287,19 +213,15 @@ func newLoadBalanceDispatchLiteMode(p *options.SchedulerConfig) *loadBalanceDisp
 					p.DispatchDecodeLoadMetric: getSchedulingMetric(p, p.DispatchDecodeLoadMetric),
 				},
 				globalFilters: []globalFilter{},
-				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.DecodeInstanceType: {
-						&metricBasedFilter{
-							metricName: p.DispatchDecodeLoadMetric,
-							threshold:  p.DispatchDecodeLoadThreshold,
-						},
+				singleInstanceFilters: []singleInstanceFilter{
+					&metricBasedFilter{
+						metricName: p.DispatchDecodeLoadMetric,
+						threshold:  p.DispatchDecodeLoadThreshold,
 					},
 				},
-				selectors: map[string]dispatchSelector{
-					consts.DecodeInstanceType: &metricBasedSelector{
-						topK:        p.DispatchTopK,
-						metricNames: []string{p.DispatchDecodeLoadMetric},
-					},
+				selectors: &metricBasedSelector{
+					topK:        p.DispatchTopK,
+					metricNames: []string{p.DispatchDecodeLoadMetric},
 				},
 			},
 			consts.NormalInferMode: {
@@ -307,19 +229,15 @@ func newLoadBalanceDispatchLiteMode(p *options.SchedulerConfig) *loadBalanceDisp
 					p.DispatchNeutralLoadMetric: getSchedulingMetric(p, p.DispatchNeutralLoadMetric),
 				},
 				globalFilters: []globalFilter{},
-				singleInstanceFilters: map[string][]singleInstanceFilter{
-					consts.NeutralInstanceType: {
-						&metricBasedFilter{
-							metricName: p.DispatchNeutralLoadMetric,
-							threshold:  p.DispatchNeutralLoadThreshold,
-						},
+				singleInstanceFilters: []singleInstanceFilter{
+					&metricBasedFilter{
+						metricName: p.DispatchNeutralLoadMetric,
+						threshold:  p.DispatchNeutralLoadThreshold,
 					},
 				},
-				selectors: map[string]dispatchSelector{
-					consts.NeutralInstanceType: &metricBasedSelector{
-						topK:        p.DispatchTopK,
-						metricNames: []string{p.DispatchNeutralLoadMetric},
-					},
+				selectors: &metricBasedSelector{
+					topK:        p.DispatchTopK,
+					metricNames: []string{p.DispatchNeutralLoadMetric},
 				},
 			},
 		},
