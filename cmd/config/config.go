@@ -205,13 +205,18 @@ type FullModeScheduleConfig struct {
 	MaxNumBatchedTokens                 int
 	NumPredictorWarmupSamples           int
 
+	// Slo
+	TtftProfilingDataPath       string
+	TpotProfilingDataPath       string
+	TtftSlo                     float32
+	TtftSloDispatchThreshold    float32
+	TpotSlo                     float32
+	TpotSloDispatchThreshold    float32
+	TpotMigrateOutCeilThreshold float32
+
 	// Adaptive PD
-	EnableAdaptivePD                     bool
-	DispatchPrefillAsDecodeLoadMetric    string
-	DispatchPrefillAsDecodeLoadThreshold float32
-	DispatchDecodeAsPrefillLoadMetric    string
-	DispatchDecodeAsPrefillLoadThreshold float32
-	DecodeComputeBoundBatchSize          int32
+	EnableAdaptivePD             bool
+	TpotMigrateOutFloorThreshold float32
 
 	// filter
 	FailoverScope            string
@@ -282,12 +287,14 @@ func (c *FullModeScheduleConfig) AddFullModeScheduleConfigFlags(flags *pflag.Fla
 	flags.IntVar(&c.MaxNumBatchedTokens, "max-num-batched-tokens", consts.DefaultMaxNumBatchedTokens, "Llumnix max num batched tokens")
 	flags.IntVar(&c.NumPredictorWarmupSamples, "num-predictor-warmup-samples", consts.DefaultNumPredictorWarmupSamples, "Llumnix num predictor warmup samples")
 
+	flags.Float32Var(&c.TtftSlo, "ttft-slo", consts.DefaultTtftSlo, "Llumnix ttft slo")
+	flags.Float32Var(&c.TtftSloDispatchThreshold, "ttft-slo-dispatch-threshold", consts.DefaultTtftSloDispatchThreshold, "Llumnix ttft slo dispatch threshold")
+	flags.Float32Var(&c.TpotSlo, "tpot-slo", consts.DefaultTpotSlo, "Llumnix tpot slo")
+	flags.Float32Var(&c.TpotSloDispatchThreshold, "tpot-slo-dispatch-threshold", consts.DefaultTpotSloDispatchThreshold, "Llumnix tpot slo dispatch threshold")
+	flags.Float32Var(&c.TpotMigrateOutCeilThreshold, "tpot-migrate-out-ceil-threshold", consts.DefaultTpotMigrateOutCeilThreshold, "Llumnix tpot migrate out ceil threshold")
+
 	flags.BoolVar(&c.EnableAdaptivePD, "enable-adaptive-pd", consts.DefaultEnableAdaptivePD, "Llumnix enable adaptive pd")
-	flags.StringVar(&c.DispatchPrefillAsDecodeLoadMetric, "dispatch-prefill-as-decode-load-metric", consts.DefaultDispatchPrefillAsDecodeLoadMetric, "Llumnix dispatch prefill as decode load metric")
-	flags.Float32Var(&c.DispatchPrefillAsDecodeLoadThreshold, "dispatch-prefill-as-decode-load-threshold", consts.DefaultDispatchPrefillAsDecodeLoadThreshold, "Llumnix dispatch prefill as decode load threshold")
-	flags.StringVar(&c.DispatchDecodeAsPrefillLoadMetric, "dispatch-decode-as-prefill-load-metric", consts.DefaultDispatchDecodeAsPrefillLoadMetric, "Llumnix dispatch decode as prefill load metric")
-	flags.Float32Var(&c.DispatchDecodeAsPrefillLoadThreshold, "dispatch-decode-as-prefill-load-threshold", consts.DefaultDispatchDecodeAsPrefillLoadThreshold, "Llumnix dispatch decode as prefill load threshold")
-	flags.Int32Var(&c.DecodeComputeBoundBatchSize, "decode-compute-bound-batch-size", consts.DefaultDecodeComputeBoundBatchSize, "Llumnix decode compute bound batch size for adaptive decode batch size metric")
+	flags.Float32Var(&c.TpotMigrateOutFloorThreshold, "tpot-migrate-out-floor-threshold", consts.DefaultTpotMigrateOutFloorThreshold, "Llumnix tpot migrate out floor threshold")
 
 	flags.StringVar(&c.FailoverScope, "failover-scope", consts.DefaultFailoverScope, "Llumnix failover scope")
 	flags.Int64Var(&c.InstanceStalenessSeconds, "instance-staleness-seconds", consts.DefaultInstanceStalenessSeconds, "Llumnix instance staleness seconds")

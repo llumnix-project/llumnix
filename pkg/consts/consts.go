@@ -47,7 +47,6 @@ const (
 	SchedulingMetricAllPrefillsTokensNum           = "all_prefills_tokens_num"
 	SchedulingMetricKVCacheHitLen                  = "kv_cache_hit_len"
 	SchedulingMetricCacheAwareAllPrefillsTokensNum = "cache_aware_all_prefills_tokens_num"
-	SchedulingMetricAdaptiveDecodeBatchSize        = "adaptive_decode_batch_size"
 	SchedulingMetricNumRequests                    = "num_requests"
 	SchedulingMetricAllDecodesTokensNum            = "all_decodes_tokens_num"
 	SchedulingMetricNumTokens                      = "num_tokens"
@@ -154,13 +153,15 @@ const (
 	DefaultMaxNumBatchedTokens                 = 65536
 	DefaultNumPredictorWarmupSamples           = 20
 
+	DefaultTtftSlo                     = 20000
+	DefaultTpotSlo                     = 125
+	DefaultTtftSloDispatchThreshold    = 0.85
+	DefaultTpotSloDispatchThreshold    = 0.85
+	DefaultTpotMigrateOutCeilThreshold = 0.95
+
 	// Adaptive PD defaults
-	DefaultEnableAdaptivePD                     = false
-	DefaultDispatchPrefillAsDecodeLoadMetric    = SchedulingMetricAdaptiveDecodeBatchSize
-	DefaultDispatchPrefillAsDecodeLoadThreshold = 256.0
-	DefaultDispatchDecodeAsPrefillLoadMetric    = SchedulingMetricKVCacheUsageRatioProjected
-	DefaultDispatchDecodeAsPrefillLoadThreshold = 1.0
-	DefaultDecodeComputeBoundBatchSize          = 128
+	DefaultEnableAdaptivePD             = false
+	DefaultTpotMigrateOutFloorThreshold = 0.50
 
 	// Filter defaults
 	DefaultFailoverScope            = FailoverScopeInstanceUnit

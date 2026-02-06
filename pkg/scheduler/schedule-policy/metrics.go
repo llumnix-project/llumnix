@@ -96,23 +96,6 @@ func getSchedulingMetric(p *options.SchedulerConfig, metricName string) func() i
 				},
 			}
 		}
-	case consts.SchedulingMetricAdaptiveDecodeBatchSize:
-		klog.V(3).Infof(
-			"Creating AdaptiveDecodeBatchSize metric factory with decodeComputeBoundBatchSize: %d",
-			p.DecodeComputeBoundBatchSize)
-		return func() instanceSchedulingMetric {
-			return &adaptiveDecodeBatchSize{
-				baseMetric: baseMetric{
-					name: consts.SchedulingMetricAdaptiveDecodeBatchSize,
-				},
-				decodeBatchSizeMetric: decodeBatchSize{
-					baseMetric: baseMetric{
-						name: consts.SchedulingMetricDecodeBatchSize,
-					},
-				},
-				decodeComputeBoundBatchSize: p.DecodeComputeBoundBatchSize,
-			}
-		}
 	case consts.SchedulingMetricNumRequests:
 		klog.V(3).Infof("Creating NumRequests metric factory")
 		return func() instanceSchedulingMetric {
@@ -380,43 +363,6 @@ func (cpb *CacheAwareAllPrefillsTokensNum) ValueLess(value float32) bool {
 
 func (cpb *CacheAwareAllPrefillsTokensNum) Less(metric instanceSchedulingMetric) bool {
 	return cpb.value < metric.GetValue()
-}
-
-type adaptiveDecodeBatchSize struct {
-	baseMetric
-	decodeBatchSizeMetric       decodeBatchSize
-	decodeComputeBoundBatchSize int32
-}
-
-func (adbs *adaptiveDecodeBatchSize) Calculate(instanceView *instanceViewScheduling) {
-	adbs.decodeBatchSizeMetric.Calculate(instanceView)
-	decodeBatchSize := int32(adbs.decodeBatchSizeMetric.GetValue())
-	if decodeBatchSize >= adbs.decodeComputeBoundBatchSize {
-		adbs.value = float32(decodeBatchSize)
-		klog.V(3).Infof("Instance %s AdaptiveDecodeBatchSize: "+
-			"decodeBatchSize:%d >= computeBoundBatchSize:%d, using actual decodeBatchSize: %f",
-			instanceView.GetInstanceId(),
-			decodeBatchSize,
-			adbs.decodeComputeBoundBatchSize,
-			adbs.value)
-	} else {
-		adbs.value = float32(
-			adbs.decodeComputeBoundBatchSize - decodeBatchSize)
-		klog.V(3).Infof("Instance %s AdaptiveDecodeBatchSize: "+
-			"decodeBatchSize:%d < computeBoundBatchSize:%d, using difference between them: %f",
-			instanceView.GetInstanceId(),
-			decodeBatchSize,
-			adbs.decodeComputeBoundBatchSize,
-			adbs.value)
-	}
-}
-
-func (adbs *adaptiveDecodeBatchSize) Less(metric instanceSchedulingMetric) bool {
-	return adbs.value < metric.GetValue()
-}
-
-func (adbs *adaptiveDecodeBatchSize) ValueLess(value float32) bool {
-	return adbs.value < value
 }
 
 type allDecodesTokensNum struct {

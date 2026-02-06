@@ -77,9 +77,7 @@ func newReschedulePolicy(c *options.SchedulerConfig) *ReschedulePolicy {
 	}
 	polices := strings.Split(c.ReschedulePolicies, ",")
 	if c.EnableAdaptivePD {
-		polices = append(polices, consts.ReschedulePolicyCleanUpDecodeRequestsOnPrefill)
-		polices = append(polices, consts.ReschedulePolicyAggregateDecodeRequestsOnPrefill)
-		polices = append(polices, consts.ReschedulePolicyEaseBusyDecodeWithFreePrefill)
+		panic("AdaptivePD is not supported yet")
 	}
 	for _, policy := range polices {
 		rp.policies = append(rp.policies, newReschedulePolicyInternal(c, policy))

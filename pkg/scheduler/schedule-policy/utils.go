@@ -74,8 +74,7 @@ func verifyDispatchLoadMetric(c *options.SchedulerConfig) {
 		consts.SchedulingMetricKVCacheUsageRatioProjected, consts.SchedulingMetricDecodeBatchSize,
 		consts.SchedulingMetricNumWaitingRequests, consts.SchedulingMetricAllPrefillsTokensNum,
 		consts.SchedulingMetricKVCacheHitLen, consts.SchedulingMetricCacheAwareAllPrefillsTokensNum,
-		consts.SchedulingMetricAdaptiveDecodeBatchSize, consts.SchedulingMetricNumRequests,
-		consts.SchedulingMetricAllDecodesTokensNum)
+		consts.SchedulingMetricNumRequests, consts.SchedulingMetricAllDecodesTokensNum)
 
 	if !c.EnableFullModeScheduling {
 		if !liteModeSchedulingMetricSet.Has(c.DispatchNeutralLoadMetric) {
