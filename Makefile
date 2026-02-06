@@ -64,6 +64,10 @@ scheduler-build: scheduler-proto-build
 discovery-proto-build:
 	cd ./python/discovery && make proto
 
+.PHONY: llumlet-proto-build
+llumlet-proto-build:
+	cd ./python/llumnix && make proto
+
 .PHONY: discovery-install
 discovery-install:
 	cd ./python/discovery && make install
@@ -89,7 +93,7 @@ benchmark-tests: discovery-proto-build gateway-build scheduler-build
 	PYTHONPATH=$(shell pwd) pytest -x -v -s ./tests/local/vllm_benchmark.py::test_benchmark
 
 .PHONY: e2e-test
-e2e-test: discovery-proto-build gateway-build scheduler-build simple-tests migration-tests
+e2e-test: llumlet-proto-build discovery-proto-build gateway-build scheduler-build simple-tests migration-tests
 
 TEST_DIRS := $(shell go list ./pkg/... | grep -v "/kvs/v6d" | grep -v "/kvs/mooncake")
 
