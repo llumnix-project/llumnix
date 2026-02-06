@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"k8s.io/klog/v2"
 )
 
 type RedisStandaloneClient struct {
@@ -29,8 +30,59 @@ func NewRedisStandaloneClient(addr string, username string, password string, ret
 	}
 }
 
+// NewRedisStandaloneClientWithRetry creates a new Redis standalone client with connection retry logic
+func NewRedisStandaloneClientWithRetry(
+	host string,
+	port string,
+	username string,
+	password string,
+	socketTimeout float64,
+	retryTimes int) (RedisClient, error) {
+	addr := host + ":" + port
+
+	// Create Redis client
+	options := &redis.Options{
+		Addr:         addr,
+		ReadTimeout:  time.Duration(socketTimeout * float64(time.Second)),
+		WriteTimeout: time.Duration(socketTimeout * float64(time.Second)),
+		MaxRetries:   retryTimes,
+		PoolSize:     10,
+		MinIdleConns: 5,
+	}
+
+	if username != "" {
+		options.Username = username
+	}
+
+	if password != "" {
+		options.Password = password
+	}
+
+	rdb := redis.NewClient(options)
+
+	// Test connection immediately after creation
+	connectRetryTimes := 3
+	ctx := context.Background()
+
+	for i := 0; i < connectRetryTimes; i++ {
+		klog.V(2).Infof("connecting to Redis at %s, %d/%d attempts", addr, i+1, connectRetryTimes)
+		if _, err := rdb.Ping(ctx).Result(); err != nil {
+			klog.V(2).Infof("failed to connect to Redis: %v", err)
+			if i < connectRetryTimes-1 {
+				time.Sleep(time.Duration(3) * time.Second)
+			}
+			continue
+		}
+		return &RedisStandaloneClient{
+			client: rdb,
+		}, nil
+	}
+
+	return nil, fmt.Errorf("failed to connect to Redis after %d attempts", connectRetryTimes)
+}
+
 // Set sets the value of a key
-func (r *RedisStandaloneClient) Set(ctx context.Context, key, value string, expiration time.Duration) error {
+func (r *RedisStandaloneClient) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
 	return r.client.Set(ctx, key, value, expiration).Err()
 }
 
@@ -87,6 +139,38 @@ func (r *RedisStandaloneClient) Get(ctx context.Context, key string) (string, er
 	return r.client.Get(ctx, key).Result()
 }
 
+// GetBytes gets the value of a key as bytes
+func (r *RedisStandaloneClient) GetBytes(ctx context.Context, key string) ([]byte, error) {
+	return r.client.Get(ctx, key).Bytes()
+}
+
+// MGetBytes gets the values of multiple keys as bytes
+func (r *RedisStandaloneClient) MGetBytes(ctx context.Context, keys []string) ([][]byte, error) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	results, err := r.client.MGet(ctx, keys...).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	byteResults := make([][]byte, len(results))
+	for i, result := range results {
+		if result == nil {
+			byteResults[i] = nil
+			continue
+		}
+
+		if str, ok := result.(string); ok {
+			byteResults[i] = []byte(str)
+		} else {
+			byteResults[i] = []byte(fmt.Sprintf("%v", result))
+		}
+	}
+
+	return byteResults, nil
+}
+
 // SAdd adds one or more members to a set
 func (r *RedisStandaloneClient) SAdd(ctx context.Context, key string, members ...any) error {
 	return r.client.SAdd(ctx, key, members...).Err()
@@ -120,6 +204,19 @@ func (r *RedisStandaloneClient) SetNX(ctx context.Context, key, value string, ex
 // Del deletes one or more keys
 func (r *RedisStandaloneClient) Del(ctx context.Context, keys ...string) error {
 	return r.client.Del(ctx, keys...).Err()
+}
+
+// GetKeysByPrefix gets all keys matching a prefix
+func (r *RedisStandaloneClient) GetKeysByPrefix(ctx context.Context, prefix string) ([]string, error) {
+	var keys []string
+	iter := r.client.Scan(ctx, 0, prefix+"*", 0).Iterator()
+	for iter.Next(ctx) {
+		keys = append(keys, iter.Val())
+	}
+	if err := iter.Err(); err != nil {
+		return nil, err
+	}
+	return keys, nil
 }
 
 // Eval executes a Lua script

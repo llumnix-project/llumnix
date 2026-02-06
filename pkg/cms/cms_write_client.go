@@ -1,7 +1,10 @@
 package cms
 
 import (
+	"context"
 	"fmt"
+
+	"llumnix/pkg/redis"
 
 	"google.golang.org/protobuf/proto"
 	"k8s.io/klog/v2"
@@ -14,11 +17,12 @@ const (
 
 // CMSWriteClient provides CMS write operation interfaces
 type CMSWriteClient struct {
-	redisClient RedisClientInterface
+	redisClient redis.RedisClient
+	ctx         context.Context
 }
 
 // NewCMSWriteClient creates a new CMS write client instance
-func NewCMSWriteClient(redisClient RedisClientInterface) (*CMSWriteClient, error) {
+func NewCMSWriteClient(redisClient redis.RedisClient) (*CMSWriteClient, error) {
 	if redisClient == nil {
 		return nil, fmt.Errorf("CMS redis client cannot be nil")
 	}
@@ -26,6 +30,7 @@ func NewCMSWriteClient(redisClient RedisClientInterface) (*CMSWriteClient, error
 	klog.Info("CMSWriteClient initialized")
 	return &CMSWriteClient{
 		redisClient: redisClient,
+		ctx:         context.Background(),
 	}, nil
 }
 
@@ -37,7 +42,7 @@ func (c *CMSWriteClient) AddInstance(instanceID string, instanceMetadata *Instan
 	if err != nil {
 		return err
 	}
-	return c.redisClient.Set(key, value)
+	return c.redisClient.Set(c.ctx, key, value, 0)
 }
 
 // UpdateInstanceMetadata updates instance metadata
@@ -47,7 +52,7 @@ func (c *CMSWriteClient) UpdateInstanceMetadata(instanceID string, instanceMetad
 	if err != nil {
 		return err
 	}
-	return c.redisClient.Set(key, value)
+	return c.redisClient.Set(c.ctx, key, value, 0)
 }
 
 // UpdateInstanceStatus updates instance status
@@ -57,16 +62,16 @@ func (c *CMSWriteClient) UpdateInstanceStatus(instanceID string, instanceStatus 
 	if err != nil {
 		return err
 	}
-	return c.redisClient.Set(key, value)
+	return c.redisClient.Set(c.ctx, key, value, 0)
 }
 
 // RemoveInstance removes an instance and its metadata/status
 func (c *CMSWriteClient) RemoveInstance(instanceID string) error {
 	klog.Infof("Removing instance: %s", instanceID)
 	// remove metadata
-	err1 := c.redisClient.Remove(LlumnixInstanceMetadataPrefix + instanceID)
+	err1 := c.redisClient.Del(c.ctx, LlumnixInstanceMetadataPrefix+instanceID)
 	// remove status
-	err2 := c.redisClient.Remove(LlumnixInstanceStatusPrefix + instanceID)
+	err2 := c.redisClient.Del(c.ctx, LlumnixInstanceStatusPrefix+instanceID)
 
 	if err1 != nil {
 		return err1

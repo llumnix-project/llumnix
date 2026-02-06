@@ -1,8 +1,7 @@
 package schedule_policy
 
 import (
-	"fmt"
-	"log"
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -11,108 +10,42 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 
 	"llumnix/cmd/config"
-	"llumnix/pkg/cms"
 	"llumnix/cmd/scheduler/app/options"
-	"llumnix/pkg/scheduler/kvs"
+	"llumnix/pkg/cms"
 	"llumnix/pkg/consts"
+	"llumnix/pkg/redis"
+	"llumnix/pkg/scheduler/kvs"
 	"llumnix/pkg/types"
 )
 
-type MockRedisClient struct {
-	data map[string]string
-}
-
-func NewMockRedisClient() *MockRedisClient {
-	log.Printf("New MockRedisClient")
-	return &MockRedisClient{
-		data: make(map[string]string),
-	}
-}
-
-func (m *MockRedisClient) Set(key string, value interface{}) error {
-	// Check the type of value and handle accordingly
-	switch v := value.(type) {
-	case string:
-		m.data[key] = v
-	case []byte:
-		// Convert bytes to string for storage
-		m.data[key] = string(v)
-	default:
-		// For other types, convert to string representation
-		m.data[key] = fmt.Sprintf("%v", v)
-	}
-	return nil
-}
-
-func (m *MockRedisClient) Get(key string) (string, error) {
-	if val, exists := m.data[key]; exists {
-		return val, nil
-	}
-	return "", nil
-}
-
-func (m *MockRedisClient) GetBytes(key string) ([]byte, error) {
-	if val, exists := m.data[key]; exists {
-		return []byte(val), nil
-	}
-	return nil, nil
-}
-
-func (m *MockRedisClient) Remove(key string) error {
-	delete(m.data, key)
-	return nil
-}
-
-func (m *MockRedisClient) MGetBytes(keys []string) ([][]byte, error) {
-	res := make([][]byte, len(keys))
-	for i, key := range keys {
-		val, err := m.Get(key)
-		if err != nil || val == "" {
-			res[i] = nil
-		} else {
-			res[i] = []byte(val)
-		}
-	}
-	return res, nil
-}
-
-func (m *MockRedisClient) GetKeysByPrefix(prefix string) ([]string, error) {
-	keys := make([]string, 0)
-	for key := range m.data {
-		if len(key) >= len(prefix) && key[:len(prefix)] == prefix {
-			keys = append(keys, key)
-		}
-	}
-	return keys, nil
-}
-
-func clearTestDB(client cms.RedisClientInterface) {
+func clearTestDB(client redis.RedisClient) {
+	ctx := context.Background()
 	// Clear test data with instance metadata prefix
-	keys, err := client.GetKeysByPrefix(cms.LlumnixInstanceMetadataPrefix + "test:")
+	keys, err := client.GetKeysByPrefix(ctx, cms.LlumnixInstanceMetadataPrefix+"test:")
 	if err == nil {
 		for _, key := range keys {
-			client.Remove(key)
+			client.Del(ctx, key)
 		}
 	}
 
 	// Clear test data with instance status prefix
-	keys, err = client.GetKeysByPrefix(cms.LlumnixInstanceStatusPrefix + "test:")
+	keys, err = client.GetKeysByPrefix(ctx, cms.LlumnixInstanceStatusPrefix+"test:")
 	if err == nil {
 		for _, key := range keys {
-			client.Remove(key)
+			client.Del(ctx, key)
 		}
 	}
 }
 
 // getRedisClient attempts to create a Redis client, returns the client if successful, otherwise returns a MockRedis client
-func getRedisClient(t *testing.T) cms.RedisClientInterface {
+func getRedisClient(t *testing.T) redis.RedisClient {
 	// Create a channel to receive connection results
-	connectChan := make(chan *cms.RedisClient, 1)
+	connectChan := make(chan redis.RedisClient, 1)
 	errorChan := make(chan error, 1)
 
 	// Try to connect in a goroutine
 	go func() {
-		redisClient, err := cms.NewRedisClient("127.0.0.1", "6379", "", "", 1, 1)
+		redisClient, err := redis.NewRedisStandaloneClientWithRetry("127.0.0.1", "6379", "", "", 1, 1)
 		if err != nil {
 			errorChan <- err
 		} else {
@@ -130,11 +63,11 @@ func getRedisClient(t *testing.T) cms.RedisClientInterface {
 	case err := <-errorChan:
 		// Connection failed, return MockRedis client
 		t.Logf("Failed to create Redis client: %v, using mock client", err)
-		return NewMockRedisClient()
+		return redis.NewMockRedisClient()
 	case <-time.After(1 * time.Second):
 		// Connection timeout, return MockRedis client
 		t.Log("Redis connection timeout, using mock client")
-		return NewMockRedisClient()
+		return redis.NewMockRedisClient()
 	}
 }
 

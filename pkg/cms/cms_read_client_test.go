@@ -1,12 +1,15 @@
 package cms
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
+
+	"llumnix/pkg/redis"
 )
 
 func TestCMSReadClient(t *testing.T) {
@@ -217,9 +220,10 @@ func TestCMSReadClient(t *testing.T) {
 func TestRefreshLoopPerformance(t *testing.T) {
 	// Automatically select client based on connection result
 	redisClient := getRedisClient(t)
+	ctx := context.Background()
 
 	// Skip test if using mock Redis client
-	if _, isMock := redisClient.(*MockRedisClient); isMock {
+	if _, isMock := redisClient.(*redis.MockRedisClient); isMock {
 		t.Skip("Skipping performance test with mock Redis client")
 	}
 
@@ -262,12 +266,12 @@ func TestRefreshLoopPerformance(t *testing.T) {
 		}
 
 		// Store in Redis
-		err = redisClient.Set(metadataKeys, metadataBytes)
+		err = redisClient.Set(ctx, metadataKeys, metadataBytes, 0)
 		if err != nil {
 			t.Fatalf("Failed to set metadata: %v", err)
 		}
 
-		err = redisClient.Set(statusKeys, statusBytes)
+		err = redisClient.Set(ctx, statusKeys, statusBytes, 0)
 		if err != nil {
 			t.Fatalf("Failed to set status: %v", err)
 		}
