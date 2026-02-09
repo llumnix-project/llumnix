@@ -188,6 +188,7 @@ type FullModeScheduleConfig struct {
 	KvsMetadataServiceRedisClusterPassword string
 	KvsMetadataServiceHttpServerHost       string
 	KvsMetadataServiceHttpServerPort       string
+	KvsMetadataServiceHashAlgo             string
 
 	// schedule
 	DispatchTopK                        int
@@ -271,6 +272,7 @@ func (c *FullModeScheduleConfig) AddFullModeScheduleConfigFlags(flags *pflag.Fla
 	flags.StringVar(&c.KvsMetadataServiceRedisClusterPassword, "kvs-metadata-service-redis-cluster-password", consts.DefaultKvsMetadataServiceRedisClusterPassword, "Llumnix KVS metadata service redis cluster password")
 	flags.StringVar(&c.KvsMetadataServiceHttpServerHost, "kvs-metadata-service-http-server-host", consts.DefaultKvsMetadataServiceHttpServerHost, "Llumnix KVS metadata service http server host")
 	flags.StringVar(&c.KvsMetadataServiceHttpServerPort, "kvs-metadata-service-http-server-port", consts.DefaultKvsMetadataServiceHttpServerPort, "Llumnix KVS metadata service http server port")
+	flags.StringVar(&c.KvsMetadataServiceHashAlgo, "kvs-metadata-service-hash-algo", consts.DefaultKvsMetadataServiceHashAlgo, "Llumnix KVS metadata service hash algo")
 
 	flags.IntVar(&c.DispatchTopK, "dispatch-top-k", consts.DefaultDispatchTopK, "Llumnix dispatch top K")
 	flags.StringVar(&c.DispatchNeutralLoadMetric, "dispatch-neutral-load-metric", consts.DefaultDispatchNeutralLoadMetric, "Llumnix dispatch neutral load metric")

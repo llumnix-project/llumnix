@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"llumnix/pkg/types"
 	"net"
 	"net/http"
 	"net/url"
@@ -16,24 +15,39 @@ import (
 	"time"
 
 	"k8s.io/klog/v2"
+
+	"llumnix/pkg/types"
 )
 
 type MetadataServiceClient struct {
-	metadataServiceClient *http.Client
-	metadataServiceHost   string
-	metadataServicePort   int
+	metadataServiceClient   *http.Client
+	metadataServiceHost     string
+	metadataServicePort     int
+	metadataServiceHashAlgo string
 }
 
-func NewMetadataServiceClient(metadataServiceHost string, metadataServicePort int) (*MetadataServiceClient, error) {
+func NewMetadataServiceClient(metadataServiceHost string, metadataServicePort int, metadataServiceHashAlgo string) (*MetadataServiceClient, error) {
 	httpClient := &http.Client{Timeout: 3 * time.Second}
 	return &MetadataServiceClient{
-		metadataServiceClient: httpClient,
-		metadataServiceHost:   metadataServiceHost,
-		metadataServicePort:   metadataServicePort,
+		metadataServiceClient:   httpClient,
+		metadataServiceHost:     metadataServiceHost,
+		metadataServicePort:     metadataServicePort,
+		metadataServiceHashAlgo: metadataServiceHashAlgo,
 	}, nil
 }
 
 func (c *MetadataServiceClient) HashTokens(
+	tokens []int64, chunkSize int, saveUnfullChunk bool,
+	irisMetaPrefix string, vLLMBlockPrefix string) ([]string, error) {
+	if c.metadataServiceHashAlgo == "sha256_hex" {
+		return c.HashTokensSha256Hex(tokens, chunkSize, saveUnfullChunk, irisMetaPrefix, vLLMBlockPrefix)
+	} else if c.metadataServiceHashAlgo == "sha256_cbor" {
+		return c.hashTokensSha256CBOR(tokens, chunkSize, saveUnfullChunk, irisMetaPrefix, vLLMBlockPrefix)
+	}
+	return nil, fmt.Errorf("unsupported hash algorithm: %s", c.metadataServiceHashAlgo)
+}
+
+func (c *MetadataServiceClient) hashTokensSha256CBOR(
 	tokens []int64, chunkSize int, saveUnfullChunk bool,
 	irisMetaPrefix string, vLLMBlockPrefix string) ([]string, error) {
 	if len(tokens) == 0 || chunkSize <= 0 {
@@ -75,6 +89,47 @@ func (c *MetadataServiceClient) HashTokens(
 		blockHashes = append(blockHashes, h)
 	}
 	return blockHashes, nil
+}
+
+func (c *MetadataServiceClient) HashTokensSha256Hex(
+	tokens []int64, chunkSize int, saveUnfullChunk bool,
+	irisMetaPrefix string, vLLMBlockPrefix string,
+) ([]string, error) {
+	if len(tokens) == 0 || chunkSize <= 0 {
+		return nil, fmt.Errorf("invalid hash input")
+	}
+
+	numCompleteBlocks := len(tokens) / chunkSize
+	remainder := len(tokens) % chunkSize
+
+	totalBlocks := numCompleteBlocks
+	if saveUnfullChunk && remainder > 0 {
+		totalBlocks++
+	}
+
+	out := make([]string, 0, totalBlocks)
+
+	lastHashHex := "" // Python last_hash starts None
+	for i := 0; i < numCompleteBlocks; i++ {
+		block := tokens[i*chunkSize : (i+1)*chunkSize]
+		hh, err := hashBlockSha256Hex(block, lastHashHex)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, hh)
+		lastHashHex = hh
+	}
+
+	if saveUnfullChunk && remainder > 0 {
+		block := tokens[numCompleteBlocks*chunkSize:]
+		hh, err := hashBlockSha256Hex(block, lastHashHex)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, hh)
+	}
+
+	return out, nil
 }
 
 func (c *MetadataServiceClient) BatchQueryPrefixHashHitKVSInstances(hashKeys []string) (map[string][]string, error) {

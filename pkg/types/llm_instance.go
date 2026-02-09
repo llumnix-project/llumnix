@@ -84,6 +84,11 @@ func (w *LLMInstance) String() string {
 		parts = append(parts, endpointStr)
 	}
 
+	// Add Aux Ip
+	if w.AuxIp != "" {
+		parts = append(parts, w.AuxIp)
+	}
+
 	// Add Aux Port
 	if w.AuxPort > 0 {
 		parts = append(parts, fmt.Sprintf("%d", w.AuxPort))

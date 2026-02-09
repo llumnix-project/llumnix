@@ -147,10 +147,10 @@ index cdc316b65b..885cb6296e 100644
          engine_args._api_process_count = client_config.get("client_count", 1)
          engine_args._api_process_rank = client_config.get("client_index", 0)
 diff --git a/vllm/envs.py b/vllm/envs.py
-index d0912863e6..7ac6890613 100755
+index d0912863e6..819c1eb1f0 100755
 --- a/vllm/envs.py
 +++ b/vllm/envs.py
-@@ -236,6 +236,17 @@ if TYPE_CHECKING:
+@@ -236,6 +236,22 @@ if TYPE_CHECKING:
      VLLM_SHARED_EXPERTS_STREAM_TOKEN_THRESHOLD: int = 256
      VLLM_COMPILE_CACHE_SAVE_FORMAT: Literal["binary", "unpacked"] = "binary"
      VLLM_USE_V2_MODEL_RUNNER: bool = False
@@ -165,10 +165,15 @@ index d0912863e6..7ac6890613 100755
 +    VLLM_KVT_MAX_DELAY_MS: int = 0
 +    VLLM_PD_CONNMANAGER_CAP: int = 128
 +    VLLM_PD_TRY_CONNECT_TIMEOUT_SECONDS: float = 30
++    VLLM_KVS_IO_TIMEOUT_SECONDS: float = 30
++    VLLM_KVS_USE_REQUEST_HASH: bool = False
++    VLLM_KVS_ON_MIN_LENGTH: int = 1024
++    VLLM_USE_SWAP_ENGINE: bool = False
++    VLLM_USE_MIGRATION_BACKEND_RETURN_TOKEN: bool = False
  
  
  def get_default_cache_root():
-@@ -1550,6 +1561,32 @@ environment_variables: dict[str, Callable[[], Any]] = {
+@@ -1550,6 +1566,47 @@ environment_variables: dict[str, Callable[[], Any]] = {
      "VLLM_USE_V2_MODEL_RUNNER": lambda: bool(
          int(os.getenv("VLLM_USE_V2_MODEL_RUNNER", "0"))
      ),
@@ -197,6 +202,21 @@ index d0912863e6..7ac6890613 100755
 +    "VLLM_PD_CONNMANAGER_CAP": lambda: int(os.getenv("VLLM_PD_CONNMANAGER_CAP", "128")),
 +    "VLLM_PD_TRY_CONNECT_TIMEOUT_SECONDS": lambda: float(
 +        os.getenv("VLLM_PD_TRY_CONNECT_TIMEOUT_SECONDS", "30")
++    ),
++    # Control vineyard kv store io timeouts.
++    "VLLM_KVS_IO_TIMEOUT_SECONDS":
++    lambda: float(os.getenv("VLLM_KVS_IO_TIMEOUT_SECONDS", "30")),
++    "VLLM_KVS_USE_REQUEST_HASH": lambda: bool(
++        int(os.getenv("VLLM_KVS_USE_REQUEST_HASH", "0"))
++    ),
++    # Control whether vineyard kv store is enabled for this request.
++    "VLLM_KVS_ON_MIN_LENGTH":
++    lambda: int(os.getenv("VLLM_KVS_ON_MIN_LENGTH", "1024")),
++    # If set, use the vllm swap engine
++    "VLLM_USE_SWAP_ENGINE": lambda: bool(int(os.getenv("VLLM_USE_SWAP_ENGINE", "0"))),
++    # Use migration backend to return token. Generally, this is used for test.
++    "VLLM_USE_MIGRATION_BACKEND_RETURN_TOKEN": lambda: bool(
++        int(os.getenv("VLLM_USE_MIGRATION_BACKEND_RETURN_TOKEN", "0"))
 +    ),
  }
  
@@ -295,7 +315,7 @@ index 52b98ef654..8712bbe230 100644
                  )
              else:
 diff --git a/vllm/v1/engine/__init__.py b/vllm/v1/engine/__init__.py
-index ce2aae7710..85d814fc2e 100644
+index ce2aae7710..f5474833b9 100644
 --- a/vllm/v1/engine/__init__.py
 +++ b/vllm/v1/engine/__init__.py
 @@ -4,7 +4,7 @@
@@ -326,6 +346,15 @@ index ce2aae7710..85d814fc2e 100644
  
      @property
      def finished(self) -> bool:
+@@ -196,6 +201,8 @@ class EngineCoreRequestType(enum.Enum):
+     # Sentinel used within EngineCoreProc.
+     EXECUTOR_FAILED = b"\x04"
+ 
++    EXECUTE_MODEL_RESULT = b"\x05"
++
+ 
+ class ReconfigureDistributedRequest(msgspec.Struct):
+     new_data_parallel_size: int
 diff --git a/vllm/v1/engine/async_llm.py b/vllm/v1/engine/async_llm.py
 index ec5d6e95ce..f1c8979ce1 100644
 --- a/vllm/v1/engine/async_llm.py
@@ -339,9 +368,18 @@ index ec5d6e95ce..f1c8979ce1 100644
  
          # Loggers.
 diff --git a/vllm/v1/engine/core.py b/vllm/v1/engine/core.py
-index 61b8422dd6..c5eb448d4f 100644
+index 61b8422dd6..b01590cdcd 100644
 --- a/vllm/v1/engine/core.py
 +++ b/vllm/v1/engine/core.py
+@@ -7,7 +7,7 @@ import threading
+ import time
+ from collections import deque
+ from collections.abc import Callable, Generator
+-from concurrent.futures import Future
++from concurrent.futures import Future, ThreadPoolExecutor
+ from contextlib import ExitStack, contextmanager
+ from inspect import isclass, signature
+ from logging import DEBUG
 @@ -18,6 +18,7 @@ import zmq
  
  from vllm.config import ParallelConfig, VllmConfig
@@ -446,7 +484,21 @@ index 61b8422dd6..c5eb448d4f 100644
          # TODO: The scheduler doesn't really need to know the
          # specific finish reason, TBD whether we propagate that
          # (i.e. client-aborted vs stop criteria met).
-@@ -334,12 +380,33 @@ class EngineCore:
+@@ -328,28 +374,71 @@ class EngineCore:
+ 
+         return callback
+ 
++    def _wait_model_output_future(
++        self,
++        model_output_future: \
++            Future[ModelRunnerOutput | None] | Future[ModelRunnerOutput]) -> tuple[
++            ModelRunnerOutput | None, 
++            dict[int, list[EngineCoreOutput]]]:
++        return model_output_future.result(), {}
++
+     def step(self) -> tuple[dict[int, EngineCoreOutputs], bool]:
+         """Schedule, execute, and make output.
+ 
          Returns tuple of outputs and a flag indicating whether the model
          was executed.
          """
@@ -471,6 +523,7 @@ index 61b8422dd6..c5eb448d4f 100644
 +            outputs: dict[int, EngineCoreOutputs] = dict()
 +            _add_output(outputs, kvconn_outputs or {})
 +            return outputs, False
++
          scheduler_output = self.scheduler.schedule()
 +        if envs.VLLM_ENABLE_LLUMNIX:
 +            self.llumlet_proxy.update_instance_status(
@@ -481,11 +534,16 @@ index 61b8422dd6..c5eb448d4f 100644
          future = self.model_executor.execute_model(scheduler_output, non_block=True)
          grammar_output = self.scheduler.get_grammar_bitmask(scheduler_output)
          with self.log_error_detail(scheduler_output):
-@@ -350,6 +417,18 @@ class EngineCore:
+-            model_output = future.result()
++            model_output, kvconn_outputs2 = self._wait_model_output_future(future)
+             if model_output is None:
+                 model_output = self.model_executor.sample_tokens(grammar_output)
+ 
          engine_core_outputs = self.scheduler.update_from_output(
              scheduler_output, model_output
          )
 +        _add_output(engine_core_outputs, kvconn_outputs or {})
++        _add_output(engine_core_outputs, kvconn_outputs2 or {})
 +         
 +        if envs.VLLM_ENABLE_LLUMNIX:
 +            if kvconn and kvconn.need_call_remote_migrate_in() and envs.LLUMNIX_ENABLE_MIGRATION:
@@ -500,7 +558,7 @@ index 61b8422dd6..c5eb448d4f 100644
  
          return engine_core_outputs, scheduler_output.total_num_scheduled_tokens > 0
  
-@@ -381,16 +460,32 @@ class EngineCore:
+@@ -381,16 +470,32 @@ class EngineCore:
          """
          batch_queue = self.batch_queue
          assert batch_queue is not None
@@ -533,7 +591,7 @@ index 61b8422dd6..c5eb448d4f 100644
              exec_future = self.model_executor.execute_model(
                  scheduler_output, non_block=True
              )
-@@ -425,14 +520,19 @@ class EngineCore:
+@@ -425,24 +530,38 @@ class EngineCore:
                      and len(batch_queue) < self.batch_queue_size
                      and not batch_queue[-1][0].done()
                  ):
@@ -555,7 +613,11 @@ index 61b8422dd6..c5eb448d4f 100644
              return None, False
  
          # Block until the next result is available.
-@@ -443,6 +543,15 @@ class EngineCore:
+         future, scheduler_output = batch_queue.pop()
+         with self.log_error_detail(scheduler_output):
+-            model_output = future.result()
++            model_output, kvconn_outputs2 = self._wait_model_output_future(future)
+ 
          engine_core_outputs = self.scheduler.update_from_output(
              scheduler_output, model_output
          )
@@ -571,15 +633,16 @@ index 61b8422dd6..c5eb448d4f 100644
  
          # NOTE(nick): We can either handle the deferred tasks here or save
          # in a field and do it immediately once step_with_batch_queue is
-@@ -456,6 +565,7 @@ class EngineCore:
+@@ -456,6 +575,8 @@ class EngineCore:
              future = self.model_executor.sample_tokens(grammar_output, non_block=True)
              batch_queue.appendleft((future, deferred_scheduler_output))
  
 +        _add_output(engine_core_outputs, kvconn_outputs or {})
++        _add_output(engine_core_outputs, kvconn_outputs2 or {})
          return engine_core_outputs, model_executed
  
      def shutdown(self):
-@@ -464,6 +574,8 @@ class EngineCore:
+@@ -464,6 +585,8 @@ class EngineCore:
              self.model_executor.shutdown()
          if self.scheduler:
              self.scheduler.shutdown()
@@ -588,10 +651,11 @@ index 61b8422dd6..c5eb448d4f 100644
  
      def profile(self, is_start: bool = True):
          self.model_executor.profile(is_start)
-@@ -552,6 +664,19 @@ class EngineCore:
+@@ -552,7 +675,37 @@ class EngineCore:
              # compilation status before scheduling request.
              self.structured_output_manager.grammar_init(req)
          return req, request.current_wave
+-
 +    
 +    def migrate_out(self, dst_engine_host: str, dst_engine_port: str,
 +                migration_param: dict) -> bool:
@@ -605,10 +669,28 @@ index 61b8422dd6..c5eb448d4f 100644
 +    
 +    def get_instance_status(self) -> InstanceStatus:
 +        return self.instance_status
- 
++
++def _use_bypass(core: EngineCore) -> bool:
++    if not envs.VLLM_ENABLE_BYPASS_TASK:
++        return False
++    kvconn = core.scheduler.get_kv_connector()
++    if kvconn is None:
++        return False
++
++    try:
++        from blade_kvt.hybrid_connector import HybridConnector
++        from blade_kvt.hybrid_connector.engine_proxy import is_statemodel
++    except ImportError:
++        return False
++
++    if not isinstance(kvconn, HybridConnector):
++        return False
++
++    return not is_statemodel()
  
  class EngineCoreProc(EngineCore):
-@@ -606,10 +731,16 @@ class EngineCoreProc(EngineCore):
+     """ZMQ-wrapper for running EngineCore in background process."""
+@@ -606,10 +759,16 @@ class EngineCoreProc(EngineCore):
              )
  
              self._init_data_parallel(vllm_config)
@@ -625,7 +707,20 @@ index 61b8422dd6..c5eb448d4f 100644
  
              # Background Threads and Queues for IO. These enable us to
              # overlap ZMQ socket IO with GPU since they release the GIL,
-@@ -876,6 +1007,9 @@ class EngineCoreProc(EngineCore):
+@@ -652,6 +811,12 @@ class EngineCoreProc(EngineCore):
+         # environment variable overrides after this point)
+         enable_envs_cache()
+ 
++        self._enable_bypass = _use_bypass(self)
++        self.task_executor: ThreadPoolExecutor | None = None
++        if self._enable_bypass:
++            logger.info("enable bypass")
++            self.task_executor = ThreadPoolExecutor(max_workers=1)
++
+     @contextmanager
+     def _perform_handshakes(
+         self,
+@@ -876,6 +1041,9 @@ class EngineCoreProc(EngineCore):
                  waited = True
              req = self.input_queue.get()
              self._handle_client_request(*req)
@@ -635,7 +730,7 @@ index 61b8422dd6..c5eb448d4f 100644
  
          if waited:
              logger.debug("EngineCore loop active.")
-@@ -890,9 +1024,14 @@ class EngineCoreProc(EngineCore):
+@@ -890,9 +1058,14 @@ class EngineCoreProc(EngineCore):
  
          # Step the engine core.
          outputs, model_executed = self.step_fn()
@@ -653,7 +748,7 @@ index 61b8422dd6..c5eb448d4f 100644
          # Post-step hook.
          self.post_step(model_executed)
  
-@@ -949,7 +1088,10 @@ class EngineCoreProc(EngineCore):
+@@ -949,7 +1122,10 @@ class EngineCoreProc(EngineCore):
  
      def _send_engine_dead(self):
          """Send EngineDead status to the EngineCoreClient."""
@@ -665,6 +760,113 @@ index 61b8422dd6..c5eb448d4f 100644
          # Put ENGINE_CORE_DEAD in the queue.
          self.output_queue.put_nowait(EngineCoreProc.ENGINE_CORE_DEAD)
  
+@@ -1100,6 +1276,106 @@ class EngineCoreProc(EngineCore):
+                     # Limit the number of buffers to reuse.
+                     reuse_buffers.append(buffer)
+ 
++    def _wait_model_output_future(
++        self,
++        model_output_future: \
++            Future[ModelRunnerOutput | None] | Future[ModelRunnerOutput]) -> tuple[
++            ModelRunnerOutput | None, 
++            dict[int, list[EngineCoreOutput]]]:
++        # For the GDN state model, tokens share state and do not support transfer
++        # during computation.
++        kvconn_outputs: dict[int, list[EngineCoreOutput]] = dict()
++        if not self._enable_bypass:
++            return model_output_future.result(), kvconn_outputs
++
++        def wait_model_output():
++            model_output_or_ex = None
++            try:
++                model_output_or_ex = model_output_future.result()
++            except Exception as e:
++                model_output_or_ex = e # type: ignore
++            self.input_queue.put_nowait(
++                (EngineCoreRequestType.EXECUTE_MODEL_RESULT, model_output_or_ex)
++            )
++            return
++
++        assert self.task_executor is not None
++        self.task_executor.submit(wait_model_output)
++
++        temp_items: list[tuple[EngineCoreRequestType, Any]] = []
++        def _should_process_now(item: tuple[EngineCoreRequestType, Any]) -> bool:
++            reqtype, req = item
++            if reqtype == EngineCoreRequestType.ADD:
++                return True
++            if reqtype == EngineCoreRequestType.ABORT:
++                return True
++            if reqtype == EngineCoreRequestType.UTILITY:
++                _, _, method_name, _ = req
++                if method_name == '_start_step':
++                    return True
++            temp_items.append(item)
++            return False
++
++        def _requeue_deferred_items():
++            for item in reversed(temp_items):
++                self.input_queue.queue.appendleft(item)
++            return
++
++        kvconn = self.scheduler.get_kv_connector()
++        assert kvconn is not None
++        while True:
++            if not kvconn.has_requests():
++                item = self.input_queue.get()  # blocking op
++                if item[0] == EngineCoreRequestType.EXECUTE_MODEL_RESULT:
++                    _requeue_deferred_items()
++                    if isinstance(item[1], Exception):
++                        # kvconn_outputs will be discard
++                        raise item[1]
++                    else:
++                        return item[1], kvconn_outputs
++                if _should_process_now(item):
++                    self._handle_client_request(*item)
++
++            # process input queue
++            while not self.input_queue.empty():
++                item = self.input_queue.get_nowait()
++                if item[0] == EngineCoreRequestType.EXECUTE_MODEL_RESULT:
++                    _requeue_deferred_items()
++                    if isinstance(item[1], Exception):
++                        raise item[1]
++                    else:
++                        return item[1], kvconn_outputs
++                if _should_process_now(item):
++                    self._handle_client_request(*item)
++
++            if envs.VLLM_ENABLE_LLUMNIX:
++                self.llumlet_proxy.update_instance_status(
++                    self.instance_status, step_phase=StepPhase.BYPASS_STEP_BEGIN
++                )
++
++            # process kvconn step
++            step_outputs = kvconn.step()
++
++            if envs.VLLM_ENABLE_LLUMNIX:
++                self.llumlet_proxy.update_instance_status(
++                    self.instance_status, step_phase=StepPhase.BYPASS_STEP_END
++                )
++
++            if step_outputs:
++                for cliidx, outputs in step_outputs.items():
++                    if cliidx in kvconn_outputs:
++                        kvconn_outputs[cliidx].extend(outputs)
++                    else:
++                        kvconn_outputs[cliidx] = outputs
++
++            # process kvconn tasks
++            schedout: SchedulerOutput = SchedulerOutput.make_empty()
++            meta = kvconn.build_connector_meta(schedout)
++
++            from blade_kvt.hybrid_connector import send_bypass_task
++            send_bypass_task(meta)
++        return  # dead code
++
+ 
+ class DPEngineCoreProc(EngineCoreProc):
+     """ZMQ-wrapper for running EngineCore in background process
 diff --git a/vllm/v1/engine/core_client.py b/vllm/v1/engine/core_client.py
 index afa0593921..1d8d8b24a9 100644
 --- a/vllm/v1/engine/core_client.py

@@ -98,3 +98,126 @@ func TestSha256CBOR_MatchesPython_TupleListLenAndPrefixHash(t *testing.T) {
 		})
 	}
 }
+
+func TestGetHashStr_MatchesPython_Regular(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not found in PATH")
+	}
+
+	tests := []struct {
+		name  string
+		toks  []int64
+		prior string
+	}{
+		{
+			name:  "empty_no_prior",
+			toks:  []int64{},
+			prior: "",
+		},
+		{
+			name:  "small_ints",
+			toks:  []int64{1, 2, 3, 255, 256, 65535, 65536},
+			prior: "",
+		},
+		{
+			name:  "max_u32",
+			toks:  []int64{0, 4294967295},
+			prior: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			want, err := pythonHashBlockSha256Hex(tt.toks, tt.prior)
+			if err != nil {
+				t.Fatalf("pythonHashBlockSha256Hex error: %v", err)
+			}
+			got, err := hashBlockSha256Hex(tt.toks, tt.prior)
+			if err != nil {
+				t.Fatalf("hashBlockSha256Hex error: %v", err)
+			}
+			if got != want {
+				t.Fatalf("hash mismatch:\n  got : %s\n  want: %s", got, want)
+			}
+		})
+	}
+}
+
+func TestGetHashStr_MatchesPython_Chaining(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not found in PATH")
+	}
+
+	toks1 := []int64{1, 2, 3, 4, 5}
+	toks2 := []int64{100, 200, 300}
+
+	py1, err := pythonHashBlockSha256Hex(toks1, "")
+	if err != nil {
+		t.Fatalf("pythonHashBlockSha256Hex(1) error: %v", err)
+	}
+	go1, err := hashBlockSha256Hex(toks1, "")
+	if err != nil {
+		t.Fatalf("hashBlockSha256Hex(1) error: %v", err)
+	}
+	if go1 != py1 {
+		t.Fatalf("hash1 mismatch:\n  got : %s\n  want: %s", go1, py1)
+	}
+
+	py2, err := pythonHashBlockSha256Hex(toks2, py1)
+	if err != nil {
+		t.Fatalf("pythonHashBlockSha256Hex(2) error: %v", err)
+	}
+	go2, err := hashBlockSha256Hex(toks2, go1)
+	if err != nil {
+		t.Fatalf("hashBlockSha256Hex(2) error: %v", err)
+	}
+	if go2 != py2 {
+		t.Fatalf("hash2 mismatch:\n  got : %s\n  want: %s", go2, py2)
+	}
+}
+
+func TestGetHashStr_RangeChecks(t *testing.T) {
+	// Negative => Python would raise OverflowError; Go should return error.
+	if _, err := hashBlockSha256Hex([]int64{-1}, ""); err == nil {
+		t.Fatalf("expected error for negative token")
+	}
+
+	// > uint32 max
+	if _, err := hashBlockSha256Hex([]int64{4294967296}, ""); err == nil {
+		t.Fatalf("expected error for >uint32 token")
+	}
+
+	// prior hash malformed
+	if _, err := hashBlockSha256Hex([]int64{1}, "zz"); err == nil {
+		t.Fatalf("expected error for invalid prior hash hex")
+	}
+}
+
+func TestGetHashStr_ManyRandomLikeCases_MatchesPython(t *testing.T) {
+	if _, err := exec.LookPath("python3"); err != nil {
+		t.Skip("python3 not found in PATH")
+	}
+
+	for i := 0; i < 50; i++ {
+		toks := make([]int64, 0, 20)
+		for j := 0; j < 20; j++ {
+			v := int64((i+1)*(j+3)) * 12345
+			v = v % 100000 // keep in uint32 range and non-negative
+			toks = append(toks, v)
+		}
+
+		t.Run(fmt.Sprintf("case_%d", i), func(t *testing.T) {
+			want, err := pythonHashBlockSha256Hex(toks, "")
+			if err != nil {
+				t.Fatalf("pythonHashBlockSha256Hex error: %v", err)
+			}
+			got, err := hashBlockSha256Hex(toks, "")
+			if err != nil {
+				t.Fatalf("hashBlockSha256Hex error: %v", err)
+			}
+			if got != want {
+				t.Fatalf("hash mismatch:\n  got : %s\n  want: %s", got, want)
+			}
+		})
+	}
+}
