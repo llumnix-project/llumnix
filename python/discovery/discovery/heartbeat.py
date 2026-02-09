@@ -20,7 +20,7 @@ class HealthStatus(str, Enum):
 
 @dataclass
 class HeartbeatConfig:
-    interval: int = 10
+    interval: int = 30
     timeout: int = 5
     retry_times: int = 1
     retry_interval: int = 1
@@ -243,7 +243,7 @@ async def loop_completion_callback(endpoints: Dict[str, EndpointStatus]):
 
 
 def add_heartbeat_config_arguments(parser: argparse.ArgumentParser):
-    parser.add_argument('--interval', type=int, default=5, help='Check interval in seconds (default: 10)')
+    parser.add_argument('--interval', type=int, default=30, help='Check interval in seconds (default: 30)')
     parser.add_argument('--timeout', type=int, default=3, help='Request timeout in seconds (default: 5)')
     parser.add_argument('--retry-times', type=int, default=1, help='Retry attempts per check (default: 1)')
     parser.add_argument('--retry-interval', type=int, default=1, help='Interval between retries (default: 1)')

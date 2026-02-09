@@ -106,6 +106,11 @@ const (
 	FailoverScopeInstance = "instance"
 )
 
+const (
+	KvsMetadataServiceHashAlgoSha256Hex  = "sha256_hex"
+	KvsMetadataServiceHashAlgoSha256CBOR = "sha256_cbor"
+)
+
 // default value
 const (
 	DefaultEnableFullModeScheduling = true
@@ -136,6 +141,7 @@ const (
 	DefaultKvsMetadataServiceRedisClusterPassword = ""
 	DefaultKvsMetadataServiceHttpServerHost       = "0.0.0.0"
 	DefaultKvsMetadataServiceHttpServerPort       = "9003"
+	DefaultKvsMetadataServiceHashAlgo             = KvsMetadataServiceHashAlgoSha256CBOR
 
 	// Schedule defaults
 	DefaultDispatchTopK                        = 1

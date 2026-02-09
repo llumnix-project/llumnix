@@ -44,7 +44,7 @@ bash scripts/build_discovery_release.sh --push
 
 # build llm backend
 bash scripts/build_llumnix_whl.sh
-bash scripts/scripts/build_vllm_release.sh --push
+bash scripts/build_vllm_release.sh --push
 
 # -------- deploy in k8s --------
 

@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     LLUMNIX_ENABLE_PROFILING: int = 0
     LLUMNIX_PROFILING_STEPS: int = 50
     LLUMNIX_USED_METRICS: str = "all"
+    LLUMNIX_INSTANCE_TYPE: str = ""
 
 
 environment_variables: Dict[str, Callable[[], Any]] = {
@@ -96,6 +97,10 @@ environment_variables: Dict[str, Callable[[], Any]] = {
 
     # If not all, llumnix will only collect statuses that are used by metrics.
     "LLUMNIX_USED_METRICS": lambda: os.getenv("LLUMNIX_USED_METRICS", "all"),
+
+    # If set, override the instance type. Valid values: "prefill", "decode", "neutral".
+    # Default is empty, which means the instance type is determined by engine config.
+    "LLUMNIX_INSTANCE_TYPE": lambda: os.getenv("LLUMNIX_INSTANCE_TYPE", ""),
 }
 
 

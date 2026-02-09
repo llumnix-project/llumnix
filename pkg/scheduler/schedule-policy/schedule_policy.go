@@ -138,7 +138,8 @@ func NewDispatchPolicy(
 			c.KvsMetadataServiceRedisClusterHosts,
 			c.KvsMetadataServiceRedisClusterPassword,
 			c.KvsMetadataServiceHttpServerHost,
-			c.KvsMetadataServiceHttpServerPort)
+			c.KvsMetadataServiceHttpServerPort,
+			c.KvsMetadataServiceHashAlgo)
 		if err != nil {
 			panic(err)
 		}

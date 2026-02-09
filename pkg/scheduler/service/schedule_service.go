@@ -60,23 +60,25 @@ func NewScheduleService(c *options.SchedulerConfig) *ScheduleService {
 	ss.addChan = addChan
 	ss.delChan = delChan
 
-	go func() {
-		for {
-			select {
-			case instances := <-ss.addChan:
-				for _, w := range instances {
-					// create realtime stats for this instance
-					klog.Infof("add backend service endpoint: %s/%s", w.Role, w.String())
-					ss.lrsClient.AddInstance(&w)
-				}
-			case instances := <-ss.delChan:
-				for _, w := range instances {
-					klog.Infof("remove backend service endpoint: %s/%s", w.Role, w.String())
-					ss.lrsClient.RemoveInstance(w.Role.String(), w.Id())
-				}
-			}
-		}
-	}()
+    if ss.config.EnableRequestStateTracking() {
+        go func() {
+            for {
+                select {
+                case instances := <-ss.addChan:
+                    for _, w := range instances {
+                        // create realtime stats for this instance
+                        klog.Infof("add backend service endpoint: %s/%s", w.Role, w.String())
+                        ss.lrsClient.AddInstance(&w)
+                    }
+                case instances := <-ss.delChan:
+                    for _, w := range instances {
+                        klog.Infof("remove backend service endpoint: %s/%s", w.Role, w.String())
+                        ss.lrsClient.RemoveInstance(w.Role.String(), w.Id())
+                    }
+                }
+            }
+        }()
+    }
 
 	return ss
 }
@@ -100,14 +102,18 @@ func (ss *ScheduleService) handleKeepalive(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// add gateway for local realtime state
-	ss.lrsClient.AddGateway(remoteEndpoint.String())
+    if ss.config.EnableRequestStateTracking() {
+        // add gateway for local realtime state
+        ss.lrsClient.AddGateway(remoteEndpoint.String())
+    }
 
 	// block and do keepalive with gateway
 	kac.StartKeepAlive(func() {
-		// If the goroutine terminates, it indicates that an anomaly occurred with the connection, which could be due to a ping pong
-		// failure or an abnormal TCP disconnection. Ultimately, we need to reclaim the request states that are in use.
-		ss.lrsClient.RemoveGateway(remoteEndpoint.String())
+        if ss.config.EnableRequestStateTracking() {
+            // If the goroutine terminates, it indicates that an anomaly occurred with the connection, which could be due to a ping pong
+            // failure or an abnormal TCP disconnection. Ultimately, we need to reclaim the request states that are in use.
+            ss.lrsClient.RemoveGateway(remoteEndpoint.String())
+        }
 	})
 }
 
@@ -160,7 +166,7 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 	}
 
 	// record realtime state for the scheduled instance
-	if !ss.config.EnableRequestStateTracking() {
+	if ss.config.EnableRequestStateTracking() {
 		for _, instance := range schReq.ScheduleResult {
 			reqState := lrs.NewRequestState(schReq.Id, int64(schReq.PromptNumTokens), instance.Id(), schReq.GatewayId)
 			err := ss.lrsClient.AllocateRequestState(instance.Role.String(), reqState)

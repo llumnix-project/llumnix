@@ -2,8 +2,6 @@ package kvs
 
 import (
 	"fmt"
-	"llumnix/pkg/scheduler/kvs/mooncake"
-	"llumnix/pkg/scheduler/kvs/v6d"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -13,6 +11,8 @@ import (
 	"k8s.io/klog/v2"
 
 	"llumnix/pkg/consts"
+	"llumnix/pkg/scheduler/kvs/mooncake"
+	"llumnix/pkg/scheduler/kvs/v6d"
 )
 
 type KVSClientInterface interface {
@@ -98,7 +98,8 @@ func CreateOrGetClient(
 	kvsMetadataServiceRedisClusterHosts string,
 	kvsMetadataServiceRedisClusterPassword string,
 	kvsMetadataServiceHttpServerHost string,
-	kvsMetadataServiceHttpServerPort string) (*KVSClient, error) {
+	kvsMetadataServiceHttpServerPort string,
+	kvsMetadataServiceHashAlgo string) (*KVSClient, error) {
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -116,7 +117,7 @@ func CreateOrGetClient(
 			return nil, fmt.Errorf("invalid kvs metadata service http server port: %w", err2)
 		}
 		kvsMetadataServiceClient, err = mooncake.NewMetadataServiceClient(
-			kvsMetadataServiceHttpServerHost, port)
+			kvsMetadataServiceHttpServerHost, port, kvsMetadataServiceHashAlgo)
 	} else {
 		return nil, fmt.Errorf("invalid kvs backend: %s, only support %s and %s",
 			kvsBackend, consts.KvsBackendV6d, consts.KvsBackendMooncake)
@@ -172,6 +173,7 @@ func (c *KVSClient) PrefixHash(tokens []int64) []string {
 	}
 
 	prefixHashes, err := c.kvsMetadataServiceClient.HashTokens(tokens, c.chunkSize, c.saveUnfullChunk, c.irisMetaPrefix, c.vLLMBlockPrefix)
+	klog.V(4).Infof("Hash tokens for %d tokens: %v", len(tokens), prefixHashes)
 	if err != nil {
 		klog.Errorf("Hash tokens failed: %v", err)
 		return nil

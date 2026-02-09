@@ -17,6 +17,7 @@ from llumnix.engine_client.base_engine_client import BaseEngineClient
 from llumnix.instance_info import ConnectorType, InstanceType, InstanceStatus
 from llumnix.logging.logger import init_logger
 from llumnix.utils import MigrationParams, RequestIDType, get_ip_address
+from llumnix import envs
 
 
 AnyFuture = Union[asyncio.Future[Any], Future[Any]]
@@ -174,7 +175,23 @@ def gen_unit_id(vllm_config: VllmConfig) -> str:
 def vllm_get_instance_meta_data(cfg: VllmConfig) -> dict:
     instance_id = cfg.instance_id
     unit_id = gen_unit_id(cfg)
-    if not cfg.kv_transfer_config:
+
+    # Check LLUMNIX_INSTANCE_TYPE environment variable first.
+    # Valid values: "prefill", "decode", "neutral". If not set, use engine config.
+    env_instance_type = envs.LLUMNIX_INSTANCE_TYPE
+    if env_instance_type:
+        if env_instance_type == "prefill":
+            instance_type = InstanceType.PREFILL.value
+        elif env_instance_type == "decode":
+            instance_type = InstanceType.DECODE.value
+        elif env_instance_type == "neutral":
+            instance_type = InstanceType.NEUTRAL.value
+        else:
+            raise ValueError(
+                f"Invalid LLUMNIX_INSTANCE_TYPE: '{env_instance_type}'. "
+                f"Valid values are: 'prefill', 'decode', 'neutral'"
+            )
+    elif not cfg.kv_transfer_config:
         instance_type = InstanceType.NEUTRAL.value
     else:
         if cfg.kv_transfer_config.kv_role == "kv_producer":
