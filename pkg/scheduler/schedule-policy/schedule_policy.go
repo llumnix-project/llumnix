@@ -277,7 +277,7 @@ func (p *DispatchPolicy) schedule(
 	for inferMode, instanceViews := range clusterView.groupedInstanceViews {
 		klog.V(3).Infof(
 			"Calculating metrics for infer mode: %s, instance count: %d", inferMode, len(instanceViews))
-		p.policyInternal.calculateMetrics(inferMode, instanceViews)
+		p.policyInternal.calculateMetrics(inferMode, request, instanceViews)
 	}
 
 	if request.ScheduleMode == types.ScheduleModeNormal {
@@ -390,6 +390,7 @@ func (p *DispatchPolicy) executeSchedule(
 type dispatchPolicyInternal interface {
 	calculateMetrics(
 		inferMode string,
+		request *types.ScheduleRequest,
 		instanceViews map[string]*instanceViewScheduling)
 	filter(
 		inferMode string,
@@ -411,9 +412,10 @@ type inferModeBaseDispatchPolicy struct {
 
 func (p baseDispatchPolicy) calculateMetrics(
 	inferMode string,
+	request *types.ScheduleRequest,
 	instanceViews map[string]*instanceViewScheduling) {
 
-	calculateMetrics(instanceViews, p[inferMode].metrics)
+	calculateMetrics(request, instanceViews, p[inferMode].metrics)
 }
 
 func (p baseDispatchPolicy) filter(

@@ -1474,10 +1474,6 @@ def log_results(
             "random_input_len": args.random_input_len,
             "random_output_len": args.random_output_len,
             "random_range_ratio": args.random_range_ratio,
-            # scheduler setup
-            "enable_full_mode_scheduling":args.enable_full_mode_scheduling,
-            "connector_type":args.connector_type,
-            "enable_pd":args.enable_pd,
             # Results
             "duration": benchmark_duration,
             "completed": metrics.completed,

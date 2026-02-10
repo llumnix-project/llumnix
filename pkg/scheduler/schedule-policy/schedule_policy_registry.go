@@ -19,6 +19,8 @@ func newDispatchPolicyInternal(c *options.SchedulerConfig) dispatchPolicyInterna
 		}
 	case consts.SchedulePolicyFlood:
 		return newFloodDispatchPolicyFullMode(c)
+	case consts.SchedulePolicySlo:
+		return newSloDispatchMode(c)
 	default:
 		panic(fmt.Sprintf("unsupported schedule policy: %s", c.SchedulePolicy))
 	}
@@ -117,6 +119,73 @@ func newLoadBalanceDispatchFullMode(p *options.SchedulerConfig) *loadBalanceDisp
 		normalInferModeMetrics[p.DispatchPrefillCacheLocalityMetric] = getSchedulingMetric(p, p.DispatchPrefillCacheLocalityMetric)
 		neutralInstanceSelector := policy.baseDispatchPolicy[consts.NormalInferMode].selectors.(*metricBasedSelector)
 		neutralInstanceSelector.metricNames = append([]string{p.DispatchPrefillCacheLocalityMetric}, neutralInstanceSelector.metricNames...)
+	}
+
+	return policy
+}
+
+// The SLO policy attempts to route requests to the instance with the lowest latency.
+type sloDispatchPolicy struct {
+	baseDispatchPolicy
+}
+
+func newSloDispatchMode(p *options.SchedulerConfig) *sloDispatchPolicy {
+	// init latency predictor, fast fail
+	GetLatencyPredictor(p.TtftProfilingDataPath, p.TpotProfilingDataPath)
+
+	policy := &sloDispatchPolicy{
+		baseDispatchPolicy: baseDispatchPolicy{
+			consts.PrefillInferMode: {
+				metrics: map[string]func() instanceSchedulingMetric{
+					consts.SchedulingMetricPredictedTtft: getSchedulingMetric(p, consts.SchedulingMetricPredictedTtft),
+				},
+				globalFilters: []globalFilter{
+					&failoverFilter{
+						failoverScope: p.FailoverScope,
+					},
+				},
+				singleInstanceFilters: []singleInstanceFilter{
+					&schedulabilityFilter{},
+					&stalenessFilter{
+						instanceStalenessSeconds: p.InstanceStalenessSeconds,
+					},
+					&metricBasedFilter{
+						metricName:          consts.SchedulingMetricPredictedTtft,
+						threshold:           p.TtftSlo * p.TtftSloDispatchThreshold,
+						notSkipWhenFallback: true,
+					},
+				},
+				selectors: &metricBasedSelector{
+					topK:        p.DispatchTopK,
+					metricNames: []string{consts.SchedulingMetricPredictedTtft},
+				},
+			},
+			consts.DecodeInferMode: {
+				metrics: map[string]func() instanceSchedulingMetric{
+					consts.SchedulingMetricPredictedTpot: getSchedulingMetric(p, consts.SchedulingMetricPredictedTpot),
+				},
+				globalFilters: []globalFilter{
+					&failoverFilter{
+						failoverScope: p.FailoverScope,
+					},
+				},
+				singleInstanceFilters: []singleInstanceFilter{
+					&schedulabilityFilter{},
+					&stalenessFilter{
+						instanceStalenessSeconds: p.InstanceStalenessSeconds,
+					},
+					&metricBasedFilter{
+						metricName:          consts.SchedulingMetricPredictedTpot,
+						threshold:           p.TpotSlo * p.TpotSloDispatchThreshold,
+						notSkipWhenFallback: true,
+					},
+				},
+				selectors: &metricBasedSelector{
+					topK:        p.DispatchTopK,
+					metricNames: []string{consts.SchedulingMetricPredictedTpot},
+				},
+			},
+		},
 	}
 
 	return policy
