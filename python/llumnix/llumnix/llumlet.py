@@ -36,7 +36,10 @@ from llumnix.utils import (
     get_rpc_port,
     UpdateInstanceStatusMode,
 )
-from llumnix.cms.proto.cms_pb2 import InstanceStatus as CMSInstanceStatus
+from llumnix.cms.proto.cms_pb2 import (
+    InstanceStatus as CMSInstanceStatus,
+    InstanceMetadata as CMSInstanceMetadata,
+)
 
 logger = init_logger(__name__)
 
@@ -126,7 +129,7 @@ class LlumletProc:
             client_addresses=client_addresses,
         )
 
-        self.push_interval = get_metric_push_interval()
+        self.status_push_interval, self.metadata_push_interval  = get_metric_push_interval()
         self.push_task: Optional[asyncio.Task] = None
         self.cms_client: CMSWriteClient = CMSWriteClient()
         self.loop = None
@@ -135,9 +138,14 @@ class LlumletProc:
 
         self.connector_type = connector_type
         self.instance_metadata: InstanceMetaData = self.get_instance_meta_data(engine_type, connector_type, self.engine_config)
+        self.cms_instance_metadata: CMSInstanceMetadata = to_cms_metadata(self.instance_metadata)
         self.instance_id = self.instance_metadata.instance_id
         self.instance_status: InstanceStatus = InstanceStatus()
         self.last_report_instance_status_timestamp = None
+        self.expired_time = envs.LLUMNIX_CMS_EXPIRED_TIME
+        self.last_metadata_report_time = None
+        assert self.expired_time > self.status_push_interval
+        assert self.expired_time > self.metadata_push_interval
 
         self.enable_mig = envs.LLUMNIX_ENABLE_MIGRATION
         self.detailed_mig = envs.LLUMNIX_DETAILED_MIG_STATUS
@@ -279,10 +287,20 @@ class LlumletProc:
         """
         if not await self.register_with_cms():
             return
+        self.last_metadata_report_time = time.time()
         logger.info(
-            "Starting periodic status reporting every %s seconds.", self.push_interval)
+            "Starting periodic status reporting every %s seconds.", self.status_push_interval)
         while True:
             start_time = time.time()
+            if (start_time - self.last_metadata_report_time) >= self.metadata_push_interval:
+                # Metadata needs to be resent periodically to act as a heartbeat and
+                # to refresh its TTL (Time-To-Live) in the CMS. This ensures that
+                # if the Llumlet process dies unexpectedly, its registration will
+                # automatically expire and be removed from the CMS.
+                if await self.report_metadata_to_cms():
+                    self.last_metadata_report_time = start_time
+                else:
+                    logger.warning("Failed to resend metadata. Will retry in the next cycle.")
             if self.parent_pid and not psutil.pid_exists(self.parent_pid):
                 self.shutdown()
                 return
@@ -296,8 +314,8 @@ class LlumletProc:
             except Exception:
                 logger.exception("An error occurred in get instance status loop")
             elapsed = time.time() - start_time
-            if elapsed < self.push_interval:
-                await asyncio.sleep(self.push_interval - elapsed)
+            if elapsed < self.status_push_interval:
+                await asyncio.sleep(self.status_push_interval - elapsed)
 
     async def _execute_with_timeout(
         self,
@@ -345,10 +363,17 @@ class LlumletProc:
     async def report_status_to_cms(self, cms_status: CMSInstanceStatus):
         """Report cms_instance_status to cms."""
         try:
-            await self.cms_client.update_instance_status(self.instance_id, cms_status)
+            await self.cms_client.update_instance_status(self.instance_id, cms_status, expired=self.expired_time)
         # pylint: disable=broad-except
         except Exception:
             logger.exception("Failed to report status to CMS.")
+    
+    async def report_metadata_to_cms(self):
+        try:
+            await self.cms_client.update_instance_metadata(self.instance_id, self.cms_instance_metadata, expired=self.expired_time)
+        # pylint: disable=broad-except
+        except Exception:
+            logger.exception("Failed to report metadata to CMS.")
 
     async def register_with_cms(self, max_retries=3, delay=5) -> bool:
         """Add instance metadate to cms."""
@@ -356,8 +381,7 @@ class LlumletProc:
         last_exception = None
         for attempt in range(max_retries):
             try:
-                cms_metadata = to_cms_metadata(self.instance_metadata)
-                await self.cms_client.add_instance(self.instance_id, cms_metadata)
+                await self.cms_client.add_instance(self.instance_id, self.cms_instance_metadata, self.expired_time)
                 logger.info("Instance %s registered successfully on attempt %s.", self.instance_id, attempt + 1)
                 return True
             except Exception as e:  # pylint: disable=broad-except

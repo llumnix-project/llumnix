@@ -16,7 +16,7 @@ from llumnix.logging.logger import init_logger
 from llumnix.migration_frontend.vllm_v1.base_migration_frontend import BaseMigrationFrontend
 from llumnix.outputs.queue.zmq_server import MigrationZmqServer
 from llumnix.utils import MigrationParams, MigrationType
-from llumnix.compat.vllm_compat import get_ip, cdiv
+from llumnix.compat.vllm_compat import get_ip
 from llumnix.compat.hybrid_connector_compat import (
 	MsgpackEncoder,
 	PlaceholderModule,
@@ -194,6 +194,8 @@ class KVTMigrationFrontend(BaseMigrationFrontend):
         try:
             for req in itertools.chain(self.scheduler.waiting, self.scheduler.running):
                 if req.request_id not in self.migrating_reqs:
+                    if req.request_id not in self.enginecore_requests:
+                        self.enginecore_requests[req.request_id] = self.get_enginecore_request(req)
                     migrated_out_requests.append((self.enginecore_requests[req.request_id], req.num_output_tokens))
                     self.migrating_reqs.add(req.request_id)
                     # Update migrate out concurrency
@@ -202,8 +204,8 @@ class KVTMigrationFrontend(BaseMigrationFrontend):
                         with _g_migrate_out_req_info_lock:
                             _g_migrate_out_req_info[req.request_id] = len(req.prompt_token_ids) + req.num_output_tokens
         # pylint: disable=broad-except
-        except Exception as e:
-            logger.error("Get migration request failed, %s", e)
+        except Exception:
+            logger.exception("Get migration request failed")
             migrated_out_requests = []
         return migrated_out_requests
 

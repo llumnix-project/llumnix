@@ -368,7 +368,7 @@ index ec5d6e95ce..f1c8979ce1 100644
  
          # Loggers.
 diff --git a/vllm/v1/engine/core.py b/vllm/v1/engine/core.py
-index 61b8422dd6..b01590cdcd 100644
+index 61b8422dd6..304c183507 100644
 --- a/vllm/v1/engine/core.py
 +++ b/vllm/v1/engine/core.py
 @@ -7,7 +7,7 @@ import threading
@@ -760,7 +760,7 @@ index 61b8422dd6..b01590cdcd 100644
          # Put ENGINE_CORE_DEAD in the queue.
          self.output_queue.put_nowait(EngineCoreProc.ENGINE_CORE_DEAD)
  
-@@ -1100,6 +1276,106 @@ class EngineCoreProc(EngineCore):
+@@ -1100,6 +1276,111 @@ class EngineCoreProc(EngineCore):
                      # Limit the number of buffers to reuse.
                      reuse_buffers.append(buffer)
  
@@ -800,6 +800,8 @@ index 61b8422dd6..b01590cdcd 100644
 +            if reqtype == EngineCoreRequestType.UTILITY:
 +                _, _, method_name, _ = req
 +                if method_name == '_start_step':
++                    return True
++                if method_name == 'migrate_out':
 +                    return True
 +            temp_items.append(item)
 +            return False
@@ -858,6 +860,9 @@ index 61b8422dd6..b01590cdcd 100644
 +
 +            # process kvconn tasks
 +            schedout: SchedulerOutput = SchedulerOutput.make_empty()
++            schedout.finished_req_ids = getattr(
++                self.scheduler, "finished_req_ids", set()
++            )
 +            meta = kvconn.build_connector_meta(schedout)
 +
 +            from blade_kvt.hybrid_connector import send_bypass_task

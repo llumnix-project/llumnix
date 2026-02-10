@@ -8,7 +8,8 @@ if TYPE_CHECKING:
     LLUMNIX_LOGGING_PREFIX: str = "Llumnix"
     LLUMNIX_LOG_STREAM: int = 1
     LLUMNIX_LOG_NODE_PATH: str = ""
-    LLUMNIX_METRIC_PUSH_INTERVAL: float = 0.04
+    LLUMNIX_STATUS_PUSH_INTERVAL: float = 0.04
+    LLUMNIX_METADATA_PUSH_INTERVAL: float = 20
     LLUMNIX_ENGINE_GET_STATUS_TIMEOUT: float = 30.0
     LLUMNIX_ENGINE_MIGRATE_TIMEOUT: float = 5.0
     LLUMNIX_ENGINE_ABORT_TIMEOUT: float = 5.0
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
     LLUMNIX_ENGINE_MIGRATE_IN_TIMEOUT: float = 5.0
     LLUMNIX_REPORT_INSTANCE_STATUS_INTERVAL_S: float = 10.0
     LLUMNIX_RECENT_WAITINGS_STALENESS_SECONDS: float = 10.0
+    LLUMNIX_CMS_EXPIRED_TIME: int = 100
     LLUMNIX_ENABLE_MIGRATION: int = 1
     LLUMNIX_MAX_REQ_MIG_IN: int = -1
     LLUMNIX_MAX_REQ_MIG_OUT: int = -1
@@ -48,7 +50,11 @@ environment_variables: Dict[str, Callable[[], Any]] = {
     # if set, llumnix will routing all node logs to this path
     "LLUMNIX_LOG_NODE_PATH": lambda: os.getenv("LLUMNIX_LOG_NODE_PATH", ""),
     # if set, llumnix will push instance status with specific interval
-    "LLUMNIX_METRIC_PUSH_INTERVAL": lambda: float(os.getenv("LLUMNIX_METRIC_PUSH_INTERVAL", "0.04")),
+    "LLUMNIX_STATUS_PUSH_INTERVAL": lambda: float(os.getenv("LLUMNIX_STATUS_PUSH_INTERVAL", "0.04")),
+    # if set, llumnix will push metadata with specific interval.
+    # To prevent the record from expiring prematurely in Redis, this value MUST be shorter
+    # than the record's Time-To-Live (TTL), which is controlled by the 'LLUMNIX_CMS_EXPIRED_TIME' environment variable
+    "LLUMNIX_METADATA_PUSH_INTERVAL": lambda: float(os.getenv("LLUMNIX_METADATA_PUSH_INTERVAL", "20")),
     # this is used for configuring the timeout for get_instance_status engine call
     "LLUMNIX_ENGINE_GET_STATUS_TIMEOUT": lambda: float(os.getenv("LLUMNIX_ENGINE_GET_STATUS_TIMEOUT", "30.0")),
     # this is used for configuring the timeout for migrate engine call
@@ -82,6 +88,9 @@ environment_variables: Dict[str, Callable[[], Any]] = {
 
     # this is used for setting the stale interval of recent waiting requests
     "LLUMNIX_RECENT_WAITINGS_STALENESS_SECONDS": lambda: float(os.getenv("LLUMNIX_RECENT_WAITINGS_STALENESS_SECONDS", "10.0")),
+    
+    # this is used to setting up redis expired time, to disable, set the value to a negative number.
+    "LLUMNIX_CMS_EXPIRED_TIME": lambda: int(os.getenv("LLUMNIX_CMS_EXPIRED_TIME", "100")),
 
     # if set, llumnix will enable migration
     "LLUMNIX_ENABLE_MIGRATION": lambda: int(os.getenv("LLUMNIX_ENABLE_MIGRATION", "1")),
