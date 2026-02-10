@@ -42,7 +42,7 @@ func TestCalculateMetrics(t *testing.T) {
 		consts.SchedulingMetricKVCacheUsageRatioProjected: getSchedulingMetric(
 			config, consts.SchedulingMetricKVCacheUsageRatioProjected),
 	}
-	calculateMetrics(instances, metrics)
+	calculateMetrics(nil, instances, metrics)
 	assert.Equal(t, float32(math.MaxFloat32), instances["0"].metrics[consts.SchedulingMetricKVCacheUsageRatioProjected].GetValue())
 }
 

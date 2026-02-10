@@ -31,14 +31,14 @@ func TestKVCacheUsageRatioProjectedCalculate(t *testing.T) {
 	instance1.cmsView.Status.NumUncomputedTokensAllWaitingPrefills = 10
 
 	// Test normal case
-	metric.Calculate(instance1)
+	metric.Calculate(nil, instance1)
 	assert.Equal(t, float32(0.4), metric.GetValue()) // (30 + 10) / 100 = 0.4
 
 	// Test with zero total tokens
 	instance2 := instances["instance-2"]
 	instance2.cmsView.Status.NumTotalGpuTokens = 0
 	instance2.cmsView.Status.NumUsedGpuTokens = 30
-	metric.Calculate(instance2)
+	metric.Calculate(nil, instance2)
 	assert.Equal(t, float32(3.4028235e+38), metric.GetValue()) // MaxFloat32
 
 	// Test with zero used and waiting tokens
@@ -46,7 +46,7 @@ func TestKVCacheUsageRatioProjectedCalculate(t *testing.T) {
 	instance3.cmsView.Status.NumTotalGpuTokens = 100
 	instance3.cmsView.Status.NumUsedGpuTokens = 0
 	instance3.cmsView.Status.NumUncomputedTokensAllWaitingPrefills = 0
-	metric.Calculate(instance2)
+	metric.Calculate(nil, instance2)
 	assert.Equal(t, float32(0.0), metric.GetValue()) // (0 + 0) / 100 = 0.0
 }
 
@@ -83,7 +83,7 @@ func TestDecodeBatchSizeCalculate(t *testing.T) {
 	instance1.cmsView.Status.NumUncomputedTokensAllWaitingPrefills = 10
 	instance1.cmsView.Status.SchedulerRunningToDecodeRequestsNum = 10
 
-	metric.Calculate(instance1)
+	metric.Calculate(nil, instance1)
 	assert.Equal(t, float32(10.0), metric.GetValue()) // (0 + 0) / 100 = 0.0
 }
 
@@ -120,7 +120,7 @@ func TestNumWaitingRequestsCalculate(t *testing.T) {
 	instance1.cmsView.Status.NumUncomputedTokensAllWaitingPrefills = 10
 	instance1.cmsView.Status.NumWaitingRequests = 10
 
-	metric.Calculate(instance1)
+	metric.Calculate(nil, instance1)
 	assert.Equal(t, float32(10.0), metric.GetValue())
 }
 
@@ -159,7 +159,7 @@ func TestNumRequestsCalculate(t *testing.T) {
 	instance1.cmsView.Status.NumWaitingRequests = 10
 	instance1.cmsView.Status.NumRunningRequests = 10
 
-	metric.Calculate(instance1)
+	metric.Calculate(nil, instance1)
 	assert.Equal(t, float32(20.0), metric.GetValue())
 }
 
@@ -195,13 +195,13 @@ func TestKVCacheHitLen(t *testing.T) {
 	// Test normal case
 	instance1 := instances["instance-1"]
 	instance1.schedulingCtx.prefixHitTokens = 100
-	metric.Calculate(instance1)
+	metric.Calculate(nil, instance1)
 	assert.Equal(t, float32(100), metric.GetValue())
 
 	// Test another case with different prefixHitTokens
 	instance2 := instances["instance-2"]
 	instance2.schedulingCtx.prefixHitTokens = 50
-	metric.Calculate(instance2)
+	metric.Calculate(nil, instance2)
 	assert.Equal(t, float32(50), metric.GetValue())
 
 	// Test Less function

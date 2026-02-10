@@ -28,7 +28,10 @@ func verifyConfig(c *options.SchedulerConfig) {
 
 func verifySchedulePolicy(c *options.SchedulerConfig) {
 	liteModeSchedulePolicySet := sets.NewString(consts.SchedulePolicyLoadBalance)
-	fullModeSchedulePolicySet := sets.NewString(consts.SchedulePolicyLoadBalance, consts.SchedulePolicyFlood)
+	fullModeSchedulePolicySet := sets.NewString(
+		consts.SchedulePolicyLoadBalance,
+		consts.SchedulePolicyFlood,
+		consts.SchedulePolicySlo)
 
 	policy := c.SchedulePolicy
 	if !c.EnableFullModeScheduling {
@@ -200,7 +203,7 @@ func logSelectedInstance(
 			},
 		}
 	}
-	loadMetric.Calculate(instance)
+	loadMetric.Calculate(nil, instance)
 	klog.V(3).Infof("[GetToken] dispatch request %s to %s instance %s for %s, %s: %.4f",
 		requestId, instance.GetInferMode(), instance.GetInstanceId(), requestInferMode,
 		loadMetric.GetName(), loadMetric.GetValue())
