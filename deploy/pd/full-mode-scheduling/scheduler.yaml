@@ -64,8 +64,7 @@ spec:
         - "5000"
         - "--cms-pull-metadata-interval-ms"
         - "10000"
-        - "--enable-full-mode-scheduling"
-        - "True"
+        - "--enable-full-mode-scheduling=true"
         ports:
         - containerPort: 8088
           name: http
