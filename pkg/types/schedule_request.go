@@ -56,6 +56,13 @@ type ScheduleRequest struct {
 	ScheduleResult ScheduledResult `json:"schedule_result,omitempty"`
 }
 
+func (req *ScheduleRequest) GetInputTokenLen() int {
+	if req.PromptNumTokens > 0 {
+		return req.PromptNumTokens
+	}
+	return len(req.PromptText)
+}
+
 func (req *ScheduleRequest) String() string {
 	var str string
 

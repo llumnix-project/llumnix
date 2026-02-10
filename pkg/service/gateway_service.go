@@ -44,8 +44,6 @@ type LlmGatewayService struct {
 	reqStateTracker *lrs.RequestStateTracker
 	// Load balancer for distributing requests to backend services
 	balancer balancer.Balancer
-	// Service router for request routing and load balancing
-	router *router.ServiceRouter
 	// Batch service for handling batch inference tasks
 	batchService *batch.BatchService
 
@@ -83,7 +81,7 @@ func NewGatewayService(c *options.Config) *LlmGatewayService {
 	// Create request handler for parsing different format requests
 	lgs.BuildHandler()
 
-	// Create load balancer and service router
+	// Create load balancer
 	var lb balancer.Balancer
 	if len(c.LocalTestIPs) == 0 {
 		lb = balancer.NewCompositeBalancer(c)
@@ -98,7 +96,6 @@ func NewGatewayService(c *options.Config) *LlmGatewayService {
 		lb = balancer.NewRoundRobinBalancer(r)
 	}
 	lgs.balancer = lb
-	lgs.router = router.NewServiceRouter(c.RoutePolicy, c.RouteConfigRaw)
 
 	// Create traffic mirror component
 	lgs.mirror = mirror.NewMirror(c)
@@ -297,7 +294,8 @@ func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext,
 //   - Fallback: use fallback service when no route matches
 func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext, handler handler.RequestHandler) {
 	// If the router policy is enabled, the router will be used first.
-	dst, rType := lgs.router.Route(reqCtx)
+	serviceRouter := router.GetServiceRouter()
+	dst, rType := serviceRouter.Route(reqCtx)
 	switch rType {
 	case router.RouteInternal:
 		// schedule the request
@@ -314,7 +312,7 @@ func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext, hand
 		go lgs.externalRouteRequest(reqCtx, dst)
 	case router.RouteUnknown:
 		// Not match external route, try fallback
-		fdst, err := lgs.router.Fallback(reqCtx)
+		fdst, err := serviceRouter.Fallback(reqCtx)
 		if err != nil {
 			reqCtx.ResponseChan <- &types.ResponseMsg{Err: err, Message: []byte(err.Error())}
 			return

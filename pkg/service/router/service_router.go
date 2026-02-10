@@ -6,10 +6,12 @@ import (
 	"math/rand"
 	"regexp"
 	"strings"
+	"sync"
 
 	"k8s.io/klog/v2"
 
 	"llm-gateway/pkg/consts"
+	"llm-gateway/pkg/property"
 	"llm-gateway/pkg/types"
 )
 
@@ -79,8 +81,8 @@ type ServiceRouter struct {
 	fallbackConfigs []RouteConfig
 }
 
-// NewServiceRouter creates a new service router instance
-func NewServiceRouter(routingPolicy string, routingConfigRaw string) *ServiceRouter {
+// newServiceRouter creates a new service router instance
+func newServiceRouter(routingPolicy string, routingConfigRaw string) *ServiceRouter {
 	sr := &ServiceRouter{
 		routingPolicy:  routingPolicy,
 		routingConfigs: setupRoutingConfigs(routingConfigRaw),
@@ -88,6 +90,39 @@ func NewServiceRouter(routingPolicy string, routingConfigRaw string) *ServiceRou
 	sr.setupFallbackConfigs(sr.routingConfigs)
 
 	return sr
+}
+
+var (
+	gMutex         sync.Mutex
+	gRouteInstance *ServiceRouter
+
+	gRoutePolicy    string
+	gRouteConfigRaw string
+)
+
+func GetServiceRouter() *ServiceRouter {
+	gMutex.Lock()
+	defer gMutex.Unlock()
+	if needReloadServiceRouter() || gRouteInstance == nil {
+		if gRoutePolicy != "" || gRouteConfigRaw != "" {
+			klog.Infof("create service router with policy: %s, config: %s", gRoutePolicy, gRouteConfigRaw)
+		}
+		gRouteInstance = newServiceRouter(gRoutePolicy, gRouteConfigRaw)
+		return gRouteInstance
+	}
+	return gRouteInstance
+}
+
+func needReloadServiceRouter() bool {
+	dyConfig := property.GetDynamicConfigManager()
+	newPolicy := dyConfig.GetStringWithDefault("llm_gateway.route_policy", "")
+	newRouteConfigRaw := dyConfig.GetStringWithDefault("llm_gateway.route_config", "")
+	if newPolicy != gRoutePolicy || newRouteConfigRaw != gRouteConfigRaw {
+		gRoutePolicy = newPolicy
+		gRouteConfigRaw = newRouteConfigRaw
+		return true
+	}
+	return false
 }
 
 // setupFallbackConfigs sets up fallback configs
@@ -158,7 +193,7 @@ func (sr *ServiceRouter) selectByPrefix(req *types.RequestContext) (*RouteConfig
 
 // getByPolicy gets next tokens based on routing policy
 func (sr *ServiceRouter) Route(req *types.RequestContext) (*RouteEndpoint, RouteType) {
-	if len(sr.routingConfigs) == 0 {
+	if len(sr.routingConfigs) == 0 || sr.routingPolicy == "" {
 		return nil, RouteInternal
 	}
 	var selectedConfig *RouteConfig

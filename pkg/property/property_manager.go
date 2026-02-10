@@ -12,6 +12,33 @@ import (
 	"llm-gateway/pkg/utils/jsquery"
 )
 
+const propertiesFile = "/etc/eas/override.properties"
+
+var registerPrefetchKeys = []PrefetchKey{
+	// traffic mirror
+	{Key: "llm_gateway.traffic_mirror.enable", Type: BoolType},
+	{Key: "llm_gateway.traffic_mirror.target", Type: StringType},
+	{Key: "llm_gateway.traffic_mirror.ratio", Type: FloatType},
+	{Key: "llm_gateway.traffic_mirror.token", Type: StringType},
+	{Key: "llm_gateway.traffic_mirror.timeout", Type: FloatType},
+	{Key: "llm_gateway.traffic_mirror.enable_log", Type: BoolType},
+	// rate limit
+	{Key: "llm_gateway.rate_limit.enable", Type: BoolType},
+	{Key: "llm_gateway.rate_limit.action", Type: StringType},
+	{Key: "llm_gateway.rate_limit.scope", Type: StringType},
+	{Key: "llm_gateway.rate_limit.max_requests_per_instance", Type: IntType},
+	{Key: "llm_gateway.rate_limit.max_tokens_per_instance", Type: IntType},
+	{Key: "llm_gateway.rate_limit.max_prefill_requests_per_instance", Type: IntType},
+	{Key: "llm_gateway.rate_limit.max_prefill_tokens_per_instance", Type: IntType},
+	{Key: "llm_gateway.rate_limit.max_decode_requests_per_instance", Type: IntType},
+	{Key: "llm_gateway.rate_limit.max_decode_tokens_per_instance", Type: IntType},
+	{Key: "llm_gateway.rate_limit.max_ratelimit_wait_timeout", Type: IntType},
+	{Key: "llm_gateway.rate_limit.ratelimit_retry_interval", Type: IntType},
+	// service-router
+	{Key: "llm_gateway.route_policy", Type: StringType},
+	{Key: "llm_gateway.route_config", Type: StringType},
+}
+
 // ConfigPath represents a single configuration file and its metadata.
 type ConfigPath struct {
 	path            string
@@ -26,6 +53,7 @@ const (
 	IntType
 	FloatType
 	BoolType
+	JSONType
 )
 
 // PrefetchKey defines a key that should be parsed and cached on load.
@@ -34,8 +62,8 @@ type PrefetchKey struct {
 	Type PrefetchKeyType
 }
 
-// ConfigManager manages configuration configs with hot reload capability
-type ConfigManager struct {
+// DynamicConfigManager manages configuration configs with hot reload capability
+type DynamicConfigManager struct {
 	// configs holds the list of configuration files, later ones have higher priority.
 	configs      []ConfigPath
 	prefetchKeys map[string]PrefetchKey // Map of keys to prefetch and cache.
@@ -45,6 +73,7 @@ type ConfigManager struct {
 	intValues    map[string]int
 	floatValues  map[string]float64
 	boolValues   map[string]bool
+	jsonValues   map[string]interface{}
 
 	// Original JSON Query for non-prefetch keys.
 	jq            *jsquery.JQ
@@ -52,8 +81,21 @@ type ConfigManager struct {
 	reloadChannel chan struct{}
 }
 
+var (
+	once          sync.Once
+	configManager *DynamicConfigManager
+)
+
+func GetDynamicConfigManager() *DynamicConfigManager {
+	once.Do(func() {
+		// Initialize with default config paths and no prefetch keys.
+		configManager = newConfigManager([]string{propertiesFile}, registerPrefetchKeys)
+	})
+	return configManager
+}
+
 // NewConfigManager creates a new config manager with multiple config paths and prefetch keys.
-func NewConfigManager(configPaths []string, prefetchKeys []PrefetchKey) *ConfigManager {
+func newConfigManager(configPaths []string, prefetchKeys []PrefetchKey) *DynamicConfigManager {
 	configs := make([]ConfigPath, len(configPaths))
 	for i, path := range configPaths {
 		configs[i] = ConfigPath{path: path}
@@ -64,13 +106,14 @@ func NewConfigManager(configPaths []string, prefetchKeys []PrefetchKey) *ConfigM
 		prefetchKeyMap[pk.Key] = pk
 	}
 
-	cm := &ConfigManager{
+	cm := &DynamicConfigManager{
 		configs:       configs,
 		prefetchKeys:  prefetchKeyMap,
 		stringValues:  make(map[string]string),
 		intValues:     make(map[string]int),
 		floatValues:   make(map[string]float64),
 		boolValues:    make(map[string]bool),
+		jsonValues:    make(map[string]interface{}),
 		reloadChannel: make(chan struct{}, 1),
 	}
 
@@ -85,7 +128,7 @@ func NewConfigManager(configPaths []string, prefetchKeys []PrefetchKey) *ConfigM
 
 // Get returns the configuration value for the specified key.
 // It first checks prefetched keys, then falls back to dynamic lookup.
-func (cm *ConfigManager) Get(key string) interface{} {
+func (cm *DynamicConfigManager) Get(key string) interface{} {
 	// Check if key is prefetched
 	if pk, exists := cm.prefetchKeys[key]; exists {
 		cm.mutex.RLock()
@@ -112,9 +155,15 @@ func (cm *ConfigManager) Get(key string) interface{} {
 				cm.mutex.RUnlock()
 				return val
 			}
+		case JSONType:
+			if val, exists := cm.jsonValues[key]; exists {
+				cm.mutex.RUnlock()
+				return val
+			}
 		}
 
 		cm.mutex.RUnlock()
+		return nil
 	}
 
 	// Fallback to original dynamic lookup via JQ
@@ -134,7 +183,7 @@ func (cm *ConfigManager) Get(key string) interface{} {
 
 // GetStringWithDefault returns a string config value by key, utilizing prefetch cache when available.
 // If the key is not found or is of the wrong type, it returns the provided default value.
-func (cm *ConfigManager) GetStringWithDefault(key, defaultValue string) string {
+func (cm *DynamicConfigManager) GetStringWithDefault(key, defaultValue string) string {
 	if val := cm.Get(key); val != nil {
 		if str, ok := val.(string); ok {
 			return str
@@ -145,7 +194,7 @@ func (cm *ConfigManager) GetStringWithDefault(key, defaultValue string) string {
 
 // GetIntWithDefault returns an integer config value by key, utilizing prefetch cache when available.
 // If the key is not found or is of the wrong type, it returns the provided default value.
-func (cm *ConfigManager) GetIntWithDefault(key string, defaultValue int) int {
+func (cm *DynamicConfigManager) GetIntWithDefault(key string, defaultValue int) int {
 	if val := cm.Get(key); val != nil {
 		if i, ok := val.(int); ok {
 			return i
@@ -159,7 +208,7 @@ func (cm *ConfigManager) GetIntWithDefault(key string, defaultValue int) int {
 
 // GetFloatWithDefault returns a float config value by key, utilizing prefetch cache when available.
 // If the key is not found or is of the wrong type, it returns the provided default value.
-func (cm *ConfigManager) GetFloatWithDefault(key string, defaultValue float64) float64 {
+func (cm *DynamicConfigManager) GetFloatWithDefault(key string, defaultValue float64) float64 {
 	if val := cm.Get(key); val != nil {
 		if f, ok := val.(float64); ok {
 			return f
@@ -173,7 +222,7 @@ func (cm *ConfigManager) GetFloatWithDefault(key string, defaultValue float64) f
 
 // GetBoolWithDefault returns a boolean config value by key, utilizing prefetch cache when available.
 // If the key is not found or is of the wrong type, it returns the provided default value.
-func (cm *ConfigManager) GetBoolWithDefault(key string, defaultValue bool) bool {
+func (cm *DynamicConfigManager) GetBoolWithDefault(key string, defaultValue bool) bool {
 	if val := cm.Get(key); val != nil {
 		if b, ok := val.(bool); ok {
 			return b
@@ -182,8 +231,17 @@ func (cm *ConfigManager) GetBoolWithDefault(key string, defaultValue bool) bool 
 	return defaultValue
 }
 
+// GetJSONWithDefault returns a JSON config value by key, utilizing prefetch cache when available.
+// If the key is not found, it returns the provided default value.
+func (cm *DynamicConfigManager) GetJSONWithDefault(key string, defaultValue interface{}) interface{} {
+	if val := cm.Get(key); val != nil {
+		return val
+	}
+	return defaultValue
+}
+
 // loadConfigs loads configs from all config files, merging them with later files taking precedence.
-func (cm *ConfigManager) loadConfigs() error {
+func (cm *DynamicConfigManager) loadConfigs() error {
 	// Create a merged JSON Query to hold combined config data.
 	finalJQ := jsquery.NewQuery(nil)
 
@@ -192,6 +250,7 @@ func (cm *ConfigManager) loadConfigs() error {
 	newIntValues := make(map[string]int)
 	newFloatValues := make(map[string]float64)
 	newBoolValues := make(map[string]bool)
+	newJsonValues := make(map[string]interface{})
 
 	for i := range cm.configs {
 		data, err := os.ReadFile(cm.configs[i].path)
@@ -222,31 +281,26 @@ func (cm *ConfigManager) loadConfigs() error {
 		case StringType:
 			if str, ok := rawVal.(string); ok {
 				newStringValues[pk.Key] = str
-			} else {
-				newStringValues[pk.Key] = ""
 			}
 		case IntType:
 			if i, ok := rawVal.(int); ok {
 				newIntValues[pk.Key] = i
 			} else if f, ok := rawVal.(float64); ok {
 				newIntValues[pk.Key] = int(f)
-			} else {
-				newIntValues[pk.Key] = 0
 			}
 		case FloatType:
 			if f, ok := rawVal.(float64); ok {
 				newFloatValues[pk.Key] = f
 			} else if i, ok := rawVal.(int); ok {
 				newFloatValues[pk.Key] = float64(i)
-			} else {
-				newFloatValues[pk.Key] = 0.0
 			}
 		case BoolType:
 			if b, ok := rawVal.(bool); ok {
 				newBoolValues[pk.Key] = b
-			} else {
-				newBoolValues[pk.Key] = false
 			}
+		case JSONType:
+			// For JSON type, store the raw value regardless of its actual type
+			newJsonValues[pk.Key] = rawVal
 		}
 	}
 
@@ -257,13 +311,14 @@ func (cm *ConfigManager) loadConfigs() error {
 	cm.intValues = newIntValues
 	cm.floatValues = newFloatValues
 	cm.boolValues = newBoolValues
+	cm.jsonValues = newJsonValues
 	cm.mutex.Unlock()
 
 	return nil
 }
 
 // watchConfigs watches the config files for changes
-func (cm *ConfigManager) watchConfigs() {
+func (cm *DynamicConfigManager) watchConfigs() {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -278,7 +333,7 @@ func (cm *ConfigManager) watchConfigs() {
 }
 
 // checkForUpdates checks if any of the config files have been updated.
-func (cm *ConfigManager) checkForUpdates() {
+func (cm *DynamicConfigManager) checkForUpdates() {
 	needsReload := false
 
 	for i := range cm.configs {
@@ -311,7 +366,7 @@ func (cm *ConfigManager) checkForUpdates() {
 }
 
 // ForceReload forces a reload of the config file
-func (cm *ConfigManager) ForceReload() {
+func (cm *DynamicConfigManager) ForceReload() {
 	select {
 	case cm.reloadChannel <- struct{}{}:
 	default:

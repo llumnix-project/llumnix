@@ -14,15 +14,12 @@ import (
 	"k8s.io/klog/v2"
 
 	"llm-gateway/pkg/consts"
-	prop "llm-gateway/pkg/property"
 )
 
 // TODO(sunbiao.sun): Group the parameters in the config.
 type Config struct {
 	Port int
 	Host string
-
-	configManager *prop.ConfigManager
 
 	Service              string // service name
 	LlmScheduler         string // llm scheduler service
@@ -413,10 +410,6 @@ func (c *Config) AddFlags(flags *pflag.FlagSet) {
 	flags.AddGoFlagSet(flag.CommandLine)
 }
 
-func (c *Config) GetConfigManager() *prop.ConfigManager {
-	return c.configManager
-}
-
 func (c *Config) IsPDSplitMode() bool {
 	return c.PDSplitMode != ""
 }
@@ -500,20 +493,6 @@ func (c *Config) setupPrefixCacheSize() error {
 	return nil
 }
 
-// createConfigManager initializes the dynamic property manager for runtime config updates.
-func (c *Config) createConfigManager() error {
-	prefetchKeys := []prop.PrefetchKey{
-		{Key: "llm_gateway.traffic_mirror.enable", Type: prop.BoolType},
-		{Key: "llm_gateway.traffic_mirror.target", Type: prop.StringType},
-		{Key: "llm_gateway.traffic_mirror.ratio", Type: prop.FloatType},
-		{Key: "llm_gateway.traffic_mirror.token", Type: prop.StringType},
-		{Key: "llm_gateway.traffic_mirror.timeout", Type: prop.FloatType},
-		{Key: "llm_gateway.traffic_mirror.enable_log", Type: prop.BoolType},
-	}
-	c.configManager = prop.NewConfigManager([]string{consts.PropertyFile}, prefetchKeys)
-	return nil
-}
-
 // updateDiscoveryEndpoint overrides the discovery endpoint from the DISCOVERY_ENDPOINT environment variable.
 func (c *Config) updateDiscoveryEndpoint() error {
 	discoveryEndpoint := os.Getenv("DISCOVERY_ENDPOINT")
@@ -528,11 +507,6 @@ func (c *Config) updateDiscoveryEndpoint() error {
 func (c *Config) Complete(flags *pflag.FlagSet) error {
 	// Load configuration from property files
 	c.loadCfgFromProperties()
-
-	// Initialize dynamic property manager for runtime config updates
-	if err := c.createConfigManager(); err != nil {
-		return fmt.Errorf("failed to create config manager: %w", err)
-	}
 
 	// Override discovery endpoint from environment variable
 	if err := c.updateDiscoveryEndpoint(); err != nil {

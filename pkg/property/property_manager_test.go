@@ -62,7 +62,7 @@ func TestPropertyManager_Get(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create PropertyManager
-			pm := NewPropertyManager([]string{configPath}, tc.prefetchKeys)
+			pm := newConfigManager([]string{configPath}, tc.prefetchKeys)
 
 			// Test getting existing keys
 			assert.Equal(t, "stringValue", pm.Get("stringKey"))
@@ -101,17 +101,19 @@ func TestPropertyManager_GetStringWithDefault(t *testing.T) {
 			name: "WithPrefetch",
 			prefetchKeys: []PrefetchKey{
 				{Key: "stringKey", Type: StringType},
+				{Key: "extraKey", Type: StringType},
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			pm := NewPropertyManager([]string{configPath}, tc.prefetchKeys)
+			pm := newConfigManager([]string{configPath}, tc.prefetchKeys)
 
 			// Test getting string value
-			assert.Equal(t, "stringValue", pm.GetStringWithDefault("stringKey", ""))
+			assert.Equal(t, "stringValue", pm.GetStringWithDefault("stringKey", "stringValue"))
 			assert.Equal(t, "defaultValue", pm.GetStringWithDefault("nonExistentKey", "defaultValue"))
+			assert.Equal(t, "defaultValue", pm.GetStringWithDefault("extraKey", "defaultValue"))
 
 			// Test getting non-string value (should return default)
 			assert.Equal(t, "default", pm.GetStringWithDefault("intKey", "default"))
@@ -148,17 +150,19 @@ func TestPropertyManager_GetIntWithDefault(t *testing.T) {
 			prefetchKeys: []PrefetchKey{
 				{Key: "intKey", Type: IntType},
 				{Key: "floatKey", Type: IntType},
+				{Key: "extraKey", Type: IntType},
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			pm := NewPropertyManager([]string{configPath}, tc.prefetchKeys)
+			pm := newConfigManager([]string{configPath}, tc.prefetchKeys)
 
 			// Test getting integer value
 			assert.Equal(t, 42, pm.GetIntWithDefault("intKey", 0))
 			assert.Equal(t, 99, pm.GetIntWithDefault("nonExistentKey", 99))
+			assert.Equal(t, 9, pm.GetIntWithDefault("extraKey", 9))
 
 			// Test getting integer from float value
 			assert.Equal(t, 3, pm.GetIntWithDefault("floatKey", 0))
@@ -198,17 +202,19 @@ func TestPropertyManager_GetFloatWithDefault(t *testing.T) {
 			prefetchKeys: []PrefetchKey{
 				{Key: "floatKey", Type: FloatType},
 				{Key: "intKey", Type: FloatType},
+				{Key: "extraKey", Type: FloatType},
 			},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			pm := NewPropertyManager([]string{configPath}, tc.prefetchKeys)
+			pm := newConfigManager([]string{configPath}, tc.prefetchKeys)
 
 			// Test getting float value
 			assert.Equal(t, 3.14, pm.GetFloatWithDefault("floatKey", 0.0))
 			assert.Equal(t, 9.9, pm.GetFloatWithDefault("nonExistentKey", 9.9))
+			assert.Equal(t, 19.9, pm.GetFloatWithDefault("extraKey", 19.9))
 
 			// Test getting float from integer value
 			assert.Equal(t, 42.0, pm.GetFloatWithDefault("intKey", 0.0))
@@ -252,7 +258,7 @@ func TestPropertyManager_GetBoolWithDefault(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			pm := NewPropertyManager([]string{configPath}, tc.prefetchKeys)
+			pm := newConfigManager([]string{configPath}, tc.prefetchKeys)
 
 			// Test getting boolean value
 			assert.Equal(t, true, pm.GetBoolWithDefault("boolKey", false))
@@ -263,6 +269,141 @@ func TestPropertyManager_GetBoolWithDefault(t *testing.T) {
 
 			// Test getting non-existent key
 			assert.Equal(t, true, pm.GetBoolWithDefault("nonExistentKey", true))
+		})
+	}
+}
+
+func TestPropertyManager_GetJSONWithDefault(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.json")
+
+	// Define struct with rich field types
+	type SubObject struct {
+		SubKey1  string                 `json:"subKey1"`
+		SubKey2  int                    `json:"subKey2"`
+		SubKey3  bool                   `json:"subKey3"`
+		SubKey4  float64                `json:"subKey4"`
+		SubKey5  map[string]interface{} `json:"subKey5"`
+		SubArray []interface{}          `json:"subArray"`
+	}
+
+	// Create test configuration with various JSON types
+	// Using JSON string directly to ensure proper structure
+	testConfigStr := `{
+		"objectKey": {
+			"subKey1": "subValue1",
+			"subKey2": 42,
+			"subKey3": true,
+			"subKey4": 3.14,
+			"subKey5": {
+				"nestedKey1": "nestedValue1",
+				"nestedKey2": 100
+			},
+			"subArray": ["item1", "item2", "item3"]
+		},
+		"arrayKey": [1, 2, 3],
+		"stringKey": "stringValue",
+		"intKey": 42,
+		"floatKey": 3.14,
+		"boolKey": true
+	}`
+
+	// Write JSON string to config file
+	err := os.WriteFile(configPath, []byte(testConfigStr), 0644)
+	require.NoError(t, err)
+
+	// Test the cases without prefetch and with prefetch
+	testCases := []struct {
+		name         string
+		prefetchKeys []PrefetchKey
+	}{
+		{
+			name:         "WithoutPrefetch",
+			prefetchKeys: []PrefetchKey{},
+		},
+		{
+			name: "WithPrefetch",
+			prefetchKeys: []PrefetchKey{
+				{Key: "objectKey", Type: JSONType},
+				{Key: "arrayKey", Type: JSONType},
+				{Key: "stringKey", Type: JSONType},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			pm := newConfigManager([]string{configPath}, tc.prefetchKeys)
+
+			// Test getting object value
+			objVal := pm.GetJSONWithDefault("objectKey", "default")
+			assert.NotEqual(t, "default", objVal) // Ensure we didn't get the default value
+			assert.NotNil(t, objVal)
+			objMap, ok := objVal.(map[string]interface{})
+			assert.True(t, ok)
+			assert.Equal(t, "subValue1", objMap["subKey1"])
+			assert.Equal(t, float64(42), objMap["subKey2"])
+
+			// Test unmarshaling JSON to struct with rich field types
+			// Convert to bytes and unmarshal to struct
+			objBytes, err := json.Marshal(objVal)
+			require.NoError(t, err)
+
+			var objStruct SubObject
+			err = json.Unmarshal(objBytes, &objStruct)
+			require.NoError(t, err)
+
+			assert.Equal(t, "subValue1", objStruct.SubKey1)
+			assert.Equal(t, 42, objStruct.SubKey2)
+			assert.Equal(t, true, objStruct.SubKey3)
+			assert.Equal(t, 3.14, objStruct.SubKey4)
+			assert.Equal(t, "nestedValue1", objStruct.SubKey5["nestedKey1"])
+			assert.Equal(t, float64(100), objStruct.SubKey5["nestedKey2"])
+			assert.Len(t, objStruct.SubArray, 3)
+			assert.Equal(t, "item1", objStruct.SubArray[0])
+			assert.Equal(t, "item2", objStruct.SubArray[1])
+			assert.Equal(t, "item3", objStruct.SubArray[2])
+
+			// Test getting array value
+			arrVal := pm.GetJSONWithDefault("arrayKey", "default")
+			assert.NotEqual(t, "default", arrVal) // Ensure we didn't get the default value
+			assert.NotNil(t, arrVal)
+			arrSlice, ok := arrVal.([]interface{})
+			assert.True(t, ok)
+			assert.Equal(t, 3, len(arrSlice))
+			assert.Equal(t, float64(1), arrSlice[0])
+			assert.Equal(t, float64(2), arrSlice[1])
+			assert.Equal(t, float64(3), arrSlice[2])
+
+			// Test getting primitive values as JSON
+			strVal := pm.GetJSONWithDefault("stringKey", "default")
+			assert.NotEqual(t, "default", strVal) // Ensure we didn't get the default value
+			assert.Equal(t, "stringValue", strVal)
+
+			intVal := pm.GetJSONWithDefault("intKey", "default")
+			assert.NotEqual(t, "default", intVal) // Ensure we didn't get the default value
+			assert.Equal(t, float64(42), intVal)  // Note: JSON unmarshals integers as float64
+
+			floatVal := pm.GetJSONWithDefault("floatKey", "default")
+			assert.NotEqual(t, "default", floatVal) // Ensure we didn't get the default value
+			assert.Equal(t, 3.14, floatVal)
+
+			boolVal := pm.GetJSONWithDefault("boolKey", "default")
+			assert.NotEqual(t, "default", boolVal) // Ensure we didn't get the default value
+			assert.Equal(t, true, boolVal)
+
+			// Test getting non-existent key
+			defaultVal := pm.GetJSONWithDefault("nonExistentKey", "default")
+			assert.Equal(t, "default", defaultVal)
+
+			// Test nested key access
+			nestedVal := pm.GetJSONWithDefault("objectKey.subKey1", "default")
+			assert.NotEqual(t, "default", nestedVal) // Ensure we didn't get the default value
+			assert.Equal(t, "subValue1", nestedVal)
+
+			nestedVal2 := pm.GetJSONWithDefault("objectKey.subKey2", "default")
+			assert.NotEqual(t, "default", nestedVal2) // Ensure we didn't get the default value
+			assert.Equal(t, float64(42), nestedVal2)
 		})
 	}
 }
@@ -294,7 +435,7 @@ func TestPropertyManager_NestedKeys(t *testing.T) {
 }`
 	jq, _ := jsquery.NewStringQuery("{}")
 	cfg, _ := jsquery.NewStringQuery(testConfig)
-	mirrorJQ, err := cfg.QueryToJq("llm-gateway.traffic_mirror")
+	mirrorJQ, err := cfg.QueryToJq("llm_gateway.traffic_mirror")
 	if err == nil {
 		mirror := struct {
 			Enable    bool   `json:"enable"`
@@ -307,7 +448,7 @@ func TestPropertyManager_NestedKeys(t *testing.T) {
 			EnableLog: true,
 		}
 		if err = mirrorJQ.As(&mirror); err == nil {
-			jq.Set("llm-gateway.traffic_mirror", mirror)
+			jq.Set("llm_gateway.traffic_mirror", mirror)
 		}
 	}
 	klog.Infof(jq.String())
@@ -339,7 +480,7 @@ func TestPropertyManager_NestedKeys(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create PropertyManager
-			pm := NewPropertyManager([]string{configPath}, tc.prefetchKeys)
+			pm := newConfigManager([]string{configPath}, tc.prefetchKeys)
 
 			// Retrieve nested values using dot notation
 			mirrorTarget := pm.GetStringWithDefault("llm_gateway.traffic_mirror.target", "")
@@ -408,7 +549,7 @@ func TestPropertyManager_HotReload(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			createTestConfigFile(t, configPath, initialConfig)
 
-			pm := NewPropertyManager([]string{configPath}, tc.prefetchKeys)
+			pm := newConfigManager([]string{configPath}, tc.prefetchKeys)
 
 			// Verify initial value
 			assert.Equal(t, "initialValue", pm.GetStringWithDefault("key", ""))
@@ -460,7 +601,7 @@ func TestPropertyManager_NonExistentFile(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create PropertyManager - should work even if file doesn't exist
-			pm := NewPropertyManager([]string{configPath}, tc.prefetchKeys)
+			pm := newConfigManager([]string{configPath}, tc.prefetchKeys)
 
 			// Accessing any key should return default values
 			assert.Equal(t, "defaultString", pm.GetStringWithDefault("anyKey", "defaultString"))
@@ -501,7 +642,7 @@ func TestPropertyManager_InvalidJSON(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create PropertyManager - should work even with invalid JSON
-			pm := NewPropertyManager([]string{configPath}, tc.prefetchKeys)
+			pm := newConfigManager([]string{configPath}, tc.prefetchKeys)
 
 			// Accessing any key should return default values
 			assert.Equal(t, "defaultString", pm.GetStringWithDefault("anyKey", "defaultString"))
@@ -565,7 +706,7 @@ func TestPropertyManager_MultipleConfigPaths(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create PropertyManager with multiple config paths
-			pm := NewPropertyManager([]string{configPath1, configPath2}, tc.prefetchKeys)
+			pm := newConfigManager([]string{configPath1, configPath2}, tc.prefetchKeys)
 
 			// Test that second config overrides first config
 			assert.Equal(t, "value2", pm.GetStringWithDefault("commonKey", ""))

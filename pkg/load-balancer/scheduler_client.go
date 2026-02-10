@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	scheduleRequestTimeout = 2 * time.Second
+	scheduleRequestTimeout = 3 * time.Second
 	releaseTryCount        = 3
 )
 
@@ -180,12 +180,6 @@ func (cb *SchedulerClient) Get(req *types.RequestContext) (types.ScheduledResult
 		if err == nil {
 			return result, nil
 		}
-
-		// don't return errors directly, as the scheduler may not have
-		// fully loaded all backend service instances right after a restart.
-		// if err == consts.ErrorEndpointNotFound {
-		// 	return nil, err
-		// }
 
 		// all service endpoints are busy, wait a period for next try
 		if errors.Is(err, consts.ErrorNoAvailableEndpoint) {

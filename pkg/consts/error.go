@@ -23,6 +23,10 @@ var (
 	ErrorCmsNotAvailable        = errors.New("cms not available")
 	ErrorBackendBadRequest      = errors.New("bad inference request") // inference return not status ok
 
+	// rate limit error
+	ErrorRateLimitExceeded     = errors.New("rate limit exceeded")
+	ErrorRateLimitQueueTimeOut = errors.New("rate limit queue: request wait timeout")
+
 	// protocol error
 	ErrorInvalidModel                            = errors.New("this model is not supported now")
 	ErrorContentFieldsMisused                    = errors.New("can't use both Content and MultiContent properties simultaneously")

@@ -102,6 +102,26 @@ func (iv *InstanceView) NumRequests() int64 {
 	return int64(len(iv.requestStates))
 }
 
+func (iv *InstanceView) NumWaitingRequests() int64 {
+	cnt := int64(0)
+	for _, reqState := range iv.requestStates {
+		if !reqState.prefillCompleted {
+			cnt += 1
+		}
+	}
+	return cnt
+}
+
+func (iv *InstanceView) NumWaitingTokens() int64 {
+	cnt := int64(0)
+	for _, reqState := range iv.requestStates {
+		if !reqState.prefillCompleted {
+			cnt += reqState.numTokens
+		}
+	}
+	return cnt
+}
+
 func (iv *InstanceView) GetRequestIds() []string {
 	reqIds := make([]string, 0, len(iv.requestStates))
 	for reqId := range iv.requestStates {
