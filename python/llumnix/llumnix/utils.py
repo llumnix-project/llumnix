@@ -204,13 +204,11 @@ def get_free_port() -> int:
 
 # ================== Others ==================
 def get_metric_push_interval():
-    interval = envs.LLUMNIX_METRIC_PUSH_INTERVAL
-    if isinstance(interval, str):
-        interval = float(interval)
-    if interval < 0:
-        logger.warning("LLUMNIX_METRIC_PUSH_INTERVAL must be positive, get {}, set to default value 1.0".format(interval))
-        interval = 1.0
-    return interval
+    status_interval = envs.LLUMNIX_STATUS_PUSH_INTERVAL
+    metadata_interval = envs.LLUMNIX_METADATA_PUSH_INTERVAL
+    assert status_interval > 0
+    assert metadata_interval > 0
+    return status_interval, metadata_interval
 
 # pylint: disable=unused-argument
 def _loop_on_ex(loop, context):

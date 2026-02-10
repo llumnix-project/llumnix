@@ -9,6 +9,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import asyncio
 import time
 
 from redis.exceptions import ConnectionError
@@ -196,3 +197,30 @@ async def test_cms_write_client():
     await cms_write_client.remove_instance(instance_id2)
     assert await redis_client.get(f"{LLUMNIX_INSTANCE_METADATA_PREFIX}{instance_id1}") is None
     assert await redis_client.get(f"{LLUMNIX_INSTANCE_STATUS_PREFIX}{instance_id2}") is None
+
+async def test_cms_write_client_timeout():
+    redis_client = await get_redis_client()
+    # Skip this test if we are using the mock client, which may not support expiration.
+    if isinstance(redis_client, MockAsyncRedisClient):
+        pytest.skip("Timeout test requires a real Redis server to test TTL.")
+    expired_time_s = 2
+    wait_time_s = expired_time_s + 1
+    cms_write_client = CMSWriteClient(redis_client=redis_client)
+    instance_id = gen_instance_id(99)
+    metadata_key = f"{LLUMNIX_INSTANCE_METADATA_PREFIX}{instance_id}"
+    status_key = f"{LLUMNIX_INSTANCE_STATUS_PREFIX}{instance_id}"
+    instance_metadata = gen_instance_metadata(instance_id)
+    await cms_write_client.add_instance(instance_id, instance_metadata, expired_time_s)
+    instance_status = gen_instance_status(instance_id)
+    await cms_write_client.update_instance_status(instance_id, instance_status, expired_time_s)
+    assert await redis_client.get(metadata_key) is not None
+    assert await redis_client.get(status_key) is not None
+    await asyncio.sleep(wait_time_s)
+    assert await redis_client.get(metadata_key) is None, "Metadata key should have expired"
+    assert await redis_client.get(status_key) is None, "Status key should have expired"
+    await cms_write_client.add_instance(instance_id, instance_metadata, expired=30)
+    new_instance_metadata = gen_instance_metadata(instance_id, instance_type="decode")
+    await cms_write_client.update_instance_metadata(instance_id, new_instance_metadata, expired_time_s)
+    assert await redis_client.get(metadata_key) is not None
+    await asyncio.sleep(wait_time_s)
+    assert await redis_client.get(metadata_key) is None, "Updated metadata key should have expired"

@@ -20,7 +20,7 @@ class HealthStatus(str, Enum):
 
 @dataclass
 class HeartbeatConfig:
-    interval: int = 30
+    interval: int = 10
     timeout: int = 5
     retry_times: int = 1
     retry_interval: int = 1

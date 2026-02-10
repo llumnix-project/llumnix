@@ -72,8 +72,16 @@ class RedisClient:
             return key.decode("utf-8")
         return key
 
-    async def set(self, key, value):
-        await self.redis_client.set(key, value)
+    async def set(self, key, value, ex=0):
+        """
+        Sets a key-value pair in Redis with an optional expiration.
+        If 'ex' is positive, the key will have a timeout in ex seconds.
+        Otherwise, it will be permanent.
+        """
+        if ex > 0:
+            await self.redis_client.set(key, value, ex=ex)
+        else:
+            await self.redis_client.set(key, value)
 
     async def get(self, key):
         return await self.redis_client.get(key)
@@ -114,25 +122,25 @@ class CMSWriteClient:
         self.redis_client = redis_client if redis_client else RedisClient()
         logger.info("CMSWriteClient initialized")
 
-    async def add_instance(self, instance_id: str, instance_metadata: InstanceMetadata):
+    async def add_instance(self, instance_id: str, instance_metadata: InstanceMetadata, expired: int = 0):
         logger.info("Adding instance: %s", instance_id)
         key = LLUMNIX_INSTANCE_METADATA_PREFIX + instance_id
         value = instance_metadata.SerializeToString()
-        await self.redis_client.set(key, value)
+        await self.redis_client.set(key, value, expired)
 
     async def update_instance_metadata(
-        self, instance_id: str, instance_metadata: InstanceMetadata
+        self, instance_id: str, instance_metadata: InstanceMetadata, expired: int = 0
     ):
-        logger.info("Update instance metadata: %s", instance_id)
+        logger.debug("Update instance metadata: %s", instance_id)
         key = LLUMNIX_INSTANCE_METADATA_PREFIX + instance_id
         value = instance_metadata.SerializeToString()
-        await self.redis_client.set(key, value)
+        await self.redis_client.set(key, value, expired)
 
-    async def update_instance_status(self, instance_id, instance_status: InstanceStatus):
+    async def update_instance_status(self, instance_id, instance_status: InstanceStatus, expired: int = 0):
         logger.debug("Update instance status: %s, update_id: %d", instance_id, instance_status.update_id)
         key = LLUMNIX_INSTANCE_STATUS_PREFIX + instance_id
         value = instance_status.SerializeToString()
-        await self.redis_client.set(key, value)
+        await self.redis_client.set(key, value, expired)
 
     async def remove_instance(self, instance_id):
         logger.info("Removing instance: %s", instance_id)
