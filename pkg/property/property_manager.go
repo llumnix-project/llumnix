@@ -4,6 +4,8 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"os"
+	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -62,6 +64,20 @@ type PrefetchKey struct {
 	Type PrefetchKeyType
 }
 
+// ConfigChangeListener receives notifications when configuration changes.
+// Implementations should handle changes quickly to avoid blocking other listeners.
+type ConfigChangeListener interface {
+	// OnConfigChanged is called when any of the watched keys change.
+	// keys: list of changed configuration keys
+	OnConfigChanged(keys []string)
+}
+
+// listenerRegistration holds a listener and its key prefix filter.
+type listenerRegistration struct {
+	listener  ConfigChangeListener
+	keyPrefix string // empty means listen to all keys
+}
+
 // DynamicConfigManager manages configuration configs with hot reload capability
 type DynamicConfigManager struct {
 	// configs holds the list of configuration files, later ones have higher priority.
@@ -79,6 +95,10 @@ type DynamicConfigManager struct {
 	jq            *jsquery.JQ
 	mutex         sync.RWMutex
 	reloadChannel chan struct{}
+
+	// Change listeners with optional key prefix filters.
+	listeners      []listenerRegistration
+	listenersMutex sync.RWMutex
 }
 
 var (
@@ -117,7 +137,7 @@ func newConfigManager(configPaths []string, prefetchKeys []PrefetchKey) *Dynamic
 		reloadChannel: make(chan struct{}, 1),
 	}
 
-	// Load initial configs
+	// Load initial configs (no notification on initial load)
 	cm.loadConfigs()
 
 	// Start watching for changes
@@ -240,8 +260,207 @@ func (cm *DynamicConfigManager) GetJSONWithDefault(key string, defaultValue inte
 	return defaultValue
 }
 
+// RegisterListener registers a listener to be notified of config changes.
+// keyPrefix: if non-empty, only changes to keys with this prefix will trigger notifications.
+// Example: RegisterListener(listener, "llm_gateway.rate_limit.") will only notify for rate limit config changes.
+//
+// IMPORTANT: The listener will be immediately notified with current matching keys to ensure
+// it can initialize based on existing configuration.
+func (cm *DynamicConfigManager) RegisterListener(listener ConfigChangeListener, keyPrefix string) {
+	cm.listenersMutex.Lock()
+	defer cm.listenersMutex.Unlock()
+	cm.listeners = append(cm.listeners, listenerRegistration{
+		listener:  listener,
+		keyPrefix: keyPrefix,
+	})
+	klog.V(3).Infof("Registered config listener with key prefix: %q", keyPrefix)
+
+	// Immediately notify the listener with current matching keys for initialization
+	cm.mutex.RLock()
+	matchedKeys := cm.collectMatchingKeys(keyPrefix)
+	cm.mutex.RUnlock()
+
+	if len(matchedKeys) > 0 {
+		klog.V(3).Infof("Notifying newly registered listener with %d initial keys", len(matchedKeys))
+		listener.OnConfigChanged(matchedKeys)
+	}
+}
+
+// collectMatchingKeys collects all config keys matching the given prefix.
+// MUST be called with cm.mutex held for reading.
+func (cm *DynamicConfigManager) collectMatchingKeys(keyPrefix string) []string {
+	matchedKeys := make([]string, 0)
+
+	// Collect from all cache types
+	for key := range cm.stringValues {
+		if keyPrefix == "" || strings.HasPrefix(key, keyPrefix) {
+			matchedKeys = append(matchedKeys, key)
+		}
+	}
+	for key := range cm.intValues {
+		if keyPrefix == "" || strings.HasPrefix(key, keyPrefix) {
+			if !contains(matchedKeys, key) {
+				matchedKeys = append(matchedKeys, key)
+			}
+		}
+	}
+	for key := range cm.floatValues {
+		if keyPrefix == "" || strings.HasPrefix(key, keyPrefix) {
+			if !contains(matchedKeys, key) {
+				matchedKeys = append(matchedKeys, key)
+			}
+		}
+	}
+	for key := range cm.boolValues {
+		if keyPrefix == "" || strings.HasPrefix(key, keyPrefix) {
+			if !contains(matchedKeys, key) {
+				matchedKeys = append(matchedKeys, key)
+			}
+		}
+	}
+	for key := range cm.jsonValues {
+		if keyPrefix == "" || strings.HasPrefix(key, keyPrefix) {
+			if !contains(matchedKeys, key) {
+				matchedKeys = append(matchedKeys, key)
+			}
+		}
+	}
+
+	return matchedKeys
+}
+
+// contains checks if a string slice contains a given string
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
+}
+
+// notifyListeners notifies all registered listeners about config changes.
+// Uses synchronous notification to ensure reliable, ordered delivery.
+func (cm *DynamicConfigManager) notifyListeners(changedKeys []string) {
+	if len(changedKeys) == 0 {
+		return
+	}
+
+	cm.listenersMutex.RLock()
+	defer cm.listenersMutex.RUnlock()
+
+	for _, reg := range cm.listeners {
+		// Filter keys by prefix if specified, no filter, send all changes
+		if reg.keyPrefix == "" {
+			reg.listener.OnConfigChanged(changedKeys)
+			continue
+		}
+
+		// Filter to only matching keys
+		filteredKeys := make([]string, 0, len(changedKeys))
+		for _, key := range changedKeys {
+			if strings.HasPrefix(key, reg.keyPrefix) {
+				filteredKeys = append(filteredKeys, key)
+			}
+		}
+
+		if len(filteredKeys) > 0 {
+			reg.listener.OnConfigChanged(filteredKeys)
+		}
+	}
+}
+
+// detectChangedKeys compares old and new values to determine which keys changed.
+func (cm *DynamicConfigManager) detectChangedKeys(
+	oldStrings map[string]string,
+	oldInts map[string]int,
+	oldFloats map[string]float64,
+	oldBools map[string]bool,
+	oldJsons map[string]interface{},
+	newStrings map[string]string,
+	newInts map[string]int,
+	newFloats map[string]float64,
+	newBools map[string]bool,
+	newJsons map[string]interface{},
+) []string {
+	cm.mutex.RLock()
+	defer cm.mutex.RUnlock()
+
+	changedKeys := make([]string, 0)
+
+	// Check string changes
+	for key, newVal := range newStrings {
+		if oldVal, exists := oldStrings[key]; !exists || oldVal != newVal {
+			changedKeys = append(changedKeys, key)
+		}
+	}
+	for key := range oldStrings {
+		if _, exists := newStrings[key]; !exists {
+			changedKeys = append(changedKeys, key)
+		}
+	}
+
+	// Check int changes
+	for key, newVal := range newInts {
+		if oldVal, exists := oldInts[key]; !exists || oldVal != newVal {
+			changedKeys = append(changedKeys, key)
+		}
+	}
+	for key := range oldInts {
+		if _, exists := newInts[key]; !exists {
+			changedKeys = append(changedKeys, key)
+		}
+	}
+
+	// Check float changes
+	for key, newVal := range newFloats {
+		if oldVal, exists := oldFloats[key]; !exists || oldVal != newVal {
+			changedKeys = append(changedKeys, key)
+		}
+	}
+	for key := range oldFloats {
+		if _, exists := newFloats[key]; !exists {
+			changedKeys = append(changedKeys, key)
+		}
+	}
+
+	// Check bool changes
+	for key, newVal := range newBools {
+		if oldVal, exists := oldBools[key]; !exists || oldVal != newVal {
+			changedKeys = append(changedKeys, key)
+		}
+	}
+	for key := range oldBools {
+		if _, exists := newBools[key]; !exists {
+			changedKeys = append(changedKeys, key)
+		}
+	}
+
+	// Check JSON changes
+	// Use reflect.DeepEqual for deep comparison of complex structures
+	for key, newVal := range newJsons {
+		oldVal, exists := oldJsons[key]
+		if !exists {
+			changedKeys = append(changedKeys, key)
+			continue
+		}
+		// Deep comparison handles maps, slices, and nested structures correctly
+		if !reflect.DeepEqual(oldVal, newVal) {
+			changedKeys = append(changedKeys, key)
+		}
+	}
+	for key := range oldJsons {
+		if _, exists := newJsons[key]; !exists {
+			changedKeys = append(changedKeys, key)
+		}
+	}
+
+	return changedKeys
+}
+
 // loadConfigs loads configs from all config files, merging them with later files taking precedence.
-func (cm *DynamicConfigManager) loadConfigs() error {
+// Returns the list of changed keys.
+func (cm *DynamicConfigManager) loadConfigs() ([]string, error) {
 	// Create a merged JSON Query to hold combined config data.
 	finalJQ := jsquery.NewQuery(nil)
 
@@ -304,6 +523,12 @@ func (cm *DynamicConfigManager) loadConfigs() error {
 		}
 	}
 
+	// Detect changes before updating
+	changedKeys := cm.detectChangedKeys(
+		cm.stringValues, cm.intValues, cm.floatValues, cm.boolValues, cm.jsonValues,
+		newStringValues, newIntValues, newFloatValues, newBoolValues, newJsonValues,
+	)
+
 	// Atomically update all internal state under lock
 	cm.mutex.Lock()
 	cm.jq = finalJQ
@@ -314,7 +539,7 @@ func (cm *DynamicConfigManager) loadConfigs() error {
 	cm.jsonValues = newJsonValues
 	cm.mutex.Unlock()
 
-	return nil
+	return changedKeys, nil
 }
 
 // watchConfigs watches the config files for changes
@@ -359,8 +584,10 @@ func (cm *DynamicConfigManager) checkForUpdates() {
 	}
 
 	if needsReload {
-		if err := cm.loadConfigs(); err == nil {
+		if changedKeys, err := cm.loadConfigs(); err == nil {
 			klog.Infof("Config files updated, reloaded configuration")
+			// Notify listeners after successful reload
+			cm.notifyListeners(changedKeys)
 		}
 	}
 }

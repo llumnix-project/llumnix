@@ -515,6 +515,268 @@ func TestPropertyManager_NestedKeys(t *testing.T) {
 	}
 }
 
+// mockListener implements ConfigChangeListener for testing
+type mockListener struct {
+	receivedKeys [][]string // Track all received key changes
+	lastKeys     []string   // Most recent keys
+	callCount    int        // Number of times OnConfigChanged was called
+}
+
+func (m *mockListener) OnConfigChanged(keys []string) {
+	m.receivedKeys = append(m.receivedKeys, keys)
+	m.lastKeys = keys
+	m.callCount++
+}
+
+func TestDynamicConfigManager_RegisterListener(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.json")
+
+	// Create initial config
+	initialConfig := map[string]interface{}{
+		"llm_gateway": map[string]interface{}{
+			"rate_limit": map[string]interface{}{
+				"enable":     true,
+				"max_tokens": float64(100), // JSON numbers are float64
+			},
+			"route_policy": "weight",
+		},
+		"other": map[string]interface{}{
+			"config": "value",
+		},
+	}
+	createTestConfigFile(t, configPath, initialConfig)
+
+	// Create config manager with prefetch keys
+	prefetchKeys := []PrefetchKey{
+		{Key: "llm_gateway.rate_limit.enable", Type: BoolType},
+		{Key: "llm_gateway.rate_limit.max_tokens", Type: IntType},
+		{Key: "llm_gateway.route_policy", Type: StringType},
+		{Key: "other.config", Type: StringType},
+	}
+	cm := newConfigManager([]string{configPath}, prefetchKeys)
+	defer cm.ForceReload()
+
+	t.Run("RegisterListenerReceivesInitialConfig", func(t *testing.T) {
+		// Verify config is loaded
+		assert.True(t, cm.GetBoolWithDefault("llm_gateway.rate_limit.enable", false), "Config should be loaded")
+		assert.Equal(t, 100, cm.GetIntWithDefault("llm_gateway.rate_limit.max_tokens", 0), "Config should be loaded")
+
+		listener := &mockListener{}
+		cm.RegisterListener(listener, "llm_gateway.rate_limit.")
+
+		// Should receive initial notification
+		assert.Equal(t, 1, listener.callCount, "Should be called once on registration")
+		assert.NotEmpty(t, listener.lastKeys, "Should receive initial keys")
+
+		// Check that only rate_limit keys are received
+		for _, key := range listener.lastKeys {
+			assert.Contains(t, key, "llm_gateway.rate_limit.", "Should only receive matching keys")
+		}
+	})
+
+	t.Run("ListenerWithEmptyPrefixReceivesAllKeys", func(t *testing.T) {
+		listener := &mockListener{}
+		cm.RegisterListener(listener, "")
+
+		// Should receive all keys
+		assert.Equal(t, 1, listener.callCount)
+		assert.GreaterOrEqual(t, len(listener.lastKeys), 4, "Should receive all 4 keys")
+	})
+
+	t.Run("MultipleListenersWithDifferentPrefixes", func(t *testing.T) {
+		listener1 := &mockListener{}
+		listener2 := &mockListener{}
+		listener3 := &mockListener{}
+
+		cm.RegisterListener(listener1, "llm_gateway.rate_limit.")
+		cm.RegisterListener(listener2, "llm_gateway.route_")
+		cm.RegisterListener(listener3, "other.")
+
+		// All should receive initial notification
+		assert.Equal(t, 1, listener1.callCount)
+		assert.Equal(t, 1, listener2.callCount)
+		assert.Equal(t, 1, listener3.callCount)
+
+		// Check prefix filtering
+		for _, key := range listener1.lastKeys {
+			assert.Contains(t, key, "llm_gateway.rate_limit.")
+		}
+		for _, key := range listener2.lastKeys {
+			assert.Contains(t, key, "llm_gateway.route_")
+		}
+		for _, key := range listener3.lastKeys {
+			assert.Contains(t, key, "other.")
+		}
+	})
+}
+
+func TestDynamicConfigManager_ConfigChangeNotification(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.json")
+
+	// Create initial config
+	initialConfig := map[string]interface{}{
+		"llm_gateway": map[string]interface{}{
+			"rate_limit": map[string]interface{}{
+				"enable":     false,
+				"max_tokens": float64(100),
+			},
+			"route_policy": "weight",
+		},
+	}
+	createTestConfigFile(t, configPath, initialConfig)
+
+	prefetchKeys := []PrefetchKey{
+		{Key: "llm_gateway.rate_limit.enable", Type: BoolType},
+		{Key: "llm_gateway.rate_limit.max_tokens", Type: IntType},
+		{Key: "llm_gateway.route_policy", Type: StringType},
+	}
+	cm := newConfigManager([]string{configPath}, prefetchKeys)
+
+	// 1. ListenerNotifiedOnConfigChange
+	listener := &mockListener{}
+	cm.RegisterListener(listener, "llm_gateway.rate_limit.")
+
+	initialCount := listener.callCount
+
+	// Update config file
+	updatedConfig := map[string]interface{}{
+		"llm_gateway": map[string]interface{}{
+			"rate_limit": map[string]interface{}{
+				"enable":     true,         // Changed
+				"max_tokens": float64(200), // Changed
+			},
+			"route_policy": "weight",
+		},
+	}
+	createTestConfigFile(t, configPath, updatedConfig)
+
+	// Trigger config reload
+	cm.ForceReload()
+	time.Sleep(100 * time.Millisecond) // Wait for reload
+
+	// Should be notified about changes
+	assert.Greater(t, listener.callCount, initialCount, "Should be notified of config change")
+	assert.NotEmpty(t, listener.lastKeys, "Should receive changed keys")
+
+	// Verify changed keys
+	expectedChangedKeys := []string{
+		"llm_gateway.rate_limit.enable",
+		"llm_gateway.rate_limit.max_tokens",
+	}
+	for _, expectedKey := range expectedChangedKeys {
+		assert.Contains(t, listener.lastKeys, expectedKey, "Should contain changed key")
+	}
+
+	// 2. ListenerNotNotifiedForUnmatchedPrefix
+	listener = &mockListener{}
+	// Register listener for rate_limit prefix only
+	cm.RegisterListener(listener, "llm_gateway.rate_limit.")
+
+	initialCount = listener.callCount
+	initialKeys := make([]string, len(listener.lastKeys))
+	copy(initialKeys, listener.lastKeys)
+
+	// Update only route_policy (doesn't match rate_limit prefix)
+	// Keep rate_limit values unchanged from previous test
+	updatedConfig = map[string]interface{}{
+		"llm_gateway": map[string]interface{}{
+			"rate_limit": map[string]interface{}{
+				"enable":     true,         // Same as before
+				"max_tokens": float64(200), // Same as before
+			},
+			"route_policy": "round_robin", // Changed - different prefix
+		},
+	}
+	createTestConfigFile(t, configPath, updatedConfig)
+
+	cm.ForceReload()
+	time.Sleep(100 * time.Millisecond)
+
+	// rate_limit listener should NOT be notified since only route_policy changed
+	assert.Equal(t, initialCount, listener.callCount, "Should NOT be notified for unmatched prefix changes")
+	// Keys should remain the same as initial notification
+	assert.ElementsMatch(t, initialKeys, listener.lastKeys, "Keys should not change")
+}
+
+func TestDynamicConfigManager_DetectChangedKeys(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.json")
+
+	initialConfig := map[string]interface{}{}
+	createTestConfigFile(t, configPath, initialConfig)
+
+	cm := newConfigManager([]string{configPath}, []PrefetchKey{})
+
+	t.Run("DetectStringChanges", func(t *testing.T) {
+		oldStrings := map[string]string{"key1": "value1", "key2": "value2"}
+		newStrings := map[string]string{"key1": "changed", "key3": "value3"}
+
+		changedKeys := cm.detectChangedKeys(
+			oldStrings, nil, nil, nil, nil,
+			newStrings, nil, nil, nil, nil,
+		)
+
+		// Should detect: key1 (changed), key2 (deleted), key3 (added)
+		assert.Contains(t, changedKeys, "key1", "Should detect value change")
+		assert.Contains(t, changedKeys, "key2", "Should detect deletion")
+		assert.Contains(t, changedKeys, "key3", "Should detect addition")
+	})
+
+	t.Run("DetectIntChanges", func(t *testing.T) {
+		oldInts := map[string]int{"num1": 100, "num2": 200}
+		newInts := map[string]int{"num1": 150, "num3": 300}
+
+		changedKeys := cm.detectChangedKeys(
+			nil, oldInts, nil, nil, nil,
+			nil, newInts, nil, nil, nil,
+		)
+
+		assert.Contains(t, changedKeys, "num1")
+		assert.Contains(t, changedKeys, "num2")
+		assert.Contains(t, changedKeys, "num3")
+	})
+
+	t.Run("DetectJSONChanges_DeepEqual", func(t *testing.T) {
+		oldJsons := map[string]interface{}{
+			"config1": map[string]int{"a": 1, "b": 2},
+			"config2": []int{1, 2, 3},
+		}
+		newJsons := map[string]interface{}{
+			"config1": map[string]int{"a": 1, "b": 3}, // Value changed
+			"config2": []int{1, 2, 3},                 // Same
+			"config3": map[string]string{"x": "y"},    // Added
+		}
+
+		changedKeys := cm.detectChangedKeys(
+			nil, nil, nil, nil, oldJsons,
+			nil, nil, nil, nil, newJsons,
+		)
+
+		assert.Contains(t, changedKeys, "config1", "Should detect nested value change")
+		assert.NotContains(t, changedKeys, "config2", "Should not detect unchanged")
+		assert.Contains(t, changedKeys, "config3", "Should detect addition")
+	})
+
+	t.Run("DetectJSONChanges_MapKeyOrder", func(t *testing.T) {
+		// Test that map key order doesn't affect comparison
+		oldJsons := map[string]interface{}{
+			"config": map[string]int{"a": 1, "b": 2, "c": 3},
+		}
+		newJsons := map[string]interface{}{
+			"config": map[string]int{"c": 3, "b": 2, "a": 1}, // Same values, different order
+		}
+
+		changedKeys := cm.detectChangedKeys(
+			nil, nil, nil, nil, oldJsons,
+			nil, nil, nil, nil, newJsons,
+		)
+
+		assert.NotContains(t, changedKeys, "config", "DeepEqual should handle map key order")
+	})
+}
+
 func TestPropertyManager_HotReload(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "config.json")

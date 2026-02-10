@@ -435,17 +435,19 @@ func (lrs *LocalRealtimeState) SubmitMetric() {
 	for {
 		instanceViews := lrs.GetInstanceViews()
 		for _, iv := range instanceViews {
-			instanceAddress := iv.GetInstance().Endpoint
+			address := iv.GetInstance().Endpoint
 			tokens := iv.NumTokens()
 			reqs := iv.NumRequests()
+			waitingReqs := iv.NumWaitingRequests()
 
 			labels := metrics.Labels{
 				{Name: "model", Value: iv.GetInstance().Model},
-				{Name: "instance_address", Value: instanceAddress.String()},
-				{Name: "infer_mode", Value: iv.GetInferMode()},
+				{Name: "address", Value: address.String()},
+				{Name: "infer_role", Value: iv.GetInferMode()},
 			}
-			metrics.StatusValue("endpoint_llm_token_count", labels).Set(float32(tokens))
-			metrics.StatusValue("endpoint_active_token_count", labels).Set(float32(reqs))
+			metrics.StatusValue("instance_tokens", labels).Set(float32(tokens))
+			metrics.StatusValue("instance_requests", labels).Set(float32(reqs))
+			metrics.StatusValue("instance_waiting_requests", labels).Set(float32(waitingReqs))
 		}
 
 		time.Sleep(5 * time.Second)

@@ -2,9 +2,9 @@ package ratelimiter
 
 import (
 	"fmt"
+	"llm-gateway/pkg/consts"
 	"llm-gateway/pkg/property"
 	"sync/atomic"
-	"time"
 
 	"k8s.io/klog/v2"
 )
@@ -36,7 +36,6 @@ func (ls LimitScope) String() string {
 // DynamicConfigManager and caches values in a local atomic snapshot for lock-free reads;
 // tests can substitute a lightweight mock to avoid external dependencies.
 type RateLimiterConfigInterface interface {
-	GetConfigVersion() uint64
 	Enabled() bool
 	LimitScope() LimitScope
 	LimitAction() LimitAction
@@ -57,7 +56,6 @@ type RateLimiterConfig struct {
 	oldLimitAction LimitAction
 	oldEnabled     bool
 
-	configVersion   uint64       // Atomic counter for config version
 	currentSnapshot atomic.Value // stores *configSnapshot; all getters read from here
 }
 
@@ -80,9 +78,10 @@ func NewRateLimiterConfig() *RateLimiterConfig {
 	rc := &RateLimiterConfig{
 		dyConfigMgr: property.GetDynamicConfigManager(),
 	}
-	// Initialize local snapshot from dyConfigMgr and start periodic refresh
-	rc.currentSnapshot.Store(rc.readFromDyConfig())
-	rc.startConfigMonitor()
+	// Initialize with empty snapshot to avoid nil panic
+	rc.currentSnapshot.Store(&configSnapshot{})
+	// Register as listener for rate limit config changes.
+	rc.dyConfigMgr.RegisterListener(rc, consts.ConfigKeyRateLimitPrefix)
 	return rc
 }
 
@@ -100,21 +99,20 @@ func (rc *RateLimiterConfig) NeedReLoadRateLimiter() bool {
 
 // readFromDyConfig reads all config values directly from DynamicConfigManager.
 // This is the ONLY method that accesses dyConfigMgr; all getters read from the local snapshot.
-// NOTE: Limit fields use 0 to mean "unlimited"; callers must treat 0 as no-limit
-// rather than converting to math.MaxInt64 (which overflows on multiplication).
+// NOTE: Limit fields use 0 to mean "unlimited"
 func (rc *RateLimiterConfig) readFromDyConfig() *configSnapshot {
 	return &configSnapshot{
-		enabled:                       rc.dyConfigMgr.GetBoolWithDefault("llm_gateway.rate_limit.enable", false),
-		limitScope:                    LimitScope(rc.dyConfigMgr.GetStringWithDefault("llm_gateway.rate_limit.scope", LimitScopeInstance.String())),
-		limitAction:                   LimitAction(rc.dyConfigMgr.GetStringWithDefault("llm_gateway.rate_limit.action", LimitActionReject.String())),
-		maxWaitTimeoutMs:              int64(rc.dyConfigMgr.GetIntWithDefault("llm_gateway.rate_limit.max_ratelimit_wait_timeout", 5000)),
-		retryIntervalMs:               int64(rc.dyConfigMgr.GetIntWithDefault("llm_gateway.rate_limit.ratelimit_retry_interval", 100)),
-		maxRequestsPerInstance:        int64(rc.dyConfigMgr.GetIntWithDefault("llm_gateway.rate_limit.max_requests_per_instance", 0)),
-		maxTokensPerInstance:          int64(rc.dyConfigMgr.GetIntWithDefault("llm_gateway.rate_limit.max_tokens_per_instance", 0)),
-		maxPrefillRequestsPerInstance: int64(rc.dyConfigMgr.GetIntWithDefault("llm_gateway.rate_limit.max_prefill_requests_per_instance", 0)),
-		maxPrefillTokensPerInstance:   int64(rc.dyConfigMgr.GetIntWithDefault("llm_gateway.rate_limit.max_prefill_tokens_per_instance", 0)),
-		maxDecodeRequestsPerInstance:  int64(rc.dyConfigMgr.GetIntWithDefault("llm_gateway.rate_limit.max_decode_requests_per_instance", 0)),
-		maxDecodeTokensPerInstance:    int64(rc.dyConfigMgr.GetIntWithDefault("llm_gateway.rate_limit.max_decode_tokens_per_instance", 0)),
+		enabled:                       rc.dyConfigMgr.GetBoolWithDefault(consts.ConfigKeyRateLimitEnable, false),
+		limitScope:                    LimitScope(rc.dyConfigMgr.GetStringWithDefault(consts.ConfigKeyRateLimitScope, LimitScopeInstance.String())),
+		limitAction:                   LimitAction(rc.dyConfigMgr.GetStringWithDefault(consts.ConfigKeyRateLimitAction, LimitActionReject.String())),
+		maxWaitTimeoutMs:              int64(rc.dyConfigMgr.GetIntWithDefault(consts.ConfigKeyRateLimitMaxWaitTimeout, 5000)),
+		retryIntervalMs:               int64(rc.dyConfigMgr.GetIntWithDefault(consts.ConfigKeyRateLimitRetryInterval, 100)),
+		maxRequestsPerInstance:        int64(rc.dyConfigMgr.GetIntWithDefault(consts.ConfigKeyRateLimitMaxRequestsPerInstance, 0)),
+		maxTokensPerInstance:          int64(rc.dyConfigMgr.GetIntWithDefault(consts.ConfigKeyRateLimitMaxTokensPerInstance, 0)),
+		maxPrefillRequestsPerInstance: int64(rc.dyConfigMgr.GetIntWithDefault(consts.ConfigKeyRateLimitMaxPrefillRequestsPerInstance, 0)),
+		maxPrefillTokensPerInstance:   int64(rc.dyConfigMgr.GetIntWithDefault(consts.ConfigKeyRateLimitMaxPrefillTokensPerInstance, 0)),
+		maxDecodeRequestsPerInstance:  int64(rc.dyConfigMgr.GetIntWithDefault(consts.ConfigKeyRateLimitMaxDecodeRequestsPerInstance, 0)),
+		maxDecodeTokensPerInstance:    int64(rc.dyConfigMgr.GetIntWithDefault(consts.ConfigKeyRateLimitMaxDecodeTokensPerInstance, 0)),
 	}
 }
 
@@ -123,62 +121,28 @@ func (rc *RateLimiterConfig) getSnapshot() *configSnapshot {
 	return rc.currentSnapshot.Load().(*configSnapshot)
 }
 
-// startConfigMonitor starts a goroutine to periodically check config changes
-func (rc *RateLimiterConfig) startConfigMonitor() {
-	go func() {
-		// Poll every 10 seconds to check for config changes
-		// This aligns with DynamicConfigManager's watch interval
-		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
-
-		for range ticker.C {
-			rc.checkAndLogConfigChanges()
-		}
-	}()
-}
-
-// checkAndLogConfigChanges reads fresh values from dyConfigMgr, compares with
-// the current local snapshot, and atomically swaps in the new snapshot if changed.
-func (rc *RateLimiterConfig) checkAndLogConfigChanges() {
-	newSnapshot := rc.readFromDyConfig()
+// OnConfigChanged implements property.ConfigChangeListener.
+// Called by DynamicConfigManager when rate limit configuration changes.
+func (rc *RateLimiterConfig) OnConfigChanged(keys []string) {
 	oldSnapshot := rc.getSnapshot()
+	newSnapshot := rc.readFromDyConfig()
 
-	if !rc.hasConfigChanged(oldSnapshot, newSnapshot) {
-		return
-	}
-
-	// Increment version atomically
-	atomic.AddUint64(&rc.configVersion, 1)
-
-	// Log changes
+	// Log changes (only logs fields that actually changed)
 	rc.logConfigChanges(oldSnapshot, newSnapshot)
 
 	// Atomically swap in new snapshot so all getters see the updated values
 	rc.currentSnapshot.Store(newSnapshot)
 }
 
-// hasConfigChanged checks if any config value has changed
-func (rc *RateLimiterConfig) hasConfigChanged(old, new *configSnapshot) bool {
-	return old.enabled != new.enabled ||
-		old.limitScope != new.limitScope ||
-		old.limitAction != new.limitAction ||
-		old.maxWaitTimeoutMs != new.maxWaitTimeoutMs ||
-		old.retryIntervalMs != new.retryIntervalMs ||
-		old.maxRequestsPerInstance != new.maxRequestsPerInstance ||
-		old.maxTokensPerInstance != new.maxTokensPerInstance ||
-		old.maxPrefillRequestsPerInstance != new.maxPrefillRequestsPerInstance ||
-		old.maxPrefillTokensPerInstance != new.maxPrefillTokensPerInstance ||
-		old.maxDecodeRequestsPerInstance != new.maxDecodeRequestsPerInstance ||
-		old.maxDecodeTokensPerInstance != new.maxDecodeTokensPerInstance
-}
-
-// logConfigChanges logs the specific config changes
+// logConfigChanges logs the specific config changes.
+// Only logs fields that have actually changed.
 func (rc *RateLimiterConfig) logConfigChanges(old, new *configSnapshot) {
-	klog.Infof("[RateLimiter] Config change detected:")
-
-	if old.enabled != new.enabled {
-		klog.Infof("  - enabled: %v -> %v", old.enabled, new.enabled)
+	if !new.enabled {
+		klog.Infof("[RateLimiter] disabled")
 	}
+
+	klog.Infof("[RateLimiter] enabled:")
+
 	if old.limitScope != new.limitScope {
 		klog.Infof("  - limit_scope: %v -> %v", old.limitScope, new.limitScope)
 	}
@@ -218,11 +182,6 @@ func formatLimitValue(val int64) string {
 		return "unlimited"
 	}
 	return fmt.Sprintf("%d", val)
-}
-
-// GetConfigVersion returns the current config version (incremented on each change)
-func (rc *RateLimiterConfig) GetConfigVersion() uint64 {
-	return atomic.LoadUint64(&rc.configVersion)
 }
 
 func (rc *RateLimiterConfig) NeedRateLimitWait() bool {

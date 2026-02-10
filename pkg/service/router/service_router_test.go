@@ -1,6 +1,7 @@
 package router
 
 import (
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,6 +10,36 @@ import (
 	"llm-gateway/pkg/protocol/anthropic"
 	"llm-gateway/pkg/types"
 )
+
+// mockRouterConfig is a lightweight mock for testing
+type mockRouterConfig struct {
+	routePolicy    atomic.Value // stores string
+	routeConfigRaw atomic.Value // stores string
+	needRebuild    atomic.Bool
+}
+
+func newMockRouterConfig(policy, configRaw string) *mockRouterConfig {
+	m := &mockRouterConfig{}
+	m.routePolicy.Store(policy)
+	m.routeConfigRaw.Store(configRaw)
+	return m
+}
+
+func (m *mockRouterConfig) RoutePolicy() string {
+	return m.routePolicy.Load().(string)
+}
+
+func (m *mockRouterConfig) RouteConfigRaw() string {
+	return m.routeConfigRaw.Load().(string)
+}
+
+func (m *mockRouterConfig) NeedRebuild() bool {
+	return m.needRebuild.Load()
+}
+
+func (m *mockRouterConfig) MarkRebuilt() {
+	m.needRebuild.Store(false)
+}
 
 // Helper function to create a test request context with a given model
 func createTestRequest(model string) *types.RequestContext {
@@ -28,7 +59,8 @@ func TestNewServiceRouter(t *testing.T) {
 	}
 	routingPolicy := consts.RoutePolicyWeight
 
-	sr := newServiceRouter(routingPolicy, "")
+	mockCfg := newMockRouterConfig(routingPolicy, "")
+	sr := newServiceRouter(mockCfg)
 
 	// Manually set routingConfigs for testing
 	sr.routingConfigs = routingConfigs
@@ -46,7 +78,8 @@ func TestSetupFallbackConfigs(t *testing.T) {
 		{URL: consts.RouteInternalURL, Weight: 10, Prefix: "internal*", IsFallback: true},
 	}
 
-	sr := newServiceRouter(consts.RoutePolicyWeight, "")
+	mockCfg := newMockRouterConfig(consts.RoutePolicyWeight, "")
+	sr := newServiceRouter(mockCfg)
 
 	// Manually set routingConfigs for testing
 	sr.routingConfigs = routingConfigs
@@ -66,7 +99,8 @@ func TestSelectByWeight(t *testing.T) {
 		{URL: "http://service3", Weight: 20, Prefix: "claude*"},
 	}
 
-	sr := newServiceRouter(consts.RoutePolicyWeight, "")
+	mockCfg := newMockRouterConfig(consts.RoutePolicyWeight, "")
+	sr := newServiceRouter(mockCfg)
 
 	// Manually set routingConfigs for testing
 	sr.routingConfigs = routingConfigs
@@ -97,7 +131,8 @@ func TestSelectByWeight_SingleConfig(t *testing.T) {
 		{URL: "http://service1", Weight: 100, Prefix: "gpt-3*"},
 	}
 
-	sr := newServiceRouter(consts.RoutePolicyWeight, "")
+	mockCfg := newMockRouterConfig(consts.RoutePolicyWeight, "")
+	sr := newServiceRouter(mockCfg)
 
 	// Manually set routingConfigs for testing
 	sr.routingConfigs = routingConfigs
@@ -112,7 +147,8 @@ func TestSelectByWeight_SingleConfig(t *testing.T) {
 }
 
 func TestSelectByWeight_EmptyConfigs(t *testing.T) {
-	sr := newServiceRouter(consts.RoutePolicyWeight, "")
+	mockCfg := newMockRouterConfig(consts.RoutePolicyWeight, "")
+	sr := newServiceRouter(mockCfg)
 
 	// When there are no configs, selectByWeight should panic due to rand.Intn(0)
 	assert.Panics(t, func() {
@@ -127,7 +163,8 @@ func TestSelectByPrefix(t *testing.T) {
 		{URL: "http://service3", Weight: 20, Prefix: "claude-2"},
 	}
 
-	sr := newServiceRouter(consts.RoutePolicyPrefix, "")
+	mockCfg := newMockRouterConfig(consts.RoutePolicyPrefix, "")
+	sr := newServiceRouter(mockCfg)
 
 	// Manually set routingConfigs for testing
 	sr.routingConfigs = routingConfigs
@@ -154,7 +191,7 @@ func TestSelectByPrefix(t *testing.T) {
 		{URL: "http://service2", Weight: 30, Prefix: "gpt-3*"},
 	}
 
-	srLong := newServiceRouter(consts.RoutePolicyPrefix, "")
+	srLong := newServiceRouter(newMockRouterConfig(consts.RoutePolicyPrefix, ""))
 	srLong.routingConfigs = routingConfigsLong
 
 	req = createTestRequest("gpt-3-turbo")
@@ -170,7 +207,8 @@ func TestSelectByPrefix_NoModel(t *testing.T) {
 		{URL: "http://service1", Weight: 50, Prefix: "gpt-3*"},
 	}
 
-	sr := newServiceRouter(consts.RoutePolicyPrefix, "")
+	mockCfg := newMockRouterConfig(consts.RoutePolicyPrefix, "")
+	sr := newServiceRouter(mockCfg)
 	sr.routingConfigs = routingConfigs
 
 	// Test with empty model
@@ -182,7 +220,8 @@ func TestSelectByPrefix_NoModel(t *testing.T) {
 }
 
 func TestSelectByPrefix_EmptyConfigs(t *testing.T) {
-	sr := newServiceRouter(consts.RoutePolicyPrefix, "")
+	mockCfg := newMockRouterConfig(consts.RoutePolicyPrefix, "")
+	sr := newServiceRouter(mockCfg)
 
 	// Test with empty configs
 	req := createTestRequest("gpt-3-turbo")
@@ -198,7 +237,8 @@ func TestSelectByPrefix_NoMatch(t *testing.T) {
 		{URL: "http://service2", Weight: 30, Prefix: "gpt-4*"},
 	}
 
-	sr := newServiceRouter(consts.RoutePolicyPrefix, "")
+	mockCfg := newMockRouterConfig(consts.RoutePolicyPrefix, "")
+	sr := newServiceRouter(mockCfg)
 	sr.routingConfigs = routingConfigs
 
 	// Test with model that doesn't match any prefix
@@ -210,7 +250,8 @@ func TestSelectByPrefix_NoMatch(t *testing.T) {
 }
 
 func TestRoute_WeightPolicy_EmptyConfigs(t *testing.T) {
-	sr := newServiceRouter(consts.RoutePolicyWeight, "")
+	mockCfg := newMockRouterConfig(consts.RoutePolicyWeight, "")
+	sr := newServiceRouter(mockCfg)
 
 	req := createTestRequest("gpt-3-turbo")
 
@@ -225,7 +266,8 @@ func TestRoute_WeightPolicy_External(t *testing.T) {
 		{URL: "http://service1", Weight: 100, Prefix: "gpt-3*", Model: "gpt-3-model"},
 	}
 
-	sr := newServiceRouter(consts.RoutePolicyWeight, "")
+	mockCfg := newMockRouterConfig(consts.RoutePolicyWeight, "")
+	sr := newServiceRouter(mockCfg)
 	sr.routingConfigs = routingConfigs
 
 	req := createTestRequest("gpt-3-turbo")
@@ -245,7 +287,8 @@ func TestRoute_PrefixPolicy_External(t *testing.T) {
 		{URL: "http://service2", Weight: 50, Prefix: "gpt-4*", Model: "gpt-4-model"},
 	}
 
-	sr := newServiceRouter(consts.RoutePolicyPrefix, "")
+	mockCfg := newMockRouterConfig(consts.RoutePolicyPrefix, "")
+	sr := newServiceRouter(mockCfg)
 	sr.routingConfigs = routingConfigs
 
 	req := createTestRequest("gpt-4-turbo")
@@ -264,10 +307,9 @@ func TestRoute_UnsupportedPolicy(t *testing.T) {
 		{URL: "http://service1", Weight: 100, Prefix: "gpt-3*", Model: "gpt-3-model"},
 	}
 
-	sr := &ServiceRouter{
-		routingPolicy:  "unsupported-policy",
-		routingConfigs: routingConfigs,
-	}
+	mockCfg := newMockRouterConfig("unsupported-policy", "")
+	sr := newServiceRouter(mockCfg)
+	sr.routingConfigs = routingConfigs
 
 	req := createTestRequest("gpt-3-turbo")
 
@@ -283,7 +325,8 @@ func TestFallback_Basic(t *testing.T) {
 		{URL: "http://service2", Weight: 50, Prefix: "gpt-3*", Model: "gpt-3-model", IsFallback: true},
 	}
 
-	sr := newServiceRouter(consts.RoutePolicyWeight, "")
+	mockCfg := newMockRouterConfig(consts.RoutePolicyWeight, "")
+	sr := newServiceRouter(mockCfg)
 	sr.routingConfigs = routingConfigs
 	sr.setupFallbackConfigs(routingConfigs)
 
@@ -313,7 +356,8 @@ func TestFallback_NoMoreFallbacks(t *testing.T) {
 		{URL: "http://service1", Weight: 50, Prefix: "gpt-4*", Model: "gpt-4-model", IsFallback: true},
 	}
 
-	sr := newServiceRouter(consts.RoutePolicyWeight, "")
+	mockCfg := newMockRouterConfig(consts.RoutePolicyWeight, "")
+	sr := newServiceRouter(mockCfg)
 	sr.routingConfigs = routingConfigs
 	sr.setupFallbackConfigs(routingConfigs)
 
@@ -328,7 +372,8 @@ func TestFallback_NoMoreFallbacks(t *testing.T) {
 }
 
 func TestFallback_NoFallbackConfigs(t *testing.T) {
-	sr := newServiceRouter(consts.RoutePolicyWeight, "")
+	mockCfg := newMockRouterConfig(consts.RoutePolicyWeight, "")
+	sr := newServiceRouter(mockCfg)
 
 	req := createTestRequest("gpt-3-turbo")
 

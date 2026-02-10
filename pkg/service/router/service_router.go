@@ -11,7 +11,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"llm-gateway/pkg/consts"
-	"llm-gateway/pkg/property"
 	"llm-gateway/pkg/types"
 )
 
@@ -82,10 +81,10 @@ type ServiceRouter struct {
 }
 
 // newServiceRouter creates a new service router instance
-func newServiceRouter(routingPolicy string, routingConfigRaw string) *ServiceRouter {
+func newServiceRouter(config ServiceRouterConfigInterface) *ServiceRouter {
 	sr := &ServiceRouter{
-		routingPolicy:  routingPolicy,
-		routingConfigs: setupRoutingConfigs(routingConfigRaw),
+		routingPolicy:  config.RoutePolicy(),
+		routingConfigs: setupRoutingConfigs(config.RouteConfigRaw()),
 	}
 	sr.setupFallbackConfigs(sr.routingConfigs)
 
@@ -95,34 +94,29 @@ func newServiceRouter(routingPolicy string, routingConfigRaw string) *ServiceRou
 var (
 	gMutex         sync.Mutex
 	gRouteInstance *ServiceRouter
-
-	gRoutePolicy    string
-	gRouteConfigRaw string
+	gRouterConfig  *ServiceRouterConfig
 )
 
 func GetServiceRouter() *ServiceRouter {
 	gMutex.Lock()
 	defer gMutex.Unlock()
-	if needReloadServiceRouter() || gRouteInstance == nil {
-		if gRoutePolicy != "" || gRouteConfigRaw != "" {
-			klog.Infof("create service router with policy: %s, config: %s", gRoutePolicy, gRouteConfigRaw)
-		}
-		gRouteInstance = newServiceRouter(gRoutePolicy, gRouteConfigRaw)
+
+	// Initialize global config and router on first call
+	if gRouterConfig == nil {
+		gRouterConfig = NewServiceRouterConfig()
+	}
+	if gRouteInstance == nil {
+		gRouteInstance = newServiceRouter(gRouterConfig)
+		return gRouteInstance
+	}
+
+	// Check if config changed and router needs rebuilding
+	if gRouterConfig.NeedRebuild() {
+		gRouteInstance = newServiceRouter(gRouterConfig)
+		gRouterConfig.MarkRebuilt() // Reset rebuild flag
 		return gRouteInstance
 	}
 	return gRouteInstance
-}
-
-func needReloadServiceRouter() bool {
-	dyConfig := property.GetDynamicConfigManager()
-	newPolicy := dyConfig.GetStringWithDefault("llm_gateway.route_policy", "")
-	newRouteConfigRaw := dyConfig.GetStringWithDefault("llm_gateway.route_config", "")
-	if newPolicy != gRoutePolicy || newRouteConfigRaw != gRouteConfigRaw {
-		gRoutePolicy = newPolicy
-		gRouteConfigRaw = newRouteConfigRaw
-		return true
-	}
-	return false
 }
 
 // setupFallbackConfigs sets up fallback configs
