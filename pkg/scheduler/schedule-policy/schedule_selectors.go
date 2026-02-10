@@ -82,7 +82,7 @@ func (s *metricBasedSelector) best(
 			}
 		}
 	}
-	
+
 	if selectedInstance != nil {
 		klog.V(4).Infof("Best instance selected: %s", selectedInstance.GetInstanceId())
 	}

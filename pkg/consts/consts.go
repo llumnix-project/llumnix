@@ -33,6 +33,7 @@ const (
 	SchedulePolicyRoundRobin  = "round-robin"
 	SchedulePolicyLoadBalance = "load-balance"
 	SchedulePolicyFlood       = "flood"
+	SchedulePolicySlo         = "slo"
 )
 
 const (
@@ -50,6 +51,9 @@ const (
 	SchedulingMetricNumRequests                    = "num_requests"
 	SchedulingMetricAllDecodesTokensNum            = "all_decodes_tokens_num"
 	SchedulingMetricNumTokens                      = "num_tokens"
+
+	SchedulingMetricPredictedTtft = "predicted_ttft"
+	SchedulingMetricPredictedTpot = "predicted_tpot"
 )
 
 const (

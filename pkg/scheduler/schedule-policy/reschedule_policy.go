@@ -281,7 +281,7 @@ type baseReschedulePolicy struct {
 }
 
 func (brp *baseReschedulePolicy) calculateMetrics(instances map[string]*instanceViewScheduling) {
-	calculateMetrics(instances, brp.metrics)
+	calculateMetrics(nil, instances, brp.metrics)
 }
 
 func (brp *baseReschedulePolicy) filter(

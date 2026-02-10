@@ -2,7 +2,9 @@ package schedule_policy
 
 import (
 	"fmt"
+	"llumnix/pkg/types"
 	"math"
+	"time"
 
 	"k8s.io/klog/v2"
 
@@ -11,6 +13,7 @@ import (
 )
 
 func calculateMetrics(
+	request *types.ScheduleRequest,
 	instances map[string]*instanceViewScheduling,
 	metrics map[string]func() instanceSchedulingMetric) {
 	for _, instanceView := range instances {
@@ -19,7 +22,7 @@ func calculateMetrics(
 			metricName := metric.GetName()
 			// assume that the calculation results of all metrics are deterministic
 			if _, ok := instanceView.schedulingCtx.metrics[metricName]; !ok {
-				metric.Calculate(instanceView)
+				metric.Calculate(request, instanceView)
 				instanceView.schedulingCtx.metrics[metricName] = metric
 			}
 		}
@@ -29,7 +32,7 @@ func calculateMetrics(
 type instanceSchedulingMetric interface {
 	GetName() string
 	GetValue() float32
-	Calculate(instanceView *instanceViewScheduling)
+	Calculate(request *types.ScheduleRequest, instanceView *instanceViewScheduling)
 	Less(metric instanceSchedulingMetric) bool
 	ValueLess(value float32) bool
 }
@@ -115,6 +118,26 @@ func getSchedulingMetric(p *options.SchedulerConfig, metricName string) func() i
 				},
 			}
 		}
+	case consts.SchedulingMetricPredictedTtft:
+		klog.V(3).Infof("Creating TtftLatency metric factory")
+		return func() instanceSchedulingMetric {
+			return &PredictedTtft{
+				baseMetric: baseMetric{
+					name: consts.SchedulingMetricPredictedTtft,
+				},
+				latencyPredictor: GetLatencyPredictor(p.TtftProfilingDataPath, p.TpotProfilingDataPath),
+			}
+		}
+	case consts.SchedulingMetricPredictedTpot:
+		klog.V(3).Infof("Creating Itlatency metric factory")
+		return func() instanceSchedulingMetric {
+			return &PredictedTpot{
+				baseMetric: baseMetric{
+					name: consts.SchedulingMetricPredictedTpot,
+				},
+				latencyPredictor: GetLatencyPredictor(p.TtftProfilingDataPath, p.TpotProfilingDataPath),
+			}
+		}
 	case consts.SchedulingMetricNumTokens:
 		klog.V(3).Infof("Creating NumTokens metric factory")
 		return func() instanceSchedulingMetric {
@@ -152,7 +175,8 @@ type kvCacheUsageRatioProjected struct {
 	baseMetric
 }
 
-func (br *kvCacheUsageRatioProjected) Calculate(instanceView *instanceViewScheduling) {
+func (br *kvCacheUsageRatioProjected) Calculate(
+	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
 	if instanceView.cmsView.Status.NumTotalGpuTokens == 0 {
 		br.value = float32(math.MaxFloat32)
 		klog.V(3).Infof(
@@ -196,7 +220,8 @@ type decodeBatchSize struct {
 	baseMetric
 }
 
-func (dbs *decodeBatchSize) Calculate(instanceView *instanceViewScheduling) {
+func (dbs *decodeBatchSize) Calculate(
+	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
 	dbs.value = float32(instanceView.cmsView.Status.HybridSchedulerWaitingToDecodeRequestsNum +
 		instanceView.cmsView.Status.NumLoadingRequests +
 		instanceView.cmsView.Status.SchedulerWaitingToDecodeRequestsNum +
@@ -227,7 +252,8 @@ type numWaitingRequests struct {
 	baseMetric
 }
 
-func (nr *numWaitingRequests) Calculate(instanceView *instanceViewScheduling) {
+func (nr *numWaitingRequests) Calculate(
+	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
 	nr.value = float32(instanceView.cmsView.Status.NumWaitingRequests +
 		instanceView.cmsView.NumInflightDispatchRequests)
 	klog.V(3).Infof(
@@ -251,7 +277,8 @@ type allPrefillsTokensNum struct {
 	baseMetric
 }
 
-func (pb *allPrefillsTokensNum) Calculate(instanceView *instanceViewScheduling) {
+func (pb *allPrefillsTokensNum) Calculate(
+	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
 	pb.value = float32(
 		instanceView.cmsView.Status.NumUncomputedTokensAllWaitingPrefills +
 			instanceView.cmsView.Status.NumUncomputedTokensSchedulerRunningPrefills +
@@ -283,7 +310,8 @@ type numRequests struct {
 	enableFullModeScheduling bool
 }
 
-func (nr *numRequests) Calculate(instanceView *instanceViewScheduling) {
+func (nr *numRequests) Calculate(
+	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
 	if nr.enableFullModeScheduling {
 		nr.value = float32(
 			instanceView.cmsView.Status.NumWaitingRequests +
@@ -320,7 +348,8 @@ type kvCacheHitLen struct {
 	baseMetric
 }
 
-func (hl *kvCacheHitLen) Calculate(instanceView *instanceViewScheduling) {
+func (hl *kvCacheHitLen) Calculate(
+	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
 	// prefixHitTokens is written when calculating the prompt cache locality for each instances before.
 	hl.value = float32(instanceView.schedulingCtx.prefixHitTokens)
 	klog.V(3).Infof(
@@ -344,8 +373,9 @@ type CacheAwareAllPrefillsTokensNum struct {
 	allPrefillsTokensNumMetric allPrefillsTokensNum
 }
 
-func (cpb *CacheAwareAllPrefillsTokensNum) Calculate(instanceView *instanceViewScheduling) {
-	cpb.allPrefillsTokensNumMetric.Calculate(instanceView)
+func (cpb *CacheAwareAllPrefillsTokensNum) Calculate(
+	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
+	cpb.allPrefillsTokensNumMetric.Calculate(request, instanceView)
 	allPrefillsTokensNum := cpb.allPrefillsTokensNumMetric.GetValue()
 	cpb.value = float32(instanceView.schedulingCtx.prefixMissTokens) + allPrefillsTokensNum
 	klog.V(3).Infof(
@@ -369,7 +399,8 @@ type allDecodesTokensNum struct {
 	baseMetric
 }
 
-func (adb *allDecodesTokensNum) Calculate(instanceView *instanceViewScheduling) {
+func (adb *allDecodesTokensNum) Calculate(
+	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
 	allDecodeTokens := instanceView.cmsView.Status.HybridSchedulerWaitingToDecodeTokensNum +
 		instanceView.cmsView.Status.SchedulerWaitingToDecodeTokensNum +
 		instanceView.cmsView.Status.SchedulerRunningToDecodeTokensNum +
@@ -397,11 +428,141 @@ func (br *allDecodesTokensNum) Less(metric instanceSchedulingMetric) bool {
 	return br.value < metric.GetValue()
 }
 
+type PredictedTtft struct {
+	baseMetric
+	allPrefillsTokensNum
+	decodeBatchSize
+	allDecodesTokensNum
+
+	latencyPredictor *LatencyPredictor
+	latency          float64
+}
+
+func (tl *PredictedTtft) Calculate(
+	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
+	tl.allPrefillsTokensNum.Calculate(request, instanceView)
+	tl.allDecodesTokensNum.Calculate(request, instanceView)
+	tl.decodeBatchSize.Calculate(request, instanceView)
+
+	tokensOnInstance := instanceView.cmsView.Status.NumUncomputedTokensAllWaitingPrefills +
+		instanceView.cmsView.Status.NumUncomputedTokensSchedulerRunningPrefills
+
+	existingTokensTtft, err := tl.latencyPredictor.predictTtftLatencyByChunkPrefill(
+		tokensOnInstance,
+		int32(tl.decodeBatchSize.GetValue()),
+		int32(tl.allDecodesTokensNum.GetValue()),
+		float64(instanceView.cmsView.Metadata.MaxNumBatchedTokens))
+
+	if err != nil {
+		klog.Warningf("Failed to predict TTFT latency: %v", err)
+		tl.latency = math.Inf(1)
+		return
+	}
+
+	now := time.Now().UnixMilli()
+	elapsedTimeMs := now - instanceView.cmsView.Status.TimestampMs
+
+	requestTokens := 0
+	if request != nil {
+		requestTokens = request.PromptNumTokens
+	}
+
+	if elapsedTimeMs > int64(existingTokensTtft) {
+		// All prefill tokens that already exist in the engine may have been exhausted since Status.Ts.
+		// In this case, use inflight + current req's tokens to estimate ttft.
+		inflightPrefillTokens := instanceView.cmsView.NumUncomputedTokensInflightDispatchPrefillRequests
+		tl.latency, err = tl.latencyPredictor.predictTtftLatencyByChunkPrefill(
+			inflightPrefillTokens+int32(requestTokens),
+			int32(tl.decodeBatchSize.GetValue()),
+			int32(tl.allDecodesTokensNum.GetValue()),
+			float64(instanceView.cmsView.Metadata.MaxNumBatchedTokens))
+	} else {
+		tl.latency, err = tl.latencyPredictor.predictTtftLatencyByChunkPrefill(
+			int32(tl.allPrefillsTokensNum.GetValue())+int32(requestTokens),
+			int32(tl.decodeBatchSize.GetValue()),
+			int32(tl.allDecodesTokensNum.GetValue()),
+			float64(instanceView.cmsView.Metadata.MaxNumBatchedTokens))
+
+		tl.latency -= float64(elapsedTimeMs)
+	}
+
+	if err != nil {
+		klog.Warningf("Failed to predict TTFT latency: %v", err)
+		tl.latency = math.Inf(1)
+	}
+
+	klog.V(3).Infof(
+		"Instance %s PredictedTtft calculated: "+
+			"(allPrefillsTokens:%f + decodeBatchSize:%f + allDecodesTokens:%f) = %f",
+		instanceView.GetInstanceId(),
+		tl.allPrefillsTokensNum.GetValue(),
+		tl.decodeBatchSize.GetValue(),
+		tl.allDecodesTokensNum.GetValue(),
+		tl.latency)
+}
+
+func (tl *PredictedTtft) ValueLess(value float32) bool {
+	return tl.GetValue() < value
+}
+
+func (tl *PredictedTtft) Less(metric instanceSchedulingMetric) bool {
+	return tl.GetValue() < metric.GetValue()
+}
+
+func (tl *PredictedTtft) GetValue() float32 {
+	return float32(tl.latency)
+}
+
+type PredictedTpot struct {
+	baseMetric
+	allDecodesTokensNum
+	decodeBatchSize
+
+	latencyPredictor *LatencyPredictor
+	latency          float64
+}
+
+func (il *PredictedTpot) Calculate(
+	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
+	il.allDecodesTokensNum.Calculate(request, instanceView)
+	il.decodeBatchSize.Calculate(request, instanceView)
+
+	var err error
+	il.latency, err = il.latencyPredictor.predictTpotLatency(
+		int32(il.decodeBatchSize.GetValue()+1),
+		int32(il.allDecodesTokensNum.GetValue())+int32(request.PromptNumTokens))
+
+	if err != nil {
+		klog.Warningf("Failed to predict ITL latency: %v", err)
+		il.latency = math.Inf(1)
+	}
+
+	klog.V(3).Infof(
+		"Instance %s PredictedTpot calculated: (decodeBatchSize:%f + allDecodesTokens:%f) = %f",
+		instanceView.GetInstanceId(),
+		il.decodeBatchSize.GetValue(),
+		il.allDecodesTokensNum.GetValue(),
+		il.latency)
+}
+
+func (il *PredictedTpot) ValueLess(value float32) bool {
+	return il.GetValue() < value
+}
+
+func (il *PredictedTpot) Less(metric instanceSchedulingMetric) bool {
+	return il.GetValue() < metric.GetValue()
+}
+
+func (il *PredictedTpot) GetValue() float32 {
+	return float32(il.latency)
+}
+
 type numTokens struct {
 	baseMetric
 }
 
-func (nt *numTokens) Calculate(instanceView *instanceViewScheduling) {
+func (nt *numTokens) Calculate(
+	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
 	nt.value = float32(instanceView.lrsView.NumTokens())
 	klog.V(3).Infof("Instance %s NumTokens calculated: (numTokens:%d) = %f",
 		instanceView.GetInstanceId(), instanceView.lrsView.NumTokens(), nt.value)

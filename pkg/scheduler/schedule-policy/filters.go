@@ -81,8 +81,9 @@ func (r *invertedSingleInstanceFilterWrapper) skipWhenFallback() bool {
 }
 
 type metricBasedFilter struct {
-	metricName string
-	threshold  float32
+	metricName          string
+	threshold           float32
+	notSkipWhenFallback bool
 }
 
 func (f *metricBasedFilter) instanceFilteredOut(
@@ -91,14 +92,14 @@ func (f *metricBasedFilter) instanceFilteredOut(
 	result := !metric.ValueLess(f.threshold)
 	if result {
 		klog.V(3).Infof(
-			"Metric based filter applied, instance %s filtered out due to %s metric (%f less than %f)",
+			"Metric based filter applied, instance %s filtered out due to %s metric (%f not less than %f)",
 			instance.GetInstanceId(), f.metricName, metric.GetValue(), f.threshold)
 	}
 	return result
 }
 
 func (f *metricBasedFilter) skipWhenFallback() bool {
-	return true
+	return !f.notSkipWhenFallback
 }
 
 type schedulabilityFilter struct{}
