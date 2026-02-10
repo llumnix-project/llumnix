@@ -74,12 +74,12 @@ spec:
         - "8089"
         - "-v"
         - "4"
-        - "--scheduler-discovery"
-        - "endpoints"
         - "--scheduler-endpoints"
         - "scheduler:8088"
         - "--llm-backend-discovery"
         - "redis"
+        - "--scheduler-discovery"
+        - "endpoints"
         - "--discovery-redis-host"
         - "redis"
         - "--discovery-redis-port"
@@ -88,10 +88,7 @@ spec:
         - "load-balance"
         - "--tokenizer-path"
         - "/tokenizers/deepseek-ai/deepseek-moe-16b-base"
-        - "--pd-disagg-protocol"
-        - "vllm-mooncake"
-        - "--enable-full-mode-scheduling"
-        - "True"
+        - "--enable-full-mode-scheduling=false"
         ports:
         - containerPort: 8089
           name: http

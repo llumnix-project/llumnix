@@ -4,15 +4,22 @@ set -e
 
 show_usage() {
     cat << EOF
-Usage: $0 <group-name> <deployment-type>
+Usage: $0 <group-name> <kustomize-dir>
 
 Arguments:
-  group-name        Namespace name (e.g., llumnix1)
-  deployment-type   Deployment type: 'pd' or 'normal'
+  group-name         Namespace name (e.g., llumnix1)
+  kustomize-dir      Directory containing kustomization.yaml
+                     Supports nested directories (e.g., 'pd', 'normal/lite-mode-scheduling')
 
-Example:
-  $0 llumnix1 pd
-  $0 llumnix2 normal
+Examples:
+  # Deploy pd mode with full-mode scheduling
+  $0 llumnix1 pd/full-mode-scheduling
+  
+  # Deploy normal mode with lite-mode scheduling
+  $0 llumnix2 normal/lite-mode-scheduling/load-balance
+  
+  # Deploy normal mode with full-mode scheduling
+  $0 llumnix3 normal/full-mode-scheduling/load-balance
 
 Environment Variables:
   ALIYUN_DOCKER_SERVER    (default: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com)
@@ -28,12 +35,22 @@ if [ $# -ne 2 ]; then
 fi
 
 GROUP_NAME=$1
-DEPLOY_TYPE=$2
+KUSTOMIZE_DIR=$2
 
-# Validate deployment type
-if [[ "$DEPLOY_TYPE" != "pd" && "$DEPLOY_TYPE" != "normal" ]]; then
-    echo "Error: Invalid deployment type: $DEPLOY_TYPE" >&2
-    echo "Must be 'pd' or 'normal'" >&2
+# Validate kustomize directory
+if [ -z "$KUSTOMIZE_DIR" ]; then
+    echo "Error: KUSTOMIZE_DIR is required" >&2
+    show_usage
+    exit 1
+fi
+
+if [ ! -d "$KUSTOMIZE_DIR" ]; then
+    echo "Error: Directory not found: $KUSTOMIZE_DIR" >&2
+    exit 1
+fi
+
+if [ ! -f "$KUSTOMIZE_DIR/kustomization.yaml" ]; then
+    echo "Error: kustomization.yaml not found in: $KUSTOMIZE_DIR" >&2
     exit 1
 fi
 
@@ -67,8 +84,10 @@ kubectl create secret docker-registry aliyun-registry-secret \
     -n "$GROUP_NAME"
 
 # Deploy with kustomize
-echo "Deploying $DEPLOY_TYPE to namespace: $GROUP_NAME"
-kubectl apply -k "$DEPLOY_TYPE/" -n "$GROUP_NAME"
+echo "Deploying with kustomize"
+echo "  Namespace: $GROUP_NAME"
+echo "  Kustomize directory: $KUSTOMIZE_DIR"
+kubectl apply -k "$KUSTOMIZE_DIR/" -n "$GROUP_NAME"
 
 # Wait a moment for resources to be created
 sleep 2
@@ -86,7 +105,7 @@ kubectl get service -o wide -n "$GROUP_NAME"
 echo ""
 echo "Deployment completed successfully"
 echo "  Namespace: $GROUP_NAME"
-echo "  Type: $DEPLOY_TYPE"
+echo "  Kustomize directory: $KUSTOMIZE_DIR"
 echo ""
 echo "Useful commands:"
 echo "  kubectl get all -n $GROUP_NAME"
