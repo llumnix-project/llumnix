@@ -53,15 +53,17 @@ func (c *MetadataServiceClient) hashTokensSha256CBOR(
 	if len(tokens) == 0 || chunkSize <= 0 {
 		return nil, fmt.Errorf("invalid hash input")
 	}
-	numComplete := len(tokens) / chunkSize
+
+	numCompleteBlocks := len(tokens) / chunkSize
 	remainder := len(tokens) % chunkSize
-	totalToHash := numComplete
+	totalBlocks := numCompleteBlocks
 	if remainder > 0 && saveUnfullChunk {
-		totalToHash++
+		totalBlocks++
 	}
-	if totalToHash == 0 {
+	if totalBlocks == 0 {
 		return []string{}, nil
 	}
+
 	seed, ok := os.LookupEnv("MOONCAKE_HASH_SEED")
 	if !ok || seed == "" {
 		seed = "0"
@@ -70,9 +72,11 @@ func (c *MetadataServiceClient) hashTokensSha256CBOR(
 	if err != nil {
 		return nil, err
 	}
-	blockHashes := make([]string, 0, totalToHash)
+
+	blockHashes := make([]string, 0, totalBlocks)
+
 	// Iterate chunks; each step hashes (prevPrefixHash, chunkTokens, nil) as a CBOR tuple
-	for i := 0; i < totalToHash; i++ {
+	for i := 0; i < totalBlocks; i++ {
 		start := i * chunkSize
 		end := start + chunkSize
 		if end > len(tokens) {
@@ -86,8 +90,11 @@ func (c *MetadataServiceClient) hashTokensSha256CBOR(
 		}
 		prefixHash = digest
 		h := hex.EncodeToString(prefixHash)
-		blockHashes = append(blockHashes, h)
+		finalHash := h + "_0"
+		// hard code, keys saved by hybrid connector have tp_rank suffix, we use keys of tp rank 0 worker to query
+		blockHashes = append(blockHashes, finalHash)
 	}
+
 	return blockHashes, nil
 }
 
@@ -101,35 +108,39 @@ func (c *MetadataServiceClient) HashTokensSha256Hex(
 
 	numCompleteBlocks := len(tokens) / chunkSize
 	remainder := len(tokens) % chunkSize
-
 	totalBlocks := numCompleteBlocks
 	if saveUnfullChunk && remainder > 0 {
 		totalBlocks++
 	}
+	if totalBlocks == 0 {
+		return []string{}, nil
+	}
 
-	out := make([]string, 0, totalBlocks)
+	blockHashes := make([]string, 0, totalBlocks)
 
-	lastHashHex := "" // Python last_hash starts None
+	prefixHash := "" // Python last_hash starts None
 	for i := 0; i < numCompleteBlocks; i++ {
-		block := tokens[i*chunkSize : (i+1)*chunkSize]
-		hh, err := hashBlockSha256Hex(block, lastHashHex)
+		chunk := tokens[i*chunkSize : (i+1)*chunkSize]
+		h, err := hashBlockSha256Hex(chunk, prefixHash)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, hh)
-		lastHashHex = hh
+		blockHashes = append(blockHashes, h)
+		prefixHash = h
 	}
 
 	if saveUnfullChunk && remainder > 0 {
-		block := tokens[numCompleteBlocks*chunkSize:]
-		hh, err := hashBlockSha256Hex(block, lastHashHex)
+		chunk := tokens[numCompleteBlocks*chunkSize:]
+		h, err := hashBlockSha256Hex(chunk, prefixHash)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, hh)
+		// hard code, keys saved by hybrid connector have tp_rank suffix, we use keys of tp rank 0 worker to query
+		finalHash := h + "_0"
+		blockHashes = append(blockHashes, finalHash)
 	}
 
-	return out, nil
+	return blockHashes, nil
 }
 
 func (c *MetadataServiceClient) BatchQueryPrefixHashHitKVSInstances(hashKeys []string) (map[string][]string, error) {
@@ -171,26 +182,31 @@ func (c *MetadataServiceClient) batchQueryKeys(keys []string) (*http.Response, e
 }
 
 func (c *MetadataServiceClient) makeNewHttpRequest(
-	method string, endpoint *types.Endpoint, path string, keys []string, ctx context.Context) (req *http.Request, err error) {
-	u := &url.URL{
-		Scheme: "http",
-		Host:   endpoint.String(),
-		Path:   path,
-	}
-	q := u.Query()
-	q.Set("keys", strings.Join(keys, ","))
-	u.RawQuery = q.Encode()
-	var newReq *http.Request
-	if ctx != nil {
-		newReq, err = http.NewRequestWithContext(ctx, method, u.String(), nil)
-	} else {
-		newReq, err = http.NewRequest(method, u.String(), nil)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("make new http request %s:%s error: %s", method, u, err)
-	}
-	newReq.Header.Set("Accept", "application/json")
-	return newReq, nil
+    method string, endpoint *types.Endpoint, path string, keys []string, ctx context.Context,
+) (req *http.Request, err error) {
+    u := &url.URL{
+        Scheme: "http",
+        Host:   endpoint.String(),
+        Path:   path,
+    }
+
+    escaped := make([]string, 0, len(keys))
+    for _, k := range keys {
+        escaped = append(escaped, url.QueryEscape(k))
+    }
+    u.RawQuery = "keys=" + strings.Join(escaped, ",")
+
+    var newReq *http.Request
+    if ctx != nil {
+        newReq, err = http.NewRequestWithContext(ctx, method, u.String(), nil)
+    } else {
+        newReq, err = http.NewRequest(method, u.String(), nil)
+    }
+    if err != nil {
+        return nil, fmt.Errorf("make new http request %s:%s error: %s", method, u, err)
+    }
+    newReq.Header.Set("Accept", "application/json")
+    return newReq, nil
 }
 
 func (c *MetadataServiceClient) doHttpRequest(newFunc func() (*http.Request, error)) (*http.Response, *http.Request, error) {
@@ -237,6 +253,7 @@ func (c *MetadataServiceClient) parseResponseToHitMap(resp *http.Response) (map[
 	}
 	out := make(map[string][]string, len(decoded.Data))
 	for key, item := range decoded.Data {
+		klog.V(4).Infof("batch query keys parse response key=%s, item=%v", key, item)
 		ips := make([]string, 0, len(item.Values))
 		for _, v := range item.Values {
 			if v.TransportEndpoint == "" {

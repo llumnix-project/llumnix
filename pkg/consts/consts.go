@@ -128,6 +128,7 @@ const (
 
 	// KvsMetaService defaults
 	DefaultEnableCacheAwareScheduling             = false
+	DefaultCacheAwareSchedulingMinTokens          = 1024
 	DefaultKvsBackend                             = "mooncake"
 	DefaultKvsMetadataServiceConfigPath           = ""
 	DefaultKvsChunkSize                           = 256

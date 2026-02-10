@@ -175,6 +175,7 @@ type FullModeScheduleConfig struct {
 
 	// Kvs
 	EnableCacheAwareScheduling             bool
+	CacheAwareSchedulingMinTokens          int
 	KvsBackend                             string
 	KvsMetadataServiceConfigPath           string
 	KvsChunkSize                           int
@@ -259,6 +260,7 @@ func (c *FullModeScheduleConfig) AddFullModeScheduleConfigFlags(flags *pflag.Fla
 	flags.Int32Var(&c.CmsRecordMetricsInterval, "cms-record-metrics-interval", consts.DefaultCmsRecordMetricsInterval, "Llumnix CMS record metrics interval")
 
 	flags.BoolVar(&c.EnableCacheAwareScheduling, "enable-cache-aware-scheduling", consts.DefaultEnableCacheAwareScheduling, "Llumnix enable cache aware scheduling")
+	flags.IntVar(&c.CacheAwareSchedulingMinTokens, "cache-aware-scheduling-min-tokens", consts.DefaultCacheAwareSchedulingMinTokens, "Llumnix cache aware scheduling min tokens")
 	flags.StringVar(&c.KvsBackend, "kvs-backend", consts.DefaultKvsBackend, "Llumnix KVS backend")
 	flags.StringVar(&c.KvsMetadataServiceConfigPath, "kvs-metadata-service-config-path", consts.DefaultKvsMetadataServiceConfigPath, "Llumnix KVS MetadataService config path")
 	flags.IntVar(&c.KvsChunkSize, "kvs-chunk-size", consts.DefaultKvsChunkSize, "Llumnix KVS chunk size")

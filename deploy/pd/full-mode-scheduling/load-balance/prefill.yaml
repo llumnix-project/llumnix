@@ -1,10 +1,10 @@
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
-  name: decode
+  name: prefill
   labels:
-    llm-d.ai/inferenceServing: "true"
-    llm-d.ai/role: decode
+    inferenceServing: "true"
+    role: prefill
 spec:
   replicas: 1
   leaderWorkerTemplate:
@@ -12,8 +12,8 @@ spec:
     workerTemplate:
       metadata:
         labels:
-          llm-d.ai/inferenceServing: "true"
-          llm-d.ai/role: decode
+          inferenceServing: "true"
+          role: prefill
       spec:
         serviceAccountName: deepseek-r1
         imagePullSecrets:
@@ -29,34 +29,31 @@ spec:
               - SYS_RAWIO
             runAsGroup: 0
             runAsUser: 0
+          # imagePullPolicy: IfNotPresent
           imagePullPolicy: Always
           command:
             - /bin/bash
             - -c
-
-          # deepseek-r1 pd+ep
           args:
             - |-
-              # Clear /dev/shm on start to prevent running out of space when crashes occur
-              # https://github.com/llm-d/llm-d/issues/352
-              find /dev/shm -type f -delete
+             # Clear /dev/shm on start to prevent running out of space when crashes occur
+             find /dev/shm -type f -delete
 
-              #################
-              # RUN vLLM decode worker
-              #################
-              START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
+             #################
+             # RUN vLLM prefill worker
+             #################
+             START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
 
-              # --data-parallel-hybrid-lb: Use exernal load balancing across nodes, and internal load balancing within a node
-              # --enable-expert-parallel:  Use TPxDP in attention, EP in MoE layers
-              # --async-scheduling: Reduce white space between engine steps
-              # --enable-dbo:  Dual batch overlap (DBO) overlaps compute with collective communication.
-              # --enable-eplb: Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU Divisibility constraint: num_routed_experts (256 for DSv3) + num_redundant_experts must be divisible by the number of GPUs.
+             # --data-parallel-hybrid-lb: Use exernal load balancing across nodes, and internal load balancing within a node
+             # --enable-expert-parallel: Use TPxDP in attention, EP in MoE layers
+             # --async-scheduling: Reduce white space between engine steps
+             # --enable-dbo: Dual batch overlap (DBO) overlaps compute with collective communication.
+             # --enable-eplb:  Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU Divisibility constraint: num_routed_experts (256 for DSv3) + num_redundant_experts must be divisible by the number of GPUs.
 
-              exec vllm serve \
+             exec vllm serve \
                 deepseek-ai/deepseek-moe-16b-base \
                 --port 8000 \
                 --trust-remote-code \
-                --data-parallel-hybrid-lb \
                 --enable-expert-parallel \
                 --tensor-parallel-size $TP_SIZE \
                 --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
@@ -65,12 +62,11 @@ spec:
                 --data-parallel-rpc-port 5555 \
                 --data-parallel-start-rank $START_RANK \
                 --async-scheduling \
-                --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-} \
-                --gpu-memory-utilization 0.7 \
-                --kv-transfer-config '{"kv_connector":"MooncakeConnector","kv_role":"kv_consumer", "kv_connector_module_path":"mooncake.mooncake_connector_v1"}' \
-                --compilation_config '{"level":"0", "cudagraph_mode":2}'
+                --kv-transfer-config '{"kv_connector":"MooncakeConnector","kv_role":"kv_producer", "kv_connector_module_path":"mooncake.mooncake_connector_v1"}' \
+                --gpu-memory-utilization 0.8
+
           env:
-          # configuration for Llumnix
+          # Redis configuration for Llumnix
           - name: LLUMNIX_CMS_REDIS_ADDRESS
             value: "redis"
           - name: LLUMNIX_CMS_REDIS_PORT
@@ -84,25 +80,14 @@ spec:
           - name: LLUMNIX_ENABLE_MIGRATION
             value: "0"
 
-         # download models
+          # download models
           - name: VLLM_USE_MODELSCOPE
             value: "true"
 
-         # VLLM_MOE_DP_CHUNK_SIZE is a tunable parameter.
-         # Higher values increase the memory footprint of the hidden states in the MoE layers,
-         # which decreases the available memory for KV Cache.
-         # Lower values may cause poor performance, especially in load-imbalanced scenarios.
-         # The value 384 was chosen to be greater than the concurrency expected to see on any DP rank.
-         # If you increase the VLLM_MOE_DP_CHUNK_SIZE above 510 you will also need to increase the
-         # default NVSHMEM_QP_DEPTH to be at least 2 * (chunk_size + 1), which will increase the
-         # memory NVSHMEM allocates up front.
-         # Has no effect when VLLM_ALL2ALL_BACKEND=deepep_high_throughput.
-          - name: VLLM_MOE_DP_CHUNK_SIZE
-            value: "384" # vLLM default is 256
           - name: DP_SIZE_LOCAL
-            value: "4"
-          - name: TP_SIZE
             value: "1"
+          - name: TP_SIZE
+            value: "4"
           - name: TRITON_LIBCUDA_PATH
             value: /usr/lib64
           - name: VLLM_SKIP_P2P_CHECK
@@ -111,8 +96,6 @@ spec:
             value: "1"
           - name: VLLM_USE_DEEP_GEMM
             value: "1"
-          - name: VLLM_ALL2ALL_BACKEND
-            value: deepep_low_latency
           - name: NVIDIA_GDRCOPY
             value: enabled
           - name: NVSHMEM_REMOTE_TRANSPORT
@@ -175,12 +158,12 @@ spec:
           resources:
             limits:
               ephemeral-storage: 256Gi
-              memory: 256Gi
+              memory: 512Gi
               nvidia.com/gpu: "4"
             requests:
-              cpu: 32
+              cpu: "32"
               ephemeral-storage: 256Gi
-              memory: 256Gi
+              memory: 512Gi
               nvidia.com/gpu: "4"
         - name: discovery
           image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:discovery-20260130-111823
@@ -191,7 +174,7 @@ spec:
             - |-
               cd /discovery && \
               exec python3 -m discovery.discovery \
-              --role decode \
+              --role prefill \
               --pod_name $(POD_NAME) \
               --entrypoint_ip $(POD_IP) \
               --entrypoint_port 8000 \
