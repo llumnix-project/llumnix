@@ -47,7 +47,7 @@ spec:
           from modelscope import snapshot_download
           
           model_dir = snapshot_download(
-              'deepseek-ai/deepseek-moe-16b-base',
+              'Qwen/Qwen2.5-7B',
               cache_dir='/tokenizers',
               allow_patterns=['tokenizer.json', 'tokenizer_config.json']
           )
@@ -66,14 +66,14 @@ spec:
             cpu: "1000m"
       containers:
       - name: gateway
-        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:gateway-20260130-111650
+        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:gateway-20260209-174227
         imagePullPolicy: Always
         command: ["/usr/local/bin/gateway"]
         args:
         - "--port"
         - "8089"
         - "-v"
-        - "4"
+        - "3"
         - "--scheduler-discovery"
         - "endpoints"
         - "--scheduler-endpoints"
@@ -87,10 +87,13 @@ spec:
         - "--schedule-policy"
         - "load-balance"
         - "--tokenizer-path"
-        - "/tokenizers/deepseek-ai/deepseek-moe-16b-base"
+        - "/tokenizers/Qwen/Qwen2.5-7B"
         - "--pd-disagg-protocol"
-        - "vllm-mooncake"
+        - "vllm-kvt"
         - "--enable-full-mode-scheduling=true"
+        env:
+        - name: MOONCAKE_HASH_SEED
+          value: "0"
         ports:
         - containerPort: 8089
           name: http

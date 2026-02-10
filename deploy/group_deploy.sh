@@ -12,14 +12,17 @@ Arguments:
                      Supports nested directories (e.g., 'pd', 'normal/lite-mode-scheduling')
 
 Examples:
-  # Deploy pd mode with full-mode scheduling
-  $0 llumnix1 pd/full-mode-scheduling
-  
   # Deploy normal mode with lite-mode scheduling
-  $0 llumnix2 normal/lite-mode-scheduling/load-balance
+  $0 llumnix normal/lite-mode-scheduling/load-balance
   
   # Deploy normal mode with full-mode scheduling
-  $0 llumnix3 normal/full-mode-scheduling/load-balance
+  $0 llumnix normal/full-mode-scheduling/load-balance
+
+  # Deploy pd mode with full-mode scheduling
+  $0 llumnix pd/full-mode-scheduling/load-balance
+
+  # Deploy pd+kvs mode with full-mode scheduling
+  $0 llumnix pd-kvs/full-mode-scheduling/load-balance
 
 Environment Variables:
   ALIYUN_DOCKER_SERVER    (default: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com)

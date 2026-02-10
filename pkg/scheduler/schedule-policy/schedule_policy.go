@@ -251,7 +251,7 @@ func (p *DispatchPolicy) schedule(
 	requestId := request.Id
 	promptTokenIds := Uint32ToInt64(request.PromptTokenIds)
 	selectedInstances = [][]*instanceViewScheduling{}
-	if p.c.EnableCacheAwareScheduling {
+	if p.c.EnableCacheAwareScheduling && len(promptTokenIds) >= p.c.CacheAwareSchedulingMinTokens {
 		// NOTE(sunbiao.sun): Calculating instance prompt cache hit len has ms-level latency, but it does not r/w
 		// the raw instance view, so we unlock and re-lock here to improve schedule throughput
 		// when not allowing concurrent schedule.

@@ -38,7 +38,7 @@ spec:
       - name: aliyun-registry-secret
       containers:
       - name: scheduler
-        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:scheduler-20260130-111734
+        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:scheduler-20260210-110241
         imagePullPolicy: Always
         command: ["/usr/local/bin/scheduler"]
         args:
@@ -65,6 +65,17 @@ spec:
         - "--cms-pull-metadata-interval-ms"
         - "10000"
         - "--enable-full-mode-scheduling=true"
+        # cache-aware-scheduling args
+        - "--enable-cache-aware-scheduling=true"
+        - "--kvs-backend"
+        - "mooncake"
+        - "--kvs-chunk-size"
+        - "256"
+        - "--kvs-enable-save-unfull-chunk=false"
+        - "--kvs-metadata-service-http-server-host"
+        - "mooncake-master-service"
+        - "--kvs-metadata-service-http-server-port"
+        - "9003"
         ports:
         - containerPort: 8088
           name: http

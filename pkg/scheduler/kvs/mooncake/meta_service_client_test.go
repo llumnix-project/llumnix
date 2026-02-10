@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"llumnix/pkg/consts"
 )
 
 // ---- helpers for test server ----
@@ -94,7 +96,7 @@ func TestBatchQueryPrefixHashHitKVSInstances(t *testing.T) {
 	srv := newBatchQueryServer(t, serverData)
 	defer srv.Close()
 	host, port := hostPortFromServerURL(t, srv.URL)
-	c, err := NewMetadataServiceClient(host, port)
+	c, err := NewMetadataServiceClient(host, port, consts.DefaultKvsMetadataServiceHashAlgo)
 	if err != nil {
 		t.Fatalf("NewMetadataServiceClient: %v", err)
 	}
@@ -136,7 +138,7 @@ func TestBatchQueryKeys_HTTPError(t *testing.T) {
 	}))
 	defer srv.Close()
 	host, port := hostPortFromServerURL(t, srv.URL)
-	c, _ := NewMetadataServiceClient(host, port)
+	c, _ := NewMetadataServiceClient(host, port, consts.DefaultKvsMetadataServiceHashAlgo)
 	_, err := c.BatchQueryPrefixHashHitKVSInstances([]string{"mykey1"})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -221,7 +223,7 @@ func TestBatchQueryPrefixHashHitKVSInstances_SuccessFalse(t *testing.T) {
 	}))
 	defer srv.Close()
 	host, port := hostPortFromServerURL(t, srv.URL)
-	c, _ := NewMetadataServiceClient(host, port)
+	c, _ := NewMetadataServiceClient(host, port, consts.DefaultKvsMetadataServiceHashAlgo)
 	_, err := c.BatchQueryPrefixHashHitKVSInstances([]string{"k1"})
 	if err == nil {
 		t.Fatalf("expected error when success=false")
@@ -235,7 +237,7 @@ func TestBatchQueryPrefixHashHitKVSInstances_InvalidJSON(t *testing.T) {
 	}))
 	defer srv.Close()
 	host, port := hostPortFromServerURL(t, srv.URL)
-	c, _ := NewMetadataServiceClient(host, port)
+	c, _ := NewMetadataServiceClient(host, port, consts.DefaultKvsMetadataServiceHashAlgo)
 	_, err := c.BatchQueryPrefixHashHitKVSInstances([]string{"k1"})
 	if err == nil {
 		t.Fatalf("expected json decode error")
@@ -260,7 +262,7 @@ func TestBatchQueryPrefixHashHitKVSInstances_EmptyTransportEndpointSkipped(t *te
 	defer srv.Close()
 
 	host, port := hostPortFromServerURL(t, srv.URL)
-	c, _ := NewMetadataServiceClient(host, port)
+	c, _ := NewMetadataServiceClient(host, port, consts.DefaultKvsMetadataServiceHashAlgo)
 
 	got, err := c.BatchQueryPrefixHashHitKVSInstances([]string{"k1"})
 	if err != nil {

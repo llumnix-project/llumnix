@@ -1,0 +1,219 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mooncake-master-service
+  labels:
+    app: mooncake
+spec:
+  type: ClusterIP
+  ports:
+    - name: rpc
+      port: 50051
+      targetPort: 50051
+      protocol: TCP
+    - name: metadata
+      port: 50052
+      targetPort: 50052
+      protocol: TCP
+    - name: metrics
+      port: 9003
+      targetPort: 9003
+      protocol: TCP
+    - name: health-check
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+  selector:
+    app: mooncake
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mooncake
+  labels:
+    app: mooncake
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mooncake
+  template:
+    metadata:
+      labels:
+        app: mooncake
+    spec:
+      imagePullSecrets:
+      - name: aliyun-registry-secret
+      containers:
+      - name: mooncake
+        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-mooncake-20260210-100213
+        command: ["/bin/bash", "-lc"]
+        args:
+        - |
+          set -e
+          
+          # Hard-coded arguments
+          LISTENING_PORT=${LISTENING_PORT:-8000}
+          RPC_PORT=50051
+          METADATA_SERVER_PORT=50052
+          METRICS_PORT=9003
+          
+          SERVICE_PORTS="$RPC_PORT $METADATA_SERVER_PORT $METRICS_PORT"
+          
+          # Global variable for the bound IP address
+          RPC_ADDR=""
+          
+          get_ip() {
+            local net_if=$1
+            ifcfg_cmd_prefix="ifconfig | grep $net_if -A3 | "
+            ifcfg_ip="${ifcfg_cmd_prefix}awk '/inet / {printf \$2}'"
+            ip=$(eval $ifcfg_ip)
+            echo $ip
+          }
+          
+          start_mooncake_master() {
+            RPC_ADDR=$(get_ip "eth0")
+            if [ -z "$RPC_ADDR" ]; then
+              echo "failed to get eth0 ip" >&2
+              exit 1
+            fi
+            
+            echo "eth0 ip: $RPC_ADDR"
+            
+            mooncake_master \
+              --rpc_address $RPC_ADDR \
+              --rpc_port $RPC_PORT \
+              --rpc_thread_num 64 \
+              --enable_http_metadata_server=true \
+              --enable_metric_reporting \
+              --metrics_port $METRICS_PORT \
+              --http_metadata_server_host $RPC_ADDR \
+              --http_metadata_server_port $METADATA_SERVER_PORT \
+              --default_kv_lease_ttl 60000 \
+              --eviction_ratio 0.05 \
+              --eviction_high_watermark_ratio 0.95 \
+              --enable_ha=false &
+              
+            MASTER_PID=$!
+            echo "Started mooncake_master with PID: $MASTER_PID"
+          }
+          
+          is_port_ready() {
+            local port=$1
+            local check_addr=${RPC_ADDR:-"127.0.0.1"}
+            nc -z $check_addr $port 2>/dev/null
+          }
+          
+          wait_ready() {
+            local timeout=${1:-300}
+            local start_time=$(date +%s)
+            local ports=($RPC_PORT $METADATA_SERVER_PORT $METRICS_PORT)
+            
+            while true; do
+              current_time=$(date +%s)
+              if [ $((current_time - start_time)) -gt $timeout ]; then
+                echo "Timeout waiting for ports to be ready: ${ports[*]}" >&2
+                exit 1
+              fi
+              
+              local not_ready_ports=()
+              for port in "${ports[@]}"; do
+                if ! is_port_ready $port; then
+                  not_ready_ports+=($port)
+                fi
+              done
+              
+              if [ ${#not_ready_ports[@]} -eq 0 ]; then
+                echo "All ports are ready: ${ports[*]}"
+                break
+              else
+                echo "Waiting for ports to be ready: ${not_ready_ports[*]}"
+                sleep 2
+              fi
+            done
+          }
+          
+          pod_ready() {
+            # Function to check if all ports are up
+            while true; do
+              local all_ports=($RPC_PORT $METADATA_SERVER_PORT $METRICS_PORT)
+              local down_ports=()
+              
+              for port in "${all_ports[@]}"; do
+                if ! is_port_ready $port; then
+                  down_ports+=($port)
+                fi
+              done
+              
+              if [ ${#down_ports[@]} -ne 0 ]; then
+                echo "Some ports are down: ${down_ports[*]}" >&2
+                exit 1  # Exit the script if any port is down
+              fi
+              
+              sleep 5
+            done
+          }
+          
+          # Start HTTP server for health checks
+          start_health_server() {
+            python3 - <<'PY' &
+          from http.server import BaseHTTPRequestHandler, HTTPServer
+          class H(BaseHTTPRequestHandler):
+              def do_GET(self):
+                  self.send_response(200)
+                  self.send_header("Content-Length", "2")
+                  self.end_headers()
+                  self.wfile.write(b"OK")
+              def log_message(self, *args): pass
+          HTTPServer(("0.0.0.0", 8000), H).serve_forever()
+          PY
+          }
+          
+          # Main execution
+          start_health_server
+          start_mooncake_master
+          wait_ready 300
+          pod_ready
+        ports:
+        - name: rpc
+          containerPort: 50051
+          protocol: TCP
+        - name: metadata
+          containerPort: 50052
+          protocol: TCP
+        - name: metrics
+          containerPort: 9003
+          protocol: TCP
+        - name: health-check
+          containerPort: 8000
+          protocol: TCP
+        resources:
+          requests:
+            memory: 128Gi
+            cpu: "32"
+          limits:
+            memory: 128Gi
+            cpu: "32"
+        volumeMounts:
+        - name: mooncake-data
+          mountPath: /data
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: mooncake-data
+        emptyDir: {}
