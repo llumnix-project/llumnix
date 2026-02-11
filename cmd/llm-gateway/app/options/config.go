@@ -108,24 +108,6 @@ type Config struct {
 	// requests token reporter duration (seconds)
 	RequestsReporterDuration int
 
-	// TODO(sunbiao.sun): remove
-
-	// max requests for every instance
-	LimitRequests        int
-	PrefillLimitRequests int
-	DecodeLimitRequests  int
-
-	// the limit of every instance tokens, used to limit the number of tokens in the instance
-	LimitTokens        int
-	PrefillLimitTokens int
-	DecodeLimitTokens  int
-
-	// the scale of threshold, used to calculate the threshold of every decode tokens
-	LimitTokensThresholdScale float32
-
-	// the threshold of request prompt length
-	PromptLengthThreshold int
-
 	// ProcessorType，used to select the processor
 	ProcessorType string
 
@@ -292,17 +274,6 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.TokenizerMode, "tokenizer-mode", "", "builtin tokenizer mode, support formatter or leave null as vllmv0")
 
 	flags.IntVar(&c.RequestsReporterDuration, "requests-report-duration", 0, "Specify requests reporter duration")
-
-	// TODO(sunbiao.sun): remove
-	flags.IntVar(&c.LimitRequests, "limit-requests", 0, "max requests for every backend llm instances.")
-	flags.IntVar(&c.PrefillLimitRequests, "prefill-limit-requests", 0, "max requests for every backend llm instances.")
-	flags.IntVar(&c.DecodeLimitRequests, "decode-limit-requests", 0, "max requests for every backend llm instances.")
-
-	flags.IntVar(&c.LimitTokens, "limit-tokens", 0, "max tokens for every backend llm instances.")
-	flags.IntVar(&c.PrefillLimitTokens, "prefill-limit-tokens", 0, "max tokens for every backend for prefill llm instances.")
-	flags.IntVar(&c.DecodeLimitTokens, "decode-limit-tokens", 0, "max tokens for every backend for decode llm instances.")
-	flags.Float32Var(&c.LimitTokensThresholdScale, "limit-tokens-threshold-scale", 0.0, "the scale of threshold, used to calculate the threshold of every decode tokens.")
-	flags.IntVar(&c.PromptLengthThreshold, "prompt-length-threshold", 0, "the threshold of request prompt length, used to determine whether the request is a long request")
 	flags.BoolVar(&c.SeparatePDSchedule, "separate-pd-schedule", false, "Specify whether to separate pd schedule")
 
 	// TODO(sunbiao.sun): remove
@@ -502,6 +473,32 @@ func (c *Config) updateDiscoveryEndpoint() error {
 	return nil
 }
 
+// isLlumnixDispatchPolicy reports whether the given policy uses llumnix dispatch mode.
+func isLlumnixDispatchPolicy(policy string) bool {
+	switch policy {
+	case consts.SchedulePolicyLeastToken, consts.SchedulePolicyLeastRequest, consts.SchedulePolicyLlmMetricBased:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *Config) validateSchedulePolicyConfig() {
+	// When using llumnix dispatch policy (least-token, least-request, or pd-split
+	// with dispatch sub-policies), full-mode scheduling must be disabled
+	// to avoid unnecessary CMS initialization.
+	switch c.SchedulePolicy {
+	case consts.SchedulePolicyPDSplit:
+		if isLlumnixDispatchPolicy(c.PrefillPolicy) || isLlumnixDispatchPolicy(c.DecodePolicy) {
+			c.LlumnixConfig.EnableFullModeScheduling = false
+		}
+	default:
+		if isLlumnixDispatchPolicy(c.SchedulePolicy) {
+			c.LlumnixConfig.EnableFullModeScheduling = false
+		}
+	}
+}
+
 // Complete performs post-initialization configuration setup in a well-defined sequence.
 // This function MUST be called after flag parsing and before the application starts.
 func (c *Config) Complete(flags *pflag.FlagSet) error {
@@ -519,9 +516,12 @@ func (c *Config) Complete(flags *pflag.FlagSet) error {
 	}
 
 	// Parse llumnix-extra-args to override flag values (highest priority)
-	if err := c.ParseLlumnixExtraArgs(flags); err != nil {
+	if err := c.parseLlumnixExtraArgs(flags); err != nil {
 		return fmt.Errorf("failed to parse llumnix extra args: %w", err)
 	}
+
+	// Validate schedule policy configuration
+	c.validateSchedulePolicyConfig()
 
 	// Print comprehensive configuration summary for debugging and auditing
 	c.printConfigSummary()
@@ -584,22 +584,6 @@ func (c *Config) printConfigSummary() {
 	logIfNotEmpty("  pd-split-mode: %s", c.PDSplitMode)
 	logIfNotEmpty("  separate-pd-schedule: %v", c.SeparatePDSchedule)
 	logIfNotEmpty("  infer-backend: %s", c.InferBackend)
-
-	// Legacy limit settings (TODO: remove)
-	if c.LimitRequests > 0 || c.PrefillLimitRequests > 0 || c.DecodeLimitRequests > 0 {
-		klog.Infof("[Legacy Limits - Requests]")
-		logIfNotEmpty("  limit-requests: %d", c.LimitRequests)
-		logIfNotEmpty("  prefill-limit-requests: %d", c.PrefillLimitRequests)
-		logIfNotEmpty("  decode-limit-requests: %d", c.DecodeLimitRequests)
-	}
-	if c.LimitTokens > 0 || c.PrefillLimitTokens > 0 || c.DecodeLimitTokens > 0 {
-		klog.Infof("[Legacy Limits - Tokens]")
-		logIfNotEmpty("  limit-tokens: %d", c.LimitTokens)
-		logIfNotEmpty("  prefill-limit-tokens: %d", c.PrefillLimitTokens)
-		logIfNotEmpty("  decode-limit-tokens: %d", c.DecodeLimitTokens)
-		logIfNotEmpty("  limit-tokens-threshold-scale: %.3f", c.LimitTokensThresholdScale)
-	}
-	logIfNotEmpty("  prompt-length-threshold: %d", c.PromptLengthThreshold)
 
 	// Tokenizer and processor
 	klog.Infof("[Tokenizer & Processor]")
@@ -924,7 +908,7 @@ func safeSplitArgs(input string) []string {
 	return result
 }
 
-// ParseLlumnixExtraArgs parses llumnix-extra-args and overrides corresponding flag values.
+// parseLlumnixExtraArgs parses llumnix-extra-args and overrides corresponding flag values.
 // Supports two formats for array values:
 //   - Quoted strings: key='value1,value2' -> parsed as: key=value1,value2 (quotes removed)
 //   - Bracket arrays: key=[value1,value2] -> parsed as: key=[value1,value2] (brackets kept)
@@ -932,7 +916,7 @@ func safeSplitArgs(input string) []string {
 // Example: "dispatch-top-k=5,policies=[p1,p2],timeout='10,20'" ->
 //
 //	"dispatch-top-k=5", "policies=[p1,p2]", "timeout=10,20"
-func (c *Config) ParseLlumnixExtraArgs(flags *pflag.FlagSet) error {
+func (c *Config) parseLlumnixExtraArgs(flags *pflag.FlagSet) error {
 	if c.LlumnixConfig.ExtraArgs == "" {
 		return nil
 	}

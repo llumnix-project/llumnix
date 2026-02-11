@@ -117,12 +117,19 @@ func (r *RateLimiterWrapper) QueueFilter(inferMode string, schReq *types.Schedul
 	return nil, consts.ErrorRateLimitExceeded
 }
 
+// Enabled returns whether the rate limiter is enabled
+func (r *RateLimiterWrapper) Enabled() bool {
+	return r.config.Enabled()
+}
+
 // Filter filters the given instance views based on the rate limiter configuration.
 func (r *RateLimiterWrapper) Filter(inferMode string, schReq *types.ScheduleRequest, instanceViews []*lrs.InstanceView) ([]*lrs.InstanceView, error) {
 	if !r.config.Enabled() {
 		return instanceViews, nil
 	}
-
+	if len(instanceViews) == 0 {
+		return nil, consts.ErrorNoAvailableEndpoint
+	}
 	action := r.config.LimitAction()
 	switch action {
 	case LimitActionReject:
@@ -181,4 +188,25 @@ func NewRateLimiterWrapper() *RateLimiterWrapper {
 	}
 	go worker.Run(cancelCtx)
 	return rlw
+}
+
+// Filter is a helper function, converting the map of instance views to a slice and calling the RateLimiterWrapper's Filter method.
+func Filter(inferMode string, schReq *types.ScheduleRequest, instanceViews map[string]*lrs.InstanceView) (map[string]*lrs.InstanceView, error) {
+	r := GetRateLimiter()
+	if !r.Enabled() {
+		return instanceViews, nil
+	}
+	instanceViewsSlice := make([]*lrs.InstanceView, 0, len(instanceViews))
+	for _, iv := range instanceViews {
+		instanceViewsSlice = append(instanceViewsSlice, iv)
+	}
+	results, err := r.Filter(inferMode, schReq, instanceViewsSlice)
+	if err != nil {
+		return nil, err
+	}
+	instanceViewsMap := make(map[string]*lrs.InstanceView)
+	for _, iv := range results {
+		instanceViewsMap[iv.GetInstanceId()] = iv
+	}
+	return instanceViewsMap, nil
 }

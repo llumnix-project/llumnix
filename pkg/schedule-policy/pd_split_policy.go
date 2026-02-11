@@ -19,44 +19,53 @@ type PDSplitPolicy struct {
 }
 
 func createPolicyByRole(role string, policyName string, config *options.Config, lrsClient *lrs.LocalRealtimeStateClient) SchedulePolicy {
-	if policyName == consts.SchedulePolicyLeastToken || policyName == consts.SchedulePolicyLlmMetricBased {
-		newConfig := *config
-		newConfig.SchedulePolicy = consts.SchedulePolicyLoadBalance
-		newConfig.LlumnixConfig.EnableFullModeScheduling = false
-		if role == "prefill" {
-			newConfig.LlumnixConfig.DispatchPrefillLoadMetric = "num-tokens"
-		} else if role == "decode" {
-			newConfig.LlumnixConfig.DispatchDecodeLoadMetric = "num-tokens"
-		} else {
-			klog.Errorf("unsupported role: %v", role)
-			return nil
-		}
-		return llumnix.NewDispatchPolicy(&newConfig, consts.SchedulePolicyLoadBalance, lrsClient)
-	} else if policyName == consts.SchedulePolicyLeastRequest {
-		newConfig := *config
-		newConfig.SchedulePolicy = consts.SchedulePolicyLoadBalance
-		newConfig.LlumnixConfig.EnableFullModeScheduling = false
-		if role == "prefill" {
-			newConfig.LlumnixConfig.DispatchPrefillLoadMetric = "num-requests"
-		} else if role == "decode" {
-			newConfig.LlumnixConfig.DispatchDecodeLoadMetric = "num-requests"
-		} else {
-			klog.Errorf("unsupported role: %v", role)
-			return nil
-		}
-		return llumnix.NewDispatchPolicy(&newConfig, consts.SchedulePolicyLoadBalance, lrsClient)
-	} else if policyName == consts.SchedulePolicyPrefixCache {
+	// Handle prefix cache separately (no metric mapping needed)
+	if policyName == consts.SchedulePolicyPrefixCache {
 		return NewPrefixCachePolicy(config, role, lrsClient)
-	} else {
+	}
+
+	// Use unified metric transformation
+	metric := transformPolicyToMetric(policyName)
+	if metric == "" {
 		return nil
 	}
+
+	newConfig := *config
+	newConfig.SchedulePolicy = consts.SchedulePolicyLoadBalance
+	newConfig.LlumnixConfig.EnableFullModeScheduling = false
+
+	switch role {
+	case "prefill":
+		newConfig.LlumnixConfig.DispatchPrefillLoadMetric = metric
+	case "decode":
+		newConfig.LlumnixConfig.DispatchDecodeLoadMetric = metric
+	default:
+		klog.Errorf("unsupported role: %v", role)
+		return nil
+	}
+
+	return llumnix.NewDispatchPolicy(&newConfig, consts.SchedulePolicyLoadBalance, lrsClient)
 }
 
-func NewPDSplitPolicy(c *options.Config, lrsClient *lrs.LocalRealtimeStateClient) *PDSplitPolicy {
+func NewPDSplitPolicy(c *options.Config, lrsClient *lrs.LocalRealtimeStateClient) SchedulePolicy {
 	if c.PrefillPolicy == consts.SchedulePolicyPDSplit || c.DecodePolicy == consts.SchedulePolicyPDSplit {
 		klog.Errorf("pd node could not be pd-split policy.")
 		return nil
 	}
+
+	// When neither prefill nor decode uses prefix cache, merge into a single llumnix policy
+	// with both metrics set, which is more efficient than creating two separate policies.
+	if c.PrefillPolicy != consts.SchedulePolicyPrefixCache &&
+		c.DecodePolicy != consts.SchedulePolicyPrefixCache {
+		c.SchedulePolicy = consts.SchedulePolicyLoadBalance
+		c.LlumnixConfig.EnableFullModeScheduling = false
+		c.LlumnixConfig.DispatchPrefillLoadMetric = transformPolicyToMetric(c.PrefillPolicy)
+		c.LlumnixConfig.DispatchDecodeLoadMetric = transformPolicyToMetric(c.DecodePolicy)
+		return llumnix.NewDispatchPolicy(c, consts.SchedulePolicyLoadBalance, lrsClient)
+	}
+
+	// When prefix cache is involved, must create separate policies per role
+	// because prefix cache is not compatible with llumnix dispatch.
 	prefillPolicy := createPolicyByRole(consts.PrefillInferMode, c.PrefillPolicy, c, lrsClient)
 	if prefillPolicy == nil {
 		klog.Errorf("failed to create prefill policy: %v", c.PrefillPolicy)
@@ -67,12 +76,11 @@ func NewPDSplitPolicy(c *options.Config, lrsClient *lrs.LocalRealtimeStateClient
 		klog.Errorf("failed to create decode policy: %v", c.DecodePolicy)
 		return nil
 	}
-	pdsp := &PDSplitPolicy{
+	return &PDSplitPolicy{
 		config:        c,
 		prefillPolicy: prefillPolicy,
 		decodePolicy:  decodePolicy,
 	}
-	return pdsp
 }
 
 func (pdsp *PDSplitPolicy) Name() string {

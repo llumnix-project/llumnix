@@ -5,6 +5,7 @@ import (
 	"llm-gateway/cmd/llm-gateway/app/options"
 	"llm-gateway/pkg/consts"
 	"llm-gateway/pkg/lrs"
+	ratelimiter "llm-gateway/pkg/service/rate-limiter"
 	"llm-gateway/pkg/types"
 	"llm-gateway/pkg/utils/radix"
 	"math"
@@ -240,9 +241,13 @@ func (pc *PrefixCachePolicy) Name() string {
 func (pc *PrefixCachePolicy) Schedule(schReq *types.ScheduleRequest) error {
 	instanceViews := pc.lrsClient.GetInstanceViews(pc.inferMode)
 	if len(instanceViews) == 0 {
-		return consts.ErrorEndpointNotFound
+		return consts.ErrorNoAvailableEndpoint
 	}
-	selectWorker := pc.trySelectBestOf(schReq.Id, schReq.PromptText, instanceViews)
+	results, err := ratelimiter.Filter(pc.inferMode, schReq, instanceViews)
+	if err != nil {
+		return err
+	}
+	selectWorker := pc.trySelectBestOf(schReq.Id, schReq.PromptText, results)
 	schReq.ScheduleResult = append(schReq.ScheduleResult, *selectWorker)
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -34,6 +35,8 @@ type ScheduleService struct {
 	addChan   <-chan types.LLMWorkerSlice
 	delChan   <-chan types.LLMWorkerSlice
 	lrsClient *lrs.LocalRealtimeStateClient
+
+	scheduleMutex sync.Mutex
 }
 
 func NewScheduleService(c *options.Config) *ScheduleService {
@@ -130,23 +133,35 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// TODO(wingo.zwt) Reusing llumnix's configuration, concurrent scheduling is not allowed by default
+	// because the scheduling reference data needs to be updated through LRS after the scheduling is completed again.
+	if !ss.config.LlumnixConfig.AllowConcurrentSchedule {
+		ss.scheduleMutex.Lock()
+		defer ss.scheduleMutex.Unlock()
+	}
+
 	var statusCode int
 	err = ss.schedulePolicy.Schedule(&schReq)
-	if errors.Is(err, consts.ErrorEndpointNotFound) {
-		klog.Errorf("%vms| gateway(%s) request failed: no endpoint exits", time.Since(tStart).Milliseconds(), schReq.GatewayId)
-		statusCode = http.StatusNotFound
-	} else if err != nil {
+
+	if err != nil {
 		if errors.Is(err, consts.ErrorNoAvailableEndpoint) {
+			statusCode = http.StatusServiceUnavailable
+			logging.Logf("%s %vms| gateway(%s) request failed: no available endpoint", schReq.Id, time.Since(tStart).Milliseconds(), schReq.GatewayId)
+		} else if errors.Is(err, consts.ErrorRateLimitExceeded) {
 			statusCode = http.StatusTooManyRequests
-			klog.Errorf("%s %vms| gateway(%s) request failed: no available endpoint", schReq.Id, time.Since(tStart).Milliseconds(), schReq.GatewayId)
+			logging.Logf("%s %vms| gateway(%s) request failed: rate limit", schReq.Id, time.Since(tStart).Milliseconds(), schReq.GatewayId, err)
+		} else if errors.Is(err, consts.ErrorRateLimitQueueTimeOut) {
+			statusCode = http.StatusTooManyRequests
+			w.Header().Set("Retry-After", "100")
+			logging.Logf("%s %vms| gateway(%s) request need retry: rate limit queue timeout", schReq.Id, time.Since(tStart).Milliseconds(), schReq.GatewayId, err)
 		} else {
 			statusCode = http.StatusBadRequest
-			klog.Errorf("%s %vms| gateway(%s) request failed: %v", schReq.Id, time.Since(tStart).Milliseconds(), schReq.GatewayId, err)
+			logging.Logf("%s %vms| gateway(%s) request failed: %v", schReq.Id, time.Since(tStart).Milliseconds(), schReq.GatewayId, err)
 		}
 	} else if len(schReq.ScheduleResult) == 0 {
 		err = consts.ErrorNoAvailableEndpoint
-		statusCode = http.StatusTooManyRequests
-		klog.Errorf("%s %vms| gateway(%s) request failed: get endpoints empty", schReq.Id, time.Since(tStart).Milliseconds(), schReq.GatewayId)
+		statusCode = http.StatusServiceUnavailable
+		logging.Logf("%s %vms| gateway(%s) request failed: empty schedule result", schReq.Id, time.Since(tStart).Milliseconds(), schReq.GatewayId)
 	}
 
 	if err != nil {
@@ -165,7 +180,7 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 			reqState := lrs.NewRequestState(schReq.Id, int64(schReq.PromptNumTokens), worker.Id(), schReq.GatewayId)
 			err := ss.lrsClient.AllocateRequestState(worker.Role.String(), reqState)
 			if err != nil {
-				klog.Errorf("Acquire %s resource request failed: %v", worker.Role, err)
+				klog.Errorf("[%s] acquire %s resource request failed: %v", schReq.Id, worker.Role, err)
 			}
 		}
 	}
@@ -245,8 +260,8 @@ func (ss *ScheduleService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ss.handleRelease(w, r)
 	case "/keepalive":
 		ss.handleKeepalive(w, r)
-	// case "/request_report":
-	// 	ss.handleRequestReport(w, r)
+	case "/report":
+		ss.handleReport(w, r)
 	case "/ws/keepalive":
 		ss.handleServiceKeepAlive(w, r)
 	case "/healthz":

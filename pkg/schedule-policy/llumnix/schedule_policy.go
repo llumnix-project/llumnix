@@ -12,6 +12,7 @@ import (
 	kvs "llm-gateway/pkg/kvs"
 	"llm-gateway/pkg/lrs"
 	"llm-gateway/pkg/metrics"
+	ratelimiter "llm-gateway/pkg/service/rate-limiter"
 	"llm-gateway/pkg/types"
 	"llm-gateway/pkg/utils"
 )
@@ -153,6 +154,58 @@ func Uint32ToInt64(arr []uint32) []int64 {
 	return result
 }
 
+func ratelimitFilter(request *types.ScheduleRequest, instanceViews map[string]map[string]*lrs.InstanceView) (map[string]map[string]*lrs.InstanceView, error) {
+	if request.ScheduleMode == types.ScheduleModeNormal {
+		normalInstanceViews, exists := instanceViews[consts.NormalInferMode]
+		if !exists {
+			return nil, consts.ErrorNoAvailableEndpoint
+		}
+		if len(normalInstanceViews) == 0 {
+			return nil, consts.ErrorNoAvailableEndpoint
+		}
+
+		filtered, err := ratelimiter.Filter(consts.NormalInferMode, request, normalInstanceViews)
+		if err != nil {
+			return nil, err
+		}
+		instanceViews[consts.NormalInferMode] = filtered
+		return instanceViews, nil
+	}
+
+	needPrefill := request.ScheduleMode == types.ScheduleModePDBatch || (request.ScheduleMode == types.ScheduleModePDStaged && request.InferStage == types.InferStagePrefill)
+	if needPrefill {
+		prefillInstanceViews, exists := instanceViews[consts.PrefillInferMode]
+		if !exists {
+			return nil, consts.ErrorNoAvailableEndpoint
+		}
+		if len(prefillInstanceViews) == 0 {
+			return nil, consts.ErrorNoAvailableEndpoint
+		}
+		filtered, err := ratelimiter.Filter(consts.PrefillInferMode, request, prefillInstanceViews)
+		if err != nil {
+			return nil, err
+		}
+		instanceViews[consts.PrefillInferMode] = filtered
+	}
+
+	needDecode := request.ScheduleMode == types.ScheduleModePDBatch || (request.ScheduleMode == types.ScheduleModePDStaged && request.InferStage == types.InferStageDecode)
+	if needDecode {
+		decodeInstanceViews, exists := instanceViews[consts.DecodeInferMode]
+		if !exists {
+			return nil, consts.ErrorNoAvailableEndpoint
+		}
+		if len(decodeInstanceViews) == 0 {
+			return nil, consts.ErrorNoAvailableEndpoint
+		}
+		filtered, err := ratelimiter.Filter(consts.DecodeInferMode, request, decodeInstanceViews)
+		if err != nil {
+			return nil, err
+		}
+		instanceViews[consts.DecodeInferMode] = filtered
+	}
+	return instanceViews, nil
+}
+
 func (p *DispatchPolicy) Schedule(request *types.ScheduleRequest) error {
 	tStart := time.Now()
 	defer func() {
@@ -190,7 +243,14 @@ func (p *DispatchPolicy) Schedule(request *types.ScheduleRequest) error {
 	if p.c.LlumnixConfig.EnableFullModeScheduling {
 		p.clusterView.groupedInstanceViews = toInstanceViewInterfaceMap(p.cmsClient.GetGroupedInstanceViews())
 	} else {
-		p.clusterView.groupedInstanceViews = toInstanceViewInterfaceMap(p.lrsClient.GetGroupedInstanceViews())
+		// Note: Implementing a global filter with ratelimiter would be more reasonable,
+		// but currently the filter interface does not expose error information,
+		// so the client cannot get the specific failure reason. Therefore, a version is implemented here first.
+		groupInstanceViews, err := ratelimitFilter(request, p.lrsClient.GetGroupedInstanceViews())
+		if err != nil {
+			return err
+		}
+		p.clusterView.groupedInstanceViews = toInstanceViewInterfaceMap(groupInstanceViews)
 	}
 	clusterViewScheduling := toClusterViewScheduling(p.clusterView)
 	klog.V(4).Infof("Retrieved cluster instances, count: %d", len(clusterViewScheduling.instanceViews))

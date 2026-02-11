@@ -3,7 +3,6 @@ package balancer
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,8 +19,11 @@ import (
 )
 
 const (
+	// Be careful when modifying this value. When the rate-limiting wait strategy is enabled, the default polling interval is 2 seconds.
+	// This value needs to be greater than that; otherwise, specific errors cannot be detected.
 	scheduleRequestTimeout = 3 * time.Second
-	releaseTryCount        = 3
+
+	releaseTryCount = 3
 )
 
 type SchedulerClient struct {
@@ -98,12 +100,11 @@ func (cb *SchedulerClient) handleResponse(body []byte) (types.ScheduledResult, e
 	var schReq types.ScheduleRequest
 	err := json.Unmarshal(body, &schReq)
 	if err != nil {
-		err = consts.ErrorEndpointNotFound
-		klog.Warningf("do schedule: content format error: %s", string(body))
+		klog.Warningf("schedule response: content format error: %s", string(body))
 		return nil, err
 	}
 	if len(schReq.ScheduleResult) == 0 {
-		klog.Warningf("get next endpoint: no available endpoint")
+		klog.Warningf("schedule response: no available endpoint")
 		return nil, consts.ErrorNoAvailableEndpoint
 	}
 
@@ -134,7 +135,7 @@ func (cb *SchedulerClient) doSchedule(req *types.RequestContext) (types.Schedule
 	resp, err := cb.schClient.Do(httpReq)
 	if err != nil {
 		klog.Warningf("[%s] do request schedule fail: %v\n", req.Id, err)
-		return nil, consts.ErrorMayNetworkBroken
+		return nil, err
 	}
 
 	defer resp.Body.Close()
@@ -143,19 +144,25 @@ func (cb *SchedulerClient) doSchedule(req *types.RequestContext) (types.Schedule
 	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		klog.Warningf("[%s] do request schedule: could not read body: %v", req.Id, err)
-		return nil, consts.ErrorMayNetworkBroken
+		return nil, err
 	}
 
 	switch resp.StatusCode {
+	case http.StatusTooManyRequests:
+		retryAfter := resp.Header.Get("Retry-After")
+		if len(retryAfter) > 0 {
+			return nil, consts.ErrorRateLimitQueueTimeOut
+		} else {
+			// No fallback
+			return nil, consts.ErrorRateLimitExceeded
+		}
 	case http.StatusOK:
 		return cb.handleResponse(body)
-	case http.StatusTooManyRequests:
+	case http.StatusServiceUnavailable:
 		return nil, consts.ErrorNoAvailableEndpoint
-	case http.StatusNotFound:
-		return nil, consts.ErrorEndpointNotFound
 	default:
 		klog.Warningf("[%s] do request schedule: %d, %s", req.Id, resp.StatusCode, string(body))
-		return nil, consts.ErrorEndpointNotFound
+		return nil, consts.ErrorNoAvailableEndpoint
 	}
 }
 
@@ -169,32 +176,26 @@ func getServiceNameFromPodName(name string) string {
 }
 
 func (cb *SchedulerClient) Get(req *types.RequestContext) (types.ScheduledResult, error) {
-	tStart := time.Now()
-
 	if !cb.kac.IsRemoteReady() {
 		return nil, consts.ErrorSchedulerNotReady
 	}
-
 	for {
 		result, err := cb.doSchedule(req)
 		if err == nil {
 			return result, nil
 		}
 
-		// all service endpoints are busy, wait a period for next try
-		if errors.Is(err, consts.ErrorNoAvailableEndpoint) {
-			if time.Since(tStart).Milliseconds() > int64(cb.config.WaitScheduleTimeout) {
-				return nil, err
-			} else {
-				klog.Infof("[%s] all service endpoints are busy, try next after %dms", req.Id, cb.config.WaitScheduleTryPeriod)
-				time.Sleep(time.Duration(cb.config.WaitScheduleTryPeriod) * time.Millisecond)
-				continue
-			}
+		if err == consts.ErrorRateLimitQueueTimeOut {
+			time.Sleep(100 * time.Millisecond)
+			continue
+		} else if err == consts.ErrorRateLimitExceeded {
+			return nil, err
+		} else {
+			// All other errors will follow the fallback logic, ensuring that as long as the backend service is available, the request can be forwarded.
+			// Do Not return the error directly, as the scheduler may not have fully loaded all backend service instances right after a restart.
+			klog.Warningf("[%s] service backend endpoint get failed, error: %v", req.Id, err)
+			return nil, consts.ErrorSchedulerNotReady
 		}
-
-		// scheduler is not ready
-		klog.Warningf("[%s] service backend endpoint get failed, error: %v", req.Id, err)
-		return nil, consts.ErrorSchedulerNotReady
 	}
 }
 
@@ -237,6 +238,7 @@ func (cb *SchedulerClient) Release(req *types.RequestContext, worker *types.LLMW
 		if len(cb.config.ServiceToken) > 0 {
 			httpReq.Header.Add("Authorization", cb.config.ServiceToken)
 		}
+		// Add retry capability to ensure the release succeeds as much as possible.
 		retry := releaseTryCount
 	RETRY:
 		resp, err := cb.schClient.Do(httpReq)

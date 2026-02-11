@@ -1228,7 +1228,7 @@ func TestSchedule_NoEndpoints(t *testing.T) {
 	}
 
 	err := pc.Schedule(req)
-	assert.Equal(t, consts.ErrorEndpointNotFound, err)
+	assert.Equal(t, consts.ErrorNoAvailableEndpoint, err)
 }
 
 // TestSchedule_DifferentApplications simulates requests from different applications.

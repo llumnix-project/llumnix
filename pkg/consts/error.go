@@ -5,11 +5,9 @@ import (
 )
 
 var (
-	ErrorNoAvailableEndpoint    = errors.New("no available endpoint") // the backend instances exist, but it cannot be obtained as the load is too high
-	ErrorEndpointNotFound       = errors.New("endpoint not found")    // there is no endpoints for the backend service
+	ErrorNoAvailableEndpoint    = errors.New("no available endpoint") // there is no endpoints for the backend service
 	ErrorBackendServiceNoFound  = errors.New("backend service not found")
 	ErrorSchedulerNotReady      = errors.New("scheduler not ready")
-	ErrorMayNetworkBroken       = errors.New("may network broken")
 	ErrorAllEndpointBusy        = errors.New("all endpoints busy")
 	ErrorNoMatchInferMode       = errors.New("not match infer mode")
 	ErrorGatewayNotFound        = errors.New("gateway not found")

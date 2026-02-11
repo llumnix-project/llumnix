@@ -158,7 +158,7 @@ func TestErrorCases(t *testing.T) {
 		}
 
 		err := lrs.AllocateRequestState(reqState)
-		assert.Equal(t, consts.ErrorEndpointNotFound, err)
+		assert.Equal(t, consts.ErrorNoAvailableEndpoint, err)
 	})
 
 	t.Run("Allocate Without Gateway", func(t *testing.T) {

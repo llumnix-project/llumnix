@@ -18,40 +18,6 @@ type SchedulePolicy interface {
 	Schedule(*types.ScheduleRequest) error
 }
 
-func transformPolicyToMetric(policy string) string {
-	switch policy {
-	case consts.SchedulePolicyLeastToken, consts.SchedulePolicyLlmMetricBased:
-		return "num-tokens"
-	case consts.SchedulePolicyLeastRequest:
-		return "num-requests"
-	default:
-		klog.Errorf("unsupported to transform policy: %v", policy)
-		return ""
-	}
-}
-
-func transformPolicyToLlumnixPolicy(policy string, config *options.Config, lrsClient *lrs.LocalRealtimeStateClient) SchedulePolicy {
-	config.SchedulePolicy = consts.SchedulePolicyLoadBalance
-	config.LlumnixConfig.EnableFullModeScheduling = false
-	config.LlumnixConfig.DispatchNeutralLoadMetric = transformPolicyToMetric(policy)
-	return llumnix.NewDispatchPolicy(config, consts.SchedulePolicyLoadBalance, lrsClient)
-}
-
-func createPDSplitPolicy(config *options.Config, lrsClient *lrs.LocalRealtimeStateClient) SchedulePolicy {
-	// Now least token and least request all use the llumnix policy.
-	// Currently, the prefix cache strategy is not compatible with llumnix, so special handling is required.
-	if config.PrefillPolicy == consts.SchedulePolicyPrefixCache ||
-		config.DecodePolicy == consts.SchedulePolicyPrefixCache {
-		return NewPDSplitPolicy(config, lrsClient)
-	}
-
-	policy := consts.SchedulePolicyLoadBalance
-	config.LlumnixConfig.EnableFullModeScheduling = false
-	config.LlumnixConfig.DispatchPrefillLoadMetric = transformPolicyToMetric(config.PrefillPolicy)
-	config.LlumnixConfig.DispatchDecodeLoadMetric = transformPolicyToMetric(config.DecodePolicy)
-	return llumnix.NewDispatchPolicy(config, policy, lrsClient)
-}
-
 func NewSchedulePolicy(
 	policy string,
 	config *options.Config,
@@ -65,15 +31,34 @@ func NewSchedulePolicy(
 	// The llm-metric-based strategy has since been phased out, but to maintain
 	// configuration compatibility, it is retained and replaced with the least-token strategy.
 	case consts.SchedulePolicyLeastRequest, consts.SchedulePolicyLeastToken, consts.SchedulePolicyLlmMetricBased:
-		return transformPolicyToLlumnixPolicy(policy, config, lrsClient)
+		return createNeutralDispatchPolicy(policy, config, lrsClient)
 	case consts.SchedulePolicyPrefixCache:
 		return NewPrefixCachePolicy(config, consts.NormalInferMode, lrsClient)
 	case consts.SchedulePolicyPDSplit:
-		return createPDSplitPolicy(config, lrsClient)
+		return NewPDSplitPolicy(config, lrsClient)
 	default:
 		klog.Errorf("unsupported schedule policy: %v", policy)
 		return nil
 	}
+}
+
+func transformPolicyToMetric(policy string) string {
+	switch policy {
+	case consts.SchedulePolicyLeastToken, consts.SchedulePolicyLlmMetricBased:
+		return "num-tokens"
+	case consts.SchedulePolicyLeastRequest:
+		return "num-requests"
+	default:
+		klog.Errorf("unsupported to transform policy: %v", policy)
+		return ""
+	}
+}
+
+func createNeutralDispatchPolicy(policy string, config *options.Config, lrsClient *lrs.LocalRealtimeStateClient) SchedulePolicy {
+	config.SchedulePolicy = consts.SchedulePolicyLoadBalance
+	config.LlumnixConfig.EnableFullModeScheduling = false
+	config.LlumnixConfig.DispatchNeutralLoadMetric = transformPolicyToMetric(policy)
+	return llumnix.NewDispatchPolicy(config, consts.SchedulePolicyLoadBalance, lrsClient)
 }
 
 func NewReschedulePolicy(config *options.Config) ReschedulePolicy {

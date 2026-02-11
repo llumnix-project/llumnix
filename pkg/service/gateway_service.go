@@ -145,9 +145,9 @@ func (lgs *LlmGatewayService) healthz(w http.ResponseWriter, r *http.Request) {
 func (lgs *LlmGatewayService) convertErrorResponse(msg *types.ResponseMsg) (int, []byte) {
 	switch msg.Err {
 	case consts.ErrorNoAvailableEndpoint:
-		return http.StatusTooManyRequests, []byte(`{"error": {"code": 429, "message": "too many requests"}}`)
-	case consts.ErrorEndpointNotFound:
-		return http.StatusNotFound, []byte(`{"error": {"code": 404, "message": "no inference worker found"}}`)
+		return http.StatusServiceUnavailable, []byte(`{"error": {"code": 503, "message": "no available inference worker"}}`)
+	case consts.ErrorRateLimitExceeded:
+		return http.StatusTooManyRequests, []byte(`{"error": {"code": 429, "message": "rate limit exceeded"}}`)
 	case consts.ErrorBackendBadRequest:
 		// Parse backend error response to extract specific error details
 		var response types.ErrorResponse

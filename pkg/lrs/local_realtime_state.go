@@ -329,12 +329,12 @@ func (lrs *LocalRealtimeState) AllocateRequestState(reqState *RequestState) erro
 
 	if len(lrs.instanceViews) == 0 {
 		klog.Warningf("no instance exists.")
-		return consts.ErrorEndpointNotFound
+		return consts.ErrorNoAvailableEndpoint
 	}
 
 	if !lrs.instanceExists(reqState.instanceId) {
 		klog.Warningf("allocate request %s allocated instance %s not exist.", reqState.reqId, reqState.instanceId)
-		return consts.ErrorEndpointNotFound
+		return consts.ErrorNoAvailableEndpoint
 	}
 
 	if !lrs.gatewayExists(reqState.gatewayId) {
@@ -366,7 +366,7 @@ func (lrs *LocalRealtimeState) UpdateRequestState(reqState *RequestState) error 
 	if !lrs.instanceExists(reqState.instanceId) {
 		klog.Warningf("update request %s scheduled instance %s not exist.",
 			reqState.reqId, reqState.instanceId)
-		return consts.ErrorEndpointNotFound
+		return consts.ErrorRequestNotExits
 	}
 
 	if !lrs.gatewayExists(reqState.gatewayId) {
@@ -389,7 +389,7 @@ func (lrs *LocalRealtimeState) MarkPrefillComplete(reqState *RequestState) error
 	if !lrs.instanceExists(reqState.instanceId) {
 		klog.Warningf("update request %s scheduled instance %s not exist.",
 			reqState.reqId, reqState.instanceId)
-		return consts.ErrorEndpointNotFound
+		return consts.ErrorRequestNotExits
 	}
 
 	if !lrs.gatewayExists(reqState.gatewayId) {
