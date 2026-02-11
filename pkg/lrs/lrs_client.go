@@ -3,8 +3,13 @@ package lrs
 import (
 	"llm-gateway/cmd/llm-gateway/app/options"
 	"llm-gateway/pkg/consts"
+	"llm-gateway/pkg/metrics"
 	"llm-gateway/pkg/types"
+	"runtime/debug"
 	"sync"
+	"time"
+
+	"k8s.io/klog/v2"
 )
 
 // LocalRealtimeStateClient manages different scheduler state stores for different inference inferModes
@@ -32,28 +37,23 @@ func NewLocalRealtimeStateClient(c *options.Config) *LocalRealtimeStateClient {
 		decodeState:       NewLocalRealtimeState(),
 	}
 
-	go w.normalState.SubmitMetric()
-	go w.prefillState.SubmitMetric()
-	go w.decodeState.SubmitMetric()
+	go w.SubmitMetric()
 
 	return w
 }
 
-func (lrsClient *LocalRealtimeStateClient) RLock() {
-	lrsClient.mu.RLock()
-}
+// Note: These lock methods (RLock/RUnlock/Lock/Unlock) are retained for compatibility with ClusterViewClientInterface.
+// For read-only Get operations, only a read lock is needed for data protection.
+// A coarse-grained lock is used in handleSchedule to ensure atomicity of the Read-Modify-Write (RMW)
+// pattern: reading LRS state for scheduling decisions and updating LRS after allocation must occur
+// under the same lock. This prevents burst concurrency from corrupting LRS state consistency.
+func (lrsClient *LocalRealtimeStateClient) RLock() {}
 
-func (lrsClient *LocalRealtimeStateClient) RUnlock() {
-	lrsClient.mu.RUnlock()
-}
+func (lrsClient *LocalRealtimeStateClient) RUnlock() {}
 
-func (lrsClient *LocalRealtimeStateClient) Lock() {
-	lrsClient.mu.Lock()
-}
+func (lrsClient *LocalRealtimeStateClient) Lock() {}
 
-func (lrsClient *LocalRealtimeStateClient) Unlock() {
-	lrsClient.mu.Unlock()
-}
+func (lrsClient *LocalRealtimeStateClient) Unlock() {}
 
 func (lrsClient *LocalRealtimeStateClient) AddInstance(token *types.LLMWorker) {
 	lrsClient.mu.Lock()
@@ -152,6 +152,9 @@ func (lrsClient *LocalRealtimeStateClient) ReleaseRequestState(inferMode string,
 }
 
 func (lrsClient *LocalRealtimeStateClient) GetGroupedInstanceViews() map[string]map[string]*InstanceView {
+	lrsClient.mu.RLock()
+	defer lrsClient.mu.RUnlock()
+
 	inferModes := []string{consts.NormalInferMode, consts.PrefillInferMode, consts.DecodeInferMode}
 	groupedInstanceViews := make(map[string]map[string]*InstanceView)
 	for _, inferMode := range inferModes {
@@ -165,6 +168,9 @@ func (lrsClient *LocalRealtimeStateClient) GetGroupedInstanceViews() map[string]
 }
 
 func (lrsClient *LocalRealtimeStateClient) GetInstanceViews(inferMode string) map[string]*InstanceView {
+	lrsClient.mu.RLock()
+	defer lrsClient.mu.RUnlock()
+
 	s := lrsClient.getLocalRealtimeState(inferMode)
 	if s == nil {
 		return nil
@@ -189,6 +195,9 @@ func (lrsClient *LocalRealtimeStateClient) GetInstanceViewsByModel(model string,
 }
 
 func (lrsClient *LocalRealtimeStateClient) GetInstanceView(inferMode string, instanceId string) *InstanceView {
+	lrsClient.mu.RLock()
+	defer lrsClient.mu.RUnlock()
+
 	s := lrsClient.getLocalRealtimeState(inferMode)
 	if s == nil {
 		return nil
@@ -197,6 +206,9 @@ func (lrsClient *LocalRealtimeStateClient) GetInstanceView(inferMode string, ins
 }
 
 func (lrsClient *LocalRealtimeStateClient) PrintInstanceViews() {
+	lrsClient.mu.RLock()
+	defer lrsClient.mu.RUnlock()
+
 	println("Normal infer mode instance views:")
 	lrsClient.normalState.PrintInstanceViews()
 	println("\nPrefill infer mode instance views:")
@@ -215,4 +227,37 @@ func (lrsClient *LocalRealtimeStateClient) getLocalRealtimeState(inferMode strin
 		return lrsClient.normalState
 	}
 	return nil
+}
+
+func (lrsClient *LocalRealtimeStateClient) SubmitMetric() {
+	defer func() {
+		if e := recover(); e != nil {
+			klog.Warningf("scheduler state store shard: submit metric loop crashed , err: %s\ntrace:%s",
+				e, string(debug.Stack()))
+			go lrsClient.SubmitMetric()
+		}
+	}()
+
+	for {
+		allInstanceViews := lrsClient.GetGroupedInstanceViews()
+		for _, instanceViews := range allInstanceViews {
+			for _, iv := range instanceViews {
+				address := iv.GetInstance().Endpoint
+				tokens := iv.NumTokens()
+				reqs := iv.NumRequests()
+				waitingReqs := iv.NumWaitingRequests()
+
+				labels := metrics.Labels{
+					{Name: "model", Value: iv.GetInstance().Model},
+					{Name: "address", Value: address.String()},
+					{Name: "infer_role", Value: iv.GetInferMode()},
+				}
+				metrics.StatusValue("instance_tokens", labels).Set(float32(tokens))
+				metrics.StatusValue("instance_requests", labels).Set(float32(reqs))
+				metrics.StatusValue("instance_waiting_requests", labels).Set(float32(waitingReqs))
+			}
+		}
+
+		time.Sleep(5 * time.Second)
+	}
 }

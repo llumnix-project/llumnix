@@ -2,11 +2,15 @@ package lrs
 
 import (
 	"fmt"
-	"llm-gateway/pkg/structs"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"llm-gateway/cmd/llm-gateway/app/options"
+	"llm-gateway/pkg/consts"
+	"llm-gateway/pkg/types"
 )
 
 const (
@@ -17,41 +21,37 @@ const (
 	updateAmount = 100 // Token amount increased per update
 )
 
-type benchmarkGateway struct {
-	id string
-}
-
-func (b *benchmarkGateway) Id() string {
-	return b.id
-}
-
-func createBenchmarkInstance(id int) *structs.Token {
-	return &structs.Token{
+func createBenchmarkInstance(id int) *types.LLMWorker {
+	return &types.LLMWorker{
 		Version: 1,
-		Endpoint: structs.Endpoint{
-			IP:   fmt.Sprintf("worker-%d.test", id),
+		Role:    types.InferRoleNormal,
+		Endpoint: types.Endpoint{
+			Host: fmt.Sprintf("worker-%d.test", id),
 			Port: 8080,
 		},
 	}
 }
 
-func BenchmarkLocalRealtimeState(b *testing.B) {
+func BenchmarkLocalRealtimeStateClient(b *testing.B) {
 	// Prepare test data
-	lrs := NewLocalRealtimeState()
+	lrsClient := NewLocalRealtimeStateClient(&options.Config{})
 
 	// Create and register instances
-	instances := make([]*structs.Token, numInstances)
+	instances := make([]*types.LLMWorker, numInstances)
 	for i := 0; i < numInstances; i++ {
 		instances[i] = createBenchmarkInstance(i)
-		lrs.AddInstance(instances[i])
+		lrsClient.AddInstance(instances[i])
 	}
 
 	// Create and register gateways
-	gateways := make([]*benchmarkGateway, numGateways)
+	gateways := make([]string, numGateways)
 	for i := 0; i < numGateways; i++ {
-		gateways[i] = &benchmarkGateway{id: string(fmt.Sprintf("gateway-%d", i))}
-		lrs.AddGateway(gateways[i])
+		gateways[i] = fmt.Sprintf("gateway-%d", i)
+		lrsClient.AddGateway(gateways[i])
 	}
+
+	// Timing statistics
+	var allocateTime, updateTime, releaseTime int64
 
 	b.ResetTimer()
 
@@ -63,10 +63,11 @@ func BenchmarkLocalRealtimeState(b *testing.B) {
 		for i := 0; i < numRequests; i++ {
 			go func(reqIndex int) {
 				defer wg.Done()
+				time.Sleep(time.Duration(rand.Intn(10)) * time.Millisecond)
 
 				reqId := fmt.Sprintf("req-%d", reqIndex)
 				instanceId := instances[reqIndex%numInstances].Id()
-				gatewayId := gateways[reqIndex%numGateways].Id()
+				gatewayId := gateways[reqIndex%numGateways]
 
 				// 1. Allocate request state
 				req := &RequestState{
@@ -77,21 +78,21 @@ func BenchmarkLocalRealtimeState(b *testing.B) {
 					updateTime: time.Now(),
 				}
 
-				err := lrs.AllocateRequestState(req)
+				start := time.Now()
+				err := lrsClient.AllocateRequestState(consts.NormalInferMode, req)
+				atomic.AddInt64(&allocateTime, time.Since(start).Nanoseconds())
 				if err != nil {
-					b.Logf("Failed to allocate request state: %v", err)
 					return
 				}
 
-				// 2. Update multiple times randomly
+				// 2. Update multiple times concurrently
 				updateWg := sync.WaitGroup{}
 				updateWg.Add(numUpdates)
 				for j := 0; j < numUpdates; j++ {
 					go func() {
 						defer updateWg.Done()
 
-						// Random sleep 0-10ms to simulate real scenario
-						time.Sleep(time.Duration(rand.Intn(10)) * time.Millisecond)
+						time.Sleep(time.Duration(rand.Intn(20)) * time.Millisecond)
 
 						updateReq := &RequestState{
 							reqId:      reqId,
@@ -101,10 +102,9 @@ func BenchmarkLocalRealtimeState(b *testing.B) {
 							updateTime: time.Now(),
 						}
 
-						err := lrs.UpdateRequestState(updateReq)
-						if err != nil {
-							b.Logf("Failed to update request state: %v", err)
-						}
+						start := time.Now()
+						lrsClient.UpdateRequestState(consts.NormalInferMode, updateReq)
+						atomic.AddInt64(&updateTime, time.Since(start).Nanoseconds())
 					}()
 				}
 				updateWg.Wait()
@@ -117,11 +117,25 @@ func BenchmarkLocalRealtimeState(b *testing.B) {
 					gatewayId:  gatewayId,
 					updateTime: time.Now(),
 				}
-				lrs.ReleaseRequestState(releaseReq)
+				start = time.Now()
+				lrsClient.ReleaseRequestState(consts.NormalInferMode, releaseReq)
+				atomic.AddInt64(&releaseTime, time.Since(start).Nanoseconds())
 
 			}(i)
 		}
 
 		wg.Wait()
 	}
+
+	b.StopTimer()
+
+	// Print timing statistics
+	totalOps := int64(b.N * numRequests)
+	totalUpdates := int64(b.N * numRequests * numUpdates)
+	b.Logf("Allocate: total=%v, avg=%v/op",
+		time.Duration(allocateTime), time.Duration(allocateTime/totalOps))
+	b.Logf("Update:   total=%v, avg=%v/op",
+		time.Duration(updateTime), time.Duration(updateTime/totalUpdates))
+	b.Logf("Release:  total=%v, avg=%v/op",
+		time.Duration(releaseTime), time.Duration(releaseTime/totalOps))
 }

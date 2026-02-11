@@ -3,9 +3,7 @@ package lrs
 import (
 	"fmt"
 	"llm-gateway/pkg/consts"
-	"llm-gateway/pkg/metrics"
 	"llm-gateway/pkg/types"
-	"runtime/debug"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -241,6 +239,7 @@ func (lrs *LocalRealtimeState) removeInstance(instanceId string) {
 			for _, requestSet := range lrs.gatewayRequestSet {
 				delete(requestSet, reqId)
 			}
+			delete(lrs.requestStates, reqId)
 			klog.V(4).Infof("delete request %s of instance %s", reqId, instanceId)
 		}
 		instanceViews.ClearStates()
@@ -421,35 +420,4 @@ func (lrs *LocalRealtimeState) ReleaseRequestState(reqState *RequestState) {
 	lrs.instanceViews[reqState.instanceId].ReleaseRequestState(reqState.reqId)
 	delete(lrs.requestStates, reqState.reqId)
 	delete(lrs.gatewayRequestSet[reqState.gatewayId], reqState.reqId)
-}
-
-func (lrs *LocalRealtimeState) SubmitMetric() {
-	defer func() {
-		if e := recover(); e != nil {
-			klog.Warningf("scheduler state store shard: submit metric loop crashed , err: %s\ntrace:%s",
-				e, string(debug.Stack()))
-			go lrs.SubmitMetric()
-		}
-	}()
-
-	for {
-		instanceViews := lrs.GetInstanceViews()
-		for _, iv := range instanceViews {
-			address := iv.GetInstance().Endpoint
-			tokens := iv.NumTokens()
-			reqs := iv.NumRequests()
-			waitingReqs := iv.NumWaitingRequests()
-
-			labels := metrics.Labels{
-				{Name: "model", Value: iv.GetInstance().Model},
-				{Name: "address", Value: address.String()},
-				{Name: "infer_role", Value: iv.GetInferMode()},
-			}
-			metrics.StatusValue("instance_tokens", labels).Set(float32(tokens))
-			metrics.StatusValue("instance_requests", labels).Set(float32(reqs))
-			metrics.StatusValue("instance_waiting_requests", labels).Set(float32(waitingReqs))
-		}
-
-		time.Sleep(5 * time.Second)
-	}
 }

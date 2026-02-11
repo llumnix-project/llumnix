@@ -1,29 +1,30 @@
 package lrs
 
 import (
+	"fmt"
 	"llm-gateway/cmd/llm-gateway/app/options"
 	"llm-gateway/pkg/consts"
-	"llm-gateway/pkg/structs"
+	"llm-gateway/pkg/types"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func createTestTokenWithInferMode(id string, inferMode string) *structs.Token {
-	return &structs.Token{
+func createTestTokenWithInferMode(id string, inferMode string) *types.LLMWorker {
+	return &types.LLMWorker{
 		Version: 1,
-		Endpoint: structs.Endpoint{
-			IP:   "test-host",
+		Role:    types.InferRole(inferMode),
+		Endpoint: types.Endpoint{
+			Host: "test-host",
 			Port: 8080,
 		},
-		InferMode: inferMode,
 	}
 }
 
 func TestScheduelrStateStore(t *testing.T) {
 	scsClient := NewLocalRealtimeStateClient(&options.Config{})
-	gateway := &MockGateway{id: "gateway-1"}
+	gateway := "gateway-1"
 
 	t.Run("Instance Creation for Different Modes", func(t *testing.T) {
 		// Test normal mode
@@ -67,16 +68,16 @@ func TestScheduelrStateStore(t *testing.T) {
 		scsClient.AddGateway(gateway)
 
 		// Create test requests for each mode
-		instance := createTestTokenWithInferMode("worker-4", consts.NormalInferMode)
-		scsClient.AddInstance(instance)
-
 		modes := []string{consts.NormalInferMode, consts.PrefillInferMode, consts.DecodeInferMode}
-		for _, mode := range modes {
+		for i, mode := range modes {
+			instance := createTestTokenWithInferMode(fmt.Sprintf("worker-4-%d", i), mode)
+			scsClient.AddInstance(instance)
+
 			reqState := &RequestState{
-				reqId:      "req-1",
+				reqId:      fmt.Sprintf("req-gw-%d", i),
 				numTokens:  100,
 				instanceId: instance.Id(),
-				gatewayId:  gateway.Id(),
+				gatewayId:  gateway,
 				updateTime: time.Now(),
 			}
 
@@ -94,7 +95,7 @@ func TestScheduelrStateStore(t *testing.T) {
 		}
 
 		// Remove gateway
-		scsClient.RemoveGateway(gateway.Id())
+		scsClient.RemoveGateway(gateway)
 	})
 
 	t.Run("GetInstanceViews for Different Modes", func(t *testing.T) {
@@ -114,7 +115,7 @@ func TestScheduelrStateStore(t *testing.T) {
 			reqId:      "req-2",
 			numTokens:  100,
 			instanceId: instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		}
 		scsClient.AllocateRequestState(consts.NormalInferMode, reqState)
@@ -132,7 +133,7 @@ func TestScheduelrStateStore(t *testing.T) {
 			reqId:      "req-3",
 			numTokens:  100,
 			instanceId: "non-existent-instance",
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		}
 		err := scsClient.AllocateRequestState(consts.NormalInferMode, reqState)
@@ -166,7 +167,7 @@ func TestScheduelrStateStore(t *testing.T) {
 					reqId:      "concurrent-req",
 					numTokens:  100,
 					instanceId: instance.Id(),
-					gatewayId:  gateway.Id(),
+					gatewayId:  gateway,
 					updateTime: time.Now(),
 				}
 
@@ -185,7 +186,7 @@ func TestScheduelrStateStore(t *testing.T) {
 	t.Run("GetInstanceViewsByModel with MultiModelSupport", func(t *testing.T) {
 		// Create a scsClient that supports multiple models
 		scsClient := NewLocalRealtimeStateClient(&options.Config{ServerlessMode: true})
-		gateway := &MockGateway{id: "gateway-1"}
+		gateway := "gateway-1"
 
 		// Create instances with different models and different modes
 		gpt35NormalInstance := createTestTokenWithInferModeAndModel("worker-gpt35-normal", consts.NormalInferMode, "gpt-3.5-turbo")
@@ -195,7 +196,7 @@ func TestScheduelrStateStore(t *testing.T) {
 		claudeNormalInstance := createTestTokenWithInferModeAndModel("worker-claude-normal", consts.NormalInferMode, "claude-2")
 
 		// Add all instances
-		instances := []*structs.Token{gpt35NormalInstance, gpt35PrefillInstance, gpt35DecodeInstance, gpt4NormalInstance, claudeNormalInstance}
+		instances := []*types.LLMWorker{gpt35NormalInstance, gpt35PrefillInstance, gpt35DecodeInstance, gpt4NormalInstance, claudeNormalInstance}
 		for _, instance := range instances {
 			scsClient.AddInstance(instance)
 		}
@@ -204,29 +205,29 @@ func TestScheduelrStateStore(t *testing.T) {
 		t.Run("Filter by Model in Normal Mode", func(t *testing.T) {
 			results := scsClient.GetInstanceViewsByModel("gpt-3.5-turbo", consts.NormalInferMode)
 			assert.Equal(t, 1, len(results))
-			assert.Equal(t, gpt35NormalInstance.Id(), results[0].GetInstance().Id())
+			assert.Equal(t, gpt35NormalInstance.Id(), results[gpt35NormalInstance.Id()].GetInstance().Id())
 		})
 
 		t.Run("Filter by Model in Prefill Mode", func(t *testing.T) {
 			results := scsClient.GetInstanceViewsByModel("gpt-3.5-turbo", consts.PrefillInferMode)
 			assert.Equal(t, 1, len(results))
-			assert.Equal(t, gpt35PrefillInstance.Id(), results[0].GetInstance().Id())
+			assert.Equal(t, gpt35PrefillInstance.Id(), results[gpt35PrefillInstance.Id()].GetInstance().Id())
 		})
 
 		t.Run("Filter by Model in Decode Mode", func(t *testing.T) {
 			results := scsClient.GetInstanceViewsByModel("gpt-3.5-turbo", consts.DecodeInferMode)
 			assert.Equal(t, 1, len(results))
-			assert.Equal(t, gpt35DecodeInstance.Id(), results[0].GetInstance().Id())
+			assert.Equal(t, gpt35DecodeInstance.Id(), results[gpt35DecodeInstance.Id()].GetInstance().Id())
 		})
 
 		t.Run("Filter Different Models", func(t *testing.T) {
 			gpt4Results := scsClient.GetInstanceViewsByModel("gpt-4", consts.NormalInferMode)
 			assert.Equal(t, 1, len(gpt4Results))
-			assert.Equal(t, gpt4NormalInstance.Id(), gpt4Results[0].GetInstance().Id())
+			assert.Equal(t, gpt4NormalInstance.Id(), gpt4Results[gpt4NormalInstance.Id()].GetInstance().Id())
 
 			claudeResults := scsClient.GetInstanceViewsByModel("claude-2", consts.NormalInferMode)
 			assert.Equal(t, 1, len(claudeResults))
-			assert.Equal(t, claudeNormalInstance.Id(), claudeResults[0].GetInstance().Id())
+			assert.Equal(t, claudeNormalInstance.Id(), claudeResults[claudeNormalInstance.Id()].GetInstance().Id())
 		})
 
 		t.Run("Non-existent Model", func(t *testing.T) {
@@ -240,14 +241,14 @@ func TestScheduelrStateStore(t *testing.T) {
 
 			results := scsClient.GetInstanceViewsByModel("", consts.NormalInferMode)
 			assert.Equal(t, 1, len(results))
-			assert.Equal(t, emptyModelInstance.Id(), results[0].GetInstance().Id())
+			assert.Equal(t, emptyModelInstance.Id(), results[emptyModelInstance.Id()].GetInstance().Id())
 		})
 	})
 
 	t.Run("GetInstanceViewsByModel without MultiModelSupport", func(t *testing.T) {
 		// Create a scsClient that does not support multiple models
 		scsClient := NewLocalRealtimeStateClient(&options.Config{ServerlessMode: false})
-		gateway := &MockGateway{id: "gateway-1"}
+		gateway := "gateway-1"
 
 		// Create instances with different models
 		gpt35Instance := createTestTokenWithInferModeAndModel("worker-gpt35", consts.NormalInferMode, "gpt-3.5-turbo")
@@ -263,17 +264,13 @@ func TestScheduelrStateStore(t *testing.T) {
 		assert.Equal(t, 2, len(results)) // Should return all instances, not filtered by model
 
 		// Verify both instances are in the result
-		instanceIds := make(map[string]bool)
-		for _, result := range results {
-			instanceIds[result.GetInstance().Id()] = true
-		}
-		assert.True(t, instanceIds[gpt35Instance.Id()])
-		assert.True(t, instanceIds[gpt4Instance.Id()])
+		assert.NotNil(t, results[gpt35Instance.Id()])
+		assert.NotNil(t, results[gpt4Instance.Id()])
 	})
 
 	t.Run("GetInstanceViewsByModel with States", func(t *testing.T) {
 		scsClient := NewLocalRealtimeStateClient(&options.Config{ServerlessMode: true})
-		gateway := &MockGateway{id: "gateway-1"}
+		gateway := "gateway-1"
 
 		// Create instance and allocate request state
 		instance := createTestTokenWithInferModeAndModel("worker-with-states", consts.NormalInferMode, "gpt-3.5-turbo")
@@ -284,7 +281,7 @@ func TestScheduelrStateStore(t *testing.T) {
 			reqId:      "req-1",
 			numTokens:  150,
 			instanceId: instance.Id(),
-			gatewayId:  gateway.Id(),
+			gatewayId:  gateway,
 			updateTime: time.Now(),
 		}
 		err := scsClient.AllocateRequestState(consts.NormalInferMode, reqState)
@@ -293,8 +290,8 @@ func TestScheduelrStateStore(t *testing.T) {
 		// Verify the returned instance contains request state
 		results := scsClient.GetInstanceViewsByModel("gpt-3.5-turbo", consts.NormalInferMode)
 		assert.Equal(t, 1, len(results))
-		assert.Equal(t, int64(150), results[0].NumTokens())
-		assert.Equal(t, int64(1), results[0].NumRequests())
+		assert.Equal(t, int64(150), results[instance.Id()].NumTokens())
+		assert.Equal(t, int64(1), results[instance.Id()].NumRequests())
 	})
 
 	t.Run("GetInstanceViewsByModel Invalid Mode", func(t *testing.T) {
@@ -309,13 +306,13 @@ func TestScheduelrStateStore(t *testing.T) {
 }
 
 // createTestTokenWithInferModeAndModel creates a test token with specified mode and model
-func createTestTokenWithInferModeAndModel(id string, inferMode string, model string) *structs.Token {
-	return &structs.Token{
-		Version:   1,
-		Model:     model,
-		InferMode: inferMode,
-		Endpoint: structs.Endpoint{
-			IP:   "test-host-" + id,
+func createTestTokenWithInferModeAndModel(id string, inferMode string, model string) *types.LLMWorker {
+	return &types.LLMWorker{
+		Version: 1,
+		Model:   model,
+		Role:    types.InferRole(inferMode),
+		Endpoint: types.Endpoint{
+			Host: "test-host-" + id,
 			Port: 8080,
 		},
 	}
