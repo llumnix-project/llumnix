@@ -108,6 +108,10 @@ type CompletionRequest struct {
 	KvTransferParams    map[string]interface{} `json:"kv_transfer_params,omitempty"`
 	BootStrapHost       string                 `json:"bootstrap_host,omitempty"` // sglang
 	BootStrapRoom       int                    `json:"bootstrap_room,omitempty"` // sglang
+
+	// ExtraFields stores any additional fields not explicitly defined in the struct.
+	// This allows preserving unknown fields during JSON unmarshal/marshal operations.
+	ExtraFields map[string]interface{} `json:"-"`
 }
 
 // CompletionChoice represents one of possible completions.
@@ -139,6 +143,68 @@ type CompletionResponse struct {
 	ServiceTier       string                 `json:"service_tier,omitempty"`
 	KvTransferParams  map[string]interface{} `json:"kv_transfer_params,omitempty"`
 	SystemFingerprint string                 `json:"system_fingerprint"`
+
+	// ExtraFields stores any additional fields not explicitly defined in the struct.
+	// This allows preserving unknown fields during JSON unmarshal/marshal operations.
+	ExtraFields map[string]interface{} `json:"-"`
+}
+
+// UnmarshalJSON custom unmarshaler for CompletionResponse that preserves unknown fields.
+// Uses a fast path optimization: avoids extra field processing when none are present.
+func (r *CompletionResponse) UnmarshalJSON(data []byte) error {
+	// Fast path: standard unmarshaling first
+	type Alias CompletionResponse
+	if err := json.Unmarshal(data, (*Alias)(r)); err != nil {
+		return err
+	}
+
+	// Check if there are any extra fields
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	knownFields := getCompletionResponseKnownFields()
+
+	// Extract extra fields (only allocate map if needed)
+	for k, v := range raw {
+		if !knownFields[k] {
+			if r.ExtraFields == nil {
+				r.ExtraFields = make(map[string]interface{})
+			}
+			r.ExtraFields[k] = v
+		}
+	}
+
+	return nil
+}
+
+// MarshalJSON custom marshaler for CompletionResponse that includes unknown fields.
+func (r *CompletionResponse) MarshalJSON() ([]byte, error) {
+	type Alias CompletionResponse
+	data, err := json.Marshal((*Alias)(r))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(r.ExtraFields) == 0 {
+		return data, nil
+	}
+
+	var base map[string]interface{}
+	if err := json.Unmarshal(data, &base); err != nil {
+		return nil, err
+	}
+
+	for k, v := range r.ExtraFields {
+		base[k] = v
+	}
+
+	return json.Marshal(base)
+}
+
+func getCompletionResponseKnownFields() map[string]bool {
+	return getStructJSONFields(CompletionResponse{})
 }
 
 // Clone creates a deep copy of the CompletionRequest.
@@ -218,7 +284,73 @@ func (r *CompletionRequest) Clone() *CompletionRequest {
 		}
 	}
 
+	// Shallow copy ExtraFields map values (interface{} deep copy requires reflection)
+	if len(r.ExtraFields) > 0 {
+		cloned.ExtraFields = make(map[string]interface{}, len(r.ExtraFields))
+		for k, v := range r.ExtraFields {
+			cloned.ExtraFields[k] = v
+		}
+	}
+
 	return cloned
+}
+
+// UnmarshalJSON custom unmarshaler for CompletionRequest that preserves unknown fields.
+// Uses a fast path optimization: avoids extra field processing when none are present.
+func (r *CompletionRequest) UnmarshalJSON(data []byte) error {
+	// Fast path: standard unmarshaling first
+	type Alias CompletionRequest
+	if err := json.Unmarshal(data, (*Alias)(r)); err != nil {
+		return err
+	}
+
+	// Check if there are any extra fields
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	knownFields := getCompletionRequestKnownFields()
+
+	// Extract extra fields (only allocate map if needed)
+	for k, v := range raw {
+		if !knownFields[k] {
+			if r.ExtraFields == nil {
+				r.ExtraFields = make(map[string]interface{})
+			}
+			r.ExtraFields[k] = v
+		}
+	}
+
+	return nil
+}
+
+// MarshalJSON custom marshaler for CompletionRequest that includes unknown fields.
+func (r *CompletionRequest) MarshalJSON() ([]byte, error) {
+	type Alias CompletionRequest
+	data, err := json.Marshal((*Alias)(r))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(r.ExtraFields) == 0 {
+		return data, nil
+	}
+
+	var base map[string]interface{}
+	if err := json.Unmarshal(data, &base); err != nil {
+		return nil, err
+	}
+
+	for k, v := range r.ExtraFields {
+		base[k] = v
+	}
+
+	return json.Marshal(base)
+}
+
+func getCompletionRequestKnownFields() map[string]bool {
+	return getStructJSONFields(CompletionRequest{})
 }
 
 // clonePromptValue performs deep copy of PromptValue.

@@ -3,6 +3,9 @@ package protocol
 import (
 	"encoding/json"
 	"llm-gateway/pkg/consts"
+	"reflect"
+	"strings"
+	"sync"
 )
 
 // Chat message role defined by the OpenAI API.
@@ -13,6 +16,58 @@ const (
 	ChatMessageRoleFunction  = "function"
 	ChatMessageRoleTool      = "tool"
 )
+
+// fieldCache stores cached JSON field names for struct types to avoid repeated reflection
+var fieldCache sync.Map // map[reflect.Type]map[string]bool
+
+// getStructJSONFields extracts all JSON field names from a struct using reflection.
+// This function automatically discovers all struct fields with json tags, eliminating
+// the need for manual field list maintenance. Results are cached for performance.
+//
+// How it works:
+//  1. Uses reflection to iterate through struct fields
+//  2. Extracts JSON field names from struct tags
+//  3. Handles omitempty and inline tags correctly
+//  4. Caches results using sync.Map for thread-safe access
+//
+// Example:
+//
+//	type Request struct {
+//	    Model string `json:"model"`
+//	    Temp  float32 `json:"temperature,omitempty"`
+//	}
+//	fields := getStructJSONFields(Request{})
+//	// Returns: map["model":true, "temperature":true]
+func getStructJSONFields(v interface{}) map[string]bool {
+	t := reflect.TypeOf(v)
+
+	// Check cache first
+	if cached, ok := fieldCache.Load(t); ok {
+		return cached.(map[string]bool)
+	}
+
+	// Build field map using reflection
+	fields := make(map[string]bool)
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		jsonTag := field.Tag.Get("json")
+
+		// Skip fields without json tag or with "-" tag
+		if jsonTag == "" || jsonTag == "-" {
+			continue
+		}
+
+		// Extract field name (remove omitempty, inline, etc.)
+		fieldName := strings.Split(jsonTag, ",")[0]
+		if fieldName != "" && fieldName != "-" {
+			fields[fieldName] = true
+		}
+	}
+
+	// Cache the result
+	fieldCache.Store(t, fields)
+	return fields
+}
 
 const (
 	ChatCompletionsPath   = "/v1/chat/completions"
@@ -241,12 +296,7 @@ type ChatCompletionRequest struct {
 	// Such as think mode for qwen3. "chat_template_kwargs": {"enable_thinking": false}
 	// https://qwen.readthedocs.io/en/latest/deployment/vllm.html#thinking-non-thinking-modes
 	ChatTemplateKwargs map[string]any `json:"chat_template_kwargs,omitempty"`
-	ChatCompletionRequestExtensions
-}
 
-// ChatCompletionRequestExtensions contains third-party OpenAI API extensions
-// (e.g., vendor-specific implementations like vLLM).
-type ChatCompletionRequestExtensions struct {
 	// GuidedChoice is a vLLM-specific extension that restricts the model's output
 	// to one of the predefined string choices provided in this field. This feature
 	// is used to constrain the model's responses to a controlled set of options,
@@ -258,6 +308,11 @@ type ChatCompletionRequestExtensions struct {
 	Rid           string `json:"rid,omitempty"`            // sglang
 	BootStrapHost string `json:"bootstrap_host,omitempty"` // sglang
 	BootStrapRoom int    `json:"bootstrap_room,omitempty"` // sglang
+
+	// ExtraFields stores any additional fields not explicitly defined in the struct.
+	// This allows preserving unknown fields during JSON unmarshal/marshal operations.
+	// When forwarding requests, these fields will be included in the output JSON.
+	ExtraFields map[string]interface{} `json:"-"`
 }
 
 type StreamOptions struct {
@@ -373,6 +428,68 @@ type ChatCompletionResponse struct {
 	Usage             *Usage                 `json:"usage"`
 	KvTransferParams  map[string]interface{} `json:"kv_transfer_params,omitempty"`
 	//PromptLogprobs    string                 `json:"prompt_logprobs,omitempty"` // vllm specific
+
+	// ExtraFields stores any additional fields not explicitly defined in the struct.
+	// This allows preserving unknown fields during JSON unmarshal/marshal operations.
+	ExtraFields map[string]interface{} `json:"-"`
+}
+
+// UnmarshalJSON custom unmarshaler for ChatCompletionResponse that preserves unknown fields.
+// Uses a fast path optimization: avoids extra field processing when none are present.
+func (r *ChatCompletionResponse) UnmarshalJSON(data []byte) error {
+	// Fast path: standard unmarshaling first
+	type Alias ChatCompletionResponse
+	if err := json.Unmarshal(data, (*Alias)(r)); err != nil {
+		return err
+	}
+
+	// Check if there are any extra fields
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	knownFields := getChatCompletionResponseKnownFields()
+
+	// Extract extra fields (only allocate map if needed)
+	for k, v := range raw {
+		if !knownFields[k] {
+			if r.ExtraFields == nil {
+				r.ExtraFields = make(map[string]interface{})
+			}
+			r.ExtraFields[k] = v
+		}
+	}
+
+	return nil
+}
+
+// MarshalJSON custom marshaler for ChatCompletionResponse that includes unknown fields.
+func (r *ChatCompletionResponse) MarshalJSON() ([]byte, error) {
+	type Alias ChatCompletionResponse
+	data, err := json.Marshal((*Alias)(r))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(r.ExtraFields) == 0 {
+		return data, nil
+	}
+
+	var base map[string]interface{}
+	if err := json.Unmarshal(data, &base); err != nil {
+		return nil, err
+	}
+
+	for k, v := range r.ExtraFields {
+		base[k] = v
+	}
+
+	return json.Marshal(base)
+}
+
+func getChatCompletionResponseKnownFields() map[string]bool {
+	return getStructJSONFields(ChatCompletionResponse{})
 }
 
 ////////////////////// streaming chat response ////////////////////////
@@ -411,6 +528,68 @@ type ChatCompletionStreamResponse struct {
 	// An optional field that will only be present when you set stream_options: {"include_usage": true} in your request.
 	// When present, it contains a null value except for the last chunk which contains the token usage statistics
 	// for the entire request.
+
+	// ExtraFields stores any additional fields not explicitly defined in the struct.
+	// This allows preserving unknown fields during JSON unmarshal/marshal operations.
+	ExtraFields map[string]interface{} `json:"-"`
+}
+
+// UnmarshalJSON custom unmarshaler for ChatCompletionStreamResponse that preserves unknown fields.
+// Uses a fast path optimization: avoids extra field processing when none are present.
+func (r *ChatCompletionStreamResponse) UnmarshalJSON(data []byte) error {
+	// Fast path: standard unmarshaling first
+	type Alias ChatCompletionStreamResponse
+	if err := json.Unmarshal(data, (*Alias)(r)); err != nil {
+		return err
+	}
+
+	// Check if there are any extra fields
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	knownFields := getChatCompletionStreamResponseKnownFields()
+
+	// Extract extra fields (only allocate map if needed)
+	for k, v := range raw {
+		if !knownFields[k] {
+			if r.ExtraFields == nil {
+				r.ExtraFields = make(map[string]interface{})
+			}
+			r.ExtraFields[k] = v
+		}
+	}
+
+	return nil
+}
+
+// MarshalJSON custom marshaler for ChatCompletionStreamResponse that includes unknown fields.
+func (r *ChatCompletionStreamResponse) MarshalJSON() ([]byte, error) {
+	type Alias ChatCompletionStreamResponse
+	data, err := json.Marshal((*Alias)(r))
+	if err != nil {
+		return nil, err
+	}
+
+	if len(r.ExtraFields) == 0 {
+		return data, nil
+	}
+
+	var base map[string]interface{}
+	if err := json.Unmarshal(data, &base); err != nil {
+		return nil, err
+	}
+
+	for k, v := range r.ExtraFields {
+		base[k] = v
+	}
+
+	return json.Marshal(base)
+}
+
+func getChatCompletionStreamResponseKnownFields() map[string]bool {
+	return getStructJSONFields(ChatCompletionStreamResponse{})
 }
 
 // Clone creates a deep copy of the ChatCompletionRequest.
@@ -434,12 +613,10 @@ func (r *ChatCompletionRequest) Clone() *ChatCompletionRequest {
 		FunctionCall:      r.FunctionCall,
 		ToolChoice:        r.ToolChoice,
 		ParallelToolCalls: r.ParallelToolCalls,
+		Rid:               r.Rid,
+		BootStrapHost:     r.BootStrapHost,
+		BootStrapRoom:     r.BootStrapRoom,
 	}
-
-	// Copy embedded ChatCompletionRequestExtensions fields
-	cloned.Rid = r.Rid
-	cloned.BootStrapHost = r.BootStrapHost
-	cloned.BootStrapRoom = r.BootStrapRoom
 
 	// Deep copy MaxTokens pointer
 	if r.MaxTokens != nil {
@@ -540,7 +717,82 @@ func (r *ChatCompletionRequest) Clone() *ChatCompletionRequest {
 		copy(cloned.GuidedChoice, r.GuidedChoice)
 	}
 
+	// Shallow copy ExtraFields map values (interface{} deep copy requires reflection)
+	if len(r.ExtraFields) > 0 {
+		cloned.ExtraFields = make(map[string]interface{}, len(r.ExtraFields))
+		for k, v := range r.ExtraFields {
+			cloned.ExtraFields[k] = v
+		}
+	}
+
 	return cloned
+}
+
+// UnmarshalJSON custom unmarshaler for ChatCompletionRequest that preserves unknown fields.
+// Uses a fast path optimization: avoids extra field processing when none are present.
+func (r *ChatCompletionRequest) UnmarshalJSON(data []byte) error {
+	// Fast path: standard unmarshaling first
+	type Alias ChatCompletionRequest
+	aux := (*Alias)(r)
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	// Check if there are any extra fields
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	knownFields := getChatCompletionRequestKnownFields()
+
+	// Extract extra fields (only allocate map if needed)
+	for k, v := range raw {
+		if !knownFields[k] {
+			if r.ExtraFields == nil {
+				r.ExtraFields = make(map[string]interface{})
+			}
+			r.ExtraFields[k] = v
+		}
+	}
+
+	return nil
+}
+
+// MarshalJSON custom marshaler for ChatCompletionRequest that includes unknown fields.
+// This implementation marshals the struct normally, then merges in any ExtraFields before
+// final serialization to ensure all fields (both known and unknown) are present in output.
+func (r *ChatCompletionRequest) MarshalJSON() ([]byte, error) {
+	// Marshal struct using type alias to avoid recursion
+	type Alias ChatCompletionRequest
+	data, err := json.Marshal((*Alias)(r))
+	if err != nil {
+		return nil, err
+	}
+
+	// If no extra fields, return as-is
+	if len(r.ExtraFields) == 0 {
+		return data, nil
+	}
+
+	// Unmarshal to map, merge ExtraFields, then marshal again
+	var base map[string]interface{}
+	if err := json.Unmarshal(data, &base); err != nil {
+		return nil, err
+	}
+
+	for k, v := range r.ExtraFields {
+		base[k] = v
+	}
+
+	return json.Marshal(base)
+}
+
+// getChatCompletionRequestKnownFields returns a set of all known field names in ChatCompletionRequest.
+// Uses reflection to automatically extract JSON field names from the struct definition,
+// eliminating manual maintenance and preventing field omissions when adding new fields.
+func getChatCompletionRequestKnownFields() map[string]bool {
+	return getStructJSONFields(ChatCompletionRequest{})
 }
 
 // cloneChatCompletionMessage performs deep copy of a single message structure.
