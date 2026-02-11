@@ -368,12 +368,14 @@ class LlumletProc:
         except Exception:
             logger.exception("Failed to report status to CMS.")
     
-    async def report_metadata_to_cms(self):
+    async def report_metadata_to_cms(self) -> bool:
         try:
             await self.cms_client.update_instance_metadata(self.instance_id, self.cms_instance_metadata, expired=self.expired_time)
+            return True
         # pylint: disable=broad-except
         except Exception:
             logger.exception("Failed to report metadata to CMS.")
+            return False
 
     async def register_with_cms(self, max_retries=3, delay=5) -> bool:
         """Add instance metadate to cms."""

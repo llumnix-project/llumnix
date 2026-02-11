@@ -414,7 +414,8 @@ class KVTMigrationFrontend(BaseMigrationFrontend):
             self.latest_running_snapshot = latest_running
             self.latest_waiting_snapshot = latest_waiting
             logger.info("Fetched new scheduler state and updated local snapshots.")
-
+            if self.latest_running_snapshot is None or self.latest_waiting_snapshot is None:
+                return
             exist_reqs = {req.request_id for req, _ in latest_running}
             exist_reqs.update(req.request_id for req, _ in latest_waiting)
 
