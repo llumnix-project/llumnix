@@ -14,10 +14,9 @@ import (
 
 // ConvertAnthropicRequestToOpenAI converts Anthropic API request format to OpenAI format
 func ConvertAnthropicRequestToOpenAI(anthropicReq *anthropic.Request) (*protocol.ChatCompletionRequest, error) {
-	maxTokens := min(anthropicReq.MaxTokens, 16384)
 	openaiReq := &protocol.ChatCompletionRequest{
 		Model:       "", // For SGLang or vLLM, the model name can be omitted; an empty string is used to indicate that the default model should be used.
-		MaxTokens:   &maxTokens,
+		MaxTokens:   &(anthropicReq.MaxTokens),
 		Temperature: anthropicReq.Temperature,
 		TopP:        anthropicReq.TopP,
 		Stream:      anthropicReq.Stream,
