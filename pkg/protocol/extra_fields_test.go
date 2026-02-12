@@ -3,9 +3,62 @@ package protocol
 import (
 	"encoding/json"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 )
+
+// fieldCache stores cached JSON field names for struct types to avoid repeated reflection
+var fieldCache sync.Map // map[reflect.Type]map[string]bool
+
+// getStructJSONFields extracts all JSON field names from a struct using reflection.
+// This function automatically discovers all struct fields with json tags, eliminating
+// the need for manual field list maintenance. Results are cached for performance.
+//
+// How it works:
+//  1. Uses reflection to iterate through struct fields
+//  2. Extracts JSON field names from struct tags
+//  3. Handles omitempty and inline tags correctly
+//  4. Caches results using sync.Map for thread-safe access
+//
+// Example:
+//
+//	type Request struct {
+//	    Model string `json:"model"`
+//	    Temp  float32 `json:"temperature,omitempty"`
+//	}
+//	fields := getStructJSONFields(Request{})
+//	// Returns: map["model":true, "temperature":true]
+func getStructJSONFields(v interface{}) map[string]bool {
+	t := reflect.TypeOf(v)
+
+	// Check cache first
+	if cached, ok := fieldCache.Load(t); ok {
+		return cached.(map[string]bool)
+	}
+
+	// Build field map using reflection
+	fields := make(map[string]bool)
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		jsonTag := field.Tag.Get("json")
+
+		// Skip fields without json tag or with "-" tag
+		if jsonTag == "" || jsonTag == "-" {
+			continue
+		}
+
+		// Extract field name (remove omitempty, inline, etc.)
+		fieldName := strings.Split(jsonTag, ",")[0]
+		if fieldName != "" && fieldName != "-" {
+			fields[fieldName] = true
+		}
+	}
+
+	// Cache the result
+	fieldCache.Store(t, fields)
+	return fields
+}
 
 // TestChatCompletionRequest_ExtraFields tests that ChatCompletionRequest preserves unknown fields
 func TestChatCompletionRequest_ExtraFields(t *testing.T) {
@@ -556,7 +609,7 @@ func BenchmarkChatCompletionRequest_MarshalNoExtra(b *testing.B) {
 	}
 }
 
-// BenchmarkGetStructJSONFields_Reflection benchmarks the reflection-based field extraction
+// BenchmarkGetStructJSONFields_Reflection benchmarks reflection-based field extraction
 func BenchmarkGetStructJSONFields_Reflection(b *testing.B) {
 	// Clear cache to measure cold start (only first iteration)
 	fieldCache = sync.Map{}
@@ -575,6 +628,322 @@ func BenchmarkGetStructJSONFields_Cached(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = getStructJSONFields(ChatCompletionRequest{})
+	}
+}
+
+// TestChatCompletionRequest_MessagesWithContent tests messages with simple content strings
+func TestChatCompletionRequest_MessagesWithContent(t *testing.T) {
+	tests := []struct {
+		name      string
+		inputJSON string
+		check     func(t *testing.T, req *ChatCompletionRequest)
+	}{
+		{
+			name: "single message with content",
+			inputJSON: `{
+				"model": "gpt-4",
+				"messages": [{"role": "user", "content": "Hello"}]
+			}`,
+			check: func(t *testing.T, req *ChatCompletionRequest) {
+				if len(req.Messages) != 1 {
+					t.Fatalf("expected 1 message, got %d", len(req.Messages))
+				}
+				if req.Messages[0].Content != "Hello" {
+					t.Errorf("expected content='Hello', got %s", req.Messages[0].Content)
+				}
+				if req.Messages[0].MultiContent != nil {
+					t.Error("expected MultiContent to be nil")
+				}
+			},
+		},
+		{
+			name: "multiple messages with content",
+			inputJSON: `{
+				"model": "gpt-4",
+				"messages": [
+					{"role": "system", "content": "You are a helpful assistant"},
+					{"role": "user", "content": "Hello"},
+					{"role": "assistant", "content": "Hi there!"}
+				]
+			}`,
+			check: func(t *testing.T, req *ChatCompletionRequest) {
+				if len(req.Messages) != 3 {
+					t.Fatalf("expected 3 messages, got %d", len(req.Messages))
+				}
+				if req.Messages[0].Role != "system" {
+					t.Errorf("expected first role='system', got %s", req.Messages[0].Role)
+				}
+				if req.Messages[1].Content != "Hello" {
+					t.Errorf("expected second content='Hello', got %s", req.Messages[1].Content)
+				}
+				if req.Messages[2].Content != "Hi there!" {
+					t.Errorf("expected third content='Hi there!', got %s", req.Messages[2].Content)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var req ChatCompletionRequest
+			if err := json.Unmarshal([]byte(tt.inputJSON), &req); err != nil {
+				t.Fatalf("Unmarshal failed: %v", err)
+			}
+			tt.check(t, &req)
+
+			// Test round-trip: marshal and unmarshal again
+			data, err := json.Marshal(&req)
+			if err != nil {
+				t.Fatalf("Marshal failed: %v", err)
+			}
+			var req2 ChatCompletionRequest
+			if err := json.Unmarshal(data, &req2); err != nil {
+				t.Fatalf("Second unmarshal failed: %v", err)
+			}
+			tt.check(t, &req2)
+		})
+	}
+}
+
+// TestChatCompletionRequest_MessagesWithMultiContent tests messages with array content (vision)
+func TestChatCompletionRequest_MessagesWithMultiContent(t *testing.T) {
+	tests := []struct {
+		name      string
+		inputJSON string
+		check     func(t *testing.T, req *ChatCompletionRequest)
+	}{
+		{
+			name: "message with text and image",
+			inputJSON: `{
+				"model": "gpt-4-vision",
+				"messages": [{
+					"role": "user",
+					"content": [
+						{"type": "text", "text": "What is in this image?"},
+						{"type": "image_url", "image_url": {"url": "https://example.com/image.jpg"}}
+					]
+				}]
+			}`,
+			check: func(t *testing.T, req *ChatCompletionRequest) {
+				if len(req.Messages) != 1 {
+					t.Fatalf("expected 1 message, got %d", len(req.Messages))
+				}
+				if req.Messages[0].Content != "" {
+					t.Errorf("expected Content to be empty, got %s", req.Messages[0].Content)
+				}
+				if len(req.Messages[0].MultiContent) != 2 {
+					t.Fatalf("expected 2 content parts, got %d", len(req.Messages[0].MultiContent))
+				}
+				if req.Messages[0].MultiContent[0].Type != "text" {
+					t.Errorf("expected first part type='text', got %s", req.Messages[0].MultiContent[0].Type)
+				}
+				if req.Messages[0].MultiContent[0].Text != "What is in this image?" {
+					t.Errorf("expected text='What is in this image?', got %s", req.Messages[0].MultiContent[0].Text)
+				}
+				if req.Messages[0].MultiContent[1].Type != "image_url" {
+					t.Errorf("expected second part type='image_url', got %s", req.Messages[0].MultiContent[1].Type)
+				}
+				if req.Messages[0].MultiContent[1].ImageURL == nil {
+					t.Fatal("expected ImageURL to be set")
+				}
+				if req.Messages[0].MultiContent[1].ImageURL.URL != "https://example.com/image.jpg" {
+					t.Errorf("expected URL='https://example.com/image.jpg', got %s", req.Messages[0].MultiContent[1].ImageURL.URL)
+				}
+			},
+		},
+		{
+			name: "message with multiple images",
+			inputJSON: `{
+				"model": "gpt-4-vision",
+				"messages": [{
+					"role": "user",
+					"content": [
+						{"type": "text", "text": "Compare these images"},
+						{"type": "image_url", "image_url": {"url": "https://example.com/img1.jpg", "detail": "high"}},
+						{"type": "image_url", "image_url": {"url": "https://example.com/img2.jpg", "detail": "low"}}
+					]
+				}]
+			}`,
+			check: func(t *testing.T, req *ChatCompletionRequest) {
+				if len(req.Messages[0].MultiContent) != 3 {
+					t.Fatalf("expected 3 content parts, got %d", len(req.Messages[0].MultiContent))
+				}
+				if req.Messages[0].MultiContent[1].ImageURL.Detail != "high" {
+					t.Errorf("expected first image detail='high', got %s", req.Messages[0].MultiContent[1].ImageURL.Detail)
+				}
+				if req.Messages[0].MultiContent[2].ImageURL.Detail != "low" {
+					t.Errorf("expected second image detail='low', got %s", req.Messages[0].MultiContent[2].ImageURL.Detail)
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var req ChatCompletionRequest
+			if err := json.Unmarshal([]byte(tt.inputJSON), &req); err != nil {
+				t.Fatalf("Unmarshal failed: %v", err)
+			}
+			tt.check(t, &req)
+
+			// Test round-trip: marshal and unmarshal again
+			data, err := json.Marshal(&req)
+			if err != nil {
+				t.Fatalf("Marshal failed: %v", err)
+			}
+			var req2 ChatCompletionRequest
+			if err := json.Unmarshal(data, &req2); err != nil {
+				t.Fatalf("Second unmarshal failed: %v", err)
+			}
+			tt.check(t, &req2)
+		})
+	}
+}
+
+// TestChatCompletionRequest_MessagesWithToolCalls tests messages with tool calls
+func TestChatCompletionRequest_MessagesWithToolCalls(t *testing.T) {
+	inputJSON := `{
+		"model": "gpt-4",
+		"messages": [
+			{"role": "user", "content": "What's the weather in Beijing?"},
+			{
+				"role": "assistant",
+				"content": "",
+				"tool_calls": [{
+					"id": "call_abc123",
+					"type": "function",
+					"function": {
+						"name": "get_weather",
+						"arguments": "{\"city\":\"Beijing\"}"
+					}
+				}]
+			},
+			{
+				"role": "tool",
+				"tool_call_id": "call_abc123",
+				"content": "Sunny, 25°C"
+			}
+		]
+	}`
+
+	var req ChatCompletionRequest
+	if err := json.Unmarshal([]byte(inputJSON), &req); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	// Verify user message
+	if req.Messages[0].Role != "user" || req.Messages[0].Content != "What's the weather in Beijing?" {
+		t.Errorf("user message incorrect")
+	}
+
+	// Verify assistant message with tool calls
+	if req.Messages[1].Role != "assistant" {
+		t.Errorf("expected assistant role, got %s", req.Messages[1].Role)
+	}
+	if len(req.Messages[1].ToolCalls) != 1 {
+		t.Fatalf("expected 1 tool call, got %d", len(req.Messages[1].ToolCalls))
+	}
+	if req.Messages[1].ToolCalls[0].ID != "call_abc123" {
+		t.Errorf("expected tool call ID='call_abc123', got %s", req.Messages[1].ToolCalls[0].ID)
+	}
+	if req.Messages[1].ToolCalls[0].Function.Name != "get_weather" {
+		t.Errorf("expected function name='get_weather', got %s", req.Messages[1].ToolCalls[0].Function.Name)
+	}
+
+	// Verify tool message
+	if req.Messages[2].Role != "tool" {
+		t.Errorf("expected tool role, got %s", req.Messages[2].Role)
+	}
+	if req.Messages[2].ToolCallID != "call_abc123" {
+		t.Errorf("expected tool_call_id='call_abc123', got %s", req.Messages[2].ToolCallID)
+	}
+	if req.Messages[2].Content != "Sunny, 25°C" {
+		t.Errorf("expected content='Sunny, 25°C', got %s", req.Messages[2].Content)
+	}
+
+	// Test round-trip
+	data, err := json.Marshal(&req)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+	var req2 ChatCompletionRequest
+	if err := json.Unmarshal(data, &req2); err != nil {
+		t.Fatalf("Second unmarshal failed: %v", err)
+	}
+	if len(req2.Messages[1].ToolCalls) != 1 {
+		t.Errorf("tool calls lost after round-trip")
+	}
+}
+
+// TestChatCompletionRequest_MessagesMixedContent tests request with both content types
+func TestChatCompletionRequest_MessagesMixedContent(t *testing.T) {
+	inputJSON := `{
+		"model": "gpt-4-vision",
+		"messages": [
+			{"role": "system", "content": "You are a helpful assistant"},
+			{
+				"role": "user",
+				"content": [
+					{"type": "text", "text": "What do you see?"},
+					{"type": "image_url", "image_url": {"url": "https://example.com/pic.jpg"}}
+				]
+			},
+			{"role": "assistant", "content": "I see a beautiful landscape."}
+		]
+	}`
+
+	var req ChatCompletionRequest
+	if err := json.Unmarshal([]byte(inputJSON), &req); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if len(req.Messages) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(req.Messages))
+	}
+
+	// First message: simple content
+	if req.Messages[0].Content != "You are a helpful assistant" {
+		t.Errorf("system message content incorrect")
+	}
+	if req.Messages[0].MultiContent != nil {
+		t.Error("system message should not have MultiContent")
+	}
+
+	// Second message: multi content
+	if req.Messages[1].Content != "" {
+		t.Errorf("user message with MultiContent should have empty Content")
+	}
+	if len(req.Messages[1].MultiContent) != 2 {
+		t.Errorf("expected 2 content parts in user message, got %d", len(req.Messages[1].MultiContent))
+	}
+
+	// Third message: simple content
+	if req.Messages[2].Content != "I see a beautiful landscape." {
+		t.Errorf("assistant message content incorrect")
+	}
+	if req.Messages[2].MultiContent != nil {
+		t.Error("assistant message should not have MultiContent")
+	}
+
+	// Test round-trip
+	data, err := json.Marshal(&req)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+	var req2 ChatCompletionRequest
+	if err := json.Unmarshal(data, &req2); err != nil {
+		t.Fatalf("Second unmarshal failed: %v", err)
+	}
+
+	// Verify mixed content preserved
+	if req2.Messages[0].Content != req.Messages[0].Content {
+		t.Error("system message content changed after round-trip")
+	}
+	if len(req2.Messages[1].MultiContent) != len(req.Messages[1].MultiContent) {
+		t.Error("user message MultiContent changed after round-trip")
+	}
+	if req2.Messages[2].Content != req.Messages[2].Content {
+		t.Error("assistant message content changed after round-trip")
 	}
 }
 
@@ -669,194 +1038,5 @@ func BenchmarkChatCompletionRequest_Clone(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_ = original.Clone()
-	}
-}
-
-// generateRandomString generates a random string of specified size to avoid compiler optimizations.
-// This ensures benchmark results reflect real-world performance rather than optimized edge cases.
-func generateRandomString(size int) string {
-	// Use a simple but effective random generation to prevent constant folding
-	// Avoid characters that need JSON escaping (like newlines, quotes, backslashes)
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 "
-	b := make([]byte, size)
-	for i := range b {
-		// Use modulo to create pseudo-random characters (good enough for benchmark)
-		b[i] = charset[(i*7+13)%len(charset)]
-	}
-	return string(b)
-}
-
-// BenchmarkChatCompletionRequest_Unmarshal_1KB benchmarks unmarshaling with 1KB message content
-func BenchmarkChatCompletionRequest_Unmarshal_1KB(b *testing.B) {
-	content := generateRandomString(1024) // 1KB
-	jsonData := []byte(`{"model":"gpt-4","messages":[{"role":"user","content":"` + content + `"}],"temperature":0.7}`)
-
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		var req ChatCompletionRequest
-		if err := json.Unmarshal(jsonData, &req); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-// BenchmarkChatCompletionRequest_Marshal_1KB benchmarks marshaling with 1KB message content
-func BenchmarkChatCompletionRequest_Marshal_1KB(b *testing.B) {
-	content := generateRandomString(1024) // 1KB
-	req := ChatCompletionRequest{
-		Model: "gpt-4",
-		Messages: []ChatCompletionMessage{
-			{Role: "user", Content: content},
-		},
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		_, err := json.Marshal(&req)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-// BenchmarkChatCompletionRequest_Unmarshal_10KB benchmarks unmarshaling with 10KB message content
-func BenchmarkChatCompletionRequest_Unmarshal_10KB(b *testing.B) {
-	content := generateRandomString(10 * 1024) // 10KB
-	jsonData := []byte(`{"model":"gpt-4","messages":[{"role":"user","content":"` + content + `"}],"temperature":0.7}`)
-
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		var req ChatCompletionRequest
-		if err := json.Unmarshal(jsonData, &req); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-// BenchmarkChatCompletionRequest_Marshal_10KB benchmarks marshaling with 10KB message content
-func BenchmarkChatCompletionRequest_Marshal_10KB(b *testing.B) {
-	content := generateRandomString(10 * 1024) // 10KB
-	req := ChatCompletionRequest{
-		Model: "gpt-4",
-		Messages: []ChatCompletionMessage{
-			{Role: "user", Content: content},
-		},
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		_, err := json.Marshal(&req)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-// BenchmarkChatCompletionRequest_Unmarshal_100KB benchmarks unmarshaling with 100KB message content
-func BenchmarkChatCompletionRequest_Unmarshal_100KB(b *testing.B) {
-	content := generateRandomString(100 * 1024) // 100KB
-	jsonData := []byte(`{"model":"gpt-4","messages":[{"role":"user","content":"` + content + `"}],"temperature":0.7}`)
-
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		var req ChatCompletionRequest
-		if err := json.Unmarshal(jsonData, &req); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-// BenchmarkChatCompletionRequest_Marshal_100KB benchmarks marshaling with 100KB message content
-func BenchmarkChatCompletionRequest_Marshal_100KB(b *testing.B) {
-	content := generateRandomString(100 * 1024) // 100KB
-	req := ChatCompletionRequest{
-		Model: "gpt-4",
-		Messages: []ChatCompletionMessage{
-			{Role: "user", Content: content},
-		},
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		_, err := json.Marshal(&req)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-// BenchmarkChatCompletionRequest_Unmarshal_1MB benchmarks unmarshaling with 1MB message content
-func BenchmarkChatCompletionRequest_Unmarshal_1MB(b *testing.B) {
-	content := generateRandomString(1024 * 1024) // 1MB
-	jsonData := []byte(`{"model":"gpt-4","messages":[{"role":"user","content":"` + content + `"}],"temperature":0.7}`)
-
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		var req ChatCompletionRequest
-		if err := json.Unmarshal(jsonData, &req); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-// BenchmarkChatCompletionRequest_Marshal_1MB benchmarks marshaling with 1MB message content
-func BenchmarkChatCompletionRequest_Marshal_1MB(b *testing.B) {
-	content := generateRandomString(1024 * 1024) // 1MB
-	req := ChatCompletionRequest{
-		Model: "gpt-4",
-		Messages: []ChatCompletionMessage{
-			{Role: "user", Content: content},
-		},
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		_, err := json.Marshal(&req)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-// BenchmarkChatCompletionRequest_Unmarshal_10MB benchmarks unmarshaling with 10MB message content
-func BenchmarkChatCompletionRequest_Unmarshal_10MB(b *testing.B) {
-	content := generateRandomString(10 * 1024 * 1024) // 10MB
-	jsonData := []byte(`{"model":"gpt-4","messages":[{"role":"user","content":"` + content + `"}],"temperature":0.7}`)
-
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		var req ChatCompletionRequest
-		if err := json.Unmarshal(jsonData, &req); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-// BenchmarkChatCompletionRequest_Marshal_10MB benchmarks marshaling with 10MB message content
-func BenchmarkChatCompletionRequest_Marshal_10MB(b *testing.B) {
-	content := generateRandomString(10 * 1024 * 1024) // 10MB
-	req := ChatCompletionRequest{
-		Model: "gpt-4",
-		Messages: []ChatCompletionMessage{
-			{Role: "user", Content: content},
-		},
-	}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		_, err := json.Marshal(&req)
-		if err != nil {
-			b.Fatal(err)
-		}
 	}
 }

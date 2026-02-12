@@ -149,40 +149,18 @@ type CompletionResponse struct {
 	ExtraFields map[string]interface{} `json:"-"`
 }
 
-// UnmarshalJSON custom unmarshaler for CompletionResponse that preserves unknown fields.
-// Uses a fast path optimization: avoids extra field processing when none are present.
+// UnmarshalJSON custom unmarshaler using reflection-based streaming API.
+// This implementation automatically discovers fields via reflection and uses
+// jsoniter's streaming API for optimal performance with minimal maintenance overhead.
 func (r *CompletionResponse) UnmarshalJSON(data []byte) error {
-	// Fast path: standard unmarshaling first
-	type Alias CompletionResponse
-	if err := json.Unmarshal(data, (*Alias)(r)); err != nil {
-		return err
-	}
-
-	// Check if there are any extra fields
-	var raw map[string]interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-
-	knownFields := getCompletionResponseKnownFields()
-
-	// Extract extra fields (only allocate map if needed)
-	for k, v := range raw {
-		if !knownFields[k] {
-			if r.ExtraFields == nil {
-				r.ExtraFields = make(map[string]interface{})
-			}
-			r.ExtraFields[k] = v
-		}
-	}
-
-	return nil
+	return unmarshalWithReflection(data, r)
 }
 
 // MarshalJSON custom marshaler for CompletionResponse that includes unknown fields.
+// Uses jsoniter for consistent serialization with UnmarshalJSON.
 func (r *CompletionResponse) MarshalJSON() ([]byte, error) {
 	type Alias CompletionResponse
-	data, err := json.Marshal((*Alias)(r))
+	data, err := jsoniterAPI.Marshal((*Alias)(r))
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +170,7 @@ func (r *CompletionResponse) MarshalJSON() ([]byte, error) {
 	}
 
 	var base map[string]interface{}
-	if err := json.Unmarshal(data, &base); err != nil {
+	if err := jsoniterAPI.Unmarshal(data, &base); err != nil {
 		return nil, err
 	}
 
@@ -200,11 +178,7 @@ func (r *CompletionResponse) MarshalJSON() ([]byte, error) {
 		base[k] = v
 	}
 
-	return json.Marshal(base)
-}
-
-func getCompletionResponseKnownFields() map[string]bool {
-	return getStructJSONFields(CompletionResponse{})
+	return jsoniterAPI.Marshal(base)
 }
 
 // Clone creates a deep copy of the CompletionRequest.
@@ -295,40 +269,18 @@ func (r *CompletionRequest) Clone() *CompletionRequest {
 	return cloned
 }
 
-// UnmarshalJSON custom unmarshaler for CompletionRequest that preserves unknown fields.
-// Uses a fast path optimization: avoids extra field processing when none are present.
+// UnmarshalJSON custom unmarshaler using reflection-based streaming API.
+// This implementation automatically discovers fields via reflection and uses
+// jsoniter's streaming API for optimal performance with minimal maintenance overhead.
 func (r *CompletionRequest) UnmarshalJSON(data []byte) error {
-	// Fast path: standard unmarshaling first
-	type Alias CompletionRequest
-	if err := json.Unmarshal(data, (*Alias)(r)); err != nil {
-		return err
-	}
-
-	// Check if there are any extra fields
-	var raw map[string]interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-
-	knownFields := getCompletionRequestKnownFields()
-
-	// Extract extra fields (only allocate map if needed)
-	for k, v := range raw {
-		if !knownFields[k] {
-			if r.ExtraFields == nil {
-				r.ExtraFields = make(map[string]interface{})
-			}
-			r.ExtraFields[k] = v
-		}
-	}
-
-	return nil
+	return unmarshalWithReflection(data, r)
 }
 
 // MarshalJSON custom marshaler for CompletionRequest that includes unknown fields.
+// Uses jsoniter for consistent serialization with UnmarshalJSON.
 func (r *CompletionRequest) MarshalJSON() ([]byte, error) {
 	type Alias CompletionRequest
-	data, err := json.Marshal((*Alias)(r))
+	data, err := jsoniterAPI.Marshal((*Alias)(r))
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +290,7 @@ func (r *CompletionRequest) MarshalJSON() ([]byte, error) {
 	}
 
 	var base map[string]interface{}
-	if err := json.Unmarshal(data, &base); err != nil {
+	if err := jsoniterAPI.Unmarshal(data, &base); err != nil {
 		return nil, err
 	}
 
@@ -346,11 +298,7 @@ func (r *CompletionRequest) MarshalJSON() ([]byte, error) {
 		base[k] = v
 	}
 
-	return json.Marshal(base)
-}
-
-func getCompletionRequestKnownFields() map[string]bool {
-	return getStructJSONFields(CompletionRequest{})
+	return jsoniterAPI.Marshal(base)
 }
 
 // clonePromptValue performs deep copy of PromptValue.
