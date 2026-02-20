@@ -32,33 +32,35 @@ func NewSimpleBackend() *SimpleBackend {
 // StreamInference implements InferBackend interface
 // Performs streaming inference by forwarding request to backend and streaming response chunks
 func (b *SimpleBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	chunkChan := make(chan StreamChunk, 100)
-
 	worker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleNormal)
 	if worker == nil {
-		return nil, fmt.Errorf("no available worker for role: %s", types.InferRoleNormal)
+		return nil, fmt.Errorf("%s no available worker for role: %s", req.Id, types.InferRoleNormal)
 	}
 
-	go func() {
-		defer close(chunkChan)
+	body, err := req.MarshalRequestWithArgs(nil)
+	if err != nil {
+		return nil, err
+	}
 
-		body, err := req.MarshalRequestWithArgs(nil)
-		if err != nil {
-			klog.Errorf("failed to marshal request body: %v", err)
-			chunkChan <- StreamChunk{err: err}
-			return
-		}
+	// Build backend request
+	newReq, err := MakeNewBackendRequest(req, body, worker)
+	if err != nil {
+		return nil, err
+	}
 
-		StreamReadFromBackend(req, b.client, body, worker, chunkChan)
-	}()
+	// Execute request with retry
+	respBody, err := DoRequest(newReq, b.client, body, worker)
+	if err != nil {
+		return nil, err
+	}
 
-	return chunkChan, nil
+	return StartStreamRead(req, respBody), nil
 }
 
 func (b *SimpleBackend) Inference(req *types.RequestContext) ([]byte, error) {
 	worker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleNormal)
 	if worker == nil {
-		return nil, fmt.Errorf("no available worker for role: %s", types.InferRoleNormal)
+		return nil, fmt.Errorf("%s no available worker for role: %s", req.Id, types.InferRoleNormal)
 	}
 
 	body, err := req.MarshalRequestWithArgs(nil)

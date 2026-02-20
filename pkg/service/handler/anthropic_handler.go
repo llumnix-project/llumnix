@@ -162,34 +162,29 @@ func (h *AnthropicHandler) ParseChunk(reqCtx *types.RequestContext, data []byte)
 // It delegates to the generic StreamProcessor which encapsulates the streaming mechanism,
 // while this handler provides Anthropic-specific parsing and writing strategies.
 // Timing metrics like TTFT and ITL are tracked by the StreamProcessor.
-func (h *AnthropicHandler) handleStream(req *types.RequestContext) {
+func (h *AnthropicHandler) handleStream(req *types.RequestContext) error {
 	// Initiate streaming inference from the backend
 	chunkChan, err := h.backend.StreamInference(req)
 	if err != nil {
 		klog.Errorf("failed to stream inference: %v", err)
-		WriteErrorResponse(req, err)
-		return
+		return err
 	}
 
 	// Delegate to the generic streaming processor with Anthropic-specific strategies
 	h.streamProcessor.ProcessStream(req, chunkChan)
+	return nil
 }
 
-func (h *AnthropicHandler) handleMessage(req *types.RequestContext) {
+func (h *AnthropicHandler) handleMessage(req *types.RequestContext) error {
 	data, err := h.backend.Inference(req)
 	if err != nil {
-		klog.Errorf("failed to get inference result: %v", err)
-		WriteErrorResponse(req, err)
-		return
+		return err
 	}
 
 	var response protocol.ChatCompletionResponse
-
 	err = json.Unmarshal(data, &response)
 	if err != nil {
-		klog.Errorf("failed to unmarshal inference result: %v", err)
-		WriteErrorResponse(req, err)
-		return
+		return err
 	}
 
 	req.AnthropicRequest.OpenAIResponse = &response
@@ -197,24 +192,23 @@ func (h *AnthropicHandler) handleMessage(req *types.RequestContext) {
 	// Execute post-processing chain and measure duration
 	err = h.postProcessors.Process(req)
 	if err != nil {
-		klog.Errorf("post-processor failed: %v", err)
-		WriteErrorResponse(req, err)
-		return
+		return err
 	}
 
 	// Write response chunk if there's data to send
 	if len(req.AnthropicRequest.ResponseData) > 0 {
 		klog.V(3).Infof("writing response chunk: %s", string(req.AnthropicRequest.ResponseData))
 		// The reason for using WriteRawResponse is that the relevant converters from Anthropic already involve specific protocol data.
-		WriteRawResponse(req, req.AnthropicRequest.ResponseData)
+		req.WriteRawResponse(req.AnthropicRequest.ResponseData)
 	}
+	return nil
 }
 
-func (h *AnthropicHandler) Handle(req *types.RequestContext) {
+func (h *AnthropicHandler) Handle(req *types.RequestContext) error {
 	if req.InferenceStream() {
-		h.handleStream(req)
+		return h.handleStream(req)
 	} else {
-		h.handleMessage(req)
+		return h.handleMessage(req)
 	}
 }
 
@@ -233,7 +227,7 @@ func (h *AnthropicHandler) ProcessAndWriteChunk(req *types.RequestContext, done 
 	// Write response chunk if there's data to send
 	if len(req.AnthropicRequest.ResponseData) > 0 {
 		klog.V(3).Infof("writing response chunk: %s", string(req.AnthropicRequest.ResponseData))
-		WriteRawResponse(req, req.AnthropicRequest.ResponseData)
+		req.WriteRawResponse(req.AnthropicRequest.ResponseData)
 	}
 
 	return nil

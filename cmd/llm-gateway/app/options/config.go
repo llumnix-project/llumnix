@@ -253,7 +253,7 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&c.EnableLogInput, "enable-log-input", false, "enable log input or not")
 	flags.BoolVar(&c.ServerlessMode, "serverless-mode", false, "run on serverless")
 
-	flags.IntVar(&c.RetryCount, "retry-count", 0, "gateway forwarding retry count")
+	flags.IntVar(&c.RetryCount, "retry-count", 2, "gateway forwarding retry count")
 	flags.IntVar(&c.WaitQueueThreads, "wait-queue-threads", 5, "number of coroutines which read the requests from queue")
 	flags.IntVar(&c.WaitScheduleTimeout, "wait-schedule-timeout", 10000, "waiting timeout if no free token, unit(milliseconds)")
 	flags.IntVar(&c.WaitScheduleTryPeriod, "wait-schedule-try-period", 1000, "retry period while waiting free tokens, unit(milliseconds)")

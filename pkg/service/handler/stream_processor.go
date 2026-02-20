@@ -73,7 +73,7 @@ func (sp *StreamProcessor) ProcessStream(req *types.RequestContext, chunkChan <-
 		// Handle unexpected streaming errors (early return for exception path)
 		if chunk.err != nil && chunk.err != io.EOF {
 			klog.Errorf("request %s error during stream inference: %v", req.Id, chunk.err)
-			WriteErrorResponse(req, chunk.err)
+			req.WriteErrorResponse(chunk.err)
 			return
 		}
 
@@ -86,12 +86,12 @@ func (sp *StreamProcessor) ProcessStream(req *types.RequestContext, chunkChan <-
 			err := sp.parser.ParseChunk(req, chunk.Data)
 			if err != nil && err != io.EOF {
 				klog.Errorf("failed to parse final response: %v", err)
-				WriteErrorResponse(req, err)
+				req.WriteErrorResponse(err)
 				return
 			}
 			if err := sp.writer.ProcessAndWriteChunk(req, true); err != nil {
 				klog.Errorf("failed to process final chunk: %v", err)
-				WriteErrorResponse(req, err)
+				req.WriteErrorResponse(err)
 				return
 			}
 			return
@@ -101,14 +101,14 @@ func (sp *StreamProcessor) ProcessStream(req *types.RequestContext, chunkChan <-
 		err := sp.parser.ParseChunk(req, chunk.Data)
 		if err != nil && err != io.EOF {
 			klog.Errorf("failed to parse response: %v", err)
-			WriteErrorResponse(req, err)
+			req.WriteErrorResponse(err)
 			return
 		}
 
 		// Process through post-processor chain and write to client
 		if err := sp.writer.ProcessAndWriteChunk(req, (err == io.EOF)); err != nil {
 			klog.Errorf("failed to process and write chunk: %v", err)
-			WriteErrorResponse(req, err)
+			req.WriteErrorResponse(err)
 			return
 		}
 

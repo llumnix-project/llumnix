@@ -43,33 +43,35 @@ func (b *PdSplitVllmKvtBackend) buildTransferParams(req *types.RequestContext, p
 }
 
 func (b *PdSplitVllmKvtBackend) BatchScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
-	if pWorker == nil {
-		return nil, fmt.Errorf("[%s] no scheduled prefill worker", req.Id)
-	}
-	dWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode)
-	if dWorker == nil {
-		return nil, fmt.Errorf("[%s] no scheduled decode worker", req.Id)
+	pWorker, dWorker, err := GetPDWorkers(req)
+	if err != nil {
+		return nil, err
 	}
 
-	chunkChan := make(chan StreamChunk, 100)
-	go func() {
-		defer close(chunkChan)
-		kvTransferParams := b.buildTransferParams(req, pWorker, dWorker)
-		body, err := req.MarshalRequestWithArgs(map[string]interface{}{
-			"kv_transfer_params": kvTransferParams,
-		})
-		if err != nil {
-			klog.Errorf("failed to marshal request body: %v", err)
-			chunkChan <- StreamChunk{err: err}
-			return
-		}
+	kvTransferParams := b.buildTransferParams(req, pWorker, dWorker)
+	body, err := req.MarshalRequestWithArgs(map[string]interface{}{
+		"kv_transfer_params": kvTransferParams,
+	})
+	if err != nil {
+		klog.Errorf("failed to marshal request body: %v", err)
+		return nil, err
+	}
 
-		// build new backend request and stream read
-		StreamReadFromBackend(req, b.client, body, dWorker, chunkChan)
-	}()
+	// Build backend request
+	newReq, err := MakeNewBackendRequest(req, body, dWorker)
+	if err != nil {
+		klog.Errorf("failed to create new backend request: %v", err)
+		return nil, err
+	}
 
-	return chunkChan, nil
+	// Execute request with retry
+	respBody, err := DoRequest(newReq, b.client, body, dWorker)
+	if err != nil {
+		klog.Errorf("failed to do backend request: %v", err)
+		return nil, err
+	}
+
+	return StartStreamRead(req, respBody), nil
 }
 
 func (b *PdSplitVllmKvtBackend) buildPrefillRequestData(req *types.RequestContext) ([]byte, error) {
@@ -93,7 +95,7 @@ func (b *PdSplitVllmKvtBackend) doPrefill(req *types.RequestContext, pWorker *ty
 		klog.Errorf("[%s] failed to make new backend request: %v", err, req.Id)
 		return err
 	}
-	body, err := DoRequest(newReq, b.client, data)
+	body, err := DoRequest(newReq, b.client, data, pWorker)
 	if err != nil {
 		klog.Errorf("[%s] failed to do request: %v", req.Id, err)
 		return err
@@ -119,51 +121,44 @@ func (b *PdSplitVllmKvtBackend) buildDecodeRequestData(req *types.RequestContext
 	})
 }
 
-func (b *PdSplitVllmKvtBackend) doDecode(req *types.RequestContext, chunkChan chan StreamChunk, dWorker *types.LLMWorker) {
-	data, err := b.buildDecodeRequestData(req, dWorker)
-	if err != nil {
-		klog.Errorf("[%s] failed to build decode request data: %v", err, req.Id)
-		chunkChan <- StreamChunk{err: err}
-		return
-	}
-	StreamReadFromBackend(req, b.client, data, dWorker, chunkChan)
-}
-
 func (b *PdSplitVllmKvtBackend) StagedScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
 	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
 	if pWorker == nil {
 		return nil, fmt.Errorf("[%s] no scheduled prefill worker", req.Id)
 	}
 
-	chunkChan := make(chan StreamChunk, 100)
-	go func() {
-		defer close(chunkChan)
+	err := b.doPrefill(req, pWorker)
+	if err != nil {
+		return nil, err
+	}
 
-		err := b.doPrefill(req, pWorker)
-		if err != nil {
-			chunkChan <- StreamChunk{err: err}
-			return
-		}
+	// start decode scheduling
+	dWorker, err := ScheduleAndGetDecodeWorker(req)
+	if err != nil {
+		return nil, err
+	}
 
-		// start decode scheduling
-		results, err := req.ScheduleDecode()
-		if err != nil {
-			klog.Errorf("[%s] decode scheduling failed: %v", req.Id, err)
-			chunkChan <- StreamChunk{err: err}
-			return
-		}
+	body, err := b.buildDecodeRequestData(req, dWorker)
+	if err != nil {
+		klog.Errorf("[%s] failed to build decode request data: %v", err, req.Id)
+		return nil, err
+	}
 
-		dWorker := results.GetWorkerByRole(types.InferRoleDecode)
-		if dWorker == nil {
-			klog.Errorf("[%s] decode worker not found", req.Id)
-			chunkChan <- StreamChunk{err: fmt.Errorf("decode worker not found")}
-			return
-		}
+	// Build backend request
+	newReq, err := MakeNewBackendRequest(req, body, dWorker)
+	if err != nil {
+		klog.Errorf("failed to create new backend request: %v", err)
+		return nil, err
+	}
 
-		b.doDecode(req, chunkChan, dWorker)
-	}()
+	// Execute request with retry
+	respBody, err := DoRequest(newReq, b.client, body, dWorker)
+	if err != nil {
+		klog.Errorf("failed to do backend request: %v", err)
+		return nil, err
+	}
 
-	return chunkChan, nil
+	return StartStreamRead(req, respBody), nil
 }
 
 // StreamInference implements InferBackend interface
@@ -180,13 +175,9 @@ func (b *PdSplitVllmKvtBackend) StreamInference(req *types.RequestContext) (<-ch
 }
 
 func (b *PdSplitVllmKvtBackend) BatchScheduleInference(req *types.RequestContext) ([]byte, error) {
-	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
-	if pWorker == nil {
-		return nil, fmt.Errorf("[%s] no scheduled prefill worker", req.Id)
-	}
-	dWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode)
-	if dWorker == nil {
-		return nil, fmt.Errorf("[%s] no scheduled decode worker", req.Id)
+	pWorker, dWorker, err := GetPDWorkers(req)
+	if err != nil {
+		return nil, err
 	}
 
 	kvTransferParams := b.buildTransferParams(req, pWorker, dWorker)
@@ -213,16 +204,9 @@ func (b *PdSplitVllmKvtBackend) StagedScheduleInference(req *types.RequestContex
 	}
 
 	// start decode scheduling
-	results, err := req.ScheduleDecode()
+	dWorker, err := ScheduleAndGetDecodeWorker(req)
 	if err != nil {
-		klog.Errorf("[%s] decode scheduling failed: %v", req.Id, err)
 		return nil, err
-	}
-
-	dWorker := results.GetWorkerByRole(types.InferRoleDecode)
-	if dWorker == nil {
-		klog.Errorf("[%s] decode worker not found", req.Id)
-		return nil, fmt.Errorf("decode worker not found")
 	}
 
 	data, err := b.buildDecodeRequestData(req, dWorker)

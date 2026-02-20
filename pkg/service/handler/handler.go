@@ -29,7 +29,7 @@ type RequestHandler interface {
 	ParseRequest(req *types.RequestContext) error
 
 	// Handle processes the request and sends the response back to the client
-	Handle(req *types.RequestContext)
+	Handle(req *types.RequestContext) error
 }
 
 // HandlerFactory is a factory function that creates a RequestHandler instance

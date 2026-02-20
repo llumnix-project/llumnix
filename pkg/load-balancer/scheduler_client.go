@@ -69,11 +69,12 @@ func (cb *SchedulerClient) createScheduleRequest(req *types.RequestContext) *typ
 	localEndpoint := cb.kac.GetLocalEndpoint()
 	// create scheduler request
 	schRequest := &types.ScheduleRequest{
-		Id:           req.Id,
-		Model:        req.GetRequestModel(),
-		GatewayId:    localEndpoint.String(),
-		ScheduleMode: req.ScheduleCtx.ScheduleMode,
-		InferStage:   req.ScheduleCtx.InferStage,
+		Id:                req.Id,
+		Model:             req.GetRequestModel(),
+		GatewayId:         localEndpoint.String(),
+		ScheduleMode:      req.ScheduleCtx.ScheduleMode,
+		InferStage:        req.ScheduleCtx.InferStage,
+		ExcludedInstances: req.ScheduleCtx.GetExcludedInstanceList(),
 	}
 
 	// In the case of tokenizer, prefer to use token ids, otherwise use string length as an alternative.

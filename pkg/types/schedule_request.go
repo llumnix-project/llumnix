@@ -47,6 +47,9 @@ type ScheduleRequest struct {
 	ScheduleMode ScheduleMode `json:"schedule_mode"`
 	InferStage   InferStage   `json:"infer_stage"`
 
+	// Excluded instances for retry scheduling
+	ExcludedInstances []string `json:"excluded_instances,omitempty"`
+
 	// LLM Prompt
 	PromptNumTokens int      `json:"prompt_num_tokens,omitempty"`
 	PromptTokenIds  []uint32 `json:"prompt_token_ids"`

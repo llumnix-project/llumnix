@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"runtime/debug"
@@ -260,6 +261,7 @@ func (lgs *LlmGatewayService) writeResponseUntilDone(reqCtx *types.RequestContex
 			} else {
 				klog.V(3).Infof("request %s write response", reqCtx.Id)
 				lgs.writeResponse(reqCtx, response)
+				reqCtx.HttpRequest.HeaderResponded = true
 				return
 			}
 		case <-reqCtx.Context.Done():
@@ -271,20 +273,143 @@ func (lgs *LlmGatewayService) writeResponseUntilDone(reqCtx *types.RequestContex
 	}
 }
 
-func (lgs *LlmGatewayService) externalRouteRequest(reqCtx *types.RequestContext, dst *router.RouteEndpoint) {
+// externalRouteRequest handles fallback routing with retry mechanism
+// It tries the given fallback endpoint first, then tries other available fallback configurations
+func (lgs *LlmGatewayService) externalRouteRequest(reqCtx *types.RequestContext, firstDst *router.RouteEndpoint) error {
 	defer close(reqCtx.ResponseChan)
 
+	// Try do external request
 	originURL := reqCtx.HttpRequest.Request.URL.String()
-	url := dst.JoinURL(originURL)
-	SimpleHTTPProxy(lgs.simpleClient, url, reqCtx.HttpRequest.Writer, reqCtx.HttpRequest.Request)
-	reqCtx.HttpRequest.HeaderResponded = true
+	url := firstDst.JoinURL(originURL)
+	if ok := TrySimpleHTTPProxy(lgs.simpleClient, url, reqCtx); ok {
+		return nil
+	}
+
+	// External request failed, then try fall back
+	lgs.tryFallback(reqCtx)
+	return nil
 }
 
-func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext, handler handler.RequestHandler) {
+// unknownRouteRequest handles requests with unknown route by trying fallback
+func (lgs *LlmGatewayService) unknownRouteRequest(reqCtx *types.RequestContext) error {
+	defer close(reqCtx.ResponseChan)
+	return lgs.tryFallback(reqCtx)
+}
+
+// internalRouteRequest handles internal routing with retry mechanism.
+// It executes the handler and retries on retryable errors (5xx, network errors)
+// by rescheduling to different workers up to config.RetryCount times.
+// When all retries are exhausted, it triggers router fallback if available.
+func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext, h handler.RequestHandler) {
 	defer close(reqCtx.ResponseChan)
 	reqCtx.TriggerPreRequest()
-	handler.Handle(reqCtx)
+
+	maxRetries := lgs.config.RetryCount
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			// Reschedule to a different worker for retry
+			if err := lgs.doSchedule(reqCtx); err != nil {
+				return
+			}
+		}
+
+		// Execute the handler
+		err := h.Handle(reqCtx)
+		if err == nil {
+			break
+		}
+
+		// Check if error is retryable and get failed instance info
+		var retryableErr consts.RetryableError
+		if !errors.As(err, &retryableErr) || !retryableErr.IsRetryable() {
+			klog.Warningf("request [%s] failed with error: %v", reqCtx.Id, err)
+			reqCtx.WriteErrorResponse(err)
+			return
+		}
+
+		// Check if this is the last attempt
+		if attempt == maxRetries {
+			klog.Warningf("request [%s] all %d retries exhausted, last error: %v", reqCtx.Id, maxRetries, err)
+			lgs.tryFallback(reqCtx)
+			return
+		}
+
+		// Record failed instance for exclusion in next scheduling
+		if instanceID := retryableErr.FailedInstanceID(); instanceID != "" {
+			reqCtx.ScheduleCtx.AddExcludedInstance(instanceID)
+			reqCtx.RequestStats.RecordFailedInstance(instanceID)
+		}
+		reqCtx.RequestStats.RetryCount++
+
+		klog.Warningf("request [%s] attempt %d failed with retryable error: %v, will retry", reqCtx.Id, attempt, err)
+
+		// try backoff: 10ms, 20ms, 40ms...
+		backoff := time.Duration(10*(1<<attempt)) * time.Millisecond
+		if backoff > 100*time.Millisecond {
+			backoff = 100 * time.Millisecond
+		}
+		time.Sleep(backoff)
+	}
+
 	reqCtx.TriggerPostRequest()
+}
+
+// tryFallback attempts router fallback first, sends error if fallback fails or unavailable.
+func (lgs *LlmGatewayService) tryFallback(reqCtx *types.RequestContext) error {
+	tryCnt := 0
+	serviceRouter := router.GetServiceRouter()
+	// Try all available fallback configurations
+	for serviceRouter.CanFallback(reqCtx) {
+		fdst, err := serviceRouter.Fallback(reqCtx)
+		if err != nil {
+			klog.Warningf("request [%s] fallback failed: %v, no more fallback endpoints", reqCtx.Id, err)
+			return fmt.Errorf("all fallback attempts failed for request %s", reqCtx.Id)
+		}
+		originURL := reqCtx.HttpRequest.Request.URL.String()
+		url := fdst.JoinURL(originURL)
+		klog.Infof("request [%s] falling back to url: %s", reqCtx.Id, url)
+
+		if reqCtx.HttpRequest.HeaderResponded {
+			klog.Errorf("request [%s] HTTP headers already sent, cannot proxy to %s", reqCtx.Id, url)
+			return nil
+		}
+
+		// Try to proxy the request
+		if ok := TrySimpleHTTPProxy(lgs.simpleClient, url, reqCtx); ok {
+			return nil
+		}
+		tryCnt += 1
+
+		// Fallback failed, try next one if available
+		klog.Warningf("request [%s] fallback to %s failed", reqCtx.Id, url)
+
+		// Add small delay before trying next fallback (exponential backoff based on attempt count)
+		attempt := reqCtx.RequestStats.FallbackAttempt - 1 // Current attempt count
+		backoff := time.Duration(10*(1<<attempt)) * time.Millisecond
+		if backoff > 100*time.Millisecond {
+			backoff = 100 * time.Millisecond
+		}
+		time.Sleep(backoff)
+	}
+	if tryCnt <= 0 {
+		return nil
+	}
+	klog.Warningf("request [%s] all %d fallback attempts failed", reqCtx.Id, tryCnt)
+	return fmt.Errorf("all fallback attempts failed for request %s", reqCtx.Id)
+}
+
+// doSchedule schedules the request using the balancer
+func (lgs *LlmGatewayService) doSchedule(reqCtx *types.RequestContext) error {
+	schResult, err := lgs.balancer.Get(reqCtx)
+	if err != nil {
+		if e := lgs.tryFallback(reqCtx); e != nil {
+			reqCtx.WriteErrorResponse(err)
+		}
+		return err
+	}
+	klog.V(3).Infof("request [%s] scheduled to %s", reqCtx.Id, schResult.String())
+	reqCtx.ScheduleCtx.ScheduleResults = schResult
+	return nil
 }
 
 // dispatchRequest routes the request and dispatches it to appropriate handler
@@ -298,26 +423,19 @@ func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext, hand
 	dst, rType := serviceRouter.Route(reqCtx)
 	switch rType {
 	case router.RouteInternal:
-		// schedule the request
-		schResult, err := lgs.balancer.Get(reqCtx)
-		if err != nil {
-			reqCtx.ResponseChan <- &types.ResponseMsg{Err: err, Message: []byte(err.Error())}
+		// Match internal route
+		// Note: Scheduling must occur before starting a new coroutine, and its operations must occupy a worker thread.
+		// This is necessary to provide feedback and ensure the request is blocked in the queue.
+		if err := lgs.doSchedule(reqCtx); err != nil {
 			return
 		}
-		klog.V(3).Infof("request [%s] scheduled to %s", reqCtx.Id, schResult.String())
-		reqCtx.ScheduleCtx.ScheduleResults = schResult
 		go lgs.internalRouteRequest(reqCtx, handler)
 	case router.RouteExternal:
 		// Match external route
 		go lgs.externalRouteRequest(reqCtx, dst)
 	case router.RouteUnknown:
-		// Not match external route, try fallback
-		fdst, err := serviceRouter.Fallback(reqCtx)
-		if err != nil {
-			reqCtx.ResponseChan <- &types.ResponseMsg{Err: err, Message: []byte(err.Error())}
-			return
-		}
-		go lgs.externalRouteRequest(reqCtx, fdst)
+		// Match unknown route, try fallback
+		go lgs.unknownRouteRequest(reqCtx)
 	}
 }
 
@@ -531,6 +649,7 @@ func (lgs *LlmGatewayService) Run() {
 	router.HandleFunc("/v1/chat/completions", lgs.HandleOpenAIRequest)
 	router.HandleFunc("/v1/completions", lgs.HandleOpenAIRequest)
 	router.HandleFunc("/v1/models", lgs.HandleSimpleRequest)
+	router.HandleFunc("/get_server_info", lgs.HandleSimpleRequest)
 
 	// handle Anthropic inference requests
 	router.HandleFunc("/v1/messages", lgs.HandleAnthropicRequest)

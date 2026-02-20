@@ -43,6 +43,10 @@ type RequestStats struct {
 	// When the scheduled backend instance is abnormal, retry is performed.
 	RetryCount int
 
+	// FailedInstances records the instance IDs that failed during this request.
+	// Used for logging and metrics when backend returns 500 or network errors.
+	FailedInstances []string
+
 	DefaultLabels metrics.Labels
 }
 
@@ -107,7 +111,21 @@ func (m *RequestStats) String() string {
 		durationCost = append(durationCost, fmt.Sprintf("FDT:%vms", int64(fdtCost/time.Millisecond)))
 	}
 
+	// Add retry information
+	if m.RetryCount > 0 {
+		durationCost = append(durationCost, fmt.Sprintf("RETRY:%d", m.RetryCount))
+	}
+	if len(m.FailedInstances) > 0 {
+		durationCost = append(durationCost, fmt.Sprintf("FAILED_INST:%v", m.FailedInstances))
+	}
+
 	return strings.Join(durationCost, ",")
+}
+
+// RecordFailedInstance records a failed instance ID for this request.
+// Called when a backend instance fails with 500 or network error.
+func (m *RequestStats) RecordFailedInstance(instanceId string) {
+	m.FailedInstances = append(m.FailedInstances, instanceId)
 }
 
 type HttpRequest struct {
@@ -390,6 +408,31 @@ type ScheduleContext struct {
 
 	// whether to schedule the request
 	NeedSchedule bool
+
+	// ExcludedInstances contains instance IDs that should be excluded during scheduling.
+	ExcludedInstances map[string]struct{}
+}
+
+// AddExcludedInstance adds an instance ID to the exclusion list.
+// This is called when a backend instance fails with 500 or network error.
+func (s *ScheduleContext) AddExcludedInstance(instanceId string) {
+	if s.ExcludedInstances == nil {
+		s.ExcludedInstances = make(map[string]struct{})
+	}
+	s.ExcludedInstances[instanceId] = struct{}{}
+}
+
+// GetExcludedInstanceList returns the list of excluded instance IDs.
+// Useful for logging and metrics.
+func (s *ScheduleContext) GetExcludedInstanceList() []string {
+	if s.ExcludedInstances == nil {
+		return nil
+	}
+	result := make([]string, 0, len(s.ExcludedInstances))
+	for id := range s.ExcludedInstances {
+		result = append(result, id)
+	}
+	return result
 }
 
 // ErrorResponse is used when the engine returns an error directly.
@@ -622,6 +665,29 @@ func (req *RequestContext) GetPromptString() (string, error) {
 		return req.AnthropicRequest.getPromptString()
 	}
 	return "", fmt.Errorf("not support get prompt string")
+}
+
+// WriteErrorResponse writes the error response to the response channel.
+func (req *RequestContext) WriteErrorResponse(err error) {
+	req.ResponseChan <- &ResponseMsg{Err: err}
+}
+
+// WriteRawResponse writes the raw response to the response channel.
+func (req *RequestContext) WriteRawResponse(chunk []byte) {
+	req.ResponseChan <- &ResponseMsg{Err: nil, Message: chunk}
+}
+
+func (req *RequestContext) WriteResponse(chunk []byte) {
+	if !req.ClientStream() {
+		req.ResponseChan <- &ResponseMsg{Err: nil, Message: chunk}
+		return
+	}
+	// "data: " (6 bytes) + chunk + "\n\n" (2 bytes)
+	body := make([]byte, 0, 6+len(chunk)+2)
+	body = append(body, "data: "...)
+	body = append(body, chunk...)
+	body = append(body, '\n', '\n')
+	req.ResponseChan <- &ResponseMsg{Err: nil, Message: body}
 }
 
 // SetScheduler sets the scheduler for decode stage scheduling.

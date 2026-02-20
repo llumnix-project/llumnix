@@ -190,8 +190,53 @@ func NewRateLimiterWrapper() *RateLimiterWrapper {
 	return rlw
 }
 
+// excludeInstancesByHost filters out instances whose hosts are in the excluded list.
+// It extracts host information from excluded instance IDs and removes all instances
+// that match those hosts from the instance views map.
+func excludeInstancesByHost(instanceViews map[string]*lrs.InstanceView, excludedInstances []string) map[string]*lrs.InstanceView {
+	if len(excludedInstances) == 0 {
+		return instanceViews
+	}
+
+	// Build a set of excluded hosts for efficient lookup
+	excludedHosts := make(map[string]struct{})
+	for _, excludedId := range excludedInstances {
+		// Find the worker by excluded instance ID to get its host
+		for _, iv := range instanceViews {
+			if iv.GetInstanceId() == excludedId {
+				worker := iv.GetInstance()
+				if worker != nil {
+					excludedHosts[worker.Endpoint.Host] = struct{}{}
+				}
+				break
+			}
+		}
+	}
+
+	if len(excludedHosts) == 0 {
+		return instanceViews
+	}
+
+	// Filter out instances with excluded hosts
+	filteredViews := make(map[string]*lrs.InstanceView)
+	for instanceId, iv := range instanceViews {
+		worker := iv.GetInstance()
+		if worker != nil {
+			host := worker.Endpoint.Host
+			if _, excluded := excludedHosts[host]; !excluded {
+				filteredViews[instanceId] = iv
+			}
+		}
+	}
+	return filteredViews
+}
+
 // Filter is a helper function, converting the map of instance views to a slice and calling the RateLimiterWrapper's Filter method.
 func Filter(inferMode string, schReq *types.ScheduleRequest, instanceViews map[string]*lrs.InstanceView) (map[string]*lrs.InstanceView, error) {
+	// Exclude instances with hosts in schReq.ExcludedInstances
+	instanceViews = excludeInstancesByHost(instanceViews, schReq.ExcludedInstances)
+
+	// Try to filter instances using the rate limiter
 	r := GetRateLimiter()
 	if !r.Enabled() {
 		return instanceViews, nil

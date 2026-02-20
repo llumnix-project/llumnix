@@ -215,6 +215,12 @@ func (sr *ServiceRouter) Route(req *types.RequestContext) (*RouteEndpoint, Route
 	}
 }
 
+// CanFallback checks if there are available fallback endpoints for the request.
+func (sr *ServiceRouter) CanFallback(req *types.RequestContext) bool {
+	fallbackAttempt := req.RequestStats.FallbackAttempt
+	return len(sr.fallbackConfigs) > 0 && fallbackAttempt < len(sr.fallbackConfigs)
+}
+
 // Fallback gets fallback tokens from fallback configs
 func (sr *ServiceRouter) Fallback(req *types.RequestContext) (*RouteEndpoint, error) {
 	fallbackAttempt := req.RequestStats.FallbackAttempt

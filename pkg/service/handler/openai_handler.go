@@ -263,60 +263,54 @@ func (h *OpenAIHandler) marshalResponse(reqCtx *types.RequestContext) ([]byte, e
 // It delegates to the generic StreamProcessor which encapsulates the streaming mechanism,
 // while this handler provides OpenAI-specific parsing and writing strategies.
 // Timing metrics like TTFT and ITL are tracked by the StreamProcessor.
-func (h *OpenAIHandler) handleStream(req *types.RequestContext) {
+func (h *OpenAIHandler) handleStream(req *types.RequestContext) error {
 	// Initiate streaming inference from the backend
 	chunkChan, err := h.backend.StreamInference(req)
 	if err != nil {
 		klog.Errorf("failed to stream inference: %v", err)
-		WriteErrorResponse(req, err)
-		return
+		return err
 	}
 
 	// Delegate to the generic streaming processor with OpenAI-specific strategies
 	h.streamProcessor.ProcessStream(req, chunkChan)
+	return nil
 }
 
-func (h *OpenAIHandler) handleMessage(req *types.RequestContext) {
+func (h *OpenAIHandler) handleMessage(req *types.RequestContext) error {
 	data, err := h.backend.Inference(req)
 	if err != nil {
-		klog.Errorf("failed to get inference result: %v", err)
-		WriteErrorResponse(req, err)
-		return
+		return err
 	}
 
 	err = h.unMarshalResponse(req, data)
 	if err != nil {
-		klog.Errorf("failed to unmarshal request: %v", err)
-		WriteErrorResponse(req, err)
-		return
+		return err
 	}
 
 	err = h.postProcessors.Process(req)
 	if err != nil {
-		klog.Errorf("post-processor failed: %v", err)
-		WriteErrorResponse(req, err)
-		return
+		return err
 	}
 
 	// Marshal the response structure to JSON
 	data, err = h.marshalResponse(req)
 	if err != nil {
-		klog.Errorf("marshal response failed: %v", err)
-		WriteErrorResponse(req, err)
+		return err
 	}
 
 	// Write response chunk if there's data to send
 	if len(data) > 0 {
 		klog.V(3).Infof("writing response chunk: %s", string(data))
-		WriteResponse(req, data)
+		req.WriteResponse(data)
 	}
+	return nil
 }
 
-func (h *OpenAIHandler) Handle(req *types.RequestContext) {
+func (h *OpenAIHandler) Handle(req *types.RequestContext) error {
 	if req.InferenceStream() {
-		h.handleStream(req)
+		return h.handleStream(req)
 	} else {
-		h.handleMessage(req)
+		return h.handleMessage(req)
 	}
 }
 
@@ -341,13 +335,13 @@ func (h *OpenAIHandler) ProcessAndWriteChunk(req *types.RequestContext, done boo
 	// Write response chunk if there's data to send
 	if len(data) > 0 {
 		klog.V(3).Infof("writing response chunk: %s", string(data))
-		WriteResponse(req, data)
+		req.WriteResponse(data)
 	}
 
 	// Send the stream completion marker if this is the final chunk
 	if done {
 		klog.V(3).Infof("writing done chunk")
-		WriteResponse(req, []byte("[DONE]"))
+		req.WriteResponse([]byte("[DONE]"))
 	}
 
 	return nil

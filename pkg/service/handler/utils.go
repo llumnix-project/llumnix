@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"llm-gateway/pkg/consts"
 	"llm-gateway/pkg/types"
 	"net"
 	"net/http"
@@ -45,32 +46,10 @@ func NewLlmForwardClient() *http.Client {
 	return &http.Client{Transport: transport}
 }
 
-func WriteErrorResponse(req *types.RequestContext, err error) {
-	req.ResponseChan <- &types.ResponseMsg{Err: err}
-}
-
-func WriteRawResponse(req *types.RequestContext, chunk []byte) {
-	req.ResponseChan <- &types.ResponseMsg{Err: nil, Message: chunk}
-}
-
-func WriteResponse(req *types.RequestContext, chunk []byte) {
-	if !req.ClientStream() {
-		req.ResponseChan <- &types.ResponseMsg{Err: nil, Message: chunk}
-		return
-	}
-	// "data: " (6 bytes) + chunk + "\n\n" (2 bytes)
-	body := make([]byte, 0, 6+len(chunk)+2)
-	body = append(body, "data: "...)
-	body = append(body, chunk...)
-	body = append(body, '\n', '\n')
-	req.ResponseChan <- &types.ResponseMsg{Err: nil, Message: body}
-}
-
 // MakeNewBackendRequest creates HTTP request for backend inference
 func MakeNewBackendRequest(req *types.RequestContext, body []byte, worker *types.LLMWorker) (*http.Request, error) {
 	httpReq := req.HttpRequest.Request
 	if worker == nil {
-		klog.Errorf("failed to get worker for request: %s", req.Id)
 		return nil, errors.New("failed to get worker")
 	}
 	url := fmt.Sprintf("http://%s%s", worker.Endpoint.String(), req.GetBackendURLPath())
@@ -79,7 +58,6 @@ func MakeNewBackendRequest(req *types.RequestContext, body []byte, worker *types
 	// Create a new request to forward to the backend
 	proxyReq, err := http.NewRequestWithContext(req.Context, "POST", url, bytes.NewBuffer(body))
 	if err != nil {
-		klog.Errorf("failed to create proxy request: %v", err)
 		return nil, err
 	}
 
@@ -92,8 +70,9 @@ func MakeNewBackendRequest(req *types.RequestContext, body []byte, worker *types
 	return proxyReq, nil
 }
 
-// DoRequest executes HTTP request with retry mechanism
-func DoRequest(req *http.Request, client *http.Client, body []byte) (io.ReadCloser, error) {
+// DoRequest executes HTTP request with retry mechanism.
+// The worker is used to identify which instance failed for exclusion during retry.
+func DoRequest(req *http.Request, client *http.Client, body []byte, worker *types.LLMWorker) (io.ReadCloser, error) {
 	var resp *http.Response
 	var err error
 
@@ -106,13 +85,12 @@ func DoRequest(req *http.Request, client *http.Client, body []byte) (io.ReadClos
 
 		// Log detailed error information for debugging
 		if netErr, ok := err.(net.Error); ok {
-			klog.Errorf("failed to forward request to %s: %v (is_timeout=%v), retry: %d",
-				req.URL, err, netErr.Timeout(), retry)
+			// Timeout connections do not need to be retried.
+			// If retried, client timeouts may become more severe,
+			// so generally retries are not performed.
 			if netErr.Timeout() {
-				return nil, fmt.Errorf("request to %s timed out: %v", req.URL, err)
+				break
 			}
-		} else {
-			klog.Errorf("failed to forward request to %s: %v, retry: %d", req.URL, err, retry)
 		}
 
 		if retry < connectRetry {
@@ -124,13 +102,12 @@ func DoRequest(req *http.Request, client *http.Client, body []byte) (io.ReadClos
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, consts.NewNetworkError(req.URL.String(), err, worker.Id())
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		klog.Errorf("failed to forward request to %s, status code: %d", req.URL, resp.StatusCode)
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to forward request to %s, status code: %d, body: %s", req.URL, resp.StatusCode, string(body))
+		return nil, consts.NewUpstreamError(req.URL.String(), resp.StatusCode, body, worker.Id())
 	}
 
 	klog.V(3).Infof("req %s content-type header: %s", req.URL, resp.Header.Get("Content-Type"))
@@ -180,7 +157,7 @@ func StreamReadFromBackend(req *types.RequestContext, client *http.Client, body 
 	}
 
 	// Execute request with retry
-	respBody, err := DoRequest(newReq, client, body)
+	respBody, err := DoRequest(newReq, client, body, worker)
 	if err != nil {
 		klog.Errorf("failed to do backend request: %v", err)
 		chunkChan <- StreamChunk{err: err}
@@ -198,16 +175,61 @@ func StreamReadFromBackend(req *types.RequestContext, client *http.Client, body 
 func ReadFromBackend(req *types.RequestContext, client *http.Client, body []byte, worker *types.LLMWorker) ([]byte, error) {
 	newReq, err := MakeNewBackendRequest(req, body, worker)
 	if err != nil {
-		klog.Errorf("failed to create new backend request: %v", err)
 		return nil, err
 	}
 
-	respBody, err := DoRequest(newReq, client, body)
+	respBody, err := DoRequest(newReq, client, body, worker)
 	if err != nil {
-		klog.Errorf("failed to do backend request: %v", err)
 		return nil, err
 	}
 	defer respBody.Close()
 
 	return io.ReadAll(respBody)
+}
+
+// GetPDWorkers retrieves prefill and decode workers from schedule results.
+// Returns an error if either worker is not found.
+func GetPDWorkers(req *types.RequestContext) (prefill, decode *types.LLMWorker, err error) {
+	prefill = req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
+	if prefill == nil {
+		return nil, nil, fmt.Errorf("[%s] no scheduled prefill worker", req.Id)
+	}
+	decode = req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode)
+	if decode == nil {
+		return nil, nil, fmt.Errorf("[%s] no scheduled decode worker", req.Id)
+	}
+	return prefill, decode, nil
+}
+
+// StartStreamRead creates a channel and starts streaming response in a goroutine.
+// The respBody will be closed automatically when streaming completes or encounters an error.
+func StartStreamRead(req *types.RequestContext, respBody io.ReadCloser) <-chan StreamChunk {
+	chunkChan := make(chan StreamChunk, 100)
+	go func() {
+		defer close(chunkChan)
+		defer respBody.Close()
+
+		if err := StreamRead(req, chunkChan, respBody); err != nil {
+			chunkChan <- StreamChunk{err: err}
+		}
+	}()
+	return chunkChan
+}
+
+// ScheduleAndGetDecodeWorker performs decode scheduling and retrieves the decode worker.
+// Returns an error if scheduling fails or decode worker is not found.
+func ScheduleAndGetDecodeWorker(req *types.RequestContext) (*types.LLMWorker, error) {
+	results, err := req.ScheduleDecode()
+	if err != nil {
+		klog.Errorf("[%s] decode scheduling failed: %v", req.Id, err)
+		return nil, err
+	}
+
+	dWorker := results.GetWorkerByRole(types.InferRoleDecode)
+	if dWorker == nil {
+		klog.Errorf("[%s] decode worker not found", req.Id)
+		return nil, fmt.Errorf("decode worker not found")
+	}
+
+	return dWorker, nil
 }
