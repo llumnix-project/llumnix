@@ -223,7 +223,9 @@ func (ss *ScheduleService) handleRelease(w http.ResponseWriter, r *http.Request)
 		ss.lrsClient.ReleaseRequestState(worker.Role.String(), reqState)
 	}
 
-	klog.V(3).Infof("%vms| do return endpoints by %s: %v", time.Since(tStart).Milliseconds(), schReq.GatewayId, string(body))
+	if ss.config.EnableAccessLog {
+		logging.Logf("%vms| return local resource by %s: %v", time.Since(tStart).Milliseconds(), schReq.GatewayId, string(body))
+	}
 	w.WriteHeader(http.StatusOK)
 }
 

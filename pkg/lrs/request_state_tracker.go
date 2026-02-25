@@ -43,7 +43,9 @@ func NewRequestStateTracker(config *options.Config) *RequestStateTracker {
 			client:            &http.Client{Timeout: 3 * time.Second},
 			config:            config,
 		}
-		go gTracker.reportLoop()
+		if config.EnableRequestReport() {
+			go gTracker.reportLoop()
+		}
 	})
 	return gTracker
 }

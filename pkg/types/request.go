@@ -87,16 +87,16 @@ func (m *RequestStats) String() string {
 
 	if !m.DeQueueTime.IsZero() && !m.EnQueueTime.IsZero() {
 		qCost := m.DeQueueTime.Sub(m.EnQueueTime)
-		durationCost = append(durationCost, fmt.Sprintf("QT:%dms", qCost.Milliseconds()))
+		durationCost = append(durationCost, fmt.Sprintf("queue_time:%dms", qCost.Milliseconds()))
 	}
 
 	if !m.BalanceTime.IsZero() && !m.DeQueueTime.IsZero() {
 		lbCost := m.BalanceTime.Sub(m.DeQueueTime)
-		durationCost = append(durationCost, fmt.Sprintf("ST:%dms", lbCost.Milliseconds()))
+		durationCost = append(durationCost, fmt.Sprintf("schedule_time:%dms", lbCost.Milliseconds()))
 	}
 
-	durationCost = append(durationCost, fmt.Sprintf("PRE:%dms", m.PreprocessCost.Milliseconds()))
-	durationCost = append(durationCost, fmt.Sprintf("POST:%dms", m.PostprocessCost.Milliseconds()))
+	durationCost = append(durationCost, fmt.Sprintf("pre_process:%dms", m.PreprocessCost.Milliseconds()))
+	durationCost = append(durationCost, fmt.Sprintf("post_process:%dms", m.PostprocessCost.Milliseconds()))
 
 	if !m.PrefillTime.IsZero() && !m.BalanceTime.IsZero() {
 		prefillCost := m.PrefillTime.Sub(m.BalanceTime)
@@ -113,10 +113,10 @@ func (m *RequestStats) String() string {
 
 	// Add retry information
 	if m.RetryCount > 0 {
-		durationCost = append(durationCost, fmt.Sprintf("RETRY:%d", m.RetryCount))
+		durationCost = append(durationCost, fmt.Sprintf("retry:%d", m.RetryCount))
 	}
 	if len(m.FailedInstances) > 0 {
-		durationCost = append(durationCost, fmt.Sprintf("FAILED_INST:%v", m.FailedInstances))
+		durationCost = append(durationCost, fmt.Sprintf("failed_insts:%v", m.FailedInstances))
 	}
 
 	return strings.Join(durationCost, ",")

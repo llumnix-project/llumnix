@@ -209,11 +209,6 @@ func (h *OpenAIHandler) unMarshalResponse(reqCtx *types.RequestContext, data []b
 				return fmt.Errorf("failed to unmarshal response")
 			}
 			klog.V(3).Infof("[%s] unMarshalResponse: got chat completion response: %v", reqCtx.Id, response, response)
-
-			if isResponseContentEmpty(&response) {
-				klog.Warningf("[%s] unMarshalResponse: response content is empty", reqCtx.Id)
-				return fmt.Errorf("response content is empty: %s", string(data))
-			}
 			reqCtx.LLMRequest.ChatCompletionResponse = &response
 		}
 	case protocol.OpenAICompletion:
@@ -263,6 +258,13 @@ func (h *OpenAIHandler) marshalResponse(reqCtx *types.RequestContext) ([]byte, e
 			if reqCtx.LLMRequest.ChatCompletionResponse == nil {
 				return nil, nil
 			}
+
+			if isResponseContentEmpty(reqCtx.LLMRequest.ChatCompletionResponse) {
+				klog.Warningf("[%s] unMarshalResponse: response content is empty", reqCtx.Id)
+				data, _ := json.Marshal(reqCtx.LLMRequest.ChatCompletionResponse)
+				return nil, fmt.Errorf("response content is empty: %s", string(data))
+			}
+
 			return json.Marshal(reqCtx.LLMRequest.ChatCompletionResponse)
 		}
 	case protocol.OpenAICompletion:
