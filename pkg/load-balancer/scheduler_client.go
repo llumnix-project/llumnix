@@ -36,13 +36,23 @@ type SchedulerClient struct {
 
 func NewSchedulerClient(config *options.Config) *SchedulerClient {
 	// create scheduler resolver
-	if len(config.LlmScheduler) == 0 {
+	if len(config.LlmScheduler) == 0 && len(config.LocalTestSchedulerIP) == 0 {
 		klog.Error("llm scheduler service config is empty.")
 		return nil
 	}
 
 	schResolver := resolver.CreateSchedulerResolver(config)
-	kac := keepalive.NewKeepAliveClient(config.LlmScheduler, config.ServiceToken, schResolver)
+	if schResolver == nil {
+		klog.Error("create scheduler resolver failed.")
+		return nil
+	}
+
+	// Use LocalTestSchedulerIP if available, otherwise use LlmScheduler
+	schedulerName := config.LlmScheduler
+	if len(config.LocalTestSchedulerIP) > 0 {
+		schedulerName = config.LocalTestSchedulerIP
+	}
+	kac := keepalive.NewKeepAliveClient(schedulerName, config.ServiceToken, schResolver)
 
 	cb := &SchedulerClient{
 		config:    config,
@@ -52,7 +62,7 @@ func NewSchedulerClient(config *options.Config) *SchedulerClient {
 
 	kac.StartAndAwaitReady()
 
-	klog.Infof("create llm scheduler balancer(%s) successfully.", config.LlmScheduler)
+	klog.Infof("create llm scheduler balancer(%s) successfully.", schedulerName)
 	return cb
 }
 

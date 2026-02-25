@@ -6,6 +6,7 @@ import (
 	"io"
 	"llm-gateway/pkg/consts"
 	"net/http"
+	"os"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -75,6 +76,9 @@ func (m *MetricContext) run() {
 }
 
 func init() {
-	metricContext := newMetricContext()
-	go metricContext.run()
+	name := os.Getenv("WORKER_NAME")
+	if name == "llm-gateway" || name == "llm-scheduler" {
+		metricContext := newMetricContext()
+		go metricContext.run()
+	}
 }

@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -144,31 +143,23 @@ func (lgs *LlmGatewayService) healthz(w http.ResponseWriter, r *http.Request) {
 //   - int: HTTP status code
 //   - string: Response body in JSON format
 func (lgs *LlmGatewayService) convertErrorResponse(msg *types.ResponseMsg) (int, []byte) {
+
+	if msg.Err == nil {
+		return http.StatusOK, []byte(msg.Message)
+	}
+
+	var upstreamErr *consts.UpstreamError
+	if errors.As(msg.Err, &upstreamErr) {
+		return upstreamErr.StatusCode, upstreamErr.Body
+	}
+
 	switch msg.Err {
 	case consts.ErrorNoAvailableEndpoint:
 		return http.StatusServiceUnavailable, []byte(`{"error": {"code": 503, "message": "no available inference worker"}}`)
 	case consts.ErrorRateLimitExceeded:
 		return http.StatusTooManyRequests, []byte(`{"error": {"code": 429, "message": "rate limit exceeded"}}`)
-	case consts.ErrorBackendBadRequest:
-		// Parse backend error response to extract specific error details
-		var response types.ErrorResponse
-		err := json.Unmarshal([]byte(msg.Message), &response)
-		if err != nil {
-			klog.Warningf("invalid bad backend bad request: %s", msg.Message)
-			return http.StatusBadRequest, []byte("{}")
-		}
-		if json.Valid([]byte(response.Error)) {
-			return response.Code, []byte(response.Error)
-		} else {
-			return response.Code, []byte(fmt.Sprintf(`{"error": {"code": %d, "message": "%s"}}`, response.Code, response.Error))
-		}
-
 	default:
-		if msg.Err == nil {
-			return http.StatusOK, []byte(msg.Message)
-		} else {
-			return http.StatusBadRequest, []byte(fmt.Sprintf(`{"error": {"code": 400, "message": "%s"}}`, msg.Err.Error()))
-		}
+		return http.StatusBadRequest, []byte(msg.Err.Error())
 	}
 }
 
@@ -281,7 +272,7 @@ func (lgs *LlmGatewayService) externalRouteRequest(reqCtx *types.RequestContext,
 	// Try do external request
 	originURL := reqCtx.HttpRequest.Request.URL.String()
 	url := firstDst.JoinURL(originURL)
-	if ok := TrySimpleHTTPProxy(lgs.simpleClient, url, reqCtx); ok {
+	if err := TrySimpleHTTPProxy(lgs.simpleClient, url, reqCtx); err == nil {
 		return nil
 	}
 
@@ -301,35 +292,51 @@ func (lgs *LlmGatewayService) unknownRouteRequest(reqCtx *types.RequestContext) 
 // by rescheduling to different workers up to config.RetryCount times.
 // When all retries are exhausted, it triggers router fallback if available.
 func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext, h handler.RequestHandler) {
-	defer close(reqCtx.ResponseChan)
+	defer func() {
+		klog.V(3).Infof("request [%s] internalRouteRequest end", reqCtx.Id)
+		close(reqCtx.ResponseChan)
+	}()
 	reqCtx.TriggerPreRequest()
 
+	var originErr error
 	maxRetries := lgs.config.RetryCount
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
 			// Reschedule to a different worker for retry
-			if err := lgs.doSchedule(reqCtx); err != nil {
+			schResult, err := lgs.balancer.Get(reqCtx)
+			if err != nil {
+				klog.V(3).Infof("request [%s] scheduling failed: %v", reqCtx.Id, err)
+				if !router.GetServiceRouter().CanFallback(reqCtx) {
+					reqCtx.WriteErrorResponse(originErr)
+					return
+				}
+				if e := lgs.tryFallback(reqCtx); e != nil {
+					reqCtx.WriteErrorResponse(e)
+				}
 				return
 			}
+			klog.V(3).Infof("request [%s] scheduled to %s", reqCtx.Id, schResult.String())
+			reqCtx.ScheduleCtx.ScheduleResults = schResult
+
 		}
 
 		// Execute the handler
-		err := h.Handle(reqCtx)
-		if err == nil {
+		originErr = h.Handle(reqCtx)
+		if originErr == nil {
 			break
 		}
 
 		// Check if error is retryable and get failed instance info
 		var retryableErr consts.RetryableError
-		if !errors.As(err, &retryableErr) || !retryableErr.IsRetryable() {
-			klog.Warningf("request [%s] failed with error: %v", reqCtx.Id, err)
-			reqCtx.WriteErrorResponse(err)
+		if !errors.As(originErr, &retryableErr) || !retryableErr.IsRetryable() {
+			klog.Warningf("request [%s] failed with error: %v", reqCtx.Id, originErr)
+			reqCtx.WriteErrorResponse(originErr)
 			return
 		}
 
 		// Check if this is the last attempt
 		if attempt == maxRetries {
-			klog.Warningf("request [%s] all %d retries exhausted, last error: %v", reqCtx.Id, maxRetries, err)
+			klog.Warningf("request [%s] all %d retries exhausted, last error: %v", reqCtx.Id, maxRetries, originErr)
 			lgs.tryFallback(reqCtx)
 			return
 		}
@@ -341,7 +348,7 @@ func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext,
 		}
 		reqCtx.RequestStats.RetryCount++
 
-		klog.Warningf("request [%s] attempt %d failed with retryable error: %v, will retry", reqCtx.Id, attempt, err)
+		klog.Warningf("request [%s] attempt %d failed with retryable error: %v, will retry", reqCtx.Id, attempt, originErr)
 
 		// try backoff: 10ms, 20ms, 40ms...
 		backoff := time.Duration(10*(1<<attempt)) * time.Millisecond
@@ -356,6 +363,7 @@ func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext,
 
 // tryFallback attempts router fallback first, sends error if fallback fails or unavailable.
 func (lgs *LlmGatewayService) tryFallback(reqCtx *types.RequestContext) error {
+	var err error
 	tryCnt := 0
 	serviceRouter := router.GetServiceRouter()
 	// Try all available fallback configurations
@@ -375,7 +383,8 @@ func (lgs *LlmGatewayService) tryFallback(reqCtx *types.RequestContext) error {
 		}
 
 		// Try to proxy the request
-		if ok := TrySimpleHTTPProxy(lgs.simpleClient, url, reqCtx); ok {
+		err = TrySimpleHTTPProxy(lgs.simpleClient, url, reqCtx)
+		if err == nil {
 			return nil
 		}
 		tryCnt += 1
@@ -391,21 +400,26 @@ func (lgs *LlmGatewayService) tryFallback(reqCtx *types.RequestContext) error {
 		}
 		time.Sleep(backoff)
 	}
-	if tryCnt <= 0 {
-		return nil
-	}
-	klog.Warningf("request [%s] all %d fallback attempts failed", reqCtx.Id, tryCnt)
-	return fmt.Errorf("all fallback attempts failed for request %s", reqCtx.Id)
+	klog.Warningf("request [%s] all %d fallback attempts failed: %v", reqCtx.Id, tryCnt, err)
+	return fmt.Errorf("request %s all fallback attempts failed: %v", reqCtx.Id, err)
 }
 
 // doSchedule schedules the request using the balancer
 func (lgs *LlmGatewayService) doSchedule(reqCtx *types.RequestContext) error {
 	schResult, err := lgs.balancer.Get(reqCtx)
 	if err != nil {
-		if e := lgs.tryFallback(reqCtx); e != nil {
+		klog.V(3).Infof("request [%s] scheduling failed: %v", reqCtx.Id, err)
+		if router.GetServiceRouter().CanFallback(reqCtx) {
+			if e := lgs.tryFallback(reqCtx); e != nil {
+				reqCtx.WriteErrorResponse(e)
+				return e
+			} else {
+				return nil
+			}
+		} else {
 			reqCtx.WriteErrorResponse(err)
+			return err
 		}
-		return err
 	}
 	klog.V(3).Infof("request [%s] scheduled to %s", reqCtx.Id, schResult.String())
 	reqCtx.ScheduleCtx.ScheduleResults = schResult
@@ -426,9 +440,20 @@ func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext, hand
 		// Match internal route
 		// Note: Scheduling must occur before starting a new coroutine, and its operations must occupy a worker thread.
 		// This is necessary to provide feedback and ensure the request is blocked in the queue.
-		if err := lgs.doSchedule(reqCtx); err != nil {
+		schResult, err := lgs.balancer.Get(reqCtx)
+		if err != nil {
+			klog.V(3).Infof("request [%s] scheduling failed: %v", reqCtx.Id, err)
+			if serviceRouter.CanFallback(reqCtx) {
+				if e := lgs.tryFallback(reqCtx); e != nil {
+					reqCtx.WriteErrorResponse(e)
+				}
+			} else {
+				reqCtx.WriteErrorResponse(err)
+			}
 			return
 		}
+		klog.V(3).Infof("request [%s] scheduled to %s", reqCtx.Id, schResult.String())
+		reqCtx.ScheduleCtx.ScheduleResults = schResult
 		go lgs.internalRouteRequest(reqCtx, handler)
 	case router.RouteExternal:
 		// Match external route
@@ -736,18 +761,17 @@ func (lgs *LlmGatewayService) LogRequestAccess(req *types.RequestContext) {
 	workSize := int(lgs.numReqs.Load()) - queueSize - schSize // Requests being inferred
 
 	// Log detailed request completion information
-	logging.Logf("Request completed [%s] status:%d,method:%s,schedule:%s,url:%s;%s;input_tokens:%d,total_tokens:%d;queue:%d,sch:%d,work:%d;retry:%d,model:%s",
+	logging.Logf("Request completed [%s] status:%d,method:%s,url:%s;schedule:%s,%s;input_tokens:%d,total_tokens:%d;queue:%d,sch:%d,work:%d,model:%s",
 		req.Id,
 		httpReq.StatusCode,
 		httpReq.Request.Method,
-		req.ScheduleCtx.ScheduleResults.String(),
 		httpReq.Request.URL.String(),
+		req.ScheduleCtx.ScheduleResults.String(),
 		stats.String(),
 		req.GetInputTokenLen(),
 		req.GetTotalTokenLen(),
 		queueSize,
 		schSize,
 		workSize,
-		stats.RetryCount,
 		req.GetRequestModel())
 }

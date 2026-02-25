@@ -245,8 +245,8 @@ func (r *CompletionRequest) Clone() *CompletionRequest {
 	// Deep copy StreamOptions pointer
 	if r.StreamOptions != nil {
 		cloned.StreamOptions = &StreamOptions{
-			IncludeUsage:           r.StreamOptions.IncludeUsage,
-			IncludeContinuousUsage: r.StreamOptions.IncludeContinuousUsage,
+			IncludeUsage:         r.StreamOptions.IncludeUsage,
+			ContinuousUsageStats: r.StreamOptions.ContinuousUsageStats,
 		}
 	}
 

@@ -42,11 +42,15 @@ func NewRoundRobinBalancer(r resolver.LLMResolver) *RoundRobinBalancer {
 				lb.mu.Lock()
 				lb.workers = append(lb.workers, workers...)
 				lb.mu.Unlock()
+				for _, w := range workers {
+					klog.Infof("add backend service endpoint: %s/%s", w.Role, w.String())
+				}
 			case workers := <-lb.delChan:
 				lb.mu.Lock()
 				for _, w := range workers {
 					for i := 0; i < len(lb.workers); i++ {
 						if lb.workers[i].Id() == w.Id() {
+							klog.Infof("remove backend service endpoint: %s/%s", w.Role, w.String())
 							lb.workers = append(lb.workers[:i], lb.workers[i+1:]...)
 							break
 						}
@@ -60,7 +64,7 @@ func NewRoundRobinBalancer(r resolver.LLMResolver) *RoundRobinBalancer {
 	return lb
 }
 
-func (rrb *RoundRobinBalancer) Get(*types.RequestContext) (types.ScheduledResult, error) {
+func (rrb *RoundRobinBalancer) Get(reqCtx *types.RequestContext) (types.ScheduledResult, error) {
 	rrb.mu.Lock()
 	defer rrb.mu.Unlock()
 
@@ -68,9 +72,30 @@ func (rrb *RoundRobinBalancer) Get(*types.RequestContext) (types.ScheduledResult
 		return nil, consts.ErrorNoAvailableEndpoint
 	}
 
+	// Filter out excluded instances
+	availableWorkers := rrb.filterExcludedWorkers(reqCtx)
+	if len(availableWorkers) == 0 {
+		return nil, consts.ErrorNoAvailableEndpoint
+	}
+
 	rrb.currentIndex++
-	index := rrb.currentIndex % uint64(len(rrb.workers))
-	return types.ScheduledResult{rrb.workers[index]}, nil
+	index := rrb.currentIndex % uint64(len(availableWorkers))
+	return types.ScheduledResult{availableWorkers[index]}, nil
+}
+
+// filterExcludedWorkers filters out workers that are in the excluded instances list.
+func (rrb *RoundRobinBalancer) filterExcludedWorkers(reqCtx *types.RequestContext) types.LLMWorkerSlice {
+	if reqCtx.ScheduleCtx == nil || len(reqCtx.ScheduleCtx.ExcludedInstances) == 0 {
+		return rrb.workers
+	}
+
+	filtered := make(types.LLMWorkerSlice, 0, len(rrb.workers))
+	for _, worker := range rrb.workers {
+		if _, excluded := reqCtx.ScheduleCtx.ExcludedInstances[worker.Id()]; !excluded {
+			filtered = append(filtered, worker)
+		}
+	}
+	return filtered
 }
 
 func (rrb *RoundRobinBalancer) Release(*types.RequestContext, *types.LLMWorker) {}

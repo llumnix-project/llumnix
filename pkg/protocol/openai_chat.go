@@ -265,9 +265,8 @@ type StreamOptions struct {
 	// The usage field on this chunk shows the token usage statistics for the entire request,
 	// and the choices field will always be an empty array.
 	// All other chunks will also include a usage field, but with a null value.
-	IncludeUsage           bool `json:"include_usage"`
-	IncludeContinuousUsage bool `json:"include_continuous_usage,omitempty"` // vllm
-	ContinuousUsageStats   bool `json:"continuous_usage_stats,omitempty"`   // sglang
+	IncludeUsage         bool `json:"include_usage"`
+	ContinuousUsageStats bool `json:"continuous_usage_stats,omitempty"`
 }
 
 type ToolType string
@@ -583,8 +582,8 @@ func (r *ChatCompletionRequest) Clone() *ChatCompletionRequest {
 	// Deep copy StreamOptions pointer
 	if r.StreamOptions != nil {
 		cloned.StreamOptions = &StreamOptions{
-			IncludeUsage:           r.StreamOptions.IncludeUsage,
-			IncludeContinuousUsage: r.StreamOptions.IncludeContinuousUsage,
+			IncludeUsage:         r.StreamOptions.IncludeUsage,
+			ContinuousUsageStats: r.StreamOptions.ContinuousUsageStats,
 		}
 	}
 

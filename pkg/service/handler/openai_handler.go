@@ -116,8 +116,12 @@ func (h *OpenAIHandler) unmarshalRequest(reqCtx *types.RequestContext) error {
 			return fmt.Errorf("Invalid ChatCompletionRequest format")
 		}
 		reqCtx.LLMRequest.Protocol = protocol.OpenAIChatCompletion
-		reqCtx.LLMRequest.ChatCompletionRequest = &chatCompletion
 		reqCtx.LLMRequest.OriginChatCompletionRequest = chatCompletion.Clone()
+		chatCompletion.StreamOptions = &protocol.StreamOptions{
+			IncludeUsage:         true,
+			ContinuousUsageStats: true,
+		}
+		reqCtx.LLMRequest.ChatCompletionRequest = &chatCompletion
 
 		// Now, the backend protocol here is consistent with the input protocol.
 		// If a converter is implemented later, it will be modified there.
@@ -131,8 +135,13 @@ func (h *OpenAIHandler) unmarshalRequest(reqCtx *types.RequestContext) error {
 			return fmt.Errorf("Invalid CompletionRequest format")
 		}
 		reqCtx.LLMRequest.Protocol = protocol.OpenAICompletion
-		reqCtx.LLMRequest.CompletionRequest = &completionRequest
 		reqCtx.LLMRequest.OriginCompletionRequest = completionRequest.Clone()
+		completionRequest.StreamOptions = &protocol.StreamOptions{
+			IncludeUsage:         true,
+			ContinuousUsageStats: true,
+		}
+		reqCtx.LLMRequest.CompletionRequest = &completionRequest
+
 		reqCtx.LLMRequest.BackendProtocol = protocol.OpenAICompletion
 	default:
 		// Unsupported URL path
@@ -168,8 +177,19 @@ func (h *OpenAIHandler) ParseRequest(reqCtx *types.RequestContext) error {
 	return nil
 }
 
+func isResponseContentEmpty(response *protocol.ChatCompletionResponse) bool {
+	if response == nil || response.Choices == nil || len(response.Choices) == 0 {
+		return true
+	}
+	if response.Choices[0].Message.Content == "" && response.Choices[0].Message.ReasoningContent == "" {
+		return true
+	}
+	return false
+}
+
 func (h *OpenAIHandler) unMarshalResponse(reqCtx *types.RequestContext, data []byte) error {
 	stream := reqCtx.InferenceStream()
+	klog.V(3).Infof("[%s] unMarshalResponse: streaming=%v, protocol=%s", reqCtx.Id, stream, reqCtx.LLMRequest.BackendProtocol)
 	switch reqCtx.LLMRequest.BackendProtocol {
 	case protocol.OpenAIChatCompletion:
 		if stream {
@@ -179,6 +199,7 @@ func (h *OpenAIHandler) unMarshalResponse(reqCtx *types.RequestContext, data []b
 				klog.Warningf("failed to unmarshal response: %v, data: %s", err, string(data))
 				return fmt.Errorf("failed to unmarshal response")
 			}
+			klog.V(3).Infof("[%s] unMarshalResponse: got chat completion stream response: %v", reqCtx.Id, response)
 			reqCtx.LLMRequest.ChatCompletionStreamResponse = &response
 		} else {
 			var response protocol.ChatCompletionResponse
@@ -186,6 +207,12 @@ func (h *OpenAIHandler) unMarshalResponse(reqCtx *types.RequestContext, data []b
 			if err != nil {
 				klog.Warningf("failed to unmarshal response: %v, data: %s", err, string(data))
 				return fmt.Errorf("failed to unmarshal response")
+			}
+			klog.V(3).Infof("[%s] unMarshalResponse: got chat completion response: %v", reqCtx.Id, response, response)
+
+			if isResponseContentEmpty(&response) {
+				klog.Warningf("[%s] unMarshalResponse: response content is empty", reqCtx.Id)
+				return fmt.Errorf("response content is empty: %s", string(data))
 			}
 			reqCtx.LLMRequest.ChatCompletionResponse = &response
 		}
@@ -196,6 +223,7 @@ func (h *OpenAIHandler) unMarshalResponse(reqCtx *types.RequestContext, data []b
 			klog.Warningf("failed to unmarshal response: %v, data: %s", err, string(data))
 			return fmt.Errorf("failed to unmarshal response")
 		}
+		klog.V(3).Infof("[%s] unMarshalResponse: got completion response: %v", reqCtx.Id, response)
 		reqCtx.LLMRequest.CompletionResponse = &response
 	default:
 		return fmt.Errorf("Unsupported protocol: %s", reqCtx.LLMRequest.BackendProtocol)
@@ -229,19 +257,13 @@ func (h *OpenAIHandler) marshalResponse(reqCtx *types.RequestContext) ([]byte, e
 			if reqCtx.LLMRequest.ChatCompletionStreamResponse == nil {
 				return nil, nil
 			}
-			data, err := json.Marshal(reqCtx.LLMRequest.ChatCompletionStreamResponse)
-			// Clear the response to free memory and prevent reuse
-			reqCtx.LLMRequest.ChatCompletionStreamResponse = nil
-			return data, err
+			return json.Marshal(reqCtx.LLMRequest.ChatCompletionStreamResponse)
 		} else {
 			// Handle non-streaming chat completion response
 			if reqCtx.LLMRequest.ChatCompletionResponse == nil {
 				return nil, nil
 			}
-			data, err := json.Marshal(reqCtx.LLMRequest.ChatCompletionResponse)
-			// Clear the response to free memory and prevent reuse
-			reqCtx.LLMRequest.ChatCompletionResponse = nil
-			return data, err
+			return json.Marshal(reqCtx.LLMRequest.ChatCompletionResponse)
 		}
 	case protocol.OpenAICompletion:
 		// Handle text completion response (both streaming and non-streaming)
@@ -250,10 +272,7 @@ func (h *OpenAIHandler) marshalResponse(reqCtx *types.RequestContext) ([]byte, e
 			klog.Warningf("[%s] marshalResponse: no completion response to marshal", reqCtx.Id)
 			return nil, nil
 		}
-		data, err := json.Marshal(reqCtx.LLMRequest.CompletionResponse)
-		// Clear the response to free memory
-		reqCtx.LLMRequest.CompletionResponse = nil
-		return data, err
+		return json.Marshal(reqCtx.LLMRequest.CompletionResponse)
 	default:
 		return nil, fmt.Errorf("Unsupported protocol: %s", reqCtx.LLMRequest.Protocol)
 	}

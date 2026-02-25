@@ -149,11 +149,11 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 			logging.Logf("%s %vms| gateway(%s) request failed: no available endpoint", schReq.Id, time.Since(tStart).Milliseconds(), schReq.GatewayId)
 		} else if errors.Is(err, consts.ErrorRateLimitExceeded) {
 			statusCode = http.StatusTooManyRequests
-			logging.Logf("%s %vms| gateway(%s) request failed: rate limit", schReq.Id, time.Since(tStart).Milliseconds(), schReq.GatewayId, err)
+			logging.Logf("%s %vms| gateway(%s) request failed: rate limit", schReq.Id, time.Since(tStart).Milliseconds(), schReq.GatewayId)
 		} else if errors.Is(err, consts.ErrorRateLimitQueueTimeOut) {
 			statusCode = http.StatusTooManyRequests
 			w.Header().Set("Retry-After", "100")
-			logging.Logf("%s %vms| gateway(%s) request need retry: rate limit queue timeout", schReq.Id, time.Since(tStart).Milliseconds(), schReq.GatewayId, err)
+			logging.Logf("%s %vms| gateway(%s) request need retry: rate limit queue timeout", schReq.Id, time.Since(tStart).Milliseconds(), schReq.GatewayId)
 		} else {
 			statusCode = http.StatusBadRequest
 			logging.Logf("%s %vms| gateway(%s) request failed: %v", schReq.Id, time.Since(tStart).Milliseconds(), schReq.GatewayId, err)

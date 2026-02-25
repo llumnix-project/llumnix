@@ -274,6 +274,9 @@ func (req *LLMRequest) getTotalTokenLen() uint64 {
 		if req.InputTokensLen != 0 {
 			return req.InputTokensLen + req.OutputTokensLen
 		} else {
+			if req.CompletionResponse == nil {
+				return 0
+			}
 			usage := req.CompletionResponse.Usage
 			if usage != nil {
 				return usage.TotalTokens
@@ -282,11 +285,17 @@ func (req *LLMRequest) getTotalTokenLen() uint64 {
 	case protocol.OpenAIChatCompletion:
 		stream := req.inferenceStream()
 		if stream {
+			if req.ChatCompletionStreamResponse == nil {
+				return 0
+			}
 			usage := req.ChatCompletionStreamResponse.Usage
 			if usage != nil {
 				return usage.TotalTokens
 			}
 		} else {
+			if req.ChatCompletionResponse == nil {
+				return 0
+			}
 			usage := req.ChatCompletionResponse.Usage
 			if usage != nil {
 				return usage.TotalTokens
@@ -302,9 +311,13 @@ func (req *LLMRequest) getTotalTokenLen() uint64 {
 func (req *LLMRequest) getInputTokenLen() uint64 {
 	switch req.BackendProtocol {
 	case protocol.OpenAICompletion:
+		// TODO(wingo.zwt): InputTokensLen has value means that the tokenizer has been enabled.
 		if req.InputTokensLen != 0 {
 			return req.InputTokensLen
 		} else {
+			if req.CompletionResponse == nil {
+				return 0
+			}
 			usage := req.CompletionResponse.Usage
 			if usage != nil {
 				return usage.PromptTokens
@@ -313,11 +326,17 @@ func (req *LLMRequest) getInputTokenLen() uint64 {
 	case protocol.OpenAIChatCompletion:
 		stream := req.inferenceStream()
 		if stream {
+			if req.ChatCompletionStreamResponse == nil {
+				return 0
+			}
 			usage := req.ChatCompletionStreamResponse.Usage
 			if usage != nil {
 				return usage.PromptTokens
 			}
 		} else {
+			if req.ChatCompletionResponse == nil {
+				return 0
+			}
 			usage := req.ChatCompletionResponse.Usage
 			if usage != nil {
 				return usage.PromptTokens
@@ -433,14 +452,6 @@ func (s *ScheduleContext) GetExcludedInstanceList() []string {
 		result = append(result, id)
 	}
 	return result
-}
-
-// ErrorResponse is used when the engine returns an error directly.
-// At this time, the Err of ResponseMsg is `consts.ErrorBackendBadRequest`,
-// and the Message is a serialized string.
-type ErrorResponse struct {
-	Code  int    `json:"code"`
-	Error string `json:"error"`
 }
 
 // response message for the http request
@@ -743,7 +754,6 @@ func NewRequestContext(ctx context.Context, r *http.Request, w http.ResponseWrit
 	if len(id) == 0 {
 		id = uuid.New().String()
 	}
-	klog.Infof("Received request: %s", id)
 
 	httpReq := &HttpRequest{Request: r, Writer: w}
 	inferCtx := &ScheduleContext{}

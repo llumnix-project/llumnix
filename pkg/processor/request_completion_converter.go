@@ -111,7 +111,7 @@ func (rt *RequestCompletionConverter) PreProcess(req *types.RequestContext) erro
 			Stop:             chatCompletions.Stop,
 			Seed:             chatCompletions.Seed,
 			Stream:           true,
-			StreamOptions:    &protocol.StreamOptions{IncludeUsage: true, IncludeContinuousUsage: true},
+			StreamOptions:    &protocol.StreamOptions{IncludeUsage: true, ContinuousUsageStats: true},
 			Temperature:      chatCompletions.Temperature,
 			TopP:             chatCompletions.TopP,
 			User:             chatCompletions.User,

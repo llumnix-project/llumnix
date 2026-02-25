@@ -54,7 +54,7 @@ func CreateSchedulerResolver(config *options.Config) Resolver {
 		schResolver, err = BuildResolver(uri, BuildArgs{})
 	}
 	if err != nil {
-		klog.Fatalf("create scheduler resolver failed: %v", err)
+		return nil
 	}
 	return schResolver
 }
@@ -63,6 +63,16 @@ func CreateSchedulerResolver(config *options.Config) Resolver {
 // It supports message bus discovery and EAS service discovery.
 func CreateBackendServiceResolver(config *options.Config, role types.InferRole) LLMResolver {
 	buildArgs := BuildArgs{"role": role.String()}
+
+	// Handle local test mode first
+	if len(config.LocalTestIPs) > 0 {
+		uri := fmt.Sprintf("llm+endpoints://%s", config.LocalTestIPs)
+		r, err := BuildLlmResolver(uri, buildArgs)
+		if err != nil {
+			klog.Fatalf("create endpoints resolver failed: %v", err)
+		}
+		return r
+	}
 
 	switch config.UseDiscovery {
 	case consts.DiscoveryMessageBus:

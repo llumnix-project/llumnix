@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"llm-gateway/pkg/types"
 	"net/http"
@@ -11,14 +12,14 @@ import (
 
 // TrySimpleHTTPProxy attempts to proxy a request to the given URL
 // Returns true if successful, false if failed
-func TrySimpleHTTPProxy(client *http.Client, url string, reqCtx *types.RequestContext) bool {
+func TrySimpleHTTPProxy(client *http.Client, url string, reqCtx *types.RequestContext) error {
 	r := reqCtx.HttpRequest.Request
 	w := reqCtx.HttpRequest.Writer
 
 	// Check if headers have already been sent
 	if reqCtx.HttpRequest.HeaderResponded {
 		klog.Errorf("request [%s] headers already sent, cannot proxy to %s", reqCtx.Id, url)
-		return false
+		return fmt.Errorf("headers already sent")
 	}
 
 	// Create a new request to forward to the backend
@@ -26,7 +27,7 @@ func TrySimpleHTTPProxy(client *http.Client, url string, reqCtx *types.RequestCo
 	proxyReq, err := http.NewRequestWithContext(reqCtx.Context, r.Method, url, bytes.NewBuffer(body))
 	if err != nil {
 		klog.Errorf("request [%s] failed to create proxy request to %s: %v", reqCtx.Id, url, err)
-		return false
+		return fmt.Errorf("failed to create proxy request")
 	}
 
 	// Copy headers from original request
@@ -40,7 +41,7 @@ func TrySimpleHTTPProxy(client *http.Client, url string, reqCtx *types.RequestCo
 	resp, err := client.Do(proxyReq)
 	if err != nil {
 		klog.Errorf("request [%s] failed to forward request to %s: %v", reqCtx.Id, url, err)
-		return false
+		return fmt.Errorf("failed to forward request: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -60,10 +61,10 @@ func TrySimpleHTTPProxy(client *http.Client, url string, reqCtx *types.RequestCo
 	if err != nil {
 		klog.Errorf("request [%s] failed to copy response body from %s: %v", reqCtx.Id, url, err)
 		// Headers already sent, can't recover
-		return false
+		return fmt.Errorf("failed to copy response body: %v", err)
 	}
 
-	return true
+	return nil
 }
 
 // SimpleHTTPProxy forwards the request to a backend endpoint and returns the response to the client

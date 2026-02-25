@@ -35,9 +35,11 @@ var (
 
 func NewRequestStateTracker(config *options.Config) *RequestStateTracker {
 	once.Do(func() {
+		schResolver := resolver.CreateSchedulerResolver(config)
+
 		gTracker = &RequestStateTracker{
 			reqTokenState:     make(map[string]*RequestTokenState),
-			schedulerResolver: resolver.CreateSchedulerResolver(config),
+			schedulerResolver: schResolver,
 			client:            &http.Client{Timeout: 3 * time.Second},
 			config:            config,
 		}
@@ -47,6 +49,10 @@ func NewRequestStateTracker(config *options.Config) *RequestStateTracker {
 }
 
 func (r *RequestStateTracker) CreateRequestState(req *types.RequestContext) {
+	if r.schedulerResolver == nil {
+		return
+	}
+
 	var inferMode, instanceID string
 	if instance := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode); instance != nil {
 		inferMode, instanceID = consts.DecodeInferMode, instance.Id()
@@ -74,6 +80,10 @@ func (r *RequestStateTracker) CreateRequestState(req *types.RequestContext) {
 }
 
 func (r *RequestStateTracker) ReportPrefillComplete(req *types.RequestContext) {
+	if r.schedulerResolver == nil {
+		return
+	}
+
 	go func() {
 		// Only support normal infer mode, because prefill complete report is not needed for prefill/decode
 		instance := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleNormal)
@@ -101,6 +111,10 @@ func (r *RequestStateTracker) ReportPrefillComplete(req *types.RequestContext) {
 }
 
 func (r *RequestStateTracker) UpdateRequestState(req *types.RequestContext) {
+	if r.schedulerResolver == nil {
+		return
+	}
+
 	r.mux.Lock()
 	defer r.mux.Unlock()
 	id := req.Id
@@ -110,6 +124,10 @@ func (r *RequestStateTracker) UpdateRequestState(req *types.RequestContext) {
 }
 
 func (r *RequestStateTracker) DeleteRequestState(id string) {
+	if r.schedulerResolver == nil {
+		return
+	}
+
 	r.mux.Lock()
 	defer r.mux.Unlock()
 	delete(r.reqTokenState, id)
@@ -135,6 +153,10 @@ type RequestTokenState struct {
 type RequestTokenStateArray = []RequestTokenState
 
 func (r *RequestStateTracker) report() {
+	if r.schedulerResolver == nil {
+		return
+	}
+
 	reports := make(RequestTokenStateArray, 0, 32)
 	r.mux.RLock()
 	for _, rs := range r.reqTokenState {
@@ -158,6 +180,10 @@ func (r *RequestStateTracker) report() {
 }
 
 func (r *RequestStateTracker) doSubmitReport(reports RequestTokenStateArray) error {
+	if r.schedulerResolver == nil {
+		return nil
+	}
+
 	endpoint, err := r.schedulerResolver.GetEndpoints()
 	if len(endpoint) == 0 || err != nil {
 		return fmt.Errorf("no scheduler endpoint found")
@@ -201,6 +227,10 @@ RETRY:
 }
 
 func (r *RequestStateTracker) reportLoop() {
+	if r.schedulerResolver == nil {
+		return
+	}
+
 	defer func() {
 		if e := recover(); e != nil {
 			klog.Warningf("request report loop crashed , err: %s\ntrace:%s", e, string(debug.Stack()))
@@ -212,79 +242,3 @@ func (r *RequestStateTracker) reportLoop() {
 		r.report()
 	}
 }
-
-// // RequestTokenState indicates the token length of the current request processing
-// // it record token length when enable tokenizer, otherwise it records message text count
-// type RequestTokenState struct {
-// 	req        *types.RequestContext
-// 	Model      string
-// 	InferMode  string
-// 	InstanceId string
-// 	GatewayId  string
-
-// 	mx sync.Mutex
-
-// 	numTokens     uint64 // directly update with current num tokens
-// 	lastNumTokens uint64 // last num tokens
-// 	ResponseText  string // current response text
-// }
-
-// func NewRequestTokenState(
-// 	req *types.RequestContext, model string, inferMode string, instanceId string, gatewayId string) *RequestTokenState {
-// 	var numTokens uint64
-// 	promptTokens, err1 := req.GetPromptTokens()
-// 	if err1 != nil {
-// 		// fallback to use string length as an alternative
-// 		promptText, err2 := req.GetPromptString()
-// 		if err2 != nil {
-// 			klog.Errorf("Failed to create request: %s, get prompt failed: %v, %v", req.Id, err1, err2)
-// 			return nil
-// 		}
-// 		numTokens = uint64(len(promptText))
-// 	} else {
-// 		numTokens = uint64(len(promptTokens))
-// 	}
-
-// 	return &RequestTokenState{
-// 		req:           req,
-// 		lastNumTokens: numTokens,
-// 		Model:         model,
-// 		InferMode:     inferMode,
-// 		InstanceId:    instanceId,
-// 		GatewayId:     gatewayId,
-// 	}
-// }
-
-// func (rs *RequestTokenState) UpdateNumTokens(num uint64) {
-// 	rs.mx.Lock()
-// 	defer rs.mx.Unlock()
-// 	rs.numTokens = num
-// }
-
-// func (rs *RequestTokenState) AppendResponseText(text string) {
-// 	rs.mx.Lock()
-// 	defer rs.mx.Unlock()
-// 	rs.ResponseText += text
-// }
-
-// func (rs *RequestTokenState) GetNumTokens() uint64 {
-// 	rs.mx.Lock()
-// 	defer rs.mx.Unlock()
-// 	count := rs.numTokens
-// 	if count != 0 {
-// 		return count
-// 	}
-// 	tk, err := tokenizer.GetTokenizer()
-// 	if err != nil {
-// 		count = uint64(len(rs.ResponseText))
-// 	} else {
-// 		tokens, err := tk.Encode(rs.ResponseText, false)
-// 		if err != nil {
-// 			klog.Warningf("Failed to encode response text: %v", err)
-// 		}
-// 		count = uint64(len(tokens))
-// 	}
-// 	rs.ResponseText = ""
-// 	rs.lastNumTokens += count
-// 	return rs.lastNumTokens
-// }

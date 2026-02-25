@@ -83,6 +83,8 @@ func DoRequest(req *http.Request, client *http.Client, body []byte, worker *type
 			break
 		}
 
+		klog.V(3).Infof("failed to do request: %v", err)
+
 		// Log detailed error information for debugging
 		if netErr, ok := err.(net.Error); ok {
 			// Timeout connections do not need to be retried.
