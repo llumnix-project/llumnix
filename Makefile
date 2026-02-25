@@ -77,19 +77,19 @@ blade-kvt-install:
 	./scripts/install_blade_kvt.sh
 
 .PHONY: simple-tests
-simple-tests: discovery-proto-build gateway-build scheduler-build
+simple-tests: llumlet-proto-build discovery-proto-build gateway-build scheduler-build
 	pytest -x -v -s ./tests/local/vllm_e2e.py::test_simple_requests
 
 .PHONY: migration-tests
-migration-tests: discovery-proto-build gateway-build scheduler-build
+migration-tests: llumlet-proto-build discovery-proto-build gateway-build scheduler-build
 	pytest -x -v -s ./tests/local/vllm_e2e.py::test_migration
 
 .PHONY: migration-correctness-tests
-migration-correctness-tests: discovery-proto-build gateway-build scheduler-build
+migration-correctness-tests: llumlet-proto-build discovery-proto-build gateway-build scheduler-build
 	pytest -x -v -s ./tests/local/vllm_mig_correctness.py::test_migration_correctness
 
 .PHONY: benchmark-tests
-benchmark-tests: discovery-proto-build gateway-build scheduler-build
+benchmark-tests: llumlet-proto-build discovery-proto-build gateway-build scheduler-build
 	PYTHONPATH=$(shell pwd) pytest -x -v -s ./tests/local/vllm_benchmark.py::test_benchmark
 
 .PHONY: e2e-test
