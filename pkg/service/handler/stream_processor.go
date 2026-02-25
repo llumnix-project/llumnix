@@ -58,43 +58,43 @@ func NewStreamProcessor(parser ChunkParser, writer ChunkWriter) *StreamProcessor
 // The actual parsing and writing logic is delegated to the injected strategy implementations.
 func (sp *StreamProcessor) ProcessStream(req *types.RequestContext, chunkChan <-chan StreamChunk) {
 
-	isFirst := true
-	for chunk := range chunkChan {
+	processFunc := func(isFirst bool, chunk StreamChunk) bool {
 		klog.V(3).Infof("received stream chunk: %s, err: %v", string(chunk.Data), chunk.err)
 
-		// Track timing metrics: first chunk triggers prefill completion, subsequent chunks trigger decode
-		if isFirst {
-			req.TriggerPostPrefillStream()
-			isFirst = false
-		} else {
-			req.TriggerPostDecodeStreamChunk()
-		}
+		defer func() {
+			// Track timing metrics: first chunk triggers prefill completion, subsequent chunks trigger decode
+			if isFirst {
+				req.TriggerPostPrefillStream()
+			} else {
+				req.TriggerPostDecodeStreamChunk()
+			}
+		}()
 
 		// Handle unexpected streaming errors (early return for exception path)
 		if chunk.err != nil && chunk.err != io.EOF {
 			klog.Errorf("request %s error during stream inference: %v", req.Id, chunk.err)
 			req.WriteErrorResponse(chunk.err)
-			return
+			return true
 		}
 
 		// Handle normal stream end - process any remaining data before completing
 		if chunk.err == io.EOF {
 			if len(chunk.Data) == 0 {
-				return
+				return true
 			}
 			// Parse and process the final chunk that came with EOF
 			err := sp.parser.ParseChunk(req, chunk.Data)
 			if err != nil && err != io.EOF {
 				klog.Errorf("failed to parse final response: %v", err)
 				req.WriteErrorResponse(err)
-				return
+				return true
 			}
 			if err := sp.writer.ProcessAndWriteChunk(req, true); err != nil {
 				klog.Errorf("failed to process final chunk: %v", err)
 				req.WriteErrorResponse(err)
-				return
+				return true
 			}
-			return
+			return true
 		}
 
 		// Parse the chunk data into internal response structure
@@ -102,14 +102,14 @@ func (sp *StreamProcessor) ProcessStream(req *types.RequestContext, chunkChan <-
 		if err != nil && err != io.EOF {
 			klog.Errorf("failed to parse response: %v", err)
 			req.WriteErrorResponse(err)
-			return
+			return true
 		}
 
 		// Process through post-processor chain and write to client
 		if err := sp.writer.ProcessAndWriteChunk(req, (err == io.EOF)); err != nil {
 			klog.Errorf("failed to process and write chunk: %v", err)
 			req.WriteErrorResponse(err)
-			return
+			return true
 		}
 
 		// Check if maximum token limit has been reached
@@ -118,7 +118,17 @@ func (sp *StreamProcessor) ProcessStream(req *types.RequestContext, chunkChan <-
 			if err := sp.writer.ProcessAndWriteChunk(req, true); err != nil {
 				klog.Errorf("failed to write final chunk: %v", err)
 			}
+			return true
+		}
+
+		return false
+	}
+
+	isFirst := true
+	for chunk := range chunkChan {
+		if processFunc(isFirst, chunk) {
 			return
 		}
+		isFirst = false
 	}
 }

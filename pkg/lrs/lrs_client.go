@@ -6,6 +6,7 @@ import (
 	"llm-gateway/pkg/metrics"
 	"llm-gateway/pkg/types"
 	"runtime/debug"
+	"strconv"
 	"sync"
 	"time"
 
@@ -251,6 +252,7 @@ func (lrsClient *LocalRealtimeStateClient) SubmitMetric() {
 					{Name: "model", Value: iv.GetInstance().Model},
 					{Name: "address", Value: address.String()},
 					{Name: "infer_role", Value: iv.GetInferMode()},
+					{Name: "dp_rank", Value: strconv.Itoa(iv.worker.DPRank)},
 				}
 				metrics.StatusValue("instance_tokens", labels).Set(float32(tokens))
 				metrics.StatusValue("instance_requests", labels).Set(float32(reqs))

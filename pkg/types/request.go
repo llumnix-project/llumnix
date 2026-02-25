@@ -389,6 +389,50 @@ func (req *AnthropicRequest) getPromptString() (string, error) {
 	return string(jsonData[0 : len(jsonData)-1]), nil
 }
 
+func (req *AnthropicRequest) getInputTokenLen() uint64 {
+	stream := req.Request.Stream
+	if stream {
+		if req.OpenAIStreamResponse == nil {
+			return 0
+		}
+		usage := req.OpenAIStreamResponse.Usage
+		if usage != nil {
+			return usage.PromptTokens
+		}
+	} else {
+		if req.OpenAIResponse == nil {
+			return 0
+		}
+		usage := req.OpenAIResponse.Usage
+		if usage != nil {
+			return usage.PromptTokens
+		}
+	}
+	return 0
+}
+
+func (req *AnthropicRequest) getTotalTokenLen() uint64 {
+	stream := req.Request.Stream
+	if stream {
+		if req.OpenAIStreamResponse == nil {
+			return 0
+		}
+		usage := req.OpenAIStreamResponse.Usage
+		if usage != nil {
+			return usage.TotalTokens
+		}
+	} else {
+		if req.OpenAIResponse == nil {
+			return 0
+		}
+		usage := req.OpenAIResponse.Usage
+		if usage != nil {
+			return usage.TotalTokens
+		}
+	}
+	return 0
+}
+
 // PDSeparateScheduler handles scheduling operations for different inference stages.
 type PDSeparateScheduler interface {
 	// ScheduleDecode schedules the request for decoding stage.
@@ -631,11 +675,7 @@ func (req *RequestContext) GetInputTokenLen() uint64 {
 	case consts.OpenAIHandlerName:
 		return req.LLMRequest.getInputTokenLen()
 	case consts.AnthropicHandlerName:
-		usage := req.AnthropicRequest.OpenAIResponse.Usage
-		if usage != nil {
-			return usage.PromptTokens
-		}
-		return 0
+		return req.AnthropicRequest.getInputTokenLen()
 	default:
 		klog.Errorf("unsupported request type: %v to get input tokens len", req.RequestType)
 		return 0
@@ -647,12 +687,7 @@ func (req *RequestContext) GetTotalTokenLen() uint64 {
 	case consts.OpenAIHandlerName:
 		return req.LLMRequest.getTotalTokenLen()
 	case consts.AnthropicHandlerName:
-		usage := req.AnthropicRequest.OpenAIResponse.Usage
-		if usage != nil {
-			return usage.TotalTokens
-		} else {
-			return 0
-		}
+		return req.AnthropicRequest.getTotalTokenLen()
 	default:
 		klog.Errorf("unsupported request type: %v to get response usage", req.RequestType)
 		return 0
