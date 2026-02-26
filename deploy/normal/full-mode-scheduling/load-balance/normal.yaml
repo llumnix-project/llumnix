@@ -2,20 +2,12 @@ apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
   name: normal
-  labels:
-    inferenceServing: "true"
-    role: decode
 spec:
   replicas: 1
   leaderWorkerTemplate:
     size: 1
     workerTemplate:
-      metadata:
-        labels:
-          inferenceServing: "true"
-          role: decode
       spec:
-        serviceAccountName: deepseek-r1
         imagePullSecrets:
           - name: aliyun-registry-secret
         terminationGracePeriodSeconds: 30
@@ -190,7 +182,7 @@ spec:
               memory: 256Gi
               nvidia.com/gpu: "4"
         - name: discovery
-          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:discovery-20260130-111823
+          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:discovery-20260226-170427
           command:
             - /bin/bash
             - -c
