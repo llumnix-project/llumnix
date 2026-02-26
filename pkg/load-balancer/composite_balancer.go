@@ -137,12 +137,16 @@ func (bp *CompositeBalancer) getWithFallback(req *types.RequestContext) (types.S
 	return result, err
 }
 
+// localGet handles endpoint selection for local balancer.
+// Handles requests that do not require scheduling, such as model info queries.
+// IMPORTANT: In PD separation scenario, only decode instances are accessed—prefill registers RDMA address
+// which is not directly reachable from gateway.
 func (bp *CompositeBalancer) localGet(req *types.RequestContext) (types.ScheduledResult, error) {
 	switch bp.balanceMode {
 	case LocalBalancer, RemoteBalancer:
 		return bp.localBalancer.Get(req)
 	case PDLocalBalancer, PDRemoteBalancer:
-		return bp.pDSplitLocalGet(req)
+		return bp.decodeLocalBalancer.Get(req)
 	default:
 		panic("unsupported balance mode")
 	}

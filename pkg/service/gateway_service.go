@@ -63,6 +63,18 @@ type LlmGatewayService struct {
 	logInputEnabled bool
 }
 
+// statusCaptureResponseWriter wraps http.ResponseWriter to capture the status code
+type statusCaptureResponseWriter struct {
+	http.ResponseWriter
+	statusCode *int
+}
+
+// WriteHeader captures the status code before writing it
+func (rw *statusCaptureResponseWriter) WriteHeader(code int) {
+	*rw.statusCode = code
+	rw.ResponseWriter.WriteHeader(code)
+}
+
 // NewGatewayService creates a new gateway service instance
 // Parameters:
 //   - c: Gateway configuration
@@ -684,6 +696,8 @@ func (lgs *LlmGatewayService) HandleCountTokens(w http.ResponseWriter, r *http.R
 //   - w: HTTP response writer
 //   - r: HTTP request
 func (lgs *LlmGatewayService) HandleSimpleRequest(w http.ResponseWriter, r *http.Request) {
+	tStart := time.Now()
+
 	// For this scenario, create a request context but disable scheduling
 	reqCtx := types.NewRequestContext(r.Context(), r, w)
 	reqCtx.ScheduleCtx.NeedSchedule = false
@@ -702,8 +716,15 @@ func (lgs *LlmGatewayService) HandleSimpleRequest(w http.ResponseWriter, r *http
 		url = fmt.Sprintf("%s?%s", url, r.URL.RawQuery)
 	}
 
+	// Wrap ResponseWriter to capture status code
+	statusCode := http.StatusOK
+	rw := &statusCaptureResponseWriter{ResponseWriter: w, statusCode: &statusCode}
+
 	// Forward the request to the backend endpoint
-	SimpleHTTPProxy(lgs.simpleClient, url, w, r)
+	SimpleHTTPProxy(lgs.simpleClient, url, rw, r)
+
+	// Log access log
+	logging.Logf("[%s] status_code:%d,response_time:%vms,method:%s,url:%s,sch_results:%s", reqCtx.Id, statusCode, time.Since(tStart).Milliseconds(), r.Method, r.URL.Path, schResult.String())
 }
 
 // Run starts the HTTP server and listens for requests
