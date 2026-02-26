@@ -108,7 +108,7 @@ func NewGatewayService(c *options.Config) *LlmGatewayService {
 			klog.Errorf("create resolver failed: %v", err)
 			return nil
 		}
-		lb = balancer.NewRoundRobinBalancer(r)
+		lb = balancer.NewRoundRobinBalancer(r, c.RetryExcludeScope)
 	}
 	lgs.balancer = lb
 

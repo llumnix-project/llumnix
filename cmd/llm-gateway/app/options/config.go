@@ -55,6 +55,9 @@ type Config struct {
 	// number of retries when forwarding fails
 	RetryCount int
 
+	// exclude scope for retry scheduling, controls whether to exclude only the instance or the entire host
+	RetryExcludeScope string
+
 	// number of coroutines which read the requests from queue
 	WaitQueueThreads int
 
@@ -254,6 +257,7 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&c.ServerlessMode, "serverless-mode", false, "run on serverless")
 
 	flags.IntVar(&c.RetryCount, "retry-count", 2, "gateway forwarding retry count")
+	flags.StringVar(&c.RetryExcludeScope, "retry-exclude-scope", consts.RetryExcludeScopeHost, "exclude scope for retry scheduling, support instance or host")
 	flags.IntVar(&c.WaitQueueThreads, "wait-queue-threads", 5, "number of coroutines which read the requests from queue")
 	flags.IntVar(&c.WaitScheduleTimeout, "wait-schedule-timeout", 10000, "waiting timeout if no free token, unit(milliseconds)")
 	flags.IntVar(&c.WaitScheduleTryPeriod, "wait-schedule-try-period", 1000, "retry period while waiting free tokens, unit(milliseconds)")
@@ -573,6 +577,7 @@ func (c *Config) printConfigSummary() {
 	// Network and connection settings
 	klog.Infof("[Network]")
 	logIfNotEmpty("  retry-count: %d", c.RetryCount)
+	logIfNotEmpty("  retry-exclude-scope: %s", c.RetryExcludeScope)
 	logIfNotEmpty("  wait-queue-threads: %d", c.WaitQueueThreads)
 	logIfNotEmpty("  wait-schedule-timeout: %dms", c.WaitScheduleTimeout)
 	logIfNotEmpty("  wait-schedule-try-period: %dms", c.WaitScheduleTryPeriod)

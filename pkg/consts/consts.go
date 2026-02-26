@@ -121,6 +121,13 @@ const (
 )
 
 const (
+	// RetryExcludeScopeInstance excludes only the specified worker instance
+	RetryExcludeScopeInstance = "instance"
+	// RetryExcludeScopeHost excludes all worker instances on the same host
+	RetryExcludeScopeHost = "host"
+)
+
+const (
 	TokenizerProcessor = "TOKENIZER"
 	RESPONSEFORMATTER  = "RESPONSEFORMATTER"
 )

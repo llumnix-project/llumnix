@@ -63,9 +63,9 @@ func NewCompositeBalancer(config *options.Config) *CompositeBalancer {
 // It creates separate balancers for prefill and decode stages.
 func (bp *CompositeBalancer) setupPDSplitBalancer(config *options.Config) {
 	prefillResolver := resolver.CreateBackendServiceResolver(config, types.InferRolePrefill)
-	bp.prefillLocalBalancer = NewRoundRobinBalancer(prefillResolver)
+	bp.prefillLocalBalancer = NewRoundRobinBalancer(prefillResolver, config.RetryExcludeScope)
 	decodeResolver := resolver.CreateBackendServiceResolver(config, types.InferRoleDecode)
-	bp.decodeLocalBalancer = NewRoundRobinBalancer(decodeResolver)
+	bp.decodeLocalBalancer = NewRoundRobinBalancer(decodeResolver, config.RetryExcludeScope)
 
 	if config.IsPDRoundRobin() {
 		bp.balanceMode = PDLocalBalancer
@@ -80,7 +80,7 @@ func (bp *CompositeBalancer) setupPDSplitBalancer(config *options.Config) {
 func (bp *CompositeBalancer) setupNormalBalancer(config *options.Config) {
 	bp.balanceMode = LocalBalancer
 	r := resolver.CreateBackendServiceResolver(config, types.InferRoleNormal)
-	bp.localBalancer = NewRoundRobinBalancer(r)
+	bp.localBalancer = NewRoundRobinBalancer(r, config.RetryExcludeScope)
 	if config.SchedulePolicy != consts.SchedulePolicyRoundRobin {
 		bp.balanceMode = RemoteBalancer
 		bp.remoteBalancer = NewSchedulerClient(config)

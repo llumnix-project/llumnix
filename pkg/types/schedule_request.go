@@ -48,7 +48,9 @@ type ScheduleRequest struct {
 	InferStage   InferStage   `json:"infer_stage"`
 
 	// Excluded instances for retry scheduling
+	// Exclude scope controls whether to exclude only the instance or the entire host
 	ExcludedInstances []string `json:"excluded_instances,omitempty"`
+	RetryExcludeScope string   `json:"exclude_scope,omitempty"`
 
 	// LLM Prompt
 	PromptNumTokens int      `json:"prompt_num_tokens,omitempty"`

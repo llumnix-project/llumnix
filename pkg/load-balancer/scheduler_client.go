@@ -85,6 +85,7 @@ func (cb *SchedulerClient) createScheduleRequest(req *types.RequestContext) *typ
 		ScheduleMode:      req.ScheduleCtx.ScheduleMode,
 		InferStage:        req.ScheduleCtx.InferStage,
 		ExcludedInstances: req.ScheduleCtx.GetExcludedInstanceList(),
+		RetryExcludeScope: cb.config.RetryExcludeScope,
 	}
 
 	// In the case of tokenizer, prefer to use token ids, otherwise use string length as an alternative.

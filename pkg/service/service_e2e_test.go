@@ -815,9 +815,10 @@ func TestGatewayService_Retry(t *testing.T) {
 	serverAddr1 := strings.TrimPrefix(mockServer1.URL(), "http://")
 	serverAddr2 := strings.TrimPrefix(mockServer2.URL(), "http://")
 
-	// Configure gateway with both servers
+	// Configure gateway with both servers, instance-level exclude scope
 	config := createTestGatewayConfig(serverAddr2 + "," + serverAddr1)
 	config.RetryCount = 2
+	config.RetryExcludeScope = consts.RetryExcludeScopeInstance
 	gateway := NewGatewayService(config)
 	require.NotNil(t, gateway)
 
@@ -843,10 +844,68 @@ func TestGatewayService_Retry(t *testing.T) {
 	resp, body := makeGatewayRequest(t, gatewayServer.URL, "/v1/chat/completions", chatReq)
 
 	t.Logf("Response status: %d, body: %s", resp.StatusCode, string(body))
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	// At least one server should have received requests
+	// Both servers should have received exactly one request (one fail, one success)
 	totalRequests := mockServer1.GetRequestCount() + mockServer2.GetRequestCount()
-	assert.Greater(t, totalRequests, 0)
+	assert.Equal(t, 2, totalRequests)
+	assert.Equal(t, 1, mockServer1.GetRequestCount())
+	assert.Equal(t, 1, mockServer2.GetRequestCount())
+}
+
+// TestGatewayService_Retry_HostScope tests gateway retry behavior when using host-level exclude scope.
+// NOTE: In local test mode, both mock servers run on 127.0.0.1 with different ports, so host scope
+// treats them as the same host. Once one instance on the host fails, all instances on that host are
+// excluded, and retry cannot switch to the other server.
+func TestGatewayService_Retry_HostScope(t *testing.T) {
+	// Create two mock servers
+	mockServer1 := NewMockLLMServer()
+	defer mockServer1.Close()
+	mockServer1.SetShouldFail(true) // First server always fails
+
+	mockServer2 := NewMockLLMServer()
+	defer mockServer2.Close()
+	// Second server works normally, but will share the same host (127.0.0.1)
+
+	serverAddr1 := strings.TrimPrefix(mockServer1.URL(), "http://")
+	serverAddr2 := strings.TrimPrefix(mockServer2.URL(), "http://")
+
+	// Configure gateway with both servers, host-level exclude scope
+	config := createTestGatewayConfig(serverAddr2 + "," + serverAddr1)
+	config.RetryCount = 2
+	config.RetryExcludeScope = consts.RetryExcludeScopeHost
+	gateway := NewGatewayService(config)
+	require.NotNil(t, gateway)
+
+	// Create a router for the gateway
+	router := http.NewServeMux()
+	router.HandleFunc("/v1/chat/completions", gateway.HandleOpenAIRequest)
+
+	gatewayServer := httptest.NewServer(router)
+	defer gatewayServer.Close()
+
+	chatReq := protocol.ChatCompletionRequest{
+		Model: "test-model",
+		Messages: []protocol.ChatCompletionMessage{
+			{
+				Role:    consts.ROLE_USER,
+				Content: "Test retry host scope",
+			},
+		},
+		Stream: false,
+	}
+
+	// Send request
+	resp, body := makeGatewayRequest(t, gatewayServer.URL, "/v1/chat/completions", chatReq)
+
+	t.Logf("[HostScope] Response status: %d, body: %s", resp.StatusCode, string(body))
+	// With host-level exclude scope and both servers on 127.0.0.1, retries cannot switch to the second server.
+	// We only assert that the request does not panic and at least one backend is called.
+	totalRequests := mockServer1.GetRequestCount() + mockServer2.GetRequestCount()
+
+	assert.Equal(t, 1, totalRequests)
+	assert.Equal(t, 1, mockServer1.GetRequestCount())
+	assert.Equal(t, 0, mockServer2.GetRequestCount())
 }
 
 // TestGatewayService_HealthCheck tests health check endpoint.
