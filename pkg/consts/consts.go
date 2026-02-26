@@ -111,8 +111,9 @@ const (
 )
 
 const (
-	KvsMetadataServiceHashAlgoSha256Hex  = "sha256_hex"
-	KvsMetadataServiceHashAlgoSha256CBOR = "sha256_cbor"
+	KvsHashAlgoSha256Hex  = "sha256_hex"
+	KvsHashAlgoSha256CBOR = "sha256_cbor"
+	KvsHashAlgoXxhash     = "xxhash"
 )
 
 // default value
@@ -146,7 +147,7 @@ const (
 	DefaultKvsMetadataServiceRedisClusterPassword = ""
 	DefaultKvsMetadataServiceHttpServerHost       = "0.0.0.0"
 	DefaultKvsMetadataServiceHttpServerPort       = "9003"
-	DefaultKvsMetadataServiceHashAlgo             = KvsMetadataServiceHashAlgoSha256CBOR
+	DefaultKvsHashAlgo             = KvsHashAlgoSha256CBOR
 
 	// Schedule defaults
 	DefaultDispatchTopK                        = 1

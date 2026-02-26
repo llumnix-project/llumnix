@@ -2,18 +2,17 @@ package schedule_policy
 
 import (
 	"context"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	"llumnix/cmd/config"
 	"llumnix/cmd/scheduler/app/options"
 	"llumnix/pkg/cms"
 	"llumnix/pkg/consts"
 	"llumnix/pkg/redis"
+	"llumnix/pkg/scheduler/hasher"
 	"llumnix/pkg/scheduler/kvs"
 	"llumnix/pkg/types"
 )
@@ -80,6 +79,8 @@ func newConfig() *options.SchedulerConfig {
 		FullModeScheduleConfig: config.FullModeScheduleConfig{
 			CmsPullStatusIntervalMs:            500,
 			CmsPullMetadataIntervalMs:          1000,
+			KvsChunkSize:                       1,
+			KvsHashAlgo:                        consts.KvsHashAlgoSha256Hex,
 			DispatchTopK:                       1,
 			DispatchNeutralLoadMetric:          consts.SchedulingMetricKVCacheUsageRatioProjected,
 			DispatchNeutralLoadThreshold:       1.0,
@@ -103,47 +104,14 @@ func newDispatchPolicy(t *testing.T, config *options.SchedulerConfig, inferMode 
 		config.NumPredictorWarmupSamples)
 
 	var kvsClient kvs.KVSClientInterface
+	var tokenHasher *hasher.TokenHasher
 	if config.EnableCacheAwareScheduling {
-		allInstances := map[string][]string{
-			"hash1": {"instance-prefill-1", "instance-prefill-2", "instance-prefill-3", "instance-prefill-4",
-				"instance-neutral-1", "instance-neutral-2", "instance-neutral-3"},
-			"hash2": {"instance-prefill-2", "instance-prefill-3", "instance-prefill-4",
-				"instance-neutral-2", "instance-neutral-3"},
+		kvsClient = &MockKVSClient{}
+		th, err := hasher.NewTokenHasher(config.KvsHashAlgo)
+		if err != nil {
+			t.Fatalf("failed to create TokenHasher: %v", err)
 		}
-		allHitLens := map[string]int{
-			"instance-prefill-1": 1,
-			"instance-prefill-2": 2,
-			"instance-prefill-3": 2,
-			"instance-prefill-4": 2,
-			"instance-neutral-1": 1,
-			"instance-neutral-2": 2,
-			"instance-neutral-3": 2,
-		}
-
-		prefixHashHitInstances := make(map[string]sets.String)
-		instancesCacheHitLenResp := make(map[string]int)
-
-		for hash, instances := range allInstances {
-			matchedInstances := sets.NewString()
-			for _, instance := range instances {
-				if strings.Contains(instance, inferMode) {
-					matchedInstances.Insert(instance)
-					if hitLen, exists := allHitLens[instance]; exists {
-						instancesCacheHitLenResp[instance] = hitLen
-					}
-				}
-			}
-			if matchedInstances.Len() > 0 {
-				prefixHashHitInstances[hash] = matchedInstances
-			}
-		}
-
-		client := &MockKVSClient{
-			prefixHashes:             []string{"hash1", "hash2"},
-			prefixHashHitInstances:   prefixHashHitInstances,
-			instancesCacheHitLenResp: instancesCacheHitLenResp,
-		}
-		kvsClient = client
+		tokenHasher = th
 	}
 
 	return DispatchPolicy{
@@ -151,6 +119,7 @@ func newDispatchPolicy(t *testing.T, config *options.SchedulerConfig, inferMode 
 		schedulePolicy: config.SchedulePolicy,
 		cmsClient:      cmsReadClient,
 		kvsClient:      kvsClient,
+		tokenHasher:    tokenHasher,
 		policyInternal: newDispatchPolicyInternal(config),
 	}
 }
@@ -382,6 +351,9 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 	policy := newDispatchPolicy(t, c, "prefill")
 
 	// Test prefill/decode mode scheduling
+	// schedule() enters cache-aware branch (tokenHasher is real), calls HashTokens and
+	// getInstancesPrefixCacheHitLen. MockKVSClient returns empty data, so pre-set
+	// prefixHitTokens below are preserved and drive the selector logic.
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-prefill-1": {
 			cmsView: &cms.InstanceView{
@@ -402,7 +374,9 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 				},
 			},
 			schedulingCtx: schedulingCtx{
-				metrics: map[string]instanceSchedulingMetric{},
+				metrics:          map[string]instanceSchedulingMetric{},
+				prefixHitTokens:  1,
+				prefixMissTokens: 1,
 			},
 		},
 		"instance-prefill-2": {
@@ -424,7 +398,9 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 				},
 			},
 			schedulingCtx: schedulingCtx{
-				metrics: map[string]instanceSchedulingMetric{},
+				metrics:          map[string]instanceSchedulingMetric{},
+				prefixHitTokens:  2,
+				prefixMissTokens: 0,
 			},
 		},
 		"instance-prefill-3": {
@@ -446,7 +422,9 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 				},
 			},
 			schedulingCtx: schedulingCtx{
-				metrics: map[string]instanceSchedulingMetric{},
+				metrics:          map[string]instanceSchedulingMetric{},
+				prefixHitTokens:  2,
+				prefixMissTokens: 0,
 			},
 		},
 		"instance-decode": {
@@ -510,7 +488,8 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 	c.DispatchTopK = 2
 	policy := newDispatchPolicy(t, c, "prefill")
 
-	// Test prefill/decode mode scheduling
+	// Test prefill/decode mode scheduling with TopK
+	// Same pattern as TestCacheAwareSchedulingSchedulePD: real tokenHasher + empty mock data.
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-prefill-1": {
 			cmsView: &cms.InstanceView{
@@ -531,7 +510,9 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 				},
 			},
 			schedulingCtx: schedulingCtx{
-				metrics: map[string]instanceSchedulingMetric{},
+				metrics:          map[string]instanceSchedulingMetric{},
+				prefixHitTokens:  1,
+				prefixMissTokens: 1,
 			},
 		},
 		"instance-prefill-2": {
@@ -553,7 +534,9 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 				},
 			},
 			schedulingCtx: schedulingCtx{
-				metrics: map[string]instanceSchedulingMetric{},
+				metrics:          map[string]instanceSchedulingMetric{},
+				prefixHitTokens:  2,
+				prefixMissTokens: 0,
 			},
 		},
 		"instance-prefill-3": {
@@ -575,7 +558,9 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 				},
 			},
 			schedulingCtx: schedulingCtx{
-				metrics: map[string]instanceSchedulingMetric{},
+				metrics:          map[string]instanceSchedulingMetric{},
+				prefixHitTokens:  2,
+				prefixMissTokens: 0,
 			},
 		},
 		"instance-prefill-4": {
@@ -597,7 +582,9 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 				},
 			},
 			schedulingCtx: schedulingCtx{
-				metrics: map[string]instanceSchedulingMetric{},
+				metrics:          map[string]instanceSchedulingMetric{},
+				prefixHitTokens:  2,
+				prefixMissTokens: 0,
 			},
 		},
 		"instance-decode": {
@@ -677,6 +664,7 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 	policy := newDispatchPolicy(t, c, "neutral")
 
 	// Test neutral mode scheduling
+	// Same pattern as TestCacheAwareSchedulingSchedulePD: real tokenHasher + empty mock data.
 	instanceViews := map[string]*instanceViewScheduling{
 		"instance-neutral-1": {
 			cmsView: &cms.InstanceView{
@@ -697,7 +685,9 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 				},
 			},
 			schedulingCtx: schedulingCtx{
-				metrics: map[string]instanceSchedulingMetric{},
+				metrics:          map[string]instanceSchedulingMetric{},
+				prefixHitTokens:  1,
+				prefixMissTokens: 1,
 			},
 		},
 		"instance-neutral-2": {
@@ -719,7 +709,9 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 				},
 			},
 			schedulingCtx: schedulingCtx{
-				metrics: map[string]instanceSchedulingMetric{},
+				metrics:          map[string]instanceSchedulingMetric{},
+				prefixHitTokens:  2,
+				prefixMissTokens: 0,
 			},
 		},
 		"instance-neutral-3": {
@@ -741,7 +733,9 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 				},
 			},
 			schedulingCtx: schedulingCtx{
-				metrics: map[string]instanceSchedulingMetric{},
+				metrics:          map[string]instanceSchedulingMetric{},
+				prefixHitTokens:  2,
+				prefixMissTokens: 0,
 			},
 		},
 	}

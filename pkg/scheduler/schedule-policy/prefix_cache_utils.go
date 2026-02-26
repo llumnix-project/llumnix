@@ -1,36 +1,78 @@
 package schedule_policy
 
 import (
-	"llumnix/pkg/cms"
-	"llumnix/pkg/scheduler/kvs"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
+
+	"llumnix/pkg/cms"
+	"llumnix/pkg/scheduler/kvs"
 )
 
-// calcInstancesPrefixCacheHitLen calculates the prefix hit length of prompt tokens in instance cache.
-// It uses the kvs metadata service cache client to:
-// 1. Chunk the prompt token IDs into smaller pieces
-// 2. Calculate prefix hashes for these chunks
-// 3. Query which kvs instances have cached content matching these prefix hashes
-// 4. Convert kvs instances to instance id set
-// 5. Calculate how many tokens each instance has cached (prefix hit length)
-// The result is stored in each instance's scheduling context for later use in scheduling decisions.
-// If KVS metadata service is down (marked after multiple query failures), returns immediately.
-// KVS metadata service status will automatically recover to healthy after a configured duration.
-// NOTE(sunbiao.sun): This function writes to instance view, so it is not placed in the kvs metadata service client.
+// calcInstancesPrefixCacheHitLen calculates the total length of cache hits for each instance
+// based on the provided prefix hashes and their corresponding hit instances.
+// It accumulates chunkSize for each consecutive hit; a gap marks the instance as broken.
 func calcInstancesPrefixCacheHitLen(
+	chunkSize int, prefixHashes []string, prefixHashHitInstances map[string]sets.String) map[string]int {
+	if len(prefixHashes) == 0 || prefixHashHitInstances == nil {
+		return nil
+	}
+
+	instanceCacheHitLen := make(map[string]int)
+	instanceLastHitIdx := make(map[string]int)
+	instanceBroken := make(map[string]bool)
+
+	for i, prefixHash := range prefixHashes {
+		hitInstances := prefixHashHitInstances[prefixHash]
+		if hitInstances == nil {
+			continue
+		}
+		for instance := range hitInstances {
+			if instanceBroken[instance] {
+				continue
+			}
+			if lastSeenIdx, ok := instanceLastHitIdx[instance]; !ok {
+				instanceLastHitIdx[instance] = i
+				instanceCacheHitLen[instance] += chunkSize
+			} else if lastSeenIdx == i-1 {
+				instanceLastHitIdx[instance] = i
+				instanceCacheHitLen[instance] += chunkSize
+			} else {
+				instanceBroken[instance] = true
+			}
+		}
+	}
+
+	return instanceCacheHitLen
+}
+
+// getInstancesPrefixCacheHitLen queries prefix cache hit information from KVS metadata service
+// and updates each instance's scheduling context with the result.
+//
+// Flow:
+//  1. Query KVS metadata service for instances that cached content matching the given prefix hashes.
+//  2. Convert KVS instance IPs to instance IDs via CMS.
+//  3. Calculate prefix cache hit length per instance (via calcInstancesPrefixCacheHitLen).
+//  4. Write prefixHitTokens, prefixHitRatio, and prefixMissTokens into each instance's scheduling context.
+//
+// If KVS metadata service is down (marked after consecutive query failures), returns immediately.
+// The service status automatically recovers to healthy after a configured duration.
+//
+// NOTE(sunbiao.sun): This function writes to instance view, so it is not placed in the kvs metadata service client.
+func getInstancesPrefixCacheHitLen(
 	kvsClient kvs.KVSClientInterface,
 	cmsClient cms.CMSReadClientInterface,
-	promptTokenIds []int64,
+	prefixHashes []string,
+	chunkSize int,
+	numPromptTokens int,
 	instanceViews map[string]*instanceViewScheduling) {
 
 	totalStart := time.Now()
 	defer func() {
 		klog.V(3).Infof(
-			"calcInstancesPrefixCacheHitLen took: %.2fms, promptTokenIds len: %v",
-			time.Since(totalStart).Seconds()*1000, len(promptTokenIds))
+			"getInstancesPrefixCacheHitLen took: %.2fms, numPromptTokens: %v",
+			time.Since(totalStart).Seconds()*1000, numPromptTokens)
 	}()
 
 	if kvsClient.IsKVSMetadataServiceDown() {
@@ -38,15 +80,10 @@ func calcInstancesPrefixCacheHitLen(
 		return
 	}
 
-	klog.V(5).Infof("promptTokenIds: %v", promptTokenIds)
-	klog.V(3).Infof("promptTokenIds len: %v", len(promptTokenIds))
+	klog.V(5).Infof("prefixHashes: %v", prefixHashes)
+	klog.V(3).Infof("prefixHashes len: %v", len(prefixHashes))
 
 	start := time.Now()
-	prefixHashes := kvsClient.PrefixHash(promptTokenIds)
-	klog.V(3).Infof("PrefixHash took: %.2fms", time.Since(start).Seconds()*1e3)
-	klog.V(5).Infof("PrefixHash result: %v", prefixHashes)
-
-	start = time.Now()
 	prefixHashHitKVSInstances := kvsClient.BatchQueryCacheHitKVSInstances(prefixHashes)
 	klog.V(3).Infof("BatchQueryCacheHitKVSInstances took: %.2fms", time.Since(start).Seconds()*1e3)
 	klog.V(5).Infof("BatchQueryCacheHitKVSInstances result: %+v", prefixHashHitKVSInstances)
@@ -57,7 +94,7 @@ func calcInstancesPrefixCacheHitLen(
 	klog.V(5).Infof("convertToCacheHitInstances result: %+v", prefixHashHitInstances)
 
 	start = time.Now()
-	instancePrefixHitLen := kvsClient.CalcInstancesCacheHitLen(prefixHashes, prefixHashHitInstances)
+	instancePrefixHitLen := calcInstancesPrefixCacheHitLen(chunkSize, prefixHashes, prefixHashHitInstances)
 	klog.V(3).Infof("CalcInstancesCacheHitLen took: %.2fms", time.Since(start).Seconds()*1e3)
 	klog.V(3).Infof("CalcInstancesCacheHitLen result: %+v", instancePrefixHitLen)
 
@@ -66,12 +103,12 @@ func calcInstancesPrefixCacheHitLen(
 	for instanceId, prefixHitLen := range instancePrefixHitLen {
 		if instanceView, ok := instanceViews[instanceId]; ok {
 			instanceView.schedulingCtx.prefixHitTokens = prefixHitLen
-			if len(promptTokenIds) > 0 {
-				instanceView.schedulingCtx.prefixHitRatio = float32(prefixHitLen) / float32(len(promptTokenIds))
+			if numPromptTokens > 0 {
+				instanceView.schedulingCtx.prefixHitRatio = float32(prefixHitLen) / float32(numPromptTokens)
 			} else {
 				instanceView.schedulingCtx.prefixHitRatio = 0.0
 			}
-			instanceView.schedulingCtx.prefixMissTokens = len(promptTokenIds) - prefixHitLen
+			instanceView.schedulingCtx.prefixMissTokens = numPromptTokens - prefixHitLen
 			updateCount++
 			klog.V(4).Infof("Updated instance %s with prefixHitTokens: %d", instanceId, prefixHitLen)
 		} else {

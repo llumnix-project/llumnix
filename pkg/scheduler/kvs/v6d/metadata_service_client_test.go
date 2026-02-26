@@ -8,13 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	batch_service_redis "llumnix/pkg/redis"
 	"testing"
 	"time"
 
 	"github.com/go-redis/redismock/v9"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
+
+	batch_service_redis "llumnix/pkg/redis"
 )
 
 func TestV6dMetadataServiceClient(t *testing.T) {
@@ -946,42 +947,6 @@ func TestV6dMetadataServiceClientBatch(t *testing.T) {
 		assert.Equal(t, expectedResult, res)
 
 		assert.NoError(t, mock.ExpectationsWereMet())
-	})
-}
-
-func TestMetadataServiceClient_HashTokens(t *testing.T) {
-	c := &MetadataServiceClient{}
-
-	t.Run("invalid input", func(t *testing.T) {
-		_, err := c.HashTokens(nil, 4, true, "iris_", "vllm_")
-		assert.Error(t, err)
-
-		_, err = c.HashTokens([]int64{1, 2, 3}, 0, true, "iris_", "vllm_")
-		assert.Error(t, err)
-	})
-
-	t.Run("chunking and saveUnfullChunk", func(t *testing.T) {
-		tokens := []int64{1, 2, 3, 4, 5} // chunkSize=4 => 1 full + 1 remainder
-
-		hs1, err := c.HashTokens(tokens, 4, true, "iris_", "vllm_")
-		assert.NoError(t, err)
-		assert.Len(t, hs1, 2)
-
-		hs2, err := c.HashTokens(tokens, 4, false, "iris_", "vllm_")
-		assert.NoError(t, err)
-		assert.Len(t, hs2, 1)
-
-		// same input should be deterministic
-		hs1Again, err := c.HashTokens(tokens, 4, true, "iris_", "vllm_")
-		assert.NoError(t, err)
-		assert.Equal(t, hs1, hs1Again)
-	})
-
-	t.Run("prefix formatting", func(t *testing.T) {
-		hs, err := c.HashTokens([]int64{1, 2, 3, 4}, 4, true, "iris_meta_", "vllm_block_")
-		assert.NoError(t, err)
-		assert.Len(t, hs, 1)
-		assert.Contains(t, hs[0], "iris_meta_"+"vllm_block_")
 	})
 }
 

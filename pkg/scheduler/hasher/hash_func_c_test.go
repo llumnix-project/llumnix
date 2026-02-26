@@ -1,7 +1,7 @@
 //go:build cgo && xxhash
 // +build cgo,xxhash
 
-package v6d
+package hasher
 
 import (
 	"testing"
@@ -99,7 +99,7 @@ func TestHashImplementations(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Go implementation
-			goHashes, err := GoHashV6d(tc.tokens, tc.chunkSize, tc.saveUnfullChunk)
+			goHashes, err := HashTokensXxhash(tc.tokens, tc.chunkSize, tc.saveUnfullChunk)
 			assert.NoError(t, err)
 
 			// C implementation
