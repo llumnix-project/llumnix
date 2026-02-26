@@ -38,7 +38,7 @@ spec:
       - name: aliyun-registry-secret
       containers:
       - name: scheduler
-        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:scheduler-20260130-111734
+        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:scheduler-20260226-164555
         imagePullPolicy: Always
         command: ["/usr/local/bin/scheduler"]
         args:
