@@ -567,15 +567,17 @@ func (h *RequestLifecycleHooksImpl) OnPostRequest(req *types.RequestContext) {
 	// Delete request state after request completes
 	h.reqStateTracker.DeleteRequestState(req.Id)
 
-	// For non-PD mode, resources also need to be released at the end of the request.
-	nWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleNormal)
-	if nWorker != nil {
-		h.balancer.Release(req, nWorker)
-	}
-	// For PD separated mode, only decode resources need to be released
-	dWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode)
-	if dWorker != nil {
-		h.balancer.Release(req, dWorker)
+	if req.ScheduleCtx.ScheduleResults != nil {
+		// For non-PD mode, resources also need to be released at the end of the request.
+		nWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleNormal)
+		if nWorker != nil {
+			h.balancer.Release(req, nWorker)
+		}
+		// For PD separated mode, only decode resources need to be released
+		dWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode)
+		if dWorker != nil {
+			h.balancer.Release(req, dWorker)
+		}
 	}
 }
 
@@ -735,6 +737,9 @@ func (lgs *LlmGatewayService) Run() {
 
 	// Register health check route
 	router.HandleFunc("/healthz", lgs.healthz)
+	// Register Prometheus metrics endpoint
+	prometheusHandler := metrics.NewPrometheusHandler()
+	router.Handle("/metrics", prometheusHandler)
 	// Register batch API routes if batch service is available
 	if lgs.batchService != nil {
 		lgs.batchService.RegisterRoutes(router)

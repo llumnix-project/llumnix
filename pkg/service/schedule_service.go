@@ -36,16 +36,18 @@ type ScheduleService struct {
 	delChan   <-chan types.LLMWorkerSlice
 	lrsClient *lrs.LocalRealtimeStateClient
 
-	scheduleMutex sync.Mutex
+	scheduleMutex     sync.Mutex
+	prometheusHandler *metrics.PrometheusHandler
 }
 
 func NewScheduleService(c *options.Config) *ScheduleService {
 	lrsClient := lrs.NewLocalRealtimeStateClient(c)
 
 	ss := &ScheduleService{
-		config:         c,
-		lrsClient:      lrsClient,
-		schedulePolicy: schedule_policy.NewSchedulePolicy(c.SchedulePolicy, c, lrsClient),
+		config:            c,
+		lrsClient:         lrsClient,
+		schedulePolicy:    schedule_policy.NewSchedulePolicy(c.SchedulePolicy, c, lrsClient),
+		prometheusHandler: metrics.NewPrometheusHandler(),
 	}
 	if c.ColocatedRescheduleMode && c.LlumnixConfig.EnableRescheduling {
 		ss.reschedulePolicy = schedule_policy.NewReschedulePolicy(c)
@@ -268,6 +270,8 @@ func (ss *ScheduleService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ss.handleServiceKeepAlive(w, r)
 	case "/healthz":
 		w.WriteHeader(http.StatusOK)
+	case "/metrics":
+		ss.prometheusHandler.ServeHTTP(w, r)
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
 	}
