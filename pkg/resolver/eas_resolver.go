@@ -279,6 +279,20 @@ func (rb *EasResolverBackend) registerResolver(r *EasResolver) {
 	rb.resolvers[r.uri] = r
 }
 
+// getOrRegisterResolver returns existing resolver for the URI, or registers and returns the new one.
+// This ensures only one resolver instance exists per URI, preventing the issue where
+// multiple callers hold different resolver instances but only the last registered one gets updated.
+func (rb *EasResolverBackend) getOrRegisterResolver(r *EasResolver) (*EasResolver, bool) {
+	rb.rlMutex.Lock()
+	defer rb.rlMutex.Unlock()
+
+	if existing, ok := rb.resolvers[r.uri]; ok {
+		return existing, true
+	}
+	rb.resolvers[r.uri] = r
+	return r, false
+}
+
 // getUniqueGroupService extracts a unique group-to-service mapping from all registered resolvers.
 // For each group, it selects the first includeService or excludeService as the test service.
 func (rb *EasResolverBackend) getUniqueGroupService() map[string]string {
@@ -357,9 +371,10 @@ type EasResolver struct {
 	watcher *Watcher // Watcher for monitoring endpoint changes
 }
 
-// newEasResolver creates a new EAS resolver instance from a URI.
+// newEasResolver creates a new EAS resolver instance from a URI, or returns existing one.
 // The URI must follow the format: eas://{group}?include={services} or eas://{group}?exclude={services}
 // Returns an error if the URI is invalid or if both include and exclude are specified.
+// Note: Same URI will return the same resolver instance to ensure all callers share the same endpoint state.
 func newEasResolver(uri, role string) (*EasResolver, error) {
 	group, excludeServices, includeServices, err := checkParseEasURI(uri)
 	if err != nil {
@@ -376,10 +391,19 @@ func newEasResolver(uri, role string) (*EasResolver, error) {
 		excludeServices: excludeServices,
 		watcher:         NewWatcher(),
 	}
+
 	rb := getOrCreateEasResolverBackend()
-	rb.registerResolver(r)
+	resolver, existed := rb.getOrRegisterResolver(r)
+	if existed {
+		klog.Infof("[EasResolver] resolver_reused: uri=%s, existing resolver returned", uri)
+		return resolver, nil
+	}
+
+	klog.Infof("[EasResolver] resolver_created: uri=%s, group=%s, role=%s, include_services=%v, exclude_services=%v",
+		uri, group, role, includeServices, excludeServices)
+
 	rb.syncGroupBackendServicesOnce()
-	return r, nil
+	return resolver, nil
 }
 
 // GetEndpoints implements the Resolver interface.
@@ -448,7 +472,25 @@ func (er *EasResolver) update(serviceEndpoints map[string]types.EndpointSlice) {
 	defer er.mu.Unlock()
 	added, removed := DiffSets(er.endpoints, newEndpoints, func(ep types.Endpoint) string { return ep.String() })
 	if len(added) > 0 || len(removed) > 0 {
+		oldCount := len(er.endpoints)
 		er.endpoints = newEndpoints
+		newCount := len(newEndpoints)
+
+		// Log endpoint changes
+		klog.Infof("[EasResolver] endpoint_change detected: resolver_uri=%s, group=%s, old_count=%d, new_count=%d, added_count=%d, removed_count=%d",
+			er.uri, er.group, oldCount, newCount, len(added), len(removed))
+
+		if len(added) > 0 {
+			for _, ep := range added {
+				klog.Infof("[EasResolver] endpoint_added: resolver_uri=%s, endpoint=%s", er.uri, ep.String())
+			}
+		}
+		if len(removed) > 0 {
+			for _, ep := range removed {
+				klog.Infof("[EasResolver] endpoint_removed: resolver_uri=%s, endpoint=%s", er.uri, ep.String())
+			}
+		}
+
 		// Notify all observers about the changes
 		er.notifyObservers(added, removed)
 	}

@@ -53,6 +53,9 @@ func newRedisResolver(
 		statusTTLMs:       StatusTTLMs,
 	}
 
+	klog.Infof("[RedisResolver] resolver_created: role=%s, host=%s, port=%s, refresh_interval_ms=%d, status_ttl_ms=%d",
+		role, host, port, refreshIntervalMs, StatusTTLMs)
+
 	go r.refreshLoop()
 
 	return r, nil
@@ -161,10 +164,30 @@ func (r *redisResolver) refresh() {
 		return w.Id()
 	})
 	if len(added) > 0 || len(removed) > 0 {
+		oldCount := len(r.workers)
+		r.podDiscoveryInfos = newPodDiscoveryInfos
+		r.workers = newWorkers
+		newCount := len(newWorkers)
+
+		// Log worker changes
+		klog.Infof("[RedisResolver] worker_change detected: role=%s, old_count=%d, new_count=%d, added_count=%d, removed_count=%d",
+			r.role, oldCount, newCount, len(added), len(removed))
+
+		if len(added) > 0 {
+			for _, w := range added {
+				klog.Infof("[RedisResolver] worker_added: role=%s, worker_id=%s, endpoint=%s, dp_rank=%d, dp_size=%d",
+					r.role, w.ID, w.Endpoint.String(), w.DPRank, w.DPSize)
+			}
+		}
+		if len(removed) > 0 {
+			for _, w := range removed {
+				klog.Infof("[RedisResolver] worker_removed: role=%s, worker_id=%s, endpoint=%s",
+					r.role, w.ID, w.Endpoint.String())
+			}
+		}
+
 		klog.V(4).Infof("redis resolover: Added: %d, Removed: %d", len(added), len(removed))
 	}
-	r.podDiscoveryInfos = newPodDiscoveryInfos
-	r.workers = newWorkers
 	r.mu.Unlock()
 
 	if len(added) > 0 || len(removed) > 0 {

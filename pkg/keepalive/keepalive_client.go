@@ -133,24 +133,24 @@ func (kac *KeepAliveClient) ensureGetRemoteEndpoint() types.Endpoint {
 }
 
 func (kac *KeepAliveClient) ensureConnected() *websocket.Conn {
-	klog.Infof("try connect to remote remoteResolver(%s) ... ", kac.remoteName)
+	klog.Infof("try connect to remoteResolver(%s) ... ", kac.remoteName)
 	connectErrCnt := 0
 	for {
 		remoteEndpoint := kac.ensureGetRemoteEndpoint()
 		conn, err := kac.tryConnect(remoteEndpoint.String(), kac.remoteToken)
 		if err == nil {
-			klog.Infof("keepalive with remove remoteResolver: %s/%s", kac.remoteName, remoteEndpoint.String())
+			klog.Infof("keepalive with remoteResolver: %s/%s", kac.remoteName, remoteEndpoint.String())
 			return conn
 		}
 		connectErrCnt++
 		if connectErrCnt > 2 {
 			originReady := kac.markRemoteUnready()
 			if originReady {
-				klog.Warningf("connect remote remoteResolver(%s), error: %v", kac.remoteName, err)
+				klog.Warningf("connect remoteResolver(%s), error: %v", kac.remoteName, err)
 			}
 		}
 		time.Sleep(1 * time.Second)
-		klog.Warningf("try connect to remote remoteResolver: %s/%s", kac.remoteName, remoteEndpoint.String())
+		klog.Warningf("try connect to remoteResolver: %s/%s", kac.remoteName, remoteEndpoint.String())
 	}
 }
 

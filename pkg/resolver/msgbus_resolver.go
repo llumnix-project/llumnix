@@ -362,6 +362,9 @@ func NewMsgBusResolver(inferRole string) LLMResolver {
 		watcher:      NewWatcher(),
 		workerSlice:  make(types.LLMWorkerSlice, 0), // Initialize empty previous slice
 	}
+
+	klog.Infof("[MsgBusResolver] resolver_created: infer_role=%s", inferRole)
+
 	b.registerResolver(inferRole, r)
 	// ensure the scheduler fetches the latest worker list after restart.
 	b.SyncWorkerOnce()
@@ -384,6 +387,26 @@ func (r *MsgBusResolver) updateInstances(workerSlice types.LLMWorkerSlice) {
 	})
 	// Notify all observers if there are changes
 	if len(added) > 0 || len(removed) > 0 {
+		oldCount := len(oldSlice)
+		newCount := len(workerSlice)
+
+		// Log worker changes
+		klog.Infof("[MsgBusResolver] worker_change detected: infer_role=%s, old_count=%d, new_count=%d, added_count=%d, removed_count=%d",
+			r.inferRole, oldCount, newCount, len(added), len(removed))
+
+		if len(added) > 0 {
+			for _, w := range added {
+				klog.Infof("[MsgBusResolver] worker_added: infer_role=%s, worker_id=%s, endpoint=%s, dp_rank=%d, dp_size=%d",
+					r.inferRole, w.ID, w.Endpoint.String(), w.DPRank, w.DPSize)
+			}
+		}
+		if len(removed) > 0 {
+			for _, w := range removed {
+				klog.Infof("[MsgBusResolver] worker_removed: infer_role=%s, worker_id=%s, endpoint=%s",
+					r.inferRole, w.ID, w.Endpoint.String())
+			}
+		}
+
 		r.notifyObservers(added, removed)
 	}
 }

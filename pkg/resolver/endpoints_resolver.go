@@ -6,6 +6,8 @@ import (
 	"llm-gateway/pkg/types"
 	"strings"
 	"sync"
+
+	"k8s.io/klog/v2"
 )
 
 const (
@@ -50,6 +52,8 @@ func newEndpointsResolver(uri, role string) (*EndpointsResolver, error) {
 	if len(endpoints) == 0 {
 		return nil, fmt.Errorf("no valid endpoints found in URI")
 	}
+
+	klog.Infof("[EndpointsResolver] resolver_created: role=%s, endpoints=%v", role, endpoints)
 
 	return &EndpointsResolver{
 		role:      role,
