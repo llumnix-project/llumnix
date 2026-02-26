@@ -1,8 +1,10 @@
 package metrics
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -291,35 +293,96 @@ func TestPrometheusHandler_RuntimeMetrics(t *testing.T) {
 
 	body := w.Body.String()
 
-	// Verify all runtime metrics are present
-	runtimeMetrics := []string{
+	// Verify GC metrics (Category 1)
+	gcMetrics := []string{
+		"go_gc_duration_seconds",
+		"go_memstats_last_gc_time_seconds",
+		"go_memstats_gc_sys_bytes",
+		"go_memstats_num_gc",
+		"go_memstats_num_forced_gc",
+	}
+
+	// Verify thread metrics (Category 2)
+	threadMetrics := []string{
 		"go_goroutines",
+		"go_threads",
+	}
+
+	// Verify memory fine-grained metrics (Category 3)
+	memoryMetrics := []string{
+		"go_memstats_sys_bytes",
 		"go_memstats_heap_alloc_bytes",
 		"go_memstats_heap_inuse_bytes",
 		"go_memstats_heap_objects",
+		"go_memstats_stack_inuse_bytes",
+		"go_memstats_stack_sys_bytes",
+		"go_memstats_mspan_inuse_bytes",
+		"go_memstats_mcache_inuse_bytes",
+		"go_memstats_mallocs_total",
+		"go_memstats_frees_total",
+		"go_memstats_alloc_bytes_total",
 	}
 
-	for _, metric := range runtimeMetrics {
+	// Verify process resource metrics (Category 4)
+	processMetrics := []string{
+		"go_cpu_count",
+	}
+
+	// Combine all runtime metrics
+	allMetrics := append(append(append(gcMetrics, threadMetrics...), memoryMetrics...), processMetrics...)
+
+	for _, metric := range allMetrics {
 		if !strings.Contains(body, metric) {
 			t.Errorf("Expected body to contain '%s'", metric)
 		}
-		// Verify each metric has HELP and TYPE annotations
+		// Verify each metric has HELP annotation
 		if !strings.Contains(body, "# HELP "+metric) {
 			t.Errorf("Expected body to contain '# HELP %s'", metric)
 		}
-		if !strings.Contains(body, "# TYPE "+metric+" gauge") {
-			t.Errorf("Expected body to contain '# TYPE %s gauge'", metric)
+		// Verify each metric has TYPE annotation (gauge or counter)
+		if !strings.Contains(body, "# TYPE "+metric) {
+			t.Errorf("Expected body to contain '# TYPE %s'", metric)
+		}
+	}
+
+	// Verify GC duration quantiles are present (only if GC has occurred)
+	if strings.Contains(body, "go_memstats_num_gc") {
+		// Check if NumGC > 0 by looking for the metric value
+		lines := strings.Split(body, "\n")
+		hasGCOccurred := false
+		for _, line := range lines {
+			if strings.HasPrefix(line, "go_memstats_num_gc ") {
+				parts := strings.Fields(line)
+				if len(parts) >= 2 && parts[1] != "0" {
+					hasGCOccurred = true
+					break
+				}
+			}
+		}
+
+		// Only verify quantiles if GC has occurred
+		if hasGCOccurred && strings.Contains(body, "go_gc_duration_seconds") {
+			gcQuantiles := []string{
+				"go_gc_duration_seconds{quantile=\"0.5\"}",
+				"go_gc_duration_seconds{quantile=\"0.9\"}",
+				"go_gc_duration_seconds{quantile=\"0.99\"}",
+			}
+			for _, quantile := range gcQuantiles {
+				if !strings.Contains(body, quantile) {
+					t.Errorf("Expected body to contain '%s' when GC has occurred", quantile)
+				}
+			}
 		}
 	}
 
 	// Verify metrics have non-negative values
 	lines := strings.Split(body, "\n")
 	for _, line := range lines {
-		for _, metric := range runtimeMetrics {
-			if strings.HasPrefix(line, metric+" ") {
+		for _, metric := range allMetrics {
+			if strings.HasPrefix(line, metric+" ") || strings.HasPrefix(line, metric+"{") {
 				// Check that the line contains a number
 				parts := strings.Fields(line)
-				if len(parts) != 2 {
+				if len(parts) < 2 {
 					t.Errorf("Invalid metric line format: %s", line)
 				}
 			}
@@ -327,3 +390,107 @@ func TestPrometheusHandler_RuntimeMetrics(t *testing.T) {
 	}
 }
 
+func TestPrometheusHandler_GCMetricsWithForcedGC(t *testing.T) {
+	// Allocate memory to trigger GC
+	const allocSize = 10 * 1024 * 1024 // 10MB
+	allocations := make([][]byte, 0, 100)
+	for i := 0; i < 100; i++ {
+		allocations = append(allocations, make([]byte, allocSize))
+	}
+
+	// Force GC to ensure metrics are populated
+	runtime.GC()
+
+	// Allow GC to complete
+	time.Sleep(10 * time.Millisecond)
+
+	handler := NewPrometheusHandler()
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	w := httptest.NewRecorder()
+
+	handler.ServeHTTP(w, req)
+
+	body := w.Body.String()
+	lines := strings.Split(body, "\n")
+
+	// Verify NumGC > 0
+	var numGC int
+	for _, line := range lines {
+		if strings.HasPrefix(line, "go_memstats_num_gc ") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				fmt.Sscanf(parts[1], "%d", &numGC)
+			}
+			break
+		}
+	}
+
+	if numGC == 0 {
+		t.Error("Expected at least one GC cycle to have occurred")
+	}
+
+	t.Logf("NumGC: %d", numGC)
+
+	// Verify GC duration quantiles are present
+	requiredQuantiles := []string{
+		"go_gc_duration_seconds{quantile=\"0.5\"}",
+		"go_gc_duration_seconds{quantile=\"0.9\"}",
+		"go_gc_duration_seconds{quantile=\"0.99\"}",
+	}
+
+	for _, quantile := range requiredQuantiles {
+		if !strings.Contains(body, quantile) {
+			t.Errorf("Expected body to contain '%s' after forced GC", quantile)
+		}
+	}
+
+	// Verify GC duration values are reasonable (non-negative and < 1 second)
+	gcDurations := make(map[string]float64)
+	for _, line := range lines {
+		if strings.HasPrefix(line, "go_gc_duration_seconds{quantile=") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				var duration float64
+				fmt.Sscanf(parts[1], "%f", &duration)
+				if duration < 0 {
+					t.Errorf("GC duration should not be negative: %s", line)
+				}
+				if duration > 1.0 {
+					t.Errorf("GC duration unexpectedly high (>1s): %s", line)
+				}
+				// Extract quantile for logging
+				if strings.Contains(parts[0], "0.5") {
+					gcDurations["p50"] = duration
+				} else if strings.Contains(parts[0], "0.9") {
+					gcDurations["p90"] = duration
+				} else if strings.Contains(parts[0], "0.99") {
+					gcDurations["p99"] = duration
+				}
+			}
+		}
+	}
+
+	if len(gcDurations) > 0 {
+		t.Logf("GC pause durations: p50=%.6fs, p90=%.6fs, p99=%.6fs",
+			gcDurations["p50"], gcDurations["p90"], gcDurations["p99"])
+	}
+
+	// Verify last GC time is recent (within last minute)
+	for _, line := range lines {
+		if strings.HasPrefix(line, "go_memstats_last_gc_time_seconds ") {
+			parts := strings.Fields(line)
+			if len(parts) >= 2 {
+				var lastGCTime float64
+				fmt.Sscanf(parts[1], "%f", &lastGCTime)
+				now := float64(time.Now().Unix())
+				if now-lastGCTime > 60 {
+					t.Errorf("Last GC time seems stale: %.0f seconds ago", now-lastGCTime)
+				}
+			}
+			break
+		}
+	}
+
+	// Keep allocation alive to prevent early collection
+	_ = allocations
+}

@@ -24,7 +24,7 @@ func TrySimpleHTTPProxy(client *http.Client, url string, reqCtx *types.RequestCo
 	}
 
 	// Create a new request to forward to the backend
-	body := []byte(reqCtx.GetRequestRawData())
+	body := reqCtx.GetRequestRawData()
 	proxyReq, err := http.NewRequestWithContext(reqCtx.Context, r.Method, url, bytes.NewBuffer(body))
 	if err != nil {
 		klog.Errorf("request [%s] failed to create proxy request to %s: %v", reqCtx.Id, url, err)

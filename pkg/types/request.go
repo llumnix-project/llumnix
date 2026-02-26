@@ -140,7 +140,7 @@ type HttpRequest struct {
 // OpenAI API Request
 type LLMRequest struct {
 	// raw request body data
-	RawData string
+	RawData []byte
 
 	// request type
 	Protocol        protocol.ProtocolType
@@ -359,7 +359,7 @@ func (req *LLMRequest) outputExceedMaxTokens() bool {
 // Anthropic API Request
 type AnthropicRequest struct {
 	// raw request body data
-	RawData string
+	RawData []byte
 
 	// Anthropic Request
 	Request      *anthropic.Request
@@ -607,7 +607,7 @@ func (req *RequestContext) SetKvTransferParams(params map[string]interface{}) {
 }
 
 // GetRequestRawData returns the raw data of the request.
-func (req *RequestContext) GetRequestRawData() string {
+func (req *RequestContext) GetRequestRawData() []byte {
 	switch req.RequestType {
 	case consts.OpenAIHandlerName:
 		return req.LLMRequest.RawData
@@ -615,7 +615,7 @@ func (req *RequestContext) GetRequestRawData() string {
 		return req.AnthropicRequest.RawData
 	default:
 		klog.Errorf("unsupported request type: %v to get request raw data", req.RequestType)
-		return ""
+		return nil
 	}
 }
 
@@ -811,7 +811,7 @@ func NewRequestContext(ctx context.Context, r *http.Request, w http.ResponseWrit
 	}
 
 	httpReq := &HttpRequest{Request: r, Writer: w}
-	inferCtx := &ScheduleContext{}
+	inferCtx := &ScheduleContext{NeedSchedule: true}
 
 	// create a request context for the new request
 	req := &RequestContext{

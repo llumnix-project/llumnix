@@ -805,7 +805,7 @@ func (lgs *LlmGatewayService) Start() (err error) {
 //   - req: Request context
 func (lgs *LlmGatewayService) LogRequestInput(req *types.RequestContext) {
 	if lgs.logInputEnabled {
-		logging.AsyncLogf("Received request [%s] %s", req.Id, req.GetRequestRawData())
+		logging.AsyncLogf("Received request [%s] %s", req.Id, string(req.GetRequestRawData()))
 	} else {
 		logging.Logf("Received request [%s]", req.Id)
 	}

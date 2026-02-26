@@ -288,10 +288,89 @@ func (h *PrometheusHandler) exportRuntimeMetrics(output *strings.Builder) {
 	var m runtime.MemStats
 	runtime.ReadMemStats(&m)
 
+	// ========== Category 1: GC (Garbage Collection) Metrics ==========
+
+	// Export GC pause time in seconds
+	output.WriteString("# HELP go_gc_duration_seconds GC pause duration in seconds\n")
+	output.WriteString("# TYPE go_gc_duration_seconds summary\n")
+	if m.NumGC > 0 {
+		// Calculate GC pause time percentiles from PauseNs ring buffer
+		// PauseNs is a circular buffer of recent GC pause times in nanoseconds
+		pauseTimes := make([]uint64, 0, 256)
+		numGC := m.NumGC
+		for i := uint32(0); i < 256 && i < numGC; i++ {
+			idx := (numGC - 1 - i) % 256
+			pauseTimes = append(pauseTimes, m.PauseNs[idx])
+		}
+
+		// Calculate quantiles from pause times
+		if len(pauseTimes) > 0 {
+			// Sort for percentile calculation
+			sortedPauses := make([]uint64, len(pauseTimes))
+			copy(sortedPauses, pauseTimes)
+			// Simple bubble sort for small arrays
+			for i := 0; i < len(sortedPauses); i++ {
+				for j := i + 1; j < len(sortedPauses); j++ {
+					if sortedPauses[i] > sortedPauses[j] {
+						sortedPauses[i], sortedPauses[j] = sortedPauses[j], sortedPauses[i]
+					}
+				}
+			}
+
+			// Export GC pause quantiles (convert nanoseconds to seconds)
+			p50Idx := len(sortedPauses) * 50 / 100
+			p90Idx := len(sortedPauses) * 90 / 100
+			p99Idx := len(sortedPauses) * 99 / 100
+
+			output.WriteString(fmt.Sprintf("go_gc_duration_seconds{quantile=\"0.5\"} %.9f\n", float64(sortedPauses[p50Idx])/1e9))
+			output.WriteString(fmt.Sprintf("go_gc_duration_seconds{quantile=\"0.9\"} %.9f\n", float64(sortedPauses[p90Idx])/1e9))
+			output.WriteString(fmt.Sprintf("go_gc_duration_seconds{quantile=\"0.99\"} %.9f\n", float64(sortedPauses[p99Idx])/1e9))
+		}
+	}
+	output.WriteString("\n")
+
+	// Export last GC time
+	output.WriteString("# HELP go_memstats_last_gc_time_seconds Last GC time in Unix timestamp\n")
+	output.WriteString("# TYPE go_memstats_last_gc_time_seconds gauge\n")
+	output.WriteString(fmt.Sprintf("go_memstats_last_gc_time_seconds %.3f\n\n", float64(m.LastGC)/1e9))
+
+	// Export GC system memory
+	output.WriteString("# HELP go_memstats_gc_sys_bytes Memory used by GC metadata\n")
+	output.WriteString("# TYPE go_memstats_gc_sys_bytes gauge\n")
+	output.WriteString(fmt.Sprintf("go_memstats_gc_sys_bytes %d\n\n", m.GCSys))
+
+	// Export GC count
+	output.WriteString("# HELP go_memstats_num_gc Total number of GC cycles completed\n")
+	output.WriteString("# TYPE go_memstats_num_gc counter\n")
+	output.WriteString(fmt.Sprintf("go_memstats_num_gc %d\n\n", m.NumGC))
+
+	// Export forced GC count
+	output.WriteString("# HELP go_memstats_num_forced_gc Total number of forced GC cycles\n")
+	output.WriteString("# TYPE go_memstats_num_forced_gc counter\n")
+	output.WriteString(fmt.Sprintf("go_memstats_num_forced_gc %d\n\n", m.NumForcedGC))
+
+	// ========== Category 2: System Thread Metrics ==========
+
 	// Export goroutines count
 	output.WriteString("# HELP go_goroutines Number of goroutines that currently exist\n")
 	output.WriteString("# TYPE go_goroutines gauge\n")
 	output.WriteString(fmt.Sprintf("go_goroutines %d\n\n", runtime.NumGoroutine()))
+
+	// Export OS threads count
+	// IMPORTANT: This metric is critical for CGO-heavy applications
+	// High thread count may indicate thread leaks or excessive blocking operations
+	// Note: Go runtime does not directly expose OS thread count via runtime package
+	// This reports GOMAXPROCS which is the limit of OS threads that can execute Go code
+	output.WriteString("# HELP go_threads Number of OS threads that can execute user-level Go code simultaneously\n")
+	output.WriteString("# TYPE go_threads gauge\n")
+	output.WriteString(fmt.Sprintf("go_threads %d\n\n", runtime.GOMAXPROCS(0)))
+
+	// ========== Category 3: Memory Fine-Grained Metrics ==========
+
+	// Export total system memory
+	output.WriteString("# HELP go_memstats_sys_bytes Total bytes of memory obtained from the OS\n")
+	output.WriteString("# TYPE go_memstats_sys_bytes gauge\n")
+	output.WriteString(fmt.Sprintf("go_memstats_sys_bytes %d\n\n", m.Sys))
 
 	// Export heap allocated memory in bytes
 	output.WriteString("# HELP go_memstats_heap_alloc_bytes Number of heap bytes allocated and still in use\n")
@@ -307,4 +386,46 @@ func (h *PrometheusHandler) exportRuntimeMetrics(output *strings.Builder) {
 	output.WriteString("# HELP go_memstats_heap_objects Number of allocated heap objects\n")
 	output.WriteString("# TYPE go_memstats_heap_objects gauge\n")
 	output.WriteString(fmt.Sprintf("go_memstats_heap_objects %d\n\n", m.HeapObjects))
+
+	// Export stack memory
+	output.WriteString("# HELP go_memstats_stack_inuse_bytes Bytes in stack spans currently in use\n")
+	output.WriteString("# TYPE go_memstats_stack_inuse_bytes gauge\n")
+	output.WriteString(fmt.Sprintf("go_memstats_stack_inuse_bytes %d\n\n", m.StackInuse))
+
+	// Export stack system memory
+	output.WriteString("# HELP go_memstats_stack_sys_bytes Bytes of stack memory obtained from OS\n")
+	output.WriteString("# TYPE go_memstats_stack_sys_bytes gauge\n")
+	output.WriteString(fmt.Sprintf("go_memstats_stack_sys_bytes %d\n\n", m.StackSys))
+
+	// Export mspan memory
+	output.WriteString("# HELP go_memstats_mspan_inuse_bytes Bytes of allocated mspan structures\n")
+	output.WriteString("# TYPE go_memstats_mspan_inuse_bytes gauge\n")
+	output.WriteString(fmt.Sprintf("go_memstats_mspan_inuse_bytes %d\n\n", m.MSpanInuse))
+
+	// Export mcache memory
+	output.WriteString("# HELP go_memstats_mcache_inuse_bytes Bytes of allocated mcache structures\n")
+	output.WriteString("# TYPE go_memstats_mcache_inuse_bytes gauge\n")
+	output.WriteString(fmt.Sprintf("go_memstats_mcache_inuse_bytes %d\n\n", m.MCacheInuse))
+
+	// Export total allocations
+	output.WriteString("# HELP go_memstats_mallocs_total Total number of heap objects allocated\n")
+	output.WriteString("# TYPE go_memstats_mallocs_total counter\n")
+	output.WriteString(fmt.Sprintf("go_memstats_mallocs_total %d\n\n", m.Mallocs))
+
+	// Export total frees
+	output.WriteString("# HELP go_memstats_frees_total Total number of heap objects freed\n")
+	output.WriteString("# TYPE go_memstats_frees_total counter\n")
+	output.WriteString(fmt.Sprintf("go_memstats_frees_total %d\n\n", m.Frees))
+
+	// Export total allocated bytes
+	output.WriteString("# HELP go_memstats_alloc_bytes_total Total bytes allocated (even if freed)\n")
+	output.WriteString("# TYPE go_memstats_alloc_bytes_total counter\n")
+	output.WriteString(fmt.Sprintf("go_memstats_alloc_bytes_total %d\n\n", m.TotalAlloc))
+
+	// ========== Category 4: Process Resource Metrics ==========
+
+	// Export CPU count
+	output.WriteString("# HELP go_cpu_count Number of logical CPUs available\n")
+	output.WriteString("# TYPE go_cpu_count gauge\n")
+	output.WriteString(fmt.Sprintf("go_cpu_count %d\n\n", runtime.NumCPU()))
 }

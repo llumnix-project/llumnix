@@ -229,17 +229,3 @@ func ExposeLatency() []Metric {
 func init() {
 	latencyGroup = NewLatencyGroup()
 }
-
-// var latencyGroup []*LatencyGroup
-// var current atomic.Int32
-// var once sync.Once
-
-// func getFrontendLatencyGroupAndSwap() *LatencyGroup {
-// 	front := current.Load()
-// 	current.Store((front + 1) % 2)
-// 	return latencyGroup[front]
-// }
-
-// func getFrontendLatencyGroup() *LatencyGroup {
-// 	return latencyGroup[current.Load()]
-// }

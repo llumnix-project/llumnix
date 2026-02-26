@@ -28,7 +28,7 @@ func (rt *RequestCompletionConverter) TokenizerEncode(prompt string, addSpecialT
 
 func (rt *RequestCompletionConverter) applyTokenizerTemplate(req *types.RequestContext) ([]uint32, error) {
 	tk, _ := tokenizer.GetTokenizer()
-	processedReq, err := tk.PreProcessChatRequest(req.LLMRequest.RawData)
+	processedReq, err := tk.PreProcessChatRequest(string(req.LLMRequest.RawData))
 	if err != nil {
 		klog.Warningf("PreProcess chat messages failed: %v", err)
 		return nil, err
@@ -98,7 +98,7 @@ func (rt *RequestCompletionConverter) PreProcess(req *types.RequestContext) erro
 	case protocol.OpenAIChatCompletion:
 		tokenIds, err := rt.applyTokenizerTemplate(req)
 		if err != nil {
-			klog.Warningf("[%s] apply tokenizer template failed: %v, request: %v", req.Id, err, oaiReq.RawData)
+			klog.Warningf("[%s] apply tokenizer template failed: %v, request: %s", req.Id, err, string(oaiReq.RawData))
 			return fmt.Errorf("Failed to apply tokenizer template")
 		}
 		chatCompletions := oaiReq.ChatCompletionRequest

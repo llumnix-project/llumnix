@@ -51,7 +51,7 @@ func (cg *StatusDataGroup) Get(k string, l Labels) *StatusData {
 func (cg *StatusDataGroup) Expose() []Metric {
 	cg.mu.Lock()
 	values := cg.data
-	cg.data = make(map[string]*StatusData)
+	// cg.data = make(map[string]*StatusData)
 	cg.mu.Unlock()
 
 	var metrics []Metric

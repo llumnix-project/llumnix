@@ -197,21 +197,37 @@ func TestScheduleService_PrometheusMetricsEndpoint(t *testing.T) {
 		t.Error("Expected response to contain 'schedule_latency' metric")
 	}
 
-	// Verify runtime metrics
-	if !strings.Contains(body, "go_goroutines") {
-		t.Error("Expected response to contain 'go_goroutines'")
+	// Verify runtime metrics (all categories)
+	runtimeMetrics := []string{
+		// Category 1: GC metrics
+		"go_gc_duration_seconds",
+		"go_memstats_last_gc_time_seconds",
+		"go_memstats_gc_sys_bytes",
+		"go_memstats_num_gc",
+		"go_memstats_num_forced_gc",
+		// Category 2: Thread metrics
+		"go_goroutines",
+		"go_threads",
+		// Category 3: Memory fine-grained metrics
+		"go_memstats_sys_bytes",
+		"go_memstats_heap_alloc_bytes",
+		"go_memstats_heap_inuse_bytes",
+		"go_memstats_heap_objects",
+		"go_memstats_stack_inuse_bytes",
+		"go_memstats_stack_sys_bytes",
+		"go_memstats_mspan_inuse_bytes",
+		"go_memstats_mcache_inuse_bytes",
+		"go_memstats_mallocs_total",
+		"go_memstats_frees_total",
+		"go_memstats_alloc_bytes_total",
+		// Category 4: Process resource metrics
+		"go_cpu_count",
 	}
 
-	if !strings.Contains(body, "go_memstats_heap_alloc_bytes") {
-		t.Error("Expected response to contain 'go_memstats_heap_alloc_bytes'")
-	}
-
-	if !strings.Contains(body, "go_memstats_heap_inuse_bytes") {
-		t.Error("Expected response to contain 'go_memstats_heap_inuse_bytes'")
-	}
-
-	if !strings.Contains(body, "go_memstats_heap_objects") {
-		t.Error("Expected response to contain 'go_memstats_heap_objects'")
+	for _, metric := range runtimeMetrics {
+		if !strings.Contains(body, metric) {
+			t.Errorf("Expected response to contain '%s'", metric)
+		}
 	}
 
 	// Verify uptime metric

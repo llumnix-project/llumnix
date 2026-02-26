@@ -76,7 +76,7 @@ func (m *Mirror) TryMirror(req *types.RequestContext) {
 		mirrorReq, err := http.NewRequest(
 			httpReq.Method,
 			mirrorURL,
-			bytes.NewBufferString(data),
+			bytes.NewBuffer(data),
 		)
 		if err != nil {
 			if mirrorLog {

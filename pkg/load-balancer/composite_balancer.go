@@ -155,7 +155,7 @@ func (bp *CompositeBalancer) localGet(req *types.RequestContext) (types.Schedule
 // Get selects appropriate endpoints for the request based on the current balance mode.
 // It implements the Balancer interface.
 func (bp *CompositeBalancer) Get(req *types.RequestContext) (types.ScheduledResult, error) {
-	if req.ScheduleCtx.NeedSchedule {
+	if !req.ScheduleCtx.NeedSchedule {
 		return bp.localGet(req)
 	}
 

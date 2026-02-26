@@ -99,7 +99,7 @@ func (h *AnthropicHandler) unmarshalRequest(reqCtx *types.RequestContext) error 
 		return err
 	}
 	// Store raw request data for logging and debugging
-	reqCtx.AnthropicRequest.RawData = string(data)
+	reqCtx.AnthropicRequest.RawData = data
 
 	// Parse the raw request data into Anthropic format
 	var anthropicReq anthropic.Request

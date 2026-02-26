@@ -102,7 +102,7 @@ func (h *OpenAIHandler) unmarshalRequest(reqCtx *types.RequestContext) error {
 		return err
 	}
 	// Store raw request data for logging and debugging
-	reqCtx.LLMRequest.RawData = string(data)
+	reqCtx.LLMRequest.RawData = data
 
 	// Determine request type based on URL path and parse accordingly
 	url := httpReq.URL.Path
