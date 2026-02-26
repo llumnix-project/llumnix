@@ -96,7 +96,6 @@ class ServiceDiscovery:
                 self.redis_key, 
                 pod_discovery_info.SerializeToString()
             )
-            await self.redis_client.expire(self.redis_key, 3600)
             logger.info(f"Updated {len(healthy_instances)} healthy instances in Redis")
         except Exception as e:
             logger.error(f"Failed to update Redis: {e}")
