@@ -51,34 +51,33 @@ func NewScheduleService(c *options.SchedulerConfig) *ScheduleService {
 		metrics.EnableLlumnixMetrics()
 	}
 
-	r := resolver.CreateBackendServiceResolver(&c.DiscoveryConfig, types.InferRoleAll)
-	addChan, delChan, err := r.Watch(context.Background())
-	if err != nil {
-		klog.Errorf("failed to watch LLM instances: %v", err)
-		return nil
+	if ss.config.EnableRequestStateTracking() {
+		r := resolver.CreateBackendServiceResolver(&c.DiscoveryConfig, types.InferRoleAll)
+		addChan, delChan, err := r.Watch(context.Background())
+		if err != nil {
+			klog.Errorf("failed to watch LLM instances: %v", err)
+			return nil
+		}
+		ss.addChan = addChan
+		ss.delChan = delChan
+		go func() {
+			for {
+				select {
+				case instances := <-ss.addChan:
+					for _, w := range instances {
+						// create realtime stats for this instance
+						klog.Infof("add backend service endpoint: %s/%s", w.Role, w.String())
+						ss.lrsClient.AddInstance(&w)
+					}
+				case instances := <-ss.delChan:
+					for _, w := range instances {
+						klog.Infof("remove backend service endpoint: %s/%s", w.Role, w.String())
+						ss.lrsClient.RemoveInstance(w.Role.String(), w.Id())
+					}
+				}
+			}
+		}()
 	}
-	ss.addChan = addChan
-	ss.delChan = delChan
-
-    if ss.config.EnableRequestStateTracking() {
-        go func() {
-            for {
-                select {
-                case instances := <-ss.addChan:
-                    for _, w := range instances {
-                        // create realtime stats for this instance
-                        klog.Infof("add backend service endpoint: %s/%s", w.Role, w.String())
-                        ss.lrsClient.AddInstance(&w)
-                    }
-                case instances := <-ss.delChan:
-                    for _, w := range instances {
-                        klog.Infof("remove backend service endpoint: %s/%s", w.Role, w.String())
-                        ss.lrsClient.RemoveInstance(w.Role.String(), w.Id())
-                    }
-                }
-            }
-        }()
-    }
 
 	return ss
 }
