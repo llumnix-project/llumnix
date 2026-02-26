@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"llm-gateway/pkg/consts"
+	"sync"
 	"time"
 
 	"github.com/tmaxmax/go-sse"
@@ -11,25 +12,32 @@ import (
 )
 
 // TimeoutReader wraps an io.ReadCloser with a timeout mechanism
-// to prevent blocking indefinitely on read operations
+// to prevent blocking indefinitely on read operations.
+// It closes the underlying reader on timeout/cancel to terminate blocking reads.
 type TimeoutReader struct {
 	r       io.ReadCloser
 	timeout time.Duration
 	ctx     context.Context
+	closed  bool
 }
 
 // Close closes the underlying reader
 // Returns any error encountered during closing
 func (t *TimeoutReader) Close() error {
+	t.closed = true
 	return t.r.Close()
 }
 
-// Read reads data from the underlying reader with timeout protection
+// Read reads data from the underlying reader with timeout protection.
 // p: byte slice to read data into
-// Returns number of bytes read and any error encountered
-// If read operation exceeds timeout, returns 0 and consts.ErrorReadTimeout
-// If context is cancelled, returns 0 and context error
+// Returns number of bytes read and any error encountered.
+// If read operation exceeds timeout or context is cancelled,
+// the underlying reader is closed to terminate the blocking read goroutine.
 func (t *TimeoutReader) Read(p []byte) (int, error) {
+	if t.closed {
+		return 0, io.EOF
+	}
+
 	type result struct {
 		n   int
 		err error
@@ -37,17 +45,27 @@ func (t *TimeoutReader) Read(p []byte) (int, error) {
 	done := make(chan result, 1)
 
 	go func() {
-		defer close(done)
 		n, err := t.r.Read(p)
-		done <- result{n, err}
+		// Use non-blocking send to avoid goroutine leak when timeout/cancel happens
+		select {
+		case done <- result{n, err}:
+		default:
+			// Reader returned after timeout/cancel, result discarded
+		}
 	}()
 
 	select {
 	case res := <-done:
 		return res.n, res.err
 	case <-t.ctx.Done():
+		// Close the underlying reader to terminate the blocking Read goroutine
+		t.r.Close()
+		t.closed = true
 		return 0, t.ctx.Err()
 	case <-time.After(t.timeout):
+		// Close the underlying reader to terminate the blocking Read goroutine
+		t.r.Close()
+		t.closed = true
 		return 0, consts.ErrorReadTimeout
 	}
 }
@@ -61,10 +79,11 @@ type ReadEvent struct {
 // SSEReader implements an io.ReadCloser for Server-Sent Events (SSE) streams
 // It processes SSE events asynchronously and provides a standard Read interface
 type SSEReader struct {
-	r        io.ReadCloser
-	resultCh chan *ReadEvent
-	done     chan struct{}
-	pending  *ReadEvent
+	r         io.ReadCloser
+	resultCh  chan *ReadEvent
+	done      chan struct{}
+	pending   *ReadEvent
+	closeOnce sync.Once
 }
 
 // NewSSEReader creates a new SSE reader instance
@@ -73,7 +92,7 @@ type SSEReader struct {
 func NewSSEReader(r io.ReadCloser) *SSEReader {
 	sr := &SSEReader{
 		r:        r,
-		resultCh: make(chan *ReadEvent, 100),
+		resultCh: make(chan *ReadEvent, 1024),
 		done:     make(chan struct{}),
 		pending:  nil,
 	}
@@ -83,7 +102,8 @@ func NewSSEReader(r io.ReadCloser) *SSEReader {
 }
 
 // processEvents runs in a goroutine to continuously read and process SSE events
-// from the underlying stream and send them to the result channel
+// from the underlying stream and send them to the result channel.
+// Uses select with done channel to avoid blocking on channel write when reader is closed.
 func (s *SSEReader) processEvents() {
 	defer close(s.resultCh)
 
@@ -97,9 +117,10 @@ func (s *SSEReader) processEvents() {
 	for ev, err := range reader {
 		select {
 		case <-s.done:
+			// Reader closed, stop processing
 			return
-		default:
-			s.resultCh <- &ReadEvent{&ev, err}
+		case s.resultCh <- &ReadEvent{&ev, err}:
+			// Successfully sent event
 			if err != nil {
 				return
 			}
@@ -146,10 +167,14 @@ func (s *SSEReader) Read(p []byte) (n int, err error) {
 }
 
 // Close closes the SSE reader and stops background processing
+// Safe to call multiple times - only the first call takes effect
 // Returns any error encountered during closing
 func (s *SSEReader) Close() error {
-	err := s.r.Close()
-	close(s.done)
+	var err error
+	s.closeOnce.Do(func() {
+		err = s.r.Close()
+		close(s.done)
+	})
 	return err
 }
 

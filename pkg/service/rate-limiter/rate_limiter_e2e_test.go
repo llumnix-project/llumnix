@@ -237,8 +237,9 @@ func TestE2E_Reject_Instance_EmptyInstances(t *testing.T) {
 	wrapper, cancel := newE2EWrapperSimple(cfg)
 	defer cancel()
 
+	// When no instances available, return ErrorNoAvailableEndpoint (not rate limit error)
 	result, err := wrapper.Filter(consts.NormalInferMode, makeScheduleRequest("r1", 100), nil)
-	assert.ErrorIs(t, err, consts.ErrorRateLimitExceeded)
+	assert.ErrorIs(t, err, consts.ErrorNoAvailableEndpoint)
 	assert.Nil(t, result)
 }
 

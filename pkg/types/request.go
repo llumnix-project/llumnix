@@ -714,26 +714,46 @@ func (req *RequestContext) GetPromptString() (string, error) {
 }
 
 // WriteErrorResponse writes the error response to the response channel.
-func (req *RequestContext) WriteErrorResponse(err error) {
-	req.ResponseChan <- &ResponseMsg{Err: err}
+// Returns false if context is cancelled (client disconnected), preventing goroutine leak.
+func (req *RequestContext) WriteErrorResponse(err error) bool {
+	select {
+	case req.ResponseChan <- &ResponseMsg{Err: err}:
+		return true
+	case <-req.Context.Done():
+		return false
+	}
 }
 
 // WriteRawResponse writes the raw response to the response channel.
-func (req *RequestContext) WriteRawResponse(chunk []byte) {
-	req.ResponseChan <- &ResponseMsg{Err: nil, Message: chunk}
+// Returns false if context is cancelled (client disconnected), preventing goroutine leak.
+func (req *RequestContext) WriteRawResponse(chunk []byte) bool {
+	select {
+	case req.ResponseChan <- &ResponseMsg{Err: nil, Message: chunk}:
+		return true
+	case <-req.Context.Done():
+		return false
+	}
 }
 
-func (req *RequestContext) WriteResponse(chunk []byte) {
+// WriteResponse writes the response to the response channel with SSE format for streaming.
+// Returns false if context is cancelled (client disconnected), preventing goroutine leak.
+func (req *RequestContext) WriteResponse(chunk []byte) bool {
+	var body []byte
 	if !req.ClientStream() {
-		req.ResponseChan <- &ResponseMsg{Err: nil, Message: chunk}
-		return
+		body = chunk
+	} else {
+		// "data: " (6 bytes) + chunk + "\n\n" (2 bytes)
+		body = make([]byte, 0, 6+len(chunk)+2)
+		body = append(body, "data: "...)
+		body = append(body, chunk...)
+		body = append(body, '\n', '\n')
 	}
-	// "data: " (6 bytes) + chunk + "\n\n" (2 bytes)
-	body := make([]byte, 0, 6+len(chunk)+2)
-	body = append(body, "data: "...)
-	body = append(body, chunk...)
-	body = append(body, '\n', '\n')
-	req.ResponseChan <- &ResponseMsg{Err: nil, Message: body}
+	select {
+	case req.ResponseChan <- &ResponseMsg{Err: nil, Message: body}:
+		return true
+	case <-req.Context.Done():
+		return false
+	}
 }
 
 // SetScheduler sets the scheduler for decode stage scheduling.

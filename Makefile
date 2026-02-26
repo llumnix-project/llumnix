@@ -103,7 +103,7 @@ llm-gateway-proto-build:
 
 .PHONY: llm-gateway-build
 llm-gateway-build: lint-backend tokenizer-lib-download
-	CGO_ENABLED=1 $(GOBUILD) -ldflags="-extldflags '-L/tmp'" -o bin/llm-gateway $(PKG)/cmd/llm-gateway
+	CGO_ENABLED=1 $(GOBUILD) -ldflags="-extldflags '-L/tmp -lm'" -o bin/llm-gateway $(PKG)/cmd/llm-gateway
 
 # ------------------- Lint -------------------
 .PHONY: lint-backend
@@ -124,7 +124,7 @@ tokenizer-lib-download:
 		fi; \
 	elif [ "$(LOCAL_OS)" = "linux" ] && [ "$(ARCH)" = "amd64" ]; then \
 	    if [ ! -f /tmp/libsgl_model_gateway_go.tar.gz ] || [ "$$(md5sum /tmp/libsgl_model_gateway_go.tar.gz | cut -d' ' -f1)" != "dfd3e15582d42246f9ede99f78f46799" ]; then \
-			wget https://eas-data.oss-cn-shanghai.aliyuncs.com/3rdparty/tokenizers/20260115/libsgl_model_gateway_go.linux-amd64.tar.gz -O /tmp/libsgl_model_gateway_go.linux-amd64.tar.gz; \
+			wget https://eas-data.oss-cn-shanghai.aliyuncs.com/3rdparty/tokenizers/20260115/libsgl_model_gateway_go.linux-amd64.tar.gz -O /tmp/libsgl_model_gateway_go.tar.gz; \
 		fi; \
 	fi; \
 	tar xzf /tmp/libsgl_model_gateway_go.tar.gz -C /tmp;

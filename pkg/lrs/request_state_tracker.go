@@ -46,6 +46,7 @@ func NewRequestStateTracker(config *options.Config) *RequestStateTracker {
 		if config.EnableRequestReport() {
 			go gTracker.reportLoop()
 		}
+		go gTracker.cleanupLoop()
 	})
 	return gTracker
 }
@@ -69,6 +70,7 @@ func (r *RequestStateTracker) CreateRequestState(req *types.RequestContext) {
 		InstanceId: instanceID,
 		GatewayId:  req.ScheduleCtx.GatewayId,
 		NumTokens:  req.GetTotalTokenLen(),
+		CreatedAt:  time.Now(), // Track creation time for stale cleanup
 	}
 
 	r.mux.Lock()
@@ -143,13 +145,14 @@ const (
 )
 
 type RequestTokenState struct {
-	Kind       Kind   `json:"kind"`
-	Id         string `json:"id"`
-	Model      string `json:"model"`
-	InferMode  string `json:"infer_mode"`
-	InstanceId string `json:"instance_id"`
-	GatewayId  string `json:"gateway_id"`
-	NumTokens  uint64 `json:"num_tokens"`
+	Kind       Kind      `json:"kind"`
+	Id         string    `json:"id"`
+	Model      string    `json:"model"`
+	InferMode  string    `json:"infer_mode"`
+	InstanceId string    `json:"instance_id"`
+	GatewayId  string    `json:"gateway_id"`
+	NumTokens  uint64    `json:"num_tokens"`
+	CreatedAt  time.Time `json:"-"` // Used for stale request cleanup, not serialized
 }
 
 type RequestTokenStateArray = []RequestTokenState
@@ -242,5 +245,42 @@ func (r *RequestStateTracker) reportLoop() {
 	for {
 		time.Sleep(time.Duration(r.config.RequestsReporterDuration) * time.Second)
 		r.report()
+	}
+}
+
+// cleanupLoop runs independently to periodically clean up stale request states.
+func (r *RequestStateTracker) cleanupLoop() {
+	defer func() {
+		if e := recover(); e != nil {
+			klog.Warningf("request cleanup loop crashed, err: %s\ntrace:%s", e, string(debug.Stack()))
+			go r.cleanupLoop()
+		}
+	}()
+
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		r.cleanupStaleRequests()
+	}
+}
+
+// cleanupStaleRequests removes request states that have been tracked for too long.
+// Requests older than 30 minutes are considered stale (typical LLM request should complete within minutes).
+func (r *RequestStateTracker) cleanupStaleRequests() {
+	r.mux.Lock()
+	defer r.mux.Unlock()
+
+	threshold := time.Now().Add(-30 * time.Minute)
+	cleanedCount := 0
+	for id, state := range r.reqTokenState {
+		if state.CreatedAt.Before(threshold) {
+			klog.Warningf("Cleaning up stale request state: %s (created at %v)", id, state.CreatedAt)
+			delete(r.reqTokenState, id)
+			cleanedCount++
+		}
+	}
+	if cleanedCount > 0 {
+		klog.Infof("Cleaned up %d stale request states", cleanedCount)
 	}
 }

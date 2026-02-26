@@ -54,6 +54,7 @@ func NewStreamProcessor(parser ChunkParser, writer ChunkWriter) *StreamProcessor
 // 3. Error handling (unexpected errors vs normal EOF)
 // 4. Max tokens truncation
 // 5. Resource cleanup via deferred function
+// 6. Context cancellation detection to prevent goroutine leak
 //
 // The actual parsing and writing logic is delegated to the injected strategy implementations.
 func (sp *StreamProcessor) ProcessStream(req *types.RequestContext, chunkChan <-chan StreamChunk) {
@@ -125,10 +126,19 @@ func (sp *StreamProcessor) ProcessStream(req *types.RequestContext, chunkChan <-
 	}
 
 	isFirst := true
-	for chunk := range chunkChan {
-		if processFunc(isFirst, chunk) {
+	for {
+		select {
+		case chunk, ok := <-chunkChan:
+			if !ok {
+				return // Channel closed, stream ended
+			}
+			if processFunc(isFirst, chunk) {
+				return
+			}
+			isFirst = false
+		case <-req.Context.Done():
+			klog.V(3).Infof("request %s context cancelled, stopping stream processing", req.Id)
 			return
 		}
-		isFirst = false
 	}
 }

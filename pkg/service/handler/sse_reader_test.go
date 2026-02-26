@@ -61,6 +61,7 @@ func TestTimeoutReader_ReadFromRegularReader_Timeout(t *testing.T) {
 		delay: 200 * time.Millisecond, // Delay longer than timeout
 	}
 	mockReader.On("Read", mock.Anything).Return(5, nil)
+	mockReader.On("Close").Return(nil) // Expect Close to be called on timeout
 
 	tr := &TimeoutReader{
 		r:       mockReader,
@@ -79,6 +80,7 @@ func TestTimeoutReader_ReadFromRegularReader_Timeout(t *testing.T) {
 	assert.Equal(t, 0, n)
 	assert.True(t, elapsed >= 50*time.Millisecond)
 	assert.True(t, elapsed < 100*time.Millisecond) // Should timeout quickly
+	mockReader.AssertCalled(t, "Close")            // Verify Close was called
 }
 
 func TestTimeoutReader_ReadFromRegularReader_Error(t *testing.T) {
