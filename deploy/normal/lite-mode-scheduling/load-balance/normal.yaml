@@ -2,20 +2,12 @@ apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
   name: normal
-  labels:
-    llm-d.ai/inferenceServing: "true"
-    llm-d.ai/role: decode
 spec:
   replicas: 1
   leaderWorkerTemplate:
     size: 1
     workerTemplate:
-      metadata:
-        labels:
-          llm-d.ai/inferenceServing: "true"
-          llm-d.ai/role: decode
       spec:
-        serviceAccountName: deepseek-r1
         imagePullSecrets:
           - name: aliyun-registry-secret
         terminationGracePeriodSeconds: 30
@@ -37,7 +29,6 @@ spec:
           args:
             - |-
               # Clear /dev/shm on start to prevent running out of space when crashes occur
-              # https://github.com/llm-d/llm-d/issues/352
               find /dev/shm -type f -delete
 
               #################
@@ -178,7 +169,7 @@ spec:
               memory: 256Gi
               nvidia.com/gpu: "4"
         - name: discovery
-          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:discovery-20260130-111823
+          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:discovery-20260226-170427
           command:
             - /bin/bash
             - -c

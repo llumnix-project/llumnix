@@ -48,8 +48,8 @@ bash scripts/build_vllm_release.sh --push
 
 # -------- deploy in k8s --------
 
-# deploy, $DEPLOY_MODE is the mode to deploy, can be "pb" or "normal"
-bash group_deploy.sh $NAMESPACE $DEPLOY_MODE
+# deploy, $KUSTOMIZE_DIR is the path of kustomization.yaml
+bash group_deploy.sh $NAMESPACE $KUSTOMIZE_DIR
 
 # delete
 bash group_delete.sh $NAMESPACE

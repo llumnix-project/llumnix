@@ -2,20 +2,12 @@ apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
   name: prefill
-  labels:
-    inferenceServing: "true"
-    role: prefill
 spec:
   replicas: 1
   leaderWorkerTemplate:
     size: 1
     workerTemplate:
-      metadata:
-        labels:
-          inferenceServing: "true"
-          role: prefill
       spec:
-        serviceAccountName: deepseek-r1
         imagePullSecrets:
           - name: aliyun-registry-secret
         terminationGracePeriodSeconds: 30
@@ -54,8 +46,8 @@ spec:
              # --async-scheduling: Reduce white space between engine steps
              # --enable-dbo: Dual batch overlap (DBO) overlaps compute with collective communication.
              # --enable-eplb: Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU Divisibility constraint: num_routed_experts (256 for DSv3) + num_redundant_experts must be divisible by the number of GPUs.
-
-             exec vllm serve \
+              
+              CUDA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES} exec vllm serve \
                 Qwen/Qwen2.5-7B \
                 --port 8000 \
                 --trust-remote-code \
@@ -198,12 +190,12 @@ spec:
               memory: 128Gi
               nvidia.com/gpu: "1"
             requests:
-              cpu: 32
+              cpu: 16
               ephemeral-storage: 128Gi
               memory: 128Gi
               nvidia.com/gpu: "1"
         - name: discovery
-          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:discovery-20260205-133632
+          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:discovery-20260226-170427
           command:
             - /bin/bash
             - -c
