@@ -7,12 +7,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
-
-	"llumnix/pkg/consts"
 )
 
 // ---- helpers for test server ----
@@ -96,7 +93,7 @@ func TestBatchQueryPrefixHashHitKVSInstances(t *testing.T) {
 	srv := newBatchQueryServer(t, serverData)
 	defer srv.Close()
 	host, port := hostPortFromServerURL(t, srv.URL)
-	c, err := NewMetadataServiceClient(host, port, consts.DefaultKvsMetadataServiceHashAlgo)
+	c, err := NewMetadataServiceClient(host, port)
 	if err != nil {
 		t.Fatalf("NewMetadataServiceClient: %v", err)
 	}
@@ -138,78 +135,10 @@ func TestBatchQueryKeys_HTTPError(t *testing.T) {
 	}))
 	defer srv.Close()
 	host, port := hostPortFromServerURL(t, srv.URL)
-	c, _ := NewMetadataServiceClient(host, port, consts.DefaultKvsMetadataServiceHashAlgo)
+	c, _ := NewMetadataServiceClient(host, port)
 	_, err := c.BatchQueryPrefixHashHitKVSInstances([]string{"mykey1"})
 	if err == nil {
 		t.Fatalf("expected error, got nil")
-	}
-}
-
-// ---- HashTokens tests ----
-func TestHashTokens_InvalidInput(t *testing.T) {
-	c := &MetadataServiceClient{}
-	_, err := c.HashTokens(nil, 4, true, "iris_", "vllm_")
-	if err == nil {
-		t.Fatalf("expected error for empty tokens")
-	}
-	_, err = c.HashTokens([]int64{1, 2, 3}, 0, true, "iris_", "vllm_")
-	if err == nil {
-		t.Fatalf("expected error for chunkSize<=0")
-	}
-}
-
-func TestHashTokens_Chunking_SaveUnfullChunk(t *testing.T) {
-	t.Setenv("MOONCAKE_HASH_SEED", "seed-1")
-	c := &MetadataServiceClient{}
-	tokens := []int64{1, 2, 3, 4, 5} // chunkSize=4 => 1 full + remainder
-	hs1, err := c.HashTokens(tokens, 4, true, "iris_", "vllm_")
-	if err != nil {
-		t.Fatalf("HashTokens err=%v", err)
-	}
-	if len(hs1) != 2 {
-		t.Fatalf("expected 2 hashes, got %d: %v", len(hs1), hs1)
-	}
-	hs2, err := c.HashTokens(tokens, 4, false, "iris_", "vllm_")
-	if err != nil {
-		t.Fatalf("HashTokens err=%v", err)
-	}
-	if len(hs2) != 1 {
-		t.Fatalf("expected 1 hash, got %d: %v", len(hs2), hs2)
-	}
-}
-
-func TestHashTokens_DeterministicWithSameSeed(t *testing.T) {
-	t.Setenv("MOONCAKE_HASH_SEED", "seed-xyz")
-	c := &MetadataServiceClient{}
-	tokens := []int64{10, 11, 12, 13}
-	h1, err := c.HashTokens(tokens, 4, true, "iris_", "vllm_")
-	if err != nil {
-		t.Fatalf("HashTokens err=%v", err)
-	}
-	h2, err := c.HashTokens(tokens, 4, true, "iris_", "vllm_")
-	if err != nil {
-		t.Fatalf("HashTokens err=%v", err)
-	}
-	if len(h1) != len(h2) || h1[0] != h2[0] {
-		t.Fatalf("expected deterministic hashes, got h1=%v h2=%v", h1, h2)
-	}
-}
-
-func TestHashTokens_DifferentSeedDifferentResult(t *testing.T) {
-	c := &MetadataServiceClient{}
-	tokens := []int64{10, 11, 12, 13}
-	os.Setenv("MOONCAKE_HASH_SEED", "seed-a")
-	h1, err := c.HashTokens(tokens, 4, true, "iris_", "vllm_")
-	if err != nil {
-		t.Fatalf("HashTokens err=%v", err)
-	}
-	os.Setenv("MOONCAKE_HASH_SEED", "seed-b")
-	h2, err := c.HashTokens(tokens, 4, true, "iris_", "vllm_")
-	if err != nil {
-		t.Fatalf("HashTokens err=%v", err)
-	}
-	if h1[0] == h2[0] {
-		t.Fatalf("expected different hashes for different seeds, h1=%v h2=%v", h1, h2)
 	}
 }
 
@@ -223,7 +152,7 @@ func TestBatchQueryPrefixHashHitKVSInstances_SuccessFalse(t *testing.T) {
 	}))
 	defer srv.Close()
 	host, port := hostPortFromServerURL(t, srv.URL)
-	c, _ := NewMetadataServiceClient(host, port, consts.DefaultKvsMetadataServiceHashAlgo)
+	c, _ := NewMetadataServiceClient(host, port)
 	_, err := c.BatchQueryPrefixHashHitKVSInstances([]string{"k1"})
 	if err == nil {
 		t.Fatalf("expected error when success=false")
@@ -237,7 +166,7 @@ func TestBatchQueryPrefixHashHitKVSInstances_InvalidJSON(t *testing.T) {
 	}))
 	defer srv.Close()
 	host, port := hostPortFromServerURL(t, srv.URL)
-	c, _ := NewMetadataServiceClient(host, port, consts.DefaultKvsMetadataServiceHashAlgo)
+	c, _ := NewMetadataServiceClient(host, port)
 	_, err := c.BatchQueryPrefixHashHitKVSInstances([]string{"k1"})
 	if err == nil {
 		t.Fatalf("expected json decode error")
@@ -262,7 +191,7 @@ func TestBatchQueryPrefixHashHitKVSInstances_EmptyTransportEndpointSkipped(t *te
 	defer srv.Close()
 
 	host, port := hostPortFromServerURL(t, srv.URL)
-	c, _ := NewMetadataServiceClient(host, port, consts.DefaultKvsMetadataServiceHashAlgo)
+	c, _ := NewMetadataServiceClient(host, port)
 
 	got, err := c.BatchQueryPrefixHashHitKVSInstances([]string{"k1"})
 	if err != nil {

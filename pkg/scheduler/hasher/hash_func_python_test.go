@@ -1,48 +1,12 @@
-package mooncake
+package hasher
 
 import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
 	"os/exec"
-	"strings"
 	"testing"
 )
-
-type tuple2 struct {
-	A []int64
-	B uint64
-}
-
-func mkSeq(n int) []int64 {
-	out := make([]int64, n)
-	for i := 0; i < n; i++ {
-		v := int64(i + 1)
-		if i%3 == 1 {
-			v = -v
-		}
-		out[i] = v
-	}
-	return out
-}
-
-func pyTupleExprFromSeq(seq []int64, u uint64) string {
-	var b strings.Builder
-	b.WriteString("(")
-	b.WriteString(fmt.Sprintf("%d", u))
-	b.WriteString(", ")
-	b.WriteString("[")
-	for i, v := range seq {
-		if i > 0 {
-			b.WriteString(", ")
-		}
-		b.WriteString(fmt.Sprintf("%d", v))
-	}
-	b.WriteString("]")
-	// 3) null/None last
-	b.WriteString(", None)")
-	return b.String()
-}
 
 func TestSha256CBOR_MatchesPython_TupleListLenAndPrefixHash(t *testing.T) {
 	if _, err := exec.LookPath("python3"); err != nil {
@@ -68,7 +32,7 @@ func TestSha256CBOR_MatchesPython_TupleListLenAndPrefixHash(t *testing.T) {
 			if err != nil {
 				t.Fatalf("pythonSha256CBOR error: %v", err)
 			}
-			got, err := sha256CBOR([]any{p, seq, nil})
+			got, err := Sha256CBOR([]any{p, seq, nil})
 			get := hex.EncodeToString(got)
 			if err != nil {
 				t.Fatalf("Sha256CBOR error: %v", err)
@@ -85,7 +49,7 @@ func TestSha256CBOR_MatchesPython_TupleListLenAndPrefixHash(t *testing.T) {
 					if err != nil {
 						t.Fatalf("pythonSha256CBOR error: %v", err)
 					}
-					got, err := sha256CBOR([]any{p, seq, nil})
+					got, err := Sha256CBOR([]any{p, seq, nil})
 					get := hex.EncodeToString(got)
 					if err != nil {
 						t.Fatalf("Sha256CBOR error: %v", err)
@@ -132,9 +96,9 @@ func TestGetHashStr_MatchesPython_Regular(t *testing.T) {
 			if err != nil {
 				t.Fatalf("pythonHashBlockSha256Hex error: %v", err)
 			}
-			got, err := hashBlockSha256Hex(tt.toks, tt.prior)
+			got, err := HashBlockSha256Hex(tt.toks, tt.prior)
 			if err != nil {
-				t.Fatalf("hashBlockSha256Hex error: %v", err)
+				t.Fatalf("HashBlockSha256Hex error: %v", err)
 			}
 			if got != want {
 				t.Fatalf("hash mismatch:\n  got : %s\n  want: %s", got, want)
@@ -155,9 +119,9 @@ func TestGetHashStr_MatchesPython_Chaining(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pythonHashBlockSha256Hex(1) error: %v", err)
 	}
-	go1, err := hashBlockSha256Hex(toks1, "")
+	go1, err := HashBlockSha256Hex(toks1, "")
 	if err != nil {
-		t.Fatalf("hashBlockSha256Hex(1) error: %v", err)
+		t.Fatalf("HashBlockSha256Hex(1) error: %v", err)
 	}
 	if go1 != py1 {
 		t.Fatalf("hash1 mismatch:\n  got : %s\n  want: %s", go1, py1)
@@ -167,29 +131,12 @@ func TestGetHashStr_MatchesPython_Chaining(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pythonHashBlockSha256Hex(2) error: %v", err)
 	}
-	go2, err := hashBlockSha256Hex(toks2, go1)
+	go2, err := HashBlockSha256Hex(toks2, go1)
 	if err != nil {
-		t.Fatalf("hashBlockSha256Hex(2) error: %v", err)
+		t.Fatalf("HashBlockSha256Hex(2) error: %v", err)
 	}
 	if go2 != py2 {
 		t.Fatalf("hash2 mismatch:\n  got : %s\n  want: %s", go2, py2)
-	}
-}
-
-func TestGetHashStr_RangeChecks(t *testing.T) {
-	// Negative => Python would raise OverflowError; Go should return error.
-	if _, err := hashBlockSha256Hex([]int64{-1}, ""); err == nil {
-		t.Fatalf("expected error for negative token")
-	}
-
-	// > uint32 max
-	if _, err := hashBlockSha256Hex([]int64{4294967296}, ""); err == nil {
-		t.Fatalf("expected error for >uint32 token")
-	}
-
-	// prior hash malformed
-	if _, err := hashBlockSha256Hex([]int64{1}, "zz"); err == nil {
-		t.Fatalf("expected error for invalid prior hash hex")
 	}
 }
 
@@ -211,9 +158,9 @@ func TestGetHashStr_ManyRandomLikeCases_MatchesPython(t *testing.T) {
 			if err != nil {
 				t.Fatalf("pythonHashBlockSha256Hex error: %v", err)
 			}
-			got, err := hashBlockSha256Hex(toks, "")
+			got, err := HashBlockSha256Hex(toks, "")
 			if err != nil {
-				t.Fatalf("hashBlockSha256Hex error: %v", err)
+				t.Fatalf("HashBlockSha256Hex error: %v", err)
 			}
 			if got != want {
 				t.Fatalf("hash mismatch:\n  got : %s\n  want: %s", got, want)

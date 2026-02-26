@@ -1,15 +1,14 @@
 package schedule_policy
 
 import (
-	"llumnix/pkg/cms"
 	"math"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	"llumnix/pkg/cms"
 	"llumnix/pkg/consts"
 	"llumnix/pkg/types"
 )
@@ -101,24 +100,30 @@ func TestFilter(t *testing.T) {
 
 func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 	tests := []struct {
-		name           string
-		promptTokenIds []int64
-		mockResponses  *MockKVSClient
-		instanceViews  map[string]*instanceViewScheduling
-		expectedHitLen map[string]int
+		name            string
+		prefixHashes    []string
+		chunkSize       int
+		numPromptTokens int
+		mockKVS         *MockKVSClient
+		mockCMS         *MockCMSReadClient
+		instanceViews   map[string]*instanceViewScheduling
+		expectedHitLen  map[string]int
 	}{
 		{
-			name:           "normal case with multiple instances",
-			promptTokenIds: []int64{1, 2, 3, 4},
-			mockResponses: &MockKVSClient{
-				prefixHashes: []string{"hash1", "hash2"},
-				prefixHashHitInstances: map[string]sets.String{
-					"hash1": sets.NewString("instance1", "instance2"),
-					"hash2": sets.NewString("instance1"),
+			name:            "normal case with multiple instances",
+			prefixHashes:    []string{"hash1", "hash2"},
+			chunkSize:       50,
+			numPromptTokens: 4,
+			mockKVS: &MockKVSClient{
+				prefixHashHitIps: map[string][]string{
+					"hash1": {"1.1.1.1", "2.2.2.2"},
+					"hash2": {"1.1.1.1"},
 				},
-				instancesCacheHitLenResp: map[string]int{
-					"instance1": 100,
-					"instance2": 50,
+			},
+			mockCMS: &MockCMSReadClient{
+				ipToInstanceIDsMap: map[string][]string{
+					"1.1.1.1": {"instance1"},
+					"2.2.2.2": {"instance2"},
 				},
 			},
 			instanceViews: map[string]*instanceViewScheduling{
@@ -167,13 +172,14 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 			},
 		},
 		{
-			name:           "empty prompt tokens",
-			promptTokenIds: []int64{},
-			mockResponses: &MockKVSClient{
-				prefixHashes:             []string{},
-				prefixHashHitInstances:   map[string]sets.String{},
-				instancesCacheHitLenResp: map[string]int{},
+			name:            "empty prefix hashes",
+			prefixHashes:    []string{},
+			chunkSize:       50,
+			numPromptTokens: 0,
+			mockKVS: &MockKVSClient{
+				prefixHashHitIps: map[string][]string{},
 			},
+			mockCMS: &MockCMSReadClient{},
 			instanceViews: map[string]*instanceViewScheduling{
 				"instance1": {
 					cmsView: &cms.InstanceView{
@@ -198,16 +204,19 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 			expectedHitLen: map[string]int{},
 		},
 		{
-			name:           "instance not in view map",
-			promptTokenIds: []int64{1, 2, 3},
-			mockResponses: &MockKVSClient{
-				prefixHashes: []string{"hash1"},
-				prefixHashHitInstances: map[string]sets.String{
-					"hash1": sets.NewString("instance1", "instance2"),
+			name:            "instance not in view map",
+			prefixHashes:    []string{"hash1"},
+			chunkSize:       100,
+			numPromptTokens: 3,
+			mockKVS: &MockKVSClient{
+				prefixHashHitIps: map[string][]string{
+					"hash1": {"1.1.1.1", "2.2.2.2"},
 				},
-				instancesCacheHitLenResp: map[string]int{
-					"instance1": 100,
-					"instance2": 50,
+			},
+			mockCMS: &MockCMSReadClient{
+				ipToInstanceIDsMap: map[string][]string{
+					"1.1.1.1": {"instance1"},
+					"2.2.2.2": {"instance2"},
 				},
 			},
 			instanceViews: map[string]*instanceViewScheduling{
@@ -242,16 +251,16 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 			for _, instance := range tt.instanceViews {
 				instance.InstanceViewInterface = instance.cmsView
 			}
-			mockCMSClient := &MockCMSReadClient{}
-			blockSize := int32(16)
-			calcInstancesPrefixCacheHitLen(tt.mockResponses, mockCMSClient, tt.promptTokenIds, tt.instanceViews)
+			getInstancesPrefixCacheHitLen(
+				tt.mockKVS, tt.mockCMS, tt.prefixHashes, tt.chunkSize,
+				tt.numPromptTokens, tt.instanceViews)
 
 			// Verify the prefixHitTokens is set correctly in instance view
 			for instanceID, expectedLen := range tt.expectedHitLen {
 				if view, exists := tt.instanceViews[instanceID]; exists {
 					assert.Equal(t, expectedLen, view.schedulingCtx.prefixHitTokens)
-					assert.Equal(t, expectedLen/int(blockSize), view.schedulingCtx.prefixHitTokens/int(blockSize))
-					assert.Equal(t, float32(expectedLen)/float32(len(tt.promptTokenIds)), view.schedulingCtx.prefixHitRatio)
+					assert.Equal(t, expectedLen/tt.chunkSize, view.schedulingCtx.prefixHitTokens/tt.chunkSize)
+					assert.Equal(t, float32(expectedLen)/float32(tt.numPromptTokens), view.schedulingCtx.prefixHitRatio)
 				}
 			}
 		})
@@ -325,27 +334,11 @@ func TestKVSClient_ConvertToPrefixHashHitInstances(t *testing.T) {
 
 // MockKVSClient implements a mock version of kvsClient
 type MockKVSClient struct {
-	prefixHashes             []string
-	prefixHashHitIps         map[string][]string
-	prefixHashHitInstances   map[string]sets.String
-	instancesCacheHitLenResp map[string]int
-}
-
-func (m *MockKVSClient) PrefixHash(tokens []int64) []string {
-	return m.prefixHashes
+	prefixHashHitIps map[string][]string
 }
 
 func (m *MockKVSClient) BatchQueryCacheHitKVSInstances(prefixHashes []string) map[string][]string {
 	return m.prefixHashHitIps
-}
-
-func (m *MockKVSClient) ConvertKVSInstanceToIp(kvsInstance string) string {
-	return strings.Split(kvsInstance, ":")[0]
-}
-
-func (m *MockKVSClient) CalcInstancesCacheHitLen(
-	prefixHashes []string, prefixHashHitInstances map[string]sets.String) map[string]int {
-	return m.instancesCacheHitLenResp
 }
 
 func (c *MockKVSClient) IsKVSMetadataServiceDown() bool {
@@ -400,4 +393,25 @@ func (m *MockCMSReadClient) GetInstanceViews() map[string]*cms.InstanceView {
 
 func (m *MockCMSReadClient) GetGroupedInstanceViews() map[string]map[string]*cms.InstanceView {
 	return nil
+}
+
+func TestCalcInstancesCacheHitLen_BrokenOnGap(t *testing.T) {
+	chunkSize := 4
+
+	prefixHashes := []string{"h1", "h2", "h3", "h4"}
+	hit := map[string]sets.String{
+		"h1": sets.NewString("i1", "i2"),
+		"h2": sets.NewString("i1"),       // i2 gap starts here
+		"h3": sets.NewString("i1", "i2"), // i2 reappears, but should be broken and not counted further
+		"h4": sets.NewString("i1"),
+	}
+
+	got := calcInstancesPrefixCacheHitLen(chunkSize, prefixHashes, hit)
+
+	if got["i1"] != 16 {
+		t.Fatalf("i1 expected 16, got %d (map=%v)", got["i1"], got)
+	}
+	if got["i2"] != 4 {
+		t.Fatalf("i2 expected 4, got %d (map=%v)", got["i2"], got)
+	}
 }

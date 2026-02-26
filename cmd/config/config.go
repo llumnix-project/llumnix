@@ -189,7 +189,7 @@ type FullModeScheduleConfig struct {
 	KvsMetadataServiceRedisClusterPassword string
 	KvsMetadataServiceHttpServerHost       string
 	KvsMetadataServiceHttpServerPort       string
-	KvsMetadataServiceHashAlgo             string
+	KvsHashAlgo             string
 
 	// schedule
 	DispatchTopK                        int
@@ -263,6 +263,7 @@ func (c *FullModeScheduleConfig) AddFullModeScheduleConfigFlags(flags *pflag.Fla
 	flags.IntVar(&c.CacheAwareSchedulingMinTokens, "cache-aware-scheduling-min-tokens", consts.DefaultCacheAwareSchedulingMinTokens, "Llumnix cache aware scheduling min tokens")
 	flags.StringVar(&c.KvsBackend, "kvs-backend", consts.DefaultKvsBackend, "Llumnix KVS backend")
 	flags.StringVar(&c.KvsMetadataServiceConfigPath, "kvs-metadata-service-config-path", consts.DefaultKvsMetadataServiceConfigPath, "Llumnix KVS MetadataService config path")
+	flags.StringVar(&c.KvsHashAlgo, "kvs-hash-algo", consts.DefaultKvsHashAlgo, "Llumnix KVS hash algo")
 	flags.IntVar(&c.KvsChunkSize, "kvs-chunk-size", consts.DefaultKvsChunkSize, "Llumnix KVS chunk size")
 	flags.BoolVar(&c.KvsEnableSaveUnfullChunk, "kvs-enable-save-unfull-chunk", consts.DefaultKvsEnableSaveUnfullChunk, "Llumnix KVS enable save unfull chunk")
 	flags.StringVar(&c.KvsIrisMetaPrefix, "kvs-iris-meta-prefix", consts.DefaultKvsIrisMetaPrefix, "Llumnix KVS iris meta prefix")
@@ -274,7 +275,6 @@ func (c *FullModeScheduleConfig) AddFullModeScheduleConfigFlags(flags *pflag.Fla
 	flags.StringVar(&c.KvsMetadataServiceRedisClusterPassword, "kvs-metadata-service-redis-cluster-password", consts.DefaultKvsMetadataServiceRedisClusterPassword, "Llumnix KVS metadata service redis cluster password")
 	flags.StringVar(&c.KvsMetadataServiceHttpServerHost, "kvs-metadata-service-http-server-host", consts.DefaultKvsMetadataServiceHttpServerHost, "Llumnix KVS metadata service http server host")
 	flags.StringVar(&c.KvsMetadataServiceHttpServerPort, "kvs-metadata-service-http-server-port", consts.DefaultKvsMetadataServiceHttpServerPort, "Llumnix KVS metadata service http server port")
-	flags.StringVar(&c.KvsMetadataServiceHashAlgo, "kvs-metadata-service-hash-algo", consts.DefaultKvsMetadataServiceHashAlgo, "Llumnix KVS metadata service hash algo")
 
 	flags.IntVar(&c.DispatchTopK, "dispatch-top-k", consts.DefaultDispatchTopK, "Llumnix dispatch top K")
 	flags.StringVar(&c.DispatchNeutralLoadMetric, "dispatch-neutral-load-metric", consts.DefaultDispatchNeutralLoadMetric, "Llumnix dispatch neutral load metric")

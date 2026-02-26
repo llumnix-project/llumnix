@@ -8,9 +8,6 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-
-	"github.com/stretchr/testify/assert"
-	"k8s.io/apimachinery/pkg/util/sets"
 )
 
 // --------- Fake client implementing KVSMetadataServiceClientInterface ---------
@@ -19,31 +16,13 @@ type FakeKVSMetadataServiceClient struct {
 	mu sync.Mutex
 
 	// injectable funcs (if set, they override the static returns below)
-	hashTokensFn func(tokens []int64, chunkSize int, saveUnfullChunk bool, irisMetaPrefix, vLLMBlockPrefix string) ([]string, error)
 	batchQueryFn func(hashKeys []string) (map[string][]string, error)
-
-	// static returns
-	hashTokensRet []string
-	hashTokensErr error
 
 	batchRet map[string][]string
 	batchErr error
 
 	// observations
 	lastBatchKeys []string
-}
-
-func (f *FakeKVSMetadataServiceClient) HashTokens(tokens []int64, chunkSize int, saveUnfullChunk bool, irisMetaPrefix string, vLLMBlockPrefix string) ([]string, error) {
-	f.mu.Lock()
-	fn := f.hashTokensFn
-	ret := append([]string(nil), f.hashTokensRet...)
-	err := f.hashTokensErr
-	f.mu.Unlock()
-
-	if fn != nil {
-		return fn(tokens, chunkSize, saveUnfullChunk, irisMetaPrefix, vLLMBlockPrefix)
-	}
-	return ret, err
 }
 
 func (f *FakeKVSMetadataServiceClient) BatchQueryPrefixHashHitKVSInstances(hashKeys []string) (map[string][]string, error) {
@@ -78,76 +57,6 @@ func equalMapStringSlice(got, want map[string][]string) bool {
 // --------- tests (ordered by kvs_client.go method order) ---------
 
 // --- newKVSClient(...) ---
-
-// --- (c *KVSClient) PrefixHash(tokens []int64) []string ---
-
-func TestKVSClient_PrefixHash_EmptyTokens(t *testing.T) {
-	c := &KVSClient{}
-	if got := c.PrefixHash(nil); got != nil {
-		t.Fatalf("expected nil, got=%v", got)
-	}
-	if got := c.PrefixHash([]int64{}); got != nil {
-		t.Fatalf("expected nil, got=%v", got)
-	}
-}
-
-func TestKVSClient_PrefixHash_PropagateAndArgs(t *testing.T) {
-	var (
-		gotChunkSize       int
-		gotSaveUnfullChunk bool
-		gotIrisPrefix      string
-		gotVLLMPrefix      string
-		called             int32
-	)
-
-	fake := &FakeKVSMetadataServiceClient{
-		hashTokensFn: func(tokens []int64, chunkSize int, saveUnfullChunk bool, irisMetaPrefix, vLLMBlockPrefix string) ([]string, error) {
-			atomic.AddInt32(&called, 1)
-			gotChunkSize = chunkSize
-			gotSaveUnfullChunk = saveUnfullChunk
-			gotIrisPrefix = irisMetaPrefix
-			gotVLLMPrefix = vLLMBlockPrefix
-			return []string{"h1", "h2"}, nil
-		},
-	}
-
-	kvsClient := &KVSClient{
-		kvsMetadataServiceClient: fake,
-		chunkSize:                4,
-		saveUnfullChunk:          true,
-		irisMetaPrefix:           "iris_",
-		vLLMBlockPrefix:          "vllm_",
-	}
-
-	out := kvsClient.PrefixHash([]int64{1, 2, 3, 4, 5})
-	if !reflect.DeepEqual(out, []string{"h1", "h2"}) {
-		t.Fatalf("unexpected out=%v", out)
-	}
-	if atomic.LoadInt32(&called) != 1 {
-		t.Fatalf("expected HashTokens called once, got %d", called)
-	}
-	if gotChunkSize != 4 || !gotSaveUnfullChunk || gotIrisPrefix != "iris_" || gotVLLMPrefix != "vllm_" {
-		t.Fatalf("args mismatch chunk=%d save=%v iris=%q vllm=%q",
-			gotChunkSize, gotSaveUnfullChunk, gotIrisPrefix, gotVLLMPrefix)
-	}
-}
-
-func TestKVSClient_PrefixHash_HashError(t *testing.T) {
-	fake := &FakeKVSMetadataServiceClient{
-		hashTokensFn: func(tokens []int64, chunkSize int, saveUnfullChunk bool, irisMetaPrefix, vLLMBlockPrefix string) ([]string, error) {
-			return nil, errors.New("hash failed")
-		},
-	}
-	kvsClient := &KVSClient{
-		kvsMetadataServiceClient: fake,
-		chunkSize:                4,
-		saveUnfullChunk:          true,
-		irisMetaPrefix:           "iris_",
-		vLLMBlockPrefix:          "vllm_",
-	}
-
-	assert.Nil(t, kvsClient.PrefixHash([]int64{1, 2, 3}))
-}
 
 // --- (c *KVSClient) BatchQueryCacheHitKVSInstances(prefixHashes []string) map[string][]string ---
 
@@ -212,11 +121,6 @@ func TestKVSClient_CacheOperations_Basic(t *testing.T) {
 
 	kvsClient := &KVSClient{
 		kvsMetadataServiceClient: fake,
-
-		chunkSize:       4,
-		saveUnfullChunk: true,
-		irisMetaPrefix:  "iris_meta_",
-		vLLMBlockPrefix: "vllm_block_",
 
 		retryTimes:    3,
 		retryInterval: 1 * time.Millisecond,
@@ -335,25 +239,3 @@ func TestKVSClient_IsKVSMetadataServiceDown_AutoRecover(t *testing.T) {
 	}
 }
 
-// --- (c *KVSClient) CalcInstancesCacheHitLen(...) map[string]int ---
-
-func TestKVSClient_CalcInstancesCacheHitLen_BrokenOnGap(t *testing.T) {
-	kvsClient := &KVSClient{chunkSize: 4}
-
-	prefixHashes := []string{"h1", "h2", "h3", "h4"}
-	hit := map[string]sets.String{
-		"h1": sets.NewString("i1", "i2"),
-		"h2": sets.NewString("i1"),       // i2 gap starts here
-		"h3": sets.NewString("i1", "i2"), // i2 reappears, but should be broken and not counted further
-		"h4": sets.NewString("i1"),
-	}
-
-	got := kvsClient.CalcInstancesCacheHitLen(prefixHashes, hit)
-
-	if got["i1"] != 16 {
-		t.Fatalf("i1 expected 16, got %d (map=%v)", got["i1"], got)
-	}
-	if got["i2"] != 4 {
-		t.Fatalf("i2 expected 4, got %d (map=%v)", got["i2"], got)
-	}
-}

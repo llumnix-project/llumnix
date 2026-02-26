@@ -204,3 +204,7 @@ version.py
 # test result file
 *.txt
 *.jsonl
+
+# ai
+AGENTS.md
+.qoder

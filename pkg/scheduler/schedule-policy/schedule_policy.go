@@ -11,6 +11,7 @@ import (
 	"llumnix/pkg/consts"
 	"llumnix/pkg/lrs"
 	"llumnix/pkg/metrics"
+	"llumnix/pkg/scheduler/hasher"
 	"llumnix/pkg/scheduler/kvs"
 	"llumnix/pkg/types"
 )
@@ -86,6 +87,7 @@ type DispatchPolicy struct {
 	lrsClient         *lrs.LocalRealtimeStateClient
 	clusterViewClient ClusterViewClientInterface
 	kvsClient         kvs.KVSClientInterface
+	tokenHasher       *hasher.TokenHasher
 	policyInternal    dispatchPolicyInternal
 	clusterView       clusterView
 }
@@ -124,26 +126,34 @@ func NewDispatchPolicy(
 	}
 
 	var kvsClient kvs.KVSClientInterface
+	var tokenHasher *hasher.TokenHasher
 	if c.EnableCacheAwareScheduling {
 		client, err := kvs.CreateOrGetClient(
 			c.KvsBackend,
 			c.KvsMetadataServiceConfigPath,
-			c.KvsChunkSize,
-			c.KvsEnableSaveUnfullChunk,
-			c.KvsIrisMetaPrefix,
-			c.KvsVLLMBlockPrefix,
 			c.KvsRetryTimes,
 			c.KvsRetryIntervalMs,
 			c.KvsMetadataServiceDownDurationS,
 			c.KvsMetadataServiceRedisClusterHosts,
 			c.KvsMetadataServiceRedisClusterPassword,
 			c.KvsMetadataServiceHttpServerHost,
-			c.KvsMetadataServiceHttpServerPort,
-			c.KvsMetadataServiceHashAlgo)
+			c.KvsMetadataServiceHttpServerPort)
 		if err != nil {
 			panic(err)
 		}
 		kvsClient = client
+
+		// Override hash algo for v6d backend: v6d always uses xxhash.
+		hashAlgo := c.KvsHashAlgo
+		if c.KvsBackend == consts.KvsBackendV6d {
+			klog.Infof("Overriding KvsHashAlgo from %q to %q for v6d backend", c.KvsHashAlgo, consts.KvsHashAlgoXxhash)
+			hashAlgo = consts.KvsHashAlgoXxhash
+		}
+		th, err := hasher.NewTokenHasher(hashAlgo)
+		if err != nil {
+			panic(err)
+		}
+		tokenHasher = th
 	}
 
 	return &DispatchPolicy{
@@ -153,6 +163,7 @@ func NewDispatchPolicy(
 		lrsClient:         lrsClient,
 		clusterViewClient: clusterViewClient,
 		kvsClient:         kvsClient,
+		tokenHasher:       tokenHasher,
 		policyInternal:    newDispatchPolicyInternal(c),
 		clusterView: clusterView{
 			groupedInstanceViews: nil,
@@ -251,15 +262,24 @@ func (p *DispatchPolicy) schedule(
 	requestId := request.Id
 	promptTokenIds := Uint32ToInt64(request.PromptTokenIds)
 	selectedInstances = [][]*instanceViewScheduling{}
-	if p.c.EnableCacheAwareScheduling && len(promptTokenIds) >= p.c.CacheAwareSchedulingMinTokens {
+	if p.c.EnableCacheAwareScheduling && p.tokenHasher != nil && len(promptTokenIds) >= p.c.CacheAwareSchedulingMinTokens {
 		// NOTE(sunbiao.sun): Calculating instance prompt cache hit len has ms-level latency, but it does not r/w
 		// the raw instance view, so we unlock and re-lock here to improve schedule throughput
 		// when not allowing concurrent schedule.
 		if !p.c.AllowConcurrentSchedule {
 			p.cmsClient.Unlock()
 		}
-		// Write prefixHitTokens in scheduling ctx of instance view.
-		calcInstancesPrefixCacheHitLen(p.kvsClient, p.cmsClient, promptTokenIds, clusterView.instanceViews)
+		prefixHashes, err := p.tokenHasher.HashTokens(
+			promptTokenIds, p.c.KvsChunkSize, p.c.KvsEnableSaveUnfullChunk,
+			p.c.KvsIrisMetaPrefix, p.c.KvsVLLMBlockPrefix)
+		if err != nil {
+			klog.Warningf("HashTokens failed: %v", err)
+		} else {
+			// Write prefixHitTokens in scheduling ctx of instance view.
+			getInstancesPrefixCacheHitLen(
+				p.kvsClient, p.cmsClient, prefixHashes, p.c.KvsChunkSize,
+				len(promptTokenIds), clusterView.instanceViews)
+		}
 		if !p.c.AllowConcurrentSchedule {
 			p.cmsClient.Lock()
 		}

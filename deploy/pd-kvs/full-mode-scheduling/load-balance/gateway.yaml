@@ -92,7 +92,7 @@ spec:
         - "vllm-kvt"
         - "--enable-full-mode-scheduling=true"
         env:
-        - name: MOONCAKE_HASH_SEED
+        - name: GO_HASH_SEED
           value: "0"
         ports:
         - containerPort: 8089

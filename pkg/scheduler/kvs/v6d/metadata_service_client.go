@@ -2,18 +2,16 @@ package v6d
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
-	batch_service_redis "llumnix/pkg/redis"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/cespare/xxhash/v2"
 	"github.com/redis/go-redis/v9"
 	"k8s.io/klog/v2"
+
+	batch_service_redis "llumnix/pkg/redis"
 )
 
 // Only safeBatchZReadRange is actually used, other methods are only used in test.
@@ -194,55 +192,6 @@ func NewMetadataServiceClient(
 	klog.Info("MetadataServiceClient initialized")
 
 	return v6dMetadataServiceClient, nil
-}
-
-func (c *MetadataServiceClient) HashTokens(
-	tokens []int64, chunkSize int, saveUnfullChunk bool,
-	irisMetaPrefix string, vLLMBlockPrefix string) ([]string, error) {
-	if len(tokens) == 0 || chunkSize <= 0 {
-		return nil, fmt.Errorf("invalid hash input")
-	}
-
-	numCompleteBlocks := len(tokens) / chunkSize
-	totalBlocks := numCompleteBlocks
-	remainder := len(tokens) % chunkSize
-	if remainder > 0 {
-		totalBlocks++
-	}
-
-	// Core prefix hash computation using XXHash64 streaming
-	blockHashes := make([]string, 0, totalBlocks)
-	hasher := xxhash.NewWithSeed(0)
-	defer hasher.Reset()
-
-	// Process complete blocks
-	for i := 0; i < numCompleteBlocks; i++ {
-		if err := binary.Write(hasher, binary.LittleEndian, tokens[i*chunkSize:(i+1)*chunkSize]); err != nil {
-			return nil, fmt.Errorf("failed to write complete block %d: %w", i, err)
-		}
-		blockHashes = append(blockHashes, c.buildBlockName(hasher.Sum64(), irisMetaPrefix, vLLMBlockPrefix))
-	}
-
-	// Process last incomplete block if it exists
-	if saveUnfullChunk && remainder > 0 {
-		if err := binary.Write(hasher, binary.LittleEndian, tokens[numCompleteBlocks*chunkSize:]); err != nil {
-			return nil, fmt.Errorf("failed to write remainder block: %w", err)
-		}
-
-		// Pad with zeros to match original behavior
-		padding := make([]int64, chunkSize-remainder)
-		if err := binary.Write(hasher, binary.LittleEndian, padding); err != nil {
-			return nil, fmt.Errorf("failed to write padding: %w", err)
-		}
-
-		blockHashes = append(blockHashes, c.buildBlockName(hasher.Sum64(), irisMetaPrefix, vLLMBlockPrefix))
-	}
-
-	return blockHashes, nil
-}
-
-func (c *MetadataServiceClient) buildBlockName(hash uint64, irisMetaPrefix string, vLLMBlockPrefix string) string {
-	return irisMetaPrefix + vLLMBlockPrefix + strconv.FormatUint(hash, 10)
 }
 
 func (c *MetadataServiceClient) BatchQueryPrefixHashHitKVSInstances(hashKeys []string) (map[string][]string, error) {
