@@ -1,4 +1,4 @@
-package schedule_policy
+package scheduling_policy
 
 import (
 	"llumnix/pkg/consts"
@@ -8,9 +8,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 )
 
-type rescheduleSelector interface {
+type reschedulingSelector interface {
 	selectPairs(
-		srcCandidates, dstCandidates map[string]*instanceViewScheduling) []*reschedulePair
+		srcCandidates, dstCandidates map[string]*instanceViewScheduling) []*reschedulingPair
 }
 
 type aggregateSelector struct {
@@ -19,7 +19,7 @@ type aggregateSelector struct {
 }
 
 func (as *aggregateSelector) selectPairs(
-	srcCandidates, dstCandidates map[string]*instanceViewScheduling) (pairs []*reschedulePair) {
+	srcCandidates, dstCandidates map[string]*instanceViewScheduling) (pairs []*reschedulingPair) {
 
 	usedInstanceIds := sets.NewString()
 	srcCandidateIds := getKeySliceFromMap(srcCandidates)
@@ -50,7 +50,7 @@ func (as *aggregateSelector) selectPairs(
 			continue
 		}
 
-		pairs = append(pairs, &reschedulePair{
+		pairs = append(pairs, &reschedulingPair{
 			srcView: srcCandidates[srcCandidateIds[srcIndex]],
 			dstView: dstCandidates[dstCandidateIds[dstIndex]],
 		})
@@ -72,7 +72,7 @@ type metricBalanceSelector struct {
 }
 
 func (mbs *metricBalanceSelector) selectPairs(
-	srcCandidates, dstCandidates map[string]*instanceViewScheduling) (pairs []*reschedulePair) {
+	srcCandidates, dstCandidates map[string]*instanceViewScheduling) (pairs []*reschedulingPair) {
 
 	sortSrcList := func(list []*instanceViewScheduling) {
 		sort.SliceStable(list, func(i, j int) bool {
@@ -102,11 +102,11 @@ func (mbs *metricBalanceSelector) selectPairs(
 		})
 	}
 
-	pairLists := func(srcList, dstList []*instanceViewScheduling) []*reschedulePair {
+	pairLists := func(srcList, dstList []*instanceViewScheduling) []*reschedulingPair {
 		sortSrcList(srcList)
 		sortDstList(dstList)
 
-		var resultPairs []*reschedulePair
+		var resultPairs []*reschedulingPair
 		minLen := int(math.Min(float64(len(srcList)), float64(len(dstList))))
 		for i := 0; i < minLen; i++ {
 			srcLoadMetric := srcList[i].schedulingCtx.metrics[mbs.srcMetric]
@@ -115,7 +115,7 @@ func (mbs *metricBalanceSelector) selectPairs(
 			if mbs.forceHigherToLower && !dstLoadMetric.Less(srcLoadMetric) {
 				break
 			}
-			resultPairs = append(resultPairs, &reschedulePair{
+			resultPairs = append(resultPairs, &reschedulingPair{
 				srcView: srcList[i],
 				dstView: dstList[i],
 			})
@@ -124,7 +124,7 @@ func (mbs *metricBalanceSelector) selectPairs(
 	}
 
 	switch mbs.balanceScope {
-	case consts.RescheduleLoadBalanceScopeCluster:
+	case consts.ReschedulingLoadBalanceScopeCluster:
 		srcList := make([]*instanceViewScheduling, 0, len(srcCandidates))
 		for _, instanceView := range srcCandidates {
 			srcList = append(srcList, instanceView)
@@ -136,7 +136,7 @@ func (mbs *metricBalanceSelector) selectPairs(
 
 		return pairLists(srcList, dstList)
 
-	case consts.RescheduleLoadBalanceScopeUnit:
+	case consts.ReschedulingLoadBalanceScopeUnit:
 		srcByUnit := make(map[string][]*instanceViewScheduling)
 		for _, instanceView := range srcCandidates {
 			metadata := instanceView.cmsView.Metadata
@@ -155,7 +155,7 @@ func (mbs *metricBalanceSelector) selectPairs(
 			dstByUnit[metadata.UnitId] = append(dstByUnit[metadata.UnitId], instanceView)
 		}
 
-		var allPairs []*reschedulePair
+		var allPairs []*reschedulingPair
 
 		for unitId, srcListForUnit := range srcByUnit {
 			dstListForUnit, ok := dstByUnit[unitId]
@@ -178,9 +178,9 @@ func (mbs *metricBalanceSelector) selectPairs(
 type roundRobinSelector struct{}
 
 func (rrs *roundRobinSelector) selectPairs(
-	srcCandidates, dstCandidates map[string]*instanceViewScheduling) []*reschedulePair {
+	srcCandidates, dstCandidates map[string]*instanceViewScheduling) []*reschedulingPair {
 
-	var pairs []*reschedulePair
+	var pairs []*reschedulingPair
 
 	// Convert src and dst candidates to slices
 	srcList := make([]*instanceViewScheduling, 0, len(srcCandidates))
@@ -219,7 +219,7 @@ func (rrs *roundRobinSelector) selectPairs(
 			continue
 		}
 
-		pairs = append(pairs, &reschedulePair{
+		pairs = append(pairs, &reschedulingPair{
 			srcView: src,
 			dstView: dst,
 		})

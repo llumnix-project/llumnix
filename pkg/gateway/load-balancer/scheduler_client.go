@@ -48,15 +48,15 @@ func NewSchedulerClient(config *options.GatewayConfig) *SchedulerClient {
 	return cb
 }
 
-func (cb *SchedulerClient) createScheduleRequest(req *types.RequestContext) *types.ScheduleRequest {
+func (cb *SchedulerClient) createSchedulingRequest(req *types.RequestContext) *types.SchedulingRequest {
 	localEndpoint := cb.kac.GetLocalEndpoint()
 	// create scheduler request
-	schRequest := &types.ScheduleRequest{
+	schRequest := &types.SchedulingRequest{
 		Id:            req.Id,
 		Model:         req.LLMRequest.Model,
 		GatewayId:     localEndpoint.String(),
-		ScheduleMode:  req.ScheduleCtx.ScheduleMode,
-		ScheduleStage: req.ScheduleCtx.ScheduleStage,
+		SchedulingMode:  req.SchedulingCtx.SchedulingMode,
+		SchedulingStage: req.SchedulingCtx.SchedulingStage,
 	}
 
 	if tokenIds, ok := req.LLMRequest.GetPromptTokens(); ok {
@@ -65,41 +65,41 @@ func (cb *SchedulerClient) createScheduleRequest(req *types.RequestContext) *typ
 			schRequest.PromptTokenIds = tokenIds
 		}
 	} else {
-		klog.Warningf("schedule request %s prompt string and token ids are empty or not support: %v", req.Id, req.LLMRequest.CompletionRequest.Prompt)
+		klog.Warningf("scheduling request %s prompt string and token ids are empty or not support: %v", req.Id, req.LLMRequest.CompletionRequest.Prompt)
 	}
 	// record the borrow gateway
-	req.ScheduleCtx.GatewayId = localEndpoint.String()
+	req.SchedulingCtx.GatewayId = localEndpoint.String()
 	return schRequest
 }
 
-func (cb *SchedulerClient) handleResponse(body []byte) (types.ScheduledResult, error) {
-	var schReq types.ScheduleRequest
+func (cb *SchedulerClient) handleResponse(body []byte) (types.SchedulingResult, error) {
+	var schReq types.SchedulingRequest
 	err := json.Unmarshal(body, &schReq)
 	if err != nil {
 		err = consts.ErrorEndpointNotFound
-		klog.Warningf("do schedule: content format error: %s", string(body))
+		klog.Warningf("do scheduling: content format error: %s", string(body))
 		return nil, err
 	}
-	if len(schReq.ScheduleResult) == 0 {
+	if len(schReq.SchedulingResult) == 0 {
 		klog.Warningf("get next endpoint: no available endpoint")
 		return nil, consts.ErrorNoAvailableEndpoint
 	}
 
-	klog.V(3).Infof("schedule result: %v", schReq.ScheduleResult.String())
-	return schReq.ScheduleResult, nil
+	klog.V(3).Infof("scheduling result: %v", schReq.SchedulingResult.String())
+	return schReq.SchedulingResult, nil
 }
 
-func (cb *SchedulerClient) doSchedule(req *types.RequestContext) (types.ScheduledResult, error) {
+func (cb *SchedulerClient) doSchedule(req *types.RequestContext) (types.SchedulingResult, error) {
 	// check scheduler ready or not
 	if !cb.kac.IsRemoteReady() {
 		return nil, consts.ErrorSchedulerNotReady
 	}
 
-	// create schedule request to scheduler
-	schReq := cb.createScheduleRequest(req)
+	// create scheduling request to scheduler
+	schReq := cb.createSchedulingRequest(req)
 	data, err := json.Marshal(&schReq)
 	if err != nil {
-		klog.Errorf("failed to marshal schedule request: %v", err)
+		klog.Errorf("failed to marshal scheduling request: %v", err)
 		return nil, err
 	}
 
@@ -111,7 +111,7 @@ func (cb *SchedulerClient) doSchedule(req *types.RequestContext) (types.Schedule
 	}
 	resp, err := cb.schClient.Do(httpReq)
 	if err != nil {
-		klog.Warningf("[%s] do request schedule fail: %v\n", req.Id, err)
+		klog.Warningf("[%s] do request scheduling fail: %v\n", req.Id, err)
 		return nil, consts.ErrorMayNetworkBroken
 	}
 
@@ -120,7 +120,7 @@ func (cb *SchedulerClient) doSchedule(req *types.RequestContext) (types.Schedule
 	var body []byte
 	body, err = io.ReadAll(resp.Body)
 	if err != nil {
-		klog.Warningf("[%s] do request schedule: could not read body: %v", req.Id, err)
+		klog.Warningf("[%s] do request scheduling: could not read body: %v", req.Id, err)
 		return nil, consts.ErrorMayNetworkBroken
 	}
 
@@ -132,12 +132,12 @@ func (cb *SchedulerClient) doSchedule(req *types.RequestContext) (types.Schedule
 	case http.StatusNotFound:
 		return nil, consts.ErrorEndpointNotFound
 	default:
-		klog.Warningf("[%s] do request schedule: %d, %s", req.Id, resp.StatusCode, string(body))
+		klog.Warningf("[%s] do request scheduling: %d, %s", req.Id, resp.StatusCode, string(body))
 		return nil, consts.ErrorEndpointNotFound
 	}
 }
 
-func (cb *SchedulerClient) Get(req *types.RequestContext) (types.ScheduledResult, error) {
+func (cb *SchedulerClient) Get(req *types.RequestContext) (types.SchedulingResult, error) {
 	tStart := time.Now()
 
 	if !cb.kac.IsRemoteReady() {
@@ -158,11 +158,11 @@ func (cb *SchedulerClient) Get(req *types.RequestContext) (types.ScheduledResult
 
 		// all service endpoints are busy, wait a period for next try
 		if errors.Is(err, consts.ErrorNoAvailableEndpoint) {
-			if time.Since(tStart) > cb.config.WaitScheduleTimeout {
+			if time.Since(tStart) > cb.config.WaitSchedulingTimeout {
 				return nil, err
 			} else {
-				klog.Infof("[%s] all service endpoints are busy, try next after %dms", req.Id, cb.config.WaitScheduleRetryInterval)
-				time.Sleep(time.Duration(cb.config.WaitScheduleRetryInterval) * time.Millisecond)
+				klog.Infof("[%s] all service endpoints are busy, try next after %dms", req.Id, cb.config.WaitSchedulingRetryInterval)
+				time.Sleep(time.Duration(cb.config.WaitSchedulingRetryInterval) * time.Millisecond)
 				continue
 			}
 		}
@@ -173,15 +173,15 @@ func (cb *SchedulerClient) Get(req *types.RequestContext) (types.ScheduledResult
 	}
 }
 
-func (cb *SchedulerClient) createReleaseRequest(req *types.RequestContext, instance *types.LLMInstance) *types.ScheduleRequest {
+func (cb *SchedulerClient) createReleaseRequest(req *types.RequestContext, instance *types.LLMInstance) *types.SchedulingRequest {
 	localEndpoint := cb.kac.GetLocalEndpoint()
-	return &types.ScheduleRequest{
+	return &types.SchedulingRequest{
 		Id:             req.Id,
 		Model:          req.LLMRequest.Model,
 		GatewayId:      localEndpoint.String(),
-		ScheduleMode:   req.ScheduleCtx.ScheduleMode,
-		ScheduleStage:  req.ScheduleCtx.ScheduleStage,
-		ScheduleResult: types.ScheduledResult{*instance},
+		SchedulingMode:   req.SchedulingCtx.SchedulingMode,
+		SchedulingStage:  req.SchedulingCtx.SchedulingStage,
+		SchedulingResult: types.SchedulingResult{*instance},
 	}
 }
 
@@ -193,7 +193,7 @@ func (cb *SchedulerClient) Release(req *types.RequestContext, instance *types.LL
 	// 2. If the scheduler is in a not-ready state, no release is required either, as subsequent new schedulers or connections will refresh these resources.
 	localEndpoint := cb.kac.GetLocalEndpoint().String()
 	ready := cb.kac.IsRemoteReady()
-	if localEndpoint != req.ScheduleCtx.GatewayId || !ready {
+	if localEndpoint != req.SchedulingCtx.GatewayId || !ready {
 		return
 	}
 

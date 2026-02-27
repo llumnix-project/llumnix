@@ -1,4 +1,4 @@
-package schedule_policy
+package scheduling_policy
 
 import (
 	"fmt"
@@ -9,40 +9,40 @@ import (
 	"llumnix/pkg/consts"
 )
 
-func newReschedulePolicyInternal(p *options.SchedulerConfig, policy string) reschedulePolicyInternal {
+func newReschedulingPolicyInternal(p *options.SchedulerConfig, policy string) reschedulingPolicyInternal {
 	switch policy {
-	case consts.ReschedulePolicyNeutralLoad:
-		return newLoadBalanceReschedule(p, consts.NormalInferMode)
-	case consts.ReschedulePolicyDecodeLoad:
-		return newLoadBalanceReschedule(p, consts.DecodeInferMode)
-	case consts.ReschedulePolicyPrefillFailover:
-		return newFailoverReschedule(p, consts.PrefillInferMode)
-	case consts.ReschedulePolicyDecodeFailover:
-		return newFailoverReschedule(p, consts.DecodeInferMode)
-	case consts.ReschedulePolicyNeutralFailover:
-		return newFailoverReschedule(p, consts.NormalInferMode)
+	case consts.ReschedulingPolicyNeutralLoad:
+		return newLoadBalanceRescheduling(p, consts.NormalInferMode)
+	case consts.ReschedulingPolicyDecodeLoad:
+		return newLoadBalanceRescheduling(p, consts.DecodeInferMode)
+	case consts.ReschedulingPolicyPrefillFailover:
+		return newFailoverRescheduling(p, consts.PrefillInferMode)
+	case consts.ReschedulingPolicyDecodeFailover:
+		return newFailoverRescheduling(p, consts.DecodeInferMode)
+	case consts.ReschedulingPolicyNeutralFailover:
+		return newFailoverRescheduling(p, consts.NormalInferMode)
 	default:
-		panic(fmt.Sprintf("unsupported reschedule policy: %s", p.ReschedulePolicies))
+		panic(fmt.Sprintf("unsupported rescheduling policy: %s", p.ReschedulingPolicies))
 	}
 }
 
-type decodeLoadBalanceReschedule struct {
-	baseReschedulePolicy
+type decodeLoadBalanceRescheduling struct {
+	baseReschedulingPolicy
 	migrationReqSelectPolicy migrationReqSelectPolicy
 	metric                   string
 	loadBalanceThreshold     float32
 }
 
-func (p *decodeLoadBalanceReschedule) selectPairs(
+func (p *decodeLoadBalanceRescheduling) selectPairs(
 	srcInstanceViewInternal,
-	dstInstanceViewInternal map[string]*instanceViewScheduling) []*reschedulePair {
+	dstInstanceViewInternal map[string]*instanceViewScheduling) []*reschedulingPair {
 
 	return p.acceptLoadImbalancePairs(
 		p.selector.selectPairs(srcInstanceViewInternal, dstInstanceViewInternal))
 }
 
-func (p *decodeLoadBalanceReschedule) acceptLoadImbalancePairs(
-	selectedPairs []*reschedulePair) (validatedPairs []*reschedulePair) {
+func (p *decodeLoadBalanceRescheduling) acceptLoadImbalancePairs(
+	selectedPairs []*reschedulingPair) (validatedPairs []*reschedulingPair) {
 	if p.loadBalanceThreshold <= 0 {
 		return selectedPairs
 	}
@@ -61,12 +61,12 @@ func (p *decodeLoadBalanceReschedule) acceptLoadImbalancePairs(
 	return validatedPairs
 }
 
-func (p *decodeLoadBalanceReschedule) getMigrationReqSelectPolicy() migrationReqSelectPolicy {
+func (p *decodeLoadBalanceRescheduling) getMigrationReqSelectPolicy() migrationReqSelectPolicy {
 	return p.migrationReqSelectPolicy
 }
 
 /*
-LoadBalanceReschedule enables load balancing among instances by redistributing
+LoadBalanceRescheduling enables load balancing among instances by redistributing
 workload from overloaded instances to underutilized ones.
 
 Instance Type:
@@ -80,28 +80,28 @@ Filters:
 Selector:
   - Source instances with high load are preferentially paired with destination instances with low load.
 */
-func newLoadBalanceReschedule(p *options.SchedulerConfig, inferMode string) *decodeLoadBalanceReschedule {
+func newLoadBalanceRescheduling(p *options.SchedulerConfig, inferMode string) *decodeLoadBalanceRescheduling {
 	var targetLoadMetric string
 	var targetLoadThreshold float32
 
 	switch inferMode {
 	case consts.DecodeInferMode:
-		targetLoadMetric = p.RescheduleDecodeLoadMetric
-		targetLoadThreshold = p.RescheduleDecodeLoadThreshold
+		targetLoadMetric = p.ReschedulingDecodeLoadMetric
+		targetLoadThreshold = p.ReschedulingDecodeLoadThreshold
 	case consts.NormalInferMode:
-		targetLoadMetric = p.RescheduleNeutralLoadMetric
-		targetLoadThreshold = p.RescheduleNeutralLoadThreshold
+		targetLoadMetric = p.ReschedulingNeutralLoadMetric
+		targetLoadThreshold = p.ReschedulingNeutralLoadThreshold
 	default:
-		panic(fmt.Sprintf("unsupported failover reschedule infer mode: %s", inferMode))
+		panic(fmt.Sprintf("unsupported failover rescheduling infer mode: %s", inferMode))
 	}
 
-	if p.RescheduleLoadBalanceScope != consts.RescheduleLoadBalanceScopeCluster &&
-		p.RescheduleLoadBalanceScope != consts.RescheduleLoadBalanceScopeUnit {
-		panic(fmt.Sprintf("unsupported reschedule load balance scope: %s", p.RescheduleLoadBalanceScope))
+	if p.ReschedulingLoadBalanceScope != consts.ReschedulingLoadBalanceScopeCluster &&
+		p.ReschedulingLoadBalanceScope != consts.ReschedulingLoadBalanceScopeUnit {
+		panic(fmt.Sprintf("unsupported rescheduling load balance scope: %s", p.ReschedulingLoadBalanceScope))
 	}
 
-	r := &decodeLoadBalanceReschedule{
-		baseReschedulePolicy: baseReschedulePolicy{
+	r := &decodeLoadBalanceRescheduling{
+		baseReschedulingPolicy: baseReschedulingPolicy{
 			metrics: map[string]func() instanceSchedulingMetric{
 				targetLoadMetric: getSchedulingMetric(p, targetLoadMetric),
 			},
@@ -133,21 +133,21 @@ func newLoadBalanceReschedule(p *options.SchedulerConfig, inferMode string) *dec
 				srcMetric:          targetLoadMetric,
 				dstMetric:          targetLoadMetric,
 				forceHigherToLower: true,
-				balanceScope:       p.RescheduleLoadBalanceScope,
+				balanceScope:       p.ReschedulingLoadBalanceScope,
 			},
 		},
 		metric:               targetLoadMetric,
-		loadBalanceThreshold: p.RescheduleLoadBalanceThreshold,
+		loadBalanceThreshold: p.ReschedulingLoadBalanceThreshold,
 		migrationReqSelectPolicy: migrationReqSelectPolicy{
-			rule:  p.RescheduleReqSelectRule,
-			order: p.RescheduleReqSelectOrder,
-			value: p.RescheduleReqSelectValue,
+			rule:  p.ReschedulingReqSelectRule,
+			order: p.ReschedulingReqSelectOrder,
+			value: p.ReschedulingReqSelectValue,
 		},
 	}
 
-	// If reschedule load balance scope is unit, instance load inside the same unit should be balanced under any load,
+	// If rescheduling load balance scope is unit, instance load inside the same unit should be balanced under any load,
 	// so there is no need to apply load threshold filter.
-	if targetLoadThreshold > 0 && p.RescheduleLoadBalanceScope != consts.RescheduleLoadBalanceScopeUnit {
+	if targetLoadThreshold > 0 && p.ReschedulingLoadBalanceScope != consts.ReschedulingLoadBalanceScopeUnit {
 		r.srcSingleInstanceFilters = append(r.srcSingleInstanceFilters, &invertedSingleInstanceFilterWrapper{
 			innerFilter: &metricBasedFilter{
 				metricName: targetLoadMetric,
@@ -162,12 +162,12 @@ func newLoadBalanceReschedule(p *options.SchedulerConfig, inferMode string) *dec
 	return r
 }
 
-type failoverReschedule struct {
-	baseReschedulePolicy
+type failoverRescheduling struct {
+	baseReschedulingPolicy
 	inferMode string
 }
 
-func (p *failoverReschedule) getMigrationReqSelectPolicy() migrationReqSelectPolicy {
+func (p *failoverRescheduling) getMigrationReqSelectPolicy() migrationReqSelectPolicy {
 	return migrationReqSelectPolicy{
 		rule:  consts.MigrationReqSelectRuleNumReq,
 		order: consts.MigrationReqSelectOrderLR,
@@ -177,7 +177,7 @@ func (p *failoverReschedule) getMigrationReqSelectPolicy() migrationReqSelectPol
 }
 
 /*
-FailoverReschedule enables fault tolerance by migrating workloads from unhealthy or failing
+FailoverRescheduling enables fault tolerance by migrating workloads from unhealthy or failing
 Decode/Prefill/Normal instances to healthy, available ones within the same infer mode.
 
 Instance Type:
@@ -192,20 +192,20 @@ Filters:
 Selector:
   - Source instances with high load are preferentially paired with destination instances with low load.
 */
-func newFailoverReschedule(p *options.SchedulerConfig, inferMode string) *failoverReschedule {
+func newFailoverRescheduling(p *options.SchedulerConfig, inferMode string) *failoverRescheduling {
 	var reschedulerMetric string
 	switch inferMode {
 	case consts.PrefillInferMode:
-		reschedulerMetric = p.ReschedulePrefillLoadMetric
+		reschedulerMetric = p.ReschedulingPrefillLoadMetric
 	case consts.DecodeInferMode:
-		reschedulerMetric = p.RescheduleDecodeLoadMetric
+		reschedulerMetric = p.ReschedulingDecodeLoadMetric
 	case consts.NormalInferMode:
-		reschedulerMetric = p.RescheduleNeutralLoadMetric
+		reschedulerMetric = p.ReschedulingNeutralLoadMetric
 	default:
-		panic(fmt.Sprintf("unsupported failover reschedule infer mode: %s", inferMode))
+		panic(fmt.Sprintf("unsupported failover rescheduling infer mode: %s", inferMode))
 	}
-	return &failoverReschedule{
-		baseReschedulePolicy: baseReschedulePolicy{
+	return &failoverRescheduling{
+		baseReschedulingPolicy: baseReschedulingPolicy{
 			metrics: map[string]func() instanceSchedulingMetric{
 				reschedulerMetric: getSchedulingMetric(p, reschedulerMetric),
 			},

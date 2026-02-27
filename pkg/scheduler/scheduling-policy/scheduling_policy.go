@@ -1,4 +1,4 @@
-package schedule_policy
+package scheduling_policy
 
 import (
 	"time"
@@ -59,20 +59,20 @@ type ClusterViewClientInterface interface {
 	Unlock()
 }
 
-type SchedulePolicy interface {
-	// Name schedule policy name
+type SchedulingPolicy interface {
+	// Name scheduling policy name
 	Name() string
 
 	// Schedule attempts to acquire an instance for processing a new request.
-	Schedule(*types.ScheduleRequest) error
+	Schedule(*types.SchedulingRequest) error
 }
 
-func NewSchedulePolicy(
+func NewSchedulingPolicy(
 	policy string,
 	config *options.SchedulerConfig,
-	lrsClient *lrs.LocalRealtimeStateClient) SchedulePolicy {
+	lrsClient *lrs.LocalRealtimeStateClient) SchedulingPolicy {
 	if len(policy) == 0 {
-		panic("create schedule policy exception, policy is empty.")
+		panic("create scheduling policy exception, policy is empty.")
 	}
 
 	klog.Infof("create scheduler with policy: %v", policy)
@@ -82,7 +82,7 @@ func NewSchedulePolicy(
 
 type DispatchPolicy struct {
 	c                 *options.SchedulerConfig
-	schedulePolicy    string
+	schedulingPolicy    string
 	cmsClient         *cms.CMSReadClient
 	lrsClient         *lrs.LocalRealtimeStateClient
 	clusterViewClient ClusterViewClientInterface
@@ -93,7 +93,7 @@ type DispatchPolicy struct {
 }
 
 func NewDispatchPolicy(
-	c *options.SchedulerConfig, schedulePolicy string, lrsClient *lrs.LocalRealtimeStateClient) *DispatchPolicy {
+	c *options.SchedulerConfig, schedulingPolicy string, lrsClient *lrs.LocalRealtimeStateClient) *DispatchPolicy {
 
 	verifyConfig(c)
 
@@ -109,7 +109,7 @@ func NewDispatchPolicy(
 			c.CmsRedisRetryTimes,
 			c.CmsPullStatusIntervalMs,
 			c.CmsPullMetadataIntervalMs,
-			c.AllowConcurrentSchedule,
+			c.AllowConcurrentScheduling,
 			c.EnableInstanceStatusLocalAccount,
 			c.EnableCacheAwareScheduling,
 			c.RequestLocalAccountStalenessSeconds,
@@ -158,7 +158,7 @@ func NewDispatchPolicy(
 
 	return &DispatchPolicy{
 		c:                 c,
-		schedulePolicy:    schedulePolicy,
+		schedulingPolicy:    schedulingPolicy,
 		cmsClient:         cmsClient,
 		lrsClient:         lrsClient,
 		clusterViewClient: clusterViewClient,
@@ -172,7 +172,7 @@ func NewDispatchPolicy(
 }
 
 func (p *DispatchPolicy) Name() string {
-	return p.schedulePolicy
+	return p.schedulingPolicy
 }
 
 func Uint32ToInt64(arr []uint32) []int64 {
@@ -183,7 +183,7 @@ func Uint32ToInt64(arr []uint32) []int64 {
 	return result
 }
 
-func (p *DispatchPolicy) Schedule(request *types.ScheduleRequest) error {
+func (p *DispatchPolicy) Schedule(request *types.SchedulingRequest) error {
 	tStart := time.Now()
 	defer func() {
 		elapsed := time.Since(tStart).Milliseconds()
@@ -202,19 +202,19 @@ func (p *DispatchPolicy) Schedule(request *types.ScheduleRequest) error {
 
 	startTime := time.Now()
 
-	if p.c.AllowConcurrentSchedule {
+	if p.c.AllowConcurrentScheduling {
 		p.clusterViewClient.RLock()
 	} else {
 		p.clusterViewClient.Lock()
 	}
 	defer func() {
-		if p.c.AllowConcurrentSchedule {
+		if p.c.AllowConcurrentScheduling {
 			p.clusterViewClient.RUnlock()
 		} else {
 			p.clusterViewClient.Unlock()
 		}
 		metrics.AddLlumnixLatency(
-			metrics.LlumnixMetricScheduleLatencyMicroseconds, metrics.Labels{}, time.Since(startTime).Microseconds())
+			metrics.LlumnixMetricSchedulingLatencyMicroseconds, metrics.Labels{}, time.Since(startTime).Microseconds())
 	}()
 
 	if p.c.EnableFullModeScheduling {
@@ -231,7 +231,7 @@ func (p *DispatchPolicy) Schedule(request *types.ScheduleRequest) error {
 		return consts.ErrorNoAvailableEndpoint
 	}
 
-	var schResults types.ScheduledResult
+	var schResults types.SchedulingResult
 	for _, instance := range selectedInstances[0] {
 		if instance == nil {
 			continue
@@ -252,21 +252,21 @@ func (p *DispatchPolicy) Schedule(request *types.ScheduleRequest) error {
 			logSelectedInstance(instance, request.Id, consts.DecodeInferMode, p.c.EnableFullModeScheduling)
 		}
 	}
-	request.ScheduleResult = schResults
+	request.SchedulingResult = schResults
 	return nil
 }
 
 func (p *DispatchPolicy) schedule(
-	request *types.ScheduleRequest,
+	request *types.SchedulingRequest,
 	clusterView clusterViewScheduling) (selectedInstances [][]*instanceViewScheduling) {
 	requestId := request.Id
 	promptTokenIds := Uint32ToInt64(request.PromptTokenIds)
 	selectedInstances = [][]*instanceViewScheduling{}
 	if p.c.EnableCacheAwareScheduling && p.tokenHasher != nil && len(promptTokenIds) >= p.c.CacheAwareSchedulingMinTokens {
 		// NOTE(sunbiao.sun): Calculating instance prompt cache hit len has ms-level latency, but it does not r/w
-		// the raw instance view, so we unlock and re-lock here to improve schedule throughput
-		// when not allowing concurrent schedule.
-		if !p.c.AllowConcurrentSchedule {
+		// the raw instance view, so we unlock and re-lock here to improve scheduling throughput
+		// when not allowing concurrent scheduling.
+		if !p.c.AllowConcurrentScheduling {
 			p.cmsClient.Unlock()
 		}
 		prefixHashes, err := p.tokenHasher.HashTokens(
@@ -280,7 +280,7 @@ func (p *DispatchPolicy) schedule(
 				p.kvsClient, p.cmsClient, prefixHashes, p.c.KvsChunkSize,
 				len(promptTokenIds), clusterView.instanceViews)
 		}
-		if !p.c.AllowConcurrentSchedule {
+		if !p.c.AllowConcurrentScheduling {
 			p.cmsClient.Lock()
 		}
 	}
@@ -300,7 +300,7 @@ func (p *DispatchPolicy) schedule(
 		p.policyInternal.calculateMetrics(inferMode, request, instanceViews)
 	}
 
-	if request.ScheduleMode == types.ScheduleModeNormal {
+	if request.SchedulingMode == types.SchedulingModeNormal {
 		if _, exists := clusterView.groupedInstanceViews[consts.NormalInferMode]; exists {
 			normal := p.executeSchedule(consts.NormalInferMode, clusterView)
 			if normal != nil {
@@ -325,8 +325,8 @@ func (p *DispatchPolicy) schedule(
 	}
 
 	var prefill *instanceViewScheduling
-	needPrefill := request.ScheduleMode == types.ScheduleModePDBatch ||
-		(request.ScheduleMode == types.ScheduleModePDStaged && request.ScheduleStage == types.ScheduleStagePrefill)
+	needPrefill := request.SchedulingMode == types.SchedulingModePDBatch ||
+		(request.SchedulingMode == types.SchedulingModePDStaged && request.SchedulingStage == types.SchedulingStagePrefill)
 	if needPrefill {
 		prefill = p.executeSchedule(consts.PrefillInferMode, clusterView)
 		if prefill == nil {
@@ -341,8 +341,8 @@ func (p *DispatchPolicy) schedule(
 	}
 
 	var decode *instanceViewScheduling
-	needDecode := request.ScheduleMode == types.ScheduleModePDBatch ||
-		(request.ScheduleMode == types.ScheduleModePDStaged && request.ScheduleStage == types.ScheduleStageDecode)
+	needDecode := request.SchedulingMode == types.SchedulingModePDBatch ||
+		(request.SchedulingMode == types.SchedulingModePDStaged && request.SchedulingStage == types.SchedulingStageDecode)
 	if needDecode {
 		decode = p.executeSchedule(consts.DecodeInferMode, clusterView)
 		if decode == nil {
@@ -381,7 +381,7 @@ func (p *DispatchPolicy) executeSchedule(
 		fallback)
 
 	if len(availableInstanceViews) == 0 {
-		klog.V(4).Info("No instances found without fallback, executing schedule steps with fallback=true")
+		klog.V(4).Info("No instances found without fallback, executing scheduling steps with fallback=true")
 		fallback = true
 		availableInstanceViews = p.policyInternal.filter(
 			inferMode,
@@ -410,7 +410,7 @@ func (p *DispatchPolicy) executeSchedule(
 type dispatchPolicyInternal interface {
 	calculateMetrics(
 		inferMode string,
-		request *types.ScheduleRequest,
+		request *types.SchedulingRequest,
 		instanceViews map[string]*instanceViewScheduling)
 	filter(
 		inferMode string,
@@ -432,7 +432,7 @@ type inferModeBaseDispatchPolicy struct {
 
 func (p baseDispatchPolicy) calculateMetrics(
 	inferMode string,
-	request *types.ScheduleRequest,
+	request *types.SchedulingRequest,
 	instanceViews map[string]*instanceViewScheduling) {
 
 	calculateMetrics(request, instanceViews, p[inferMode].metrics)

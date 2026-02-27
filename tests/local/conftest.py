@@ -39,14 +39,14 @@ def gateway_server(test_config: Dict[str, Any]) -> Generator[subprocess.Popen, N
     policy = test_config.get('policy', 'round-robin')
     enable_pd =  test_config.get('enable_pd', False)
     enable_full_mode_scheduling = test_config.get('enable_full_mode_scheduling', False)
-    separate_pd_schedule = test_config.get('separate_pd_schedule', False)
+    separate_pd_scheduling = test_config.get('separate_pd_scheduling', False)
     connector_type = test_config.get('connector_type', 'HybridConnector')
 
     command = get_gateway_command(
         policy=policy,
         enable_pd=enable_pd,
         enable_full_mode_scheduling=enable_full_mode_scheduling,
-        separate_pd_schedule=separate_pd_schedule,
+        separate_pd_scheduling=separate_pd_scheduling,
         connector_type=connector_type
     )
 

@@ -32,12 +32,12 @@ def generate_e2e_config():
     base_configs = update_configs
 
     update_configs = []
-    for separate_pd_schedule in [False, True]:
+    for separate_pd_scheduling in [False, True]:
         for config in base_configs:
             if not config['enable_pd']:
                 continue
             tmp_config = copy.deepcopy(config)
-            tmp_config['separate_pd_schedule'] = separate_pd_schedule
+            tmp_config['separate_pd_scheduling'] = separate_pd_scheduling
             update_configs.append(tmp_config)
     base_configs = update_configs
     return base_configs
@@ -130,8 +130,8 @@ def check_migration_logs(connector_type: str):
 
 def generate_migration_config():
     base_configs = [
-        {'policy': 'flood', 'enable_full_mode_scheduling': True, 'enable_migration': True, 'enable_pd': False, 'separate_pd_schedule': False},
-        {'policy': 'flood', 'enable_full_mode_scheduling': True, 'enable_migration': True, 'enable_pd': True, 'separate_pd_schedule': False},
+        {'policy': 'flood', 'enable_full_mode_scheduling': True, 'enable_migration': True, 'enable_pd': False, 'separate_pd_scheduling': False},
+        {'policy': 'flood', 'enable_full_mode_scheduling': True, 'enable_migration': True, 'enable_pd': True, 'separate_pd_scheduling': False},
     ]
 
     update_configs = []

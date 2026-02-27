@@ -54,7 +54,7 @@ spec:
         - "redis"
         - "--discovery-redis-port"
         - "6379"
-        - "--schedule-policy"
+        - "--scheduling-policy"
         - "load-balance"
         - "--cms-redis-host"
         - "redis"

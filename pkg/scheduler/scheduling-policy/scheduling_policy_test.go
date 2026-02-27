@@ -1,4 +1,4 @@
-package schedule_policy
+package scheduling_policy
 
 import (
 	"context"
@@ -72,11 +72,11 @@ func getRedisClient(t *testing.T) redis.RedisClient {
 
 func newConfig() *options.SchedulerConfig {
 	return &options.SchedulerConfig{
-		ScheduleBaseConfig: config.ScheduleBaseConfig{
-			SchedulePolicy:           consts.SchedulePolicyLoadBalance,
+		SchedulingBaseConfig: config.SchedulingBaseConfig{
+			SchedulingPolicy:           consts.SchedulingPolicyLoadBalance,
 			EnableFullModeScheduling: true,
 		},
-		FullModeScheduleConfig: config.FullModeScheduleConfig{
+		FullModeSchedulingConfig: config.FullModeSchedulingConfig{
 			CmsPullStatusIntervalMs:            500,
 			CmsPullMetadataIntervalMs:          1000,
 			KvsChunkSize:                       1,
@@ -116,7 +116,7 @@ func newDispatchPolicy(t *testing.T, config *options.SchedulerConfig, inferMode 
 
 	return DispatchPolicy{
 		c:              config,
-		schedulePolicy: config.SchedulePolicy,
+		schedulingPolicy: config.SchedulingPolicy,
 		cmsClient:      cmsReadClient,
 		kvsClient:      kvsClient,
 		tokenHasher:    tokenHasher,
@@ -127,7 +127,7 @@ func newDispatchPolicy(t *testing.T, config *options.SchedulerConfig, inferMode 
 func TestDispatchPolicyName(t *testing.T) {
 	c := newConfig()
 	policy := newDispatchPolicy(t, c, "")
-	assert.Equal(t, c.SchedulePolicy, policy.Name())
+	assert.Equal(t, c.SchedulingPolicy, policy.Name())
 }
 
 func TestDispatchPolicyScheduleNeutral(t *testing.T) {
@@ -171,7 +171,7 @@ func TestDispatchPolicyScheduleNeutral(t *testing.T) {
 		groupedInstanceViews: groupedInstanceViews,
 		instanceViews:        instanceViews,
 	}
-	result := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModeNormal}, clusterViewScheduling)
+	result := policy.schedule(&types.SchedulingRequest{SchedulingMode: types.SchedulingModeNormal}, clusterViewScheduling)
 	assert.Len(t, result, 1)
 	assert.Len(t, result[0], 1)
 	assert.Equal(t, "127.0.0.1", result[0][0].GetInstance().Endpoint.Host)
@@ -248,7 +248,7 @@ func TestDispatchPolicySchedulePD(t *testing.T) {
 		instanceViews:        instanceViews,
 	}
 
-	result := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch}, clusterViewScheduling)
+	result := policy.schedule(&types.SchedulingRequest{SchedulingMode: types.SchedulingModePDBatch}, clusterViewScheduling)
 	assert.Len(t, result, 2)
 	assert.Len(t, result[0], 1)
 	assert.Len(t, result[1], 1)
@@ -300,7 +300,7 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 		instanceViews:        instanceViews1,
 	}
 
-	result := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch}, clusterViewScheduling1)
+	result := policy.schedule(&types.SchedulingRequest{SchedulingMode: types.SchedulingModePDBatch}, clusterViewScheduling1)
 	assert.Empty(t, result)
 
 	// Test with only decode instance (should return nil)
@@ -341,7 +341,7 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 		instanceViews:        instanceViews2,
 	}
 
-	result2 := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch}, clusterViewScheduling2)
+	result2 := policy.schedule(&types.SchedulingRequest{SchedulingMode: types.SchedulingModePDBatch}, clusterViewScheduling2)
 	assert.Empty(t, result2)
 }
 
@@ -471,7 +471,7 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 	}
 
 	policy.cmsClient.Lock()
-	result := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch, PromptTokenIds: []uint32{0, 1}}, clusterViewScheduling)
+	result := policy.schedule(&types.SchedulingRequest{SchedulingMode: types.SchedulingModePDBatch, PromptTokenIds: []uint32{0, 1}}, clusterViewScheduling)
 	policy.cmsClient.Unlock()
 	assert.Len(t, result, 2)
 	assert.Len(t, result[0], 1)
@@ -631,7 +631,7 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 		instanceViews:        instanceViews,
 	}
 
-	req := &types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch, PromptTokenIds: []uint32{0, 1}}
+	req := &types.SchedulingRequest{SchedulingMode: types.SchedulingModePDBatch, PromptTokenIds: []uint32{0, 1}}
 	selections := make(map[int]int)
 	numIterations := 100
 
@@ -751,7 +751,7 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 		instanceViews:        instanceViews,
 	}
 
-	req := &types.ScheduleRequest{ScheduleMode: types.ScheduleModeNormal, PromptTokenIds: []uint32{0, 1}}
+	req := &types.SchedulingRequest{SchedulingMode: types.SchedulingModeNormal, PromptTokenIds: []uint32{0, 1}}
 	policy.cmsClient.Lock()
 	result := policy.schedule(req, clusterViewScheduling)
 	policy.cmsClient.Unlock()
@@ -762,7 +762,7 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 
 func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 	c := newConfig()
-	c.SchedulePolicy = consts.SchedulePolicyFlood
+	c.SchedulingPolicy = consts.SchedulingPolicyFlood
 	policy := newDispatchPolicy(t, c, "neutral")
 
 	instanceViews := map[string]*instanceViewScheduling{
@@ -899,11 +899,11 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 		instanceViews:        instanceViews,
 	}
 
-	result1 := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModeNormal}, clusterViewScheduling)
+	result1 := policy.schedule(&types.SchedulingRequest{SchedulingMode: types.SchedulingModeNormal}, clusterViewScheduling)
 	assert.Len(t, result1, 1)
 	assert.Len(t, result1[0], 1)
 
-	result2 := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModeNormal}, clusterViewScheduling)
+	result2 := policy.schedule(&types.SchedulingRequest{SchedulingMode: types.SchedulingModeNormal}, clusterViewScheduling)
 	assert.Len(t, result2, 1)
 	assert.Len(t, result2[0], 1)
 
@@ -913,7 +913,7 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 
 func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 	c := newConfig()
-	c.SchedulePolicy = consts.SchedulePolicyFlood
+	c.SchedulingPolicy = consts.SchedulingPolicyFlood
 	policy := newDispatchPolicy(t, c, "prefill")
 
 	instanceViews := map[string]*instanceViewScheduling{
@@ -1183,14 +1183,14 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		instanceViews:        instanceViews,
 	}
 
-	result1 := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch}, clusterViewScheduling)
+	result1 := policy.schedule(&types.SchedulingRequest{SchedulingMode: types.SchedulingModePDBatch}, clusterViewScheduling)
 	assert.Len(t, result1, 2)
 	assert.Len(t, result1[0], 1)
 	assert.Len(t, result1[1], 1)
 	assert.Equal(t, consts.PrefillInferMode, result1[0][0].GetInferMode())
 	assert.Equal(t, consts.DecodeInferMode, result1[1][0].GetInferMode())
 
-	result2 := policy.schedule(&types.ScheduleRequest{ScheduleMode: types.ScheduleModePDBatch}, clusterViewScheduling)
+	result2 := policy.schedule(&types.SchedulingRequest{SchedulingMode: types.SchedulingModePDBatch}, clusterViewScheduling)
 	assert.Len(t, result2, 2)
 	assert.Len(t, result2[0], 1)
 	assert.Len(t, result2[1], 1)
@@ -1277,7 +1277,7 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 	}
 
 	promptTokenIds := []uint32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	req := &types.ScheduleRequest{ScheduleMode: types.ScheduleModeNormal, PromptTokenIds: promptTokenIds}
+	req := &types.SchedulingRequest{SchedulingMode: types.SchedulingModeNormal, PromptTokenIds: promptTokenIds}
 
 	result1 := policy.schedule(req, clusterViewScheduling)
 	assert.Equal(t, int32(1), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)

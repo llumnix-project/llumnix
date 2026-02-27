@@ -26,8 +26,8 @@ type InferenceBackend interface {
 }
 
 // BackendFactory is a factory function that creates an InferenceBackend instance
-// It takes a schedule mode as parameter and returns the corresponding backend
-type BackendFactory func(scheduleMode types.ScheduleMode) (InferenceBackend, error)
+// It takes a scheduling mode as parameter and returns the corresponding backend
+type BackendFactory func(schedulingMode types.SchedulingMode) (InferenceBackend, error)
 
 // backendRegistry holds registered backend factories indexed by backend type key
 var (
@@ -43,9 +43,9 @@ func RegisterBackend(backendType string, factory BackendFactory) {
 	backendRegistry[backendType] = factory
 }
 
-// BuildBackend creates an InferenceBackend instance based on the backend type and schedule mode
+// BuildBackend creates an InferenceBackend instance based on the backend type and scheduling mode
 // Returns an error if the backend type is not registered
-func BuildBackend(backendType string, scheduleMode types.ScheduleMode) (InferenceBackend, error) {
+func BuildBackend(backendType string, schedulingMode types.SchedulingMode) (InferenceBackend, error) {
 	registryMu.RLock()
 	factory, exists := backendRegistry[backendType]
 	registryMu.RUnlock()
@@ -54,5 +54,5 @@ func BuildBackend(backendType string, scheduleMode types.ScheduleMode) (Inferenc
 		return nil, fmt.Errorf("unknown backend type: %s", backendType)
 	}
 
-	return factory(scheduleMode)
+	return factory(schedulingMode)
 }

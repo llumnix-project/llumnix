@@ -60,7 +60,7 @@ func NewRoundRobinBalancer(r resolver.LLMResolver) *RoundRobinBalancer {
 	return lb
 }
 
-func (rrb *RoundRobinBalancer) Get(*types.RequestContext) (types.ScheduledResult, error) {
+func (rrb *RoundRobinBalancer) Get(*types.RequestContext) (types.SchedulingResult, error) {
 	rrb.mu.Lock()
 	defer rrb.mu.Unlock()
 
@@ -72,7 +72,7 @@ func (rrb *RoundRobinBalancer) Get(*types.RequestContext) (types.ScheduledResult
 	index := rrb.currentIndex % uint64(len(rrb.instances))
 	klog.V(4).Infof("round-robin balancer: selected instance %s", rrb.instances[index].Id())
 
-	return types.ScheduledResult{rrb.instances[index]}, nil
+	return types.SchedulingResult{rrb.instances[index]}, nil
 }
 
 func (rrb *RoundRobinBalancer) Release(*types.RequestContext, *types.LLMInstance) {}

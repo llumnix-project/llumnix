@@ -1,4 +1,4 @@
-package schedule_policy
+package scheduling_policy
 
 import (
 	"llumnix/pkg/cms"
@@ -110,7 +110,7 @@ func TestMetricBalanceSelector(t *testing.T) {
 		srcMetric:          consts.SchedulingMetricKVCacheUsageRatioProjected,
 		dstMetric:          consts.SchedulingMetricKVCacheUsageRatioProjected,
 		forceHigherToLower: true,
-		balanceScope:       consts.RescheduleLoadBalanceScopeCluster,
+		balanceScope:       consts.ReschedulingLoadBalanceScopeCluster,
 	}
 
 	config := newConfig()

@@ -2,22 +2,22 @@ package service
 
 import (
 	"llumnix/cmd/scheduler/app/options"
-	policy "llumnix/pkg/scheduler/schedule-policy"
+	policy "llumnix/pkg/scheduler/scheduling-policy"
 )
 
 type ReschedulerService struct {
 	config           *options.SchedulerConfig
-	reschedulePolicy policy.RescheduleInterface
+	reschedulingPolicy policy.ReschedulingInterface
 }
 
-func NewRescheduleService(c *options.SchedulerConfig) *ReschedulerService {
+func NewReschedulerService(c *options.SchedulerConfig) *ReschedulerService {
 	return &ReschedulerService{
-		config:           c,
-		reschedulePolicy: policy.NewReschedulePolicy(c),
+		config:             c,
+		reschedulingPolicy: policy.NewReschedulingPolicy(c),
 	}
 }
 
 func (r *ReschedulerService) Start() error {
-	go r.reschedulePolicy.RescheduleLoop()
+	go r.reschedulingPolicy.ReschedulingLoop()
 	return nil
 }
