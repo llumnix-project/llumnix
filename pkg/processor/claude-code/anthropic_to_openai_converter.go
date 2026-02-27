@@ -23,6 +23,14 @@ func ConvertAnthropicRequestToOpenAI(anthropicReq *anthropic.Request) (*protocol
 		Stop:        anthropicReq.StopSequences,
 	}
 
+	// Enable usage reporting for streaming requests (supported by OpenAI, vLLM, SGLang)
+	if anthropicReq.Stream {
+		openaiReq.StreamOptions = &protocol.StreamOptions{
+			IncludeUsage:         true,
+			ContinuousUsageStats: true,
+		}
+	}
+
 	// System message is the model's goal or role. If a system message is set, it should be placed at the beginning of the messages list.
 	// For QwQ models, setting a System Message is not recommended. For QVQ models, the System Message will not take effect.
 	if anthropicReq.System != nil {
@@ -154,11 +162,6 @@ func parseToolResultMessages(content []map[string]any) []protocol.ChatCompletion
 			}
 
 			rc := parseToolResultContent(block["content"])
-			if rc == "" {
-				klog.Warningf("found message with empty tool_result content, original content: %s", MapToString(block))
-				continue
-			}
-
 			msg := protocol.ChatCompletionMessage{
 				Role:    consts.ROLE_TOOL,
 				Content: rc,
@@ -317,8 +320,8 @@ func extractSystemText(system any) string {
 
 	switch s := system.(type) {
 	case string:
-		// Simple string format
-		return s
+		// Simple string format - process cch value
+		return replaceCchValue(s)
 	case []any:
 		// List of content blocks
 		systemText := ""
@@ -333,6 +336,8 @@ func extractSystemText(system any) string {
 			}
 
 			if text, ok := blockMap["text"].(string); ok && text != "" {
+				// Process cch value in each text block
+				text = replaceCchValue(text)
 				systemText += text + "\n\n"
 			}
 		}
@@ -379,4 +384,27 @@ func ConvertSliceAnyToMapStringAny(input []any) ([]map[string]any, bool) {
 		result = append(result, m)
 	}
 	return result, true
+}
+
+// replaceCchValue replaces the cch value in x-anthropic-billing-header to "00000"
+func replaceCchValue(text string) string {
+	// Check if this text contains x-anthropic-billing-header with cch
+	if strings.Contains(text, "x-anthropic-billing-header:") && strings.Contains(text, "cch=") {
+		// Use regex to replace cch=xxxxx; with cch=00000;
+		// Pattern matches cch= followed by any characters until semicolon
+		result := text
+		// Find and replace cch value
+		idx := strings.Index(result, "cch=")
+		if idx != -1 {
+			start := idx + 4 // len("cch=")
+			end := strings.Index(result[start:], ";")
+			if end != -1 {
+				end += start
+				// Replace the value between cch= and ;
+				result = result[:start] + "00000" + result[end:]
+			}
+		}
+		return result
+	}
+	return text
 }

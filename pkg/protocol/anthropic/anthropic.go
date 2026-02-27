@@ -33,6 +33,10 @@ type TokenCountRequest struct {
 	ToolChoice map[string]any `json:"tool_choice,omitempty"`
 }
 
+type TokenCountResponse struct {
+	InputTokens int `json:"input_tokens" validate:"required"`
+}
+
 type Usage struct {
 	InputTokens          int `json:"input_tokens" validate:"required"`
 	OutputTokens         int `json:"output_tokens" validate:"required"`

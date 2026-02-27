@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"runtime/debug"
 	"strconv"
@@ -20,6 +22,7 @@ import (
 	"llm-gateway/pkg/logging"
 	"llm-gateway/pkg/lrs"
 	"llm-gateway/pkg/metrics"
+	"llm-gateway/pkg/protocol/anthropic"
 	"llm-gateway/pkg/resolver"
 	"llm-gateway/pkg/service/handler"
 	"llm-gateway/pkg/service/mirror"
@@ -630,6 +633,51 @@ func (lgs *LlmGatewayService) HandleAnthropicRequest(w http.ResponseWriter, r *h
 	lgs.HandleAPIEntry(w, r, lgs.anthropicHandler)
 }
 
+// HandleCountTokens handles Anthropic token counting requests
+// It estimates the number of input tokens from the request body without performing inference
+// Parameters:
+//   - w: HTTP response writer
+//   - r: HTTP request
+func (lgs *LlmGatewayService) HandleCountTokens(w http.ResponseWriter, r *http.Request) {
+	// Validate request method
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Read request body
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		klog.Errorf("Failed to read request body: %v", err)
+		http.Error(w, "failed to read request body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	// Estimate tokens using the utility function
+	estimatedTokens := EstimateTokens(data)
+
+	// Create response
+	response := anthropic.TokenCountResponse{
+		InputTokens: estimatedTokens,
+	}
+
+	// Marshal response
+	responseData, err := json.Marshal(response)
+	if err != nil {
+		klog.Errorf("Failed to marshal response: %v", err)
+		http.Error(w, "failed to marshal response", http.StatusInternalServerError)
+		return
+	}
+
+	// Set response headers and write response
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write(responseData); err != nil {
+		klog.Errorf("Failed to write response: %v", err)
+	}
+}
+
 // HandleSimpleRequest handles simple requests (e.g., /v1/models)
 // It forwards the request to a backend endpoint and returns the response to the client
 // Parameters:
@@ -678,6 +726,7 @@ func (lgs *LlmGatewayService) Run() {
 
 	// handle Anthropic inference requests
 	router.HandleFunc("/v1/messages", lgs.HandleAnthropicRequest)
+	router.HandleFunc("/v1/messages/count_tokens", lgs.HandleCountTokens)
 
 	address := fmt.Sprintf("%s:%d", lgs.config.Host, lgs.config.Port)
 	klog.Infof("LLM Gateway start listen on %s", address)

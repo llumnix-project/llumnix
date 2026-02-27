@@ -7,6 +7,7 @@ import (
 	"llm-gateway/pkg/types"
 	"net/http"
 
+	"github.com/valyala/fastjson"
 	"k8s.io/klog/v2"
 )
 
@@ -109,4 +110,64 @@ func SimpleHTTPProxy(client *http.Client, url string, w http.ResponseWriter, r *
 
 	// Copy response body to client
 	io.Copy(w, resp.Body)
+}
+
+// EstimateTokens estimates input tokens from Anthropic request JSON
+// It parses the request body and counts characters in system and message content,
+// then estimates token count using a rough approximation (4 characters per token)
+func EstimateTokens(data []byte) int {
+	if len(data) == 0 {
+		return 0
+	}
+	// Parse request body
+	var p fastjson.Parser
+	v, err := p.ParseBytes(data)
+	if err != nil {
+		// Fallback to rough character-based estimation if parsing fails
+		return len(data) / 4
+	}
+	totalChars := 0
+	// Count system message characters
+	if system := v.Get("system"); system != nil {
+		if system.Type() == fastjson.TypeString {
+			totalChars += len(system.GetStringBytes())
+		} else if system.Type() == fastjson.TypeArray {
+			systemArray, err := system.Array()
+			if err == nil {
+				for _, block := range systemArray {
+					if text := block.GetStringBytes("text"); text != nil {
+						totalChars += len(text)
+					}
+				}
+			}
+		}
+	}
+	// Count message characters
+	if messages := v.Get("messages"); messages != nil && messages.Type() == fastjson.TypeArray {
+		msgsArray, err := messages.Array()
+		if err == nil {
+			for _, msg := range msgsArray {
+				if content := msg.Get("content"); content != nil {
+					if content.Type() == fastjson.TypeString {
+						totalChars += len(content.GetStringBytes())
+					} else if content.Type() == fastjson.TypeArray {
+						contentArray, err := content.Array()
+						if err == nil {
+							for _, block := range contentArray {
+								if text := block.GetStringBytes("text"); text != nil {
+									totalChars += len(text)
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	// Rough estimation: 4 characters per token
+	estimatedTokens := totalChars / 4
+	if estimatedTokens < 1 {
+		estimatedTokens = 1
+	}
+	return estimatedTokens
 }
