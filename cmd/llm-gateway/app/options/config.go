@@ -94,6 +94,10 @@ type Config struct {
 	// determines acceptable load deviation above mean when selecting cache-hit workers
 	// e.g., 0.5 means workers with load <= (mean * 1.5) are acceptable
 	PrefixCacheLoadTolerance float64
+	// maintenance loop interval for prefix cache (in seconds)
+	// controls how often TTL eviction, memory pressure management, and metrics updates run
+	// default: 60s for production, can be set lower (e.g., 2s) for testing
+	PrefixCacheMaintenanceInterval int
 	// if the number of requests for an instance exceeds this value when the prefix
 	// cache is satisfied, a new instance will be selected to be a more suitable one
 	RequestsThreshold int
@@ -248,6 +252,7 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.SchedulePolicy, "schedule-policy", "least-token", "schedule policy, now support round-robin, load-balance, flood")
 	flags.IntVar(&c.PrefixCacheTTL, "prefix-cache-ttl", 1800, "prefix cache time to live")
 	flags.Float64Var(&c.PrefixCacheLoadTolerance, "prefix-cache-load-tolerance", 0.3, "load tolerance factor (0.0-1.0) for prefix cache worker selection")
+	flags.IntVar(&c.PrefixCacheMaintenanceInterval, "prefix-cache-maintenance-interval", 60, "maintenance loop interval in seconds for prefix cache (default: 60s)")
 	flags.IntVar(&c.RequestsThreshold, "requests-threshold", 10, "the threshold of try to choose other instance, 0 indicates the average value of usage requests")
 
 	flags.StringVar(&c.PDSplitMode, "pdsplit-mode", "", "pd split mode, this configuration only takes effect under the pd-split policy, now support vllm-vineyard, vllm-kvt, sglang-mooncake")
@@ -432,7 +437,7 @@ func (c *Config) getPrefixCacheLimit() (int64, error) {
 	memLimit := utils.GetLimitMemory()
 
 	if memLimit == 0 {
-		klog.Infof("No memory limit detected, using default value: %d MB", c.PrefixCacheLimit/consts.MB)
+		klog.Infof("No memory limit detected, using default value: %d MB", consts.DefaultPrefixCacheMaxSize/consts.MB)
 		return consts.DefaultPrefixCacheMaxSize, nil
 	}
 
@@ -445,26 +450,32 @@ func (c *Config) getPrefixCacheLimit() (int64, error) {
 	}
 
 	// Convert bytes to MB for storage
-	klog.Infof("Prefix cache size configured: %d MB (total memory: %d bytes, reserved: %d bytes)",
-		c.PrefixCacheLimit/consts.MB, memLimit, consts.DefaultPrefixCacheReservedSize)
+	klog.Infof("Prefix cache size configured: %d MB (total memory: %d MB, reserved: %d MB)",
+		cacheSize/consts.MB, memLimit/consts.MB, consts.DefaultPrefixCacheReservedSize/consts.MB)
 	return cacheSize, nil
 }
 
 // setupPrefixCacheSize configures the prefix cache size based on available memory.
 func (c *Config) setupPrefixCacheSize() error {
-	cacheSize, err := c.getPrefixCacheLimit()
-	if err != nil {
-		return err
-	}
-	if c.SchedulePolicy != consts.SchedulePolicyPDSplit {
-		c.PrefixCacheLimit = cacheSize
+	var cacheSize int64
+	if c.PrefixCacheLimit > 0 {
+		cacheSize = c.PrefixCacheLimit
 	} else {
-		if c.PrefillPolicy == consts.SchedulePolicyPrefixCache && c.DecodePolicy == consts.SchedulePolicyPrefixCache {
-			c.PrefixCacheLimit = c.PrefixCacheLimit / 2
-			klog.Infof("Prefix cache size divided by 2, as both prefill and decode use prefix cache: %d MB", c.PrefixCacheLimit/consts.MB)
+		var err error
+		cacheSize, err = c.getPrefixCacheLimit()
+		if err != nil {
+			return err
 		}
-		c.PrefixCacheLimit = consts.DefaultPrefixCacheMaxSize
 	}
+	// In PDSplit mode, if both prefill and decode use prefix cache, divide cache size by 2.
+	if c.SchedulePolicy == consts.SchedulePolicyPDSplit &&
+		c.PrefillPolicy == consts.SchedulePolicyPrefixCache &&
+		c.DecodePolicy == consts.SchedulePolicyPrefixCache {
+		cacheSize /= 2
+		klog.Infof("Prefix cache size divided by 2, as both prefill and decode use prefix cache: %d MB", cacheSize/consts.MB)
+	}
+
+	c.PrefixCacheLimit = cacheSize
 	return nil
 }
 

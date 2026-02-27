@@ -183,7 +183,7 @@ func TestNewPrefixCacheIndexer(t *testing.T) {
 	ttl := 5 * time.Second
 	memLimit := int64(1024 * 1024) // 1MB
 
-	pci := NewPrefixCacheIndexer(ttl, memLimit)
+	pci := NewPrefixCacheIndexer(ttl, memLimit, 2*time.Second, "")
 
 	assert.NotNil(t, pci)
 	assert.NotNil(t, pci.tree)
@@ -191,12 +191,12 @@ func TestNewPrefixCacheIndexer(t *testing.T) {
 	assert.Equal(t, memLimit, pci.memLimit)
 	assert.Equal(t, int64(0), pci.GetMemUsed())
 
-	// Note: RecycleLoop is started in goroutine, tested separately
+	// Note: MaintenanceLoop is started in goroutine, tested separately
 }
 
 // TestPrefixCacheIndexer_AddAndMatchPrefix verifies basic prefix operations.
 func TestPrefixCacheIndexer_AddAndMatchPrefix(t *testing.T) {
-	pci := NewPrefixCacheIndexer(5*time.Second, 1024*1024)
+	pci := NewPrefixCacheIndexer(5*time.Second, 1024*1024, 2*time.Second, "")
 	defer time.Sleep(100 * time.Millisecond) // Allow goroutine cleanup
 
 	// Add prefixes
@@ -242,7 +242,7 @@ func TestPrefixCacheIndexer_AddAndMatchPrefix(t *testing.T) {
 //
 // This enables KV cache reuse when prompts share common prefixes but aren't strict prefixes.
 func TestPrefixCacheIndexer_CommonPrefixMatching(t *testing.T) {
-	pci := NewPrefixCacheIndexer(5*time.Second, 1024*1024)
+	pci := NewPrefixCacheIndexer(5*time.Second, 1024*1024, 2*time.Second, "")
 	defer time.Sleep(100 * time.Millisecond)
 
 	// Setup: Build a representative cache tree
@@ -385,7 +385,7 @@ func TestPrefixCacheIndexer_CommonPrefixMatching(t *testing.T) {
 
 // TestPrefixCacheIndexer_DeletePrefix verifies prefix deletion.
 func TestPrefixCacheIndexer_DeletePrefix(t *testing.T) {
-	pci := NewPrefixCacheIndexer(5*time.Second, 1024*1024)
+	pci := NewPrefixCacheIndexer(5*time.Second, 1024*1024, 2*time.Second, "")
 	defer time.Sleep(100 * time.Millisecond)
 
 	node := NewTreeNode()
@@ -407,7 +407,7 @@ func TestPrefixCacheIndexer_DeletePrefix(t *testing.T) {
 
 // TestPrefixCacheIndexer_MemoryTracking verifies memory usage tracking.
 func TestPrefixCacheIndexer_MemoryTracking(t *testing.T) {
-	pci := NewPrefixCacheIndexer(5*time.Second, 1024*1024)
+	pci := NewPrefixCacheIndexer(5*time.Second, 1024*1024, 2*time.Second, "")
 	defer time.Sleep(100 * time.Millisecond)
 
 	node := NewTreeNode()
@@ -426,7 +426,7 @@ func TestPrefixCacheIndexer_MemoryTracking(t *testing.T) {
 
 // TestPrefixCacheIndexer_DuplicateAdd verifies updating existing prefix doesn't increase memory.
 func TestPrefixCacheIndexer_DuplicateAdd(t *testing.T) {
-	pci := NewPrefixCacheIndexer(5*time.Second, 1024*1024)
+	pci := NewPrefixCacheIndexer(5*time.Second, 1024*1024, 2*time.Second, "")
 	defer time.Sleep(100 * time.Millisecond)
 
 	node1 := NewTreeNode()
@@ -448,7 +448,7 @@ func TestPrefixCacheIndexer_DuplicateAdd(t *testing.T) {
 
 // TestPrefixCacheIndexer_ConcurrentAccess tests thread-safety.
 func TestPrefixCacheIndexer_ConcurrentAccess(t *testing.T) {
-	pci := NewPrefixCacheIndexer(5*time.Second, 1024*1024)
+	pci := NewPrefixCacheIndexer(5*time.Second, 1024*1024, 2*time.Second, "")
 	defer time.Sleep(100 * time.Millisecond)
 
 	var wg sync.WaitGroup
@@ -479,10 +479,10 @@ func TestPrefixCacheIndexer_ConcurrentAccess(t *testing.T) {
 	assert.Greater(t, pci.GetMemUsed(), int64(0))
 }
 
-// TestPrefixCacheIndexer_RecycleLoop_TTLEviction verifies TTL-based eviction in recycle loop.
-func TestPrefixCacheIndexer_RecycleLoop_TTLEviction(t *testing.T) {
+// TestPrefixCacheIndexer_MaintenanceLoop_TTLEviction verifies TTL-based eviction in maintenance loop.
+func TestPrefixCacheIndexer_MaintenanceLoop_TTLEviction(t *testing.T) {
 	// Use short TTL for faster test
-	pci := NewPrefixCacheIndexer(100*time.Millisecond, 1024*1024)
+	pci := NewPrefixCacheIndexer(100*time.Millisecond, 1024*1024, 2*time.Second, "")
 	defer time.Sleep(100 * time.Millisecond)
 
 	node := NewTreeNode()
@@ -492,8 +492,8 @@ func TestPrefixCacheIndexer_RecycleLoop_TTLEviction(t *testing.T) {
 	pci.AddPrefix("test", node)
 	assert.Greater(t, pci.GetMemUsed(), int64(0))
 
-	// Wait for worker to expire and recycle loop to run
-	time.Sleep(6 * time.Second) // RecycleLoop runs every 5 seconds
+	// Wait for worker to expire and maintenance loop to run
+	time.Sleep(3 * time.Second) // MaintenanceLoop runs every 3 seconds
 
 	// Prefix should be removed due to empty node
 	matched, _, _ := pci.MatchPrefix("test")
@@ -501,11 +501,11 @@ func TestPrefixCacheIndexer_RecycleLoop_TTLEviction(t *testing.T) {
 	assert.Equal(t, int64(0), pci.GetMemUsed())
 }
 
-// TestPrefixCacheIndexer_RecycleLoop_MemoryPressure verifies memory-based eviction.
-func TestPrefixCacheIndexer_RecycleLoop_MemoryPressure(t *testing.T) {
+// TestPrefixCacheIndexer_MaintenanceLoop_MemoryPressure verifies memory-based eviction.
+func TestPrefixCacheIndexer_MaintenanceLoop_MemoryPressure(t *testing.T) {
 	// Use very small memory limit
 	memLimit := int64(50)
-	pci := NewPrefixCacheIndexer(1*time.Hour, memLimit) // Long TTL to test memory eviction
+	pci := NewPrefixCacheIndexer(1*time.Hour, memLimit, 2*time.Second, "") // Long TTL to test memory eviction
 	defer time.Sleep(100 * time.Millisecond)
 
 	// Add prefixes to exceed memory limit
@@ -521,21 +521,21 @@ func TestPrefixCacheIndexer_RecycleLoop_MemoryPressure(t *testing.T) {
 	initialMem := pci.GetMemUsed()
 	assert.Greater(t, initialMem, memLimit, "memory should exceed limit")
 
-	// Wait for recycle loop to run
-	time.Sleep(6 * time.Second)
+	// Wait for maintenance loop to run
+	time.Sleep(3 * time.Second)
 
-	// Memory should be reduced (recycles 1/3 of limit)
+	// Memory should be reduced (evicts 1/3 of limit)
 	finalMem := pci.GetMemUsed()
-	assert.Less(t, finalMem, initialMem, "memory should be reduced by recycle loop")
+	assert.Less(t, finalMem, initialMem, "memory should be reduced by maintenance loop")
 }
 
-// TestPrefixCacheIndexer_RecycleLoop_NoPanic verifies RecycleLoop handles panics gracefully.
+// TestPrefixCacheIndexer_MaintenanceLoop_NoPanic verifies MaintenanceLoop handles panics gracefully.
 // Note: The current implementation does NOT restart on panic (user removed restart logic)
-func TestPrefixCacheIndexer_RecycleLoop_NoPanic(t *testing.T) {
-	pci := NewPrefixCacheIndexer(5*time.Second, 1024*1024)
+func TestPrefixCacheIndexer_MaintenanceLoop_NoPanic(t *testing.T) {
+	pci := NewPrefixCacheIndexer(2*time.Second, 1024*1024, 2*time.Second, "")
 
-	// Let RecycleLoop run for a few cycles
-	time.Sleep(11 * time.Second)
+	// Let MaintenanceLoop run for a few cycles
+	time.Sleep(5 * time.Second)
 
 	// Verify indexer is still operational
 	node := NewTreeNode()
@@ -548,7 +548,7 @@ func TestPrefixCacheIndexer_RecycleLoop_NoPanic(t *testing.T) {
 // Tests that query exactly matches a cached key in the prefix cache.
 func TestPrefixCacheIndexer_MatchPrefix_ExactMatch(t *testing.T) {
 	// Use smaller, reasonable test data sizes for unit tests
-	pci := NewPrefixCacheIndexer(1*time.Hour, 100*1024*1024)
+	pci := NewPrefixCacheIndexer(1*time.Hour, 100*1024*1024, 2*time.Second, "")
 	node := NewTreeNode()
 
 	sizes := []struct {
@@ -583,392 +583,6 @@ func TestPrefixCacheIndexer_MatchPrefix_ExactMatch(t *testing.T) {
 			assert.Equal(t, len(cachedStr), m, "match length should equal cached string length")
 		})
 	}
-}
-
-// Benchmark tests for performance analysis
-
-func BenchmarkWorkerWithLRU_Touch(b *testing.B) {
-	worker := &types.LLMWorker{ID: "worker-1"}
-	wl := NewWorkerWithLRU(worker)
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		wl.Touch()
-	}
-}
-
-func BenchmarkTreeNode_AddWorker(b *testing.B) {
-	tn := NewTreeNode()
-	worker := &types.LLMWorker{ID: "worker-1"}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		tn.AddWorker(worker)
-	}
-}
-
-func BenchmarkPrefixCacheIndexer_AddPrefix(b *testing.B) {
-	pci := NewPrefixCacheIndexer(5*time.Second, 1024*1024*1024)
-	node := NewTreeNode()
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		prefix := fmt.Sprintf("prefix-%d", i)
-		pci.AddPrefix(prefix, node)
-	}
-}
-
-func BenchmarkPrefixCacheIndexer_MatchPrefix(b *testing.B) {
-	pci := NewPrefixCacheIndexer(5*time.Second, 1024*1024*1024)
-	node := NewTreeNode()
-
-	// Pre-populate with prefixes
-	for i := 0; i < 1000; i++ {
-		prefix := fmt.Sprintf("prefix-%d", i)
-		pci.AddPrefix(prefix, node)
-	}
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		prefix := fmt.Sprintf("prefix-%d-extra", i%1000)
-		pci.MatchPrefix(prefix)
-	}
-}
-
-// generateLongString creates a string of specified size (in bytes) with randomized content.
-// Each call generates different random content to prevent pattern-based cache optimization.
-//
-// Algorithm:
-// - Uses crypto-quality randomness for realistic LLM prompt simulation
-// - Character set: [a-zA-Z0-9 ] (63 chars) matches typical text distribution
-// - No repeating patterns that could trigger string interning or SIMD shortcuts
-func generateLongString(size int) string {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 "
-	charsetLen := len(charset)
-
-	builder := strings.Builder{}
-	builder.Grow(size)
-
-	// Generate random content byte by byte
-	for i := 0; i < size; i++ {
-		builder.WriteByte(charset[rand.Intn(charsetLen)])
-	}
-
-	return builder.String()
-}
-
-// BenchmarkPrefixCacheIndexer_MatchPrefix_LongStrings tests MatchPrefix performance with various string lengths.
-// Tests scenarios from 1KB to 10MB to validate performance characteristics under LLM long input scenarios.
-//
-// Performance expectations:
-// - Sub-linear time complexity due to WalkPrefix optimization
-// - strings.HasPrefix provides SIMD-accelerated prefix detection
-// - Adaptive prefix length reduces candidate set for long strings (>=128 chars)
-// - Early termination on perfect match
-//
-// High-density cache simulation:
-// - Single shared PrefixCacheIndexer instance across all size benchmarks
-// - 1000+ cached entries per size to stress radix tree traversal
-// - Multiple prefix variations to maximize candidate branches
-func BenchmarkPrefixCacheIndexer_MatchPrefix_LongStrings(b *testing.B) {
-	// Shared cache indexer for high-density testing
-	pci := NewPrefixCacheIndexer(1*time.Hour, 100*1024*1024*1024) // 100GB limit
-	node := NewTreeNode()
-	node.AddWorker(&types.LLMWorker{ID: "worker-1"})
-
-	sizes := []struct {
-		name string
-		size int
-	}{
-		{"1KB", 1 * 1024},
-		{"8KB", 8 * 1024},
-		{"16KB", 16 * 1024},
-		{"32KB", 32 * 1024},
-		{"128KB", 128 * 1024},
-		{"512KB", 512 * 1024},
-		{"1MB", 1024 * 1024},
-		{"10MB", 10 * 1024 * 1024},
-	}
-
-	// Store generated base strings for each size to ensure query strings match cached entries
-	baseStrings := make(map[int]string)
-	for _, tc := range sizes {
-		baseStrings[tc.size] = generateLongString(tc.size)
-	}
-
-	// Pre-populate cache with high-density data across all sizes
-	for _, tc := range sizes {
-		baseStr := baseStrings[tc.size]
-
-		// Add 1000 cached entries per size with varying prefixes
-		// This creates a dense radix tree with many candidate branches
-		for i := 0; i < 1000; i++ {
-			// Create variations at different positions to maximize tree branching:
-			// - Vary prefix (first 20 chars)
-			// - Vary middle (around 50% position)
-			// - Vary suffix (last 20 chars)
-			midPos := tc.size / 2
-			if midPos > 20 && midPos+20 < tc.size {
-				variation := fmt.Sprintf("%03d", i%100) + baseStr[3:midPos] +
-					fmt.Sprintf("-%04d-", i) + baseStr[midPos+6:tc.size-10] +
-					fmt.Sprintf("-v%03d", i%100)
-				pci.AddPrefix(variation, node)
-			} else {
-				variation := fmt.Sprintf("%03d", i%100) + baseStr[3:tc.size-10] + fmt.Sprintf("-v%03d", i%100)
-				pci.AddPrefix(variation, node)
-			}
-		}
-	}
-
-	for _, tc := range sizes {
-		b.Run(tc.name, func(b *testing.B) {
-			baseStr := baseStrings[tc.size]
-
-			// Query string: shares prefix with cached entries (uses index 50 variation)
-			midPos := tc.size / 2
-			var queryStr string
-			if midPos > 20 && midPos+20 < tc.size {
-				queryStr = "050" + baseStr[3:midPos] + "-9999-" + baseStr[midPos+6:tc.size-10] + "-query"
-			} else {
-				queryStr = "050" + baseStr[3:tc.size-10] + "-query"
-			}
-
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				pci.MatchPrefix(queryStr)
-			}
-		})
-	}
-}
-
-// BenchmarkPrefixCacheIndexer_MatchPrefix_ExactMatch benchmarks exact match scenarios.
-// Tests best-case performance when query exactly matches a cached key in high-density cache.
-func BenchmarkPrefixCacheIndexer_MatchPrefix_ExactMatch(b *testing.B) {
-	// Shared cache indexer for high-density testing
-	pci := NewPrefixCacheIndexer(1*time.Hour, 100*1024*1024*1024)
-	sizes := []struct {
-		name string
-		size int
-		node *TreeNode
-	}{
-		{"1KB", 1 * 1024, NewTreeNode()},
-		{"8KB", 8 * 1024, NewTreeNode()},
-		{"16KB", 16 * 1024, NewTreeNode()},
-		{"32KB", 32 * 1024, NewTreeNode()},
-		{"128KB", 128 * 1024, NewTreeNode()},
-		{"512KB", 512 * 1024, NewTreeNode()},
-		{"1MB", 1024 * 1024, NewTreeNode()},
-		{"10MB", 10 * 1024 * 1024, NewTreeNode()},
-	}
-
-	// Store base strings and target cached strings for each size
-	baseStrings := make(map[string]string)
-	for _, tc := range sizes {
-		baseStr := generateLongString(tc.size)
-		baseStrings[tc.name] = baseStr
-		pci.AddPrefix(baseStr, tc.node)
-	}
-
-	for _, tc := range sizes {
-		b.Run(tc.name, func(b *testing.B) {
-			// Use the exact cached string from pre-population
-			cachedStr := baseStrings[tc.name]
-
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				n, m, _ := pci.MatchPrefix(cachedStr)
-				if m == 0 {
-					b.Fatalf("MatchPrefix: %d, %v, %d\n", len(cachedStr), n, m)
-				}
-			}
-		})
-	}
-}
-
-// BenchmarkPrefixCacheIndexer_MatchPrefix_PrefixMatch benchmarks prefix match scenarios.
-// Query is longer than cached key, testing when cached key is a prefix of query in dense cache.
-func BenchmarkPrefixCacheIndexer_MatchPrefix_PrefixMatch(b *testing.B) {
-	// Shared cache indexer for high-density testing
-	pci := NewPrefixCacheIndexer(1*time.Hour, 100*1024*1024*1024)
-	node := NewTreeNode()
-	node.AddWorker(&types.LLMWorker{ID: "worker-1"})
-
-	sizes := []struct {
-		name string
-		size int
-	}{
-		{"1KB", 1 * 1024},
-		{"8KB", 8 * 1024},
-		{"16KB", 16 * 1024},
-		{"32KB", 32 * 1024},
-		{"128KB", 128 * 1024},
-		{"512KB", 512 * 1024},
-		{"1MB", 1024 * 1024},
-		{"10MB", 10 * 1024 * 1024},
-	}
-
-	// Store base strings and target cached strings
-	baseStrings := make(map[int]string)
-	cachedTargets := make(map[int]string)
-	for _, tc := range sizes {
-		baseStrings[tc.size] = generateLongString(tc.size)
-	}
-
-	// Pre-populate with 500 entries per size
-	for _, tc := range sizes {
-		baseStr := baseStrings[tc.size]
-		for i := 0; i < 500; i++ {
-			variation := fmt.Sprintf("%03d-", i) + baseStr[4:]
-			pci.AddPrefix(variation, node)
-			cachedTargets[tc.size] = variation
-		}
-	}
-
-	for _, tc := range sizes {
-		b.Run(tc.name, func(b *testing.B) {
-			cachedStr := cachedTargets[tc.size]
-
-			// Query is longer - append suffix to cached string
-			queryStr := cachedStr + "-additional-suffix-with-more-content"
-
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				pci.MatchPrefix(queryStr)
-			}
-		})
-	}
-}
-
-// BenchmarkPrefixCacheIndexer_MatchPrefix_NoMatch benchmarks worst-case scenarios.
-// Query has no common prefix with any cached key in dense cache, testing traversal overhead.
-func BenchmarkPrefixCacheIndexer_MatchPrefix_NoMatch(b *testing.B) {
-	// Shared cache indexer for high-density testing
-	pci := NewPrefixCacheIndexer(1*time.Hour, 100*1024*1024*1024)
-	node := NewTreeNode()
-	node.AddWorker(&types.LLMWorker{ID: "worker-1"})
-
-	sizes := []struct {
-		name string
-		size int
-	}{
-		{"1KB", 1 * 1024},
-		{"8KB", 8 * 1024},
-		{"16KB", 16 * 1024},
-		{"32KB", 32 * 1024},
-		{"128KB", 128 * 1024},
-		{"512KB", 512 * 1024},
-		{"1MB", 1024 * 1024},
-		{"10MB", 10 * 1024 * 1024},
-	}
-
-	// Generate base strings for each size
-	baseStrings := make(map[int]string)
-	queryStrings := make(map[int]string)
-	for _, tc := range sizes {
-		baseStrings[tc.size] = generateLongString(tc.size - 1)
-		queryStrings[tc.size] = generateLongString(tc.size - 1)
-	}
-
-	// Pre-populate with 500 entries per size, all starting with 'a'-'m' range
-	for _, tc := range sizes {
-		baseStr := baseStrings[tc.size]
-		for i := 0; i < 500; i++ {
-			// Use 'a' through 'm' prefix (first half of alphabet)
-			prefixChar := rune('a' + (i % 13))
-			cachedStr := string(prefixChar) + baseStr
-			pci.AddPrefix(cachedStr, node)
-		}
-	}
-
-	for _, tc := range sizes {
-		b.Run(tc.name, func(b *testing.B) {
-			// Query starts with 'z' - completely different from all cached entries
-			queryStr := "z" + queryStrings[tc.size]
-
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				pci.MatchPrefix(queryStr)
-			}
-		})
-	}
-}
-
-// BenchmarkPrefixCacheIndexer_MatchPrefix_ManyCandidates benchmarks with extremely dense cache.
-// Simulates worst-case scenario where WalkPrefix must traverse many candidates with shared prefixes.
-func BenchmarkPrefixCacheIndexer_MatchPrefix_ManyCandidates(b *testing.B) {
-	// Shared cache indexer for maximum density testing
-	pci := NewPrefixCacheIndexer(1*time.Hour, 100*1024*1024*1024)
-	node := NewTreeNode()
-	node.AddWorker(&types.LLMWorker{ID: "worker-1"})
-
-	sizes := []struct {
-		name string
-		size int
-	}{
-		{"1KB", 1 * 1024},
-		{"8KB", 8 * 1024},
-		{"16KB", 16 * 1024},
-		{"32KB", 32 * 1024},
-		{"128KB", 128 * 1024},
-		{"512KB", 512 * 1024},
-		{"1MB", 1024 * 1024},
-		{"10MB", 10 * 1024 * 1024},
-	}
-
-	// Generate base strings for each size
-	baseStrings := make(map[int]string)
-	for _, tc := range sizes {
-		baseStrings[tc.size] = generateLongString(tc.size)
-	}
-
-	// Pre-populate with 2000+ entries per size, all sharing common prefixes
-	// This creates maximum branching factor in the radix tree
-	for _, tc := range sizes {
-		baseStr := baseStrings[tc.size]
-		commonPrefixLen := min(tc.size-20, 100)
-
-		cnt := 100
-
-		// Add entries sharing the same initial prefix
-		for i := 0; i < cnt; i++ {
-			// All share first 100 chars (or tc.size-20), diverge after
-			if commonPrefixLen+20 < tc.size {
-				variation := baseStr[:commonPrefixLen] +
-					fmt.Sprintf("-var%04d-", i) +
-					baseStr[commonPrefixLen+10:]
-				if len(variation) > tc.size {
-					variation = variation[:tc.size]
-				}
-				pci.AddPrefix(variation, node)
-			} else {
-				variation := baseStr[:tc.size-15] + fmt.Sprintf("-v%04d", i)
-				pci.AddPrefix(variation, node)
-			}
-		}
-	}
-
-	for _, tc := range sizes {
-		b.Run(tc.name, func(b *testing.B) {
-			baseStr := baseStrings[tc.size]
-			commonPrefixLen := min(tc.size-20, 100)
-
-			// Query shares common prefix, forcing traversal of many candidates
-			queryStr := baseStr[:commonPrefixLen] + "-query-9999"
-
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				pci.MatchPrefix(queryStr)
-			}
-		})
-	}
-}
-
-// min returns the minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // =============================================================================
@@ -1149,9 +763,10 @@ func TestLLMScenario_LongContextWindow(t *testing.T) {
 // This is useful for deterministic unit tests.
 func NewPrefixCacheIndexerWithoutRecycle(ttl time.Duration, memLimit int64) *PrefixCacheIndexer {
 	return &PrefixCacheIndexer{
-		tree:     radix.New(),
-		ttl:      ttl,
-		memLimit: memLimit,
+		tree:      radix.New(),
+		ttl:       ttl,
+		memLimit:  memLimit,
+		inferMode: "",
 	}
 }
 
@@ -1175,13 +790,16 @@ const (
 		`with similar prefixes to the same worker instance.\n\nAnswer the user's question based on this context.`
 )
 
-// createTestConfig creates a minimal config for testing
+// createTestConfig creates a minimal config for testing.
+// Key config values:
+// - PrefixCacheTTL: 1800s (30min) - how long cached prefixes remain valid
+// - PrefixCacheLimit: 100MB - memory limit for prefix cache
+// - PrefixCacheLoadTolerance: 0.3 - workers with load > mean*(1+tolerance) are filtered out
 func createTestConfig() *options.Config {
 	return &options.Config{
-		PrefixCacheTTL:           1800,
-		PrefixCacheLimit:         100 * 1024 * 1024,
-		PrefixCacheLoadTolerance: 0.3,
-		RequestsThreshold:        10,
+		PrefixCacheTTL:           1800,              // 30 minutes
+		PrefixCacheLimit:         100 * 1024 * 1024, // 100MB
+		PrefixCacheLoadTolerance: 0.3,               // threshold = mean * 1.3
 	}
 }
 
@@ -1397,7 +1015,9 @@ func TestSchedule_BurstTraffic(t *testing.T) {
 	t.Logf("Worker distribution: %v", workerCounts)
 }
 
-// simulateWorkerLoad adds simulated requests to a worker to change its load metrics.
+// simulateWorkerLoad adds simulated requests to a worker to change its token load metrics.
+// Total tokens added = numRequests * tokensPerReq.
+// This is used to test load-aware scheduling behavior.
 func simulateWorkerLoad(lrsClient *lrs.LocalRealtimeStateClient, workerID string, numRequests int, tokensPerReq int64) {
 	for i := 0; i < numRequests; i++ {
 		reqState := lrs.NewRequestState(
@@ -1410,10 +1030,10 @@ func simulateWorkerLoad(lrsClient *lrs.LocalRealtimeStateClient, workerID string
 	}
 }
 
-// TestSchedule_LoadBalancing_NumTokens verifies that scheduler prefers workers with fewer tokens.
+// TestSchedule_LoadBalancing_NumTokens verifies that scheduler selects worker with fewest tokens when no cache hit.
+// This tests the baseline load balancing behavior: without prefix cache hit, select least-loaded worker.
 func TestSchedule_LoadBalancing_NumTokens(t *testing.T) {
 	config := createTestConfig()
-	config.RequestsThreshold = 100 // High threshold to use token-based balancing
 
 	workers := []*types.LLMWorker{
 		{ID: "worker-heavy", Version: 1},
@@ -1421,10 +1041,9 @@ func TestSchedule_LoadBalancing_NumTokens(t *testing.T) {
 	}
 	lrsClient := createTestLRSClient(workers)
 
-	// Simulate heavy load on worker-heavy (10000 tokens)
-	simulateWorkerLoad(lrsClient, "worker-heavy", 5, 2000)
-	// Simulate light load on worker-light (1000 tokens)
-	simulateWorkerLoad(lrsClient, "worker-light", 2, 500)
+	// Setup: worker-heavy has 10000 tokens, worker-light has 1000 tokens
+	simulateWorkerLoad(lrsClient, "worker-heavy", 5, 2000) // 10000 tokens
+	simulateWorkerLoad(lrsClient, "worker-light", 2, 500)  // 1000 tokens
 
 	pc := NewPrefixCachePolicy(config, consts.NormalInferMode, lrsClient)
 
@@ -1443,10 +1062,11 @@ func TestSchedule_LoadBalancing_NumTokens(t *testing.T) {
 		"should select worker with fewer tokens when no cache hit")
 }
 
-// TestSchedule_LoadBalancing_RequestsThreshold verifies RequestsThreshold filtering.
+// TestSchedule_LoadBalancing_CacheHitWithOverload verifies load balancing when cache-hit workers exceed token threshold.
+// Strategy: When a cache-hit worker's token load exceeds (mean + tolerance * mean), scheduler falls back to
+// the least-loaded worker globally, avoiding hotspots even at the cost of cache miss.
 func TestSchedule_LoadBalancing_CacheHitWithOverload(t *testing.T) {
 	config := createTestConfig()
-	config.RequestsThreshold = 5 // Low threshold
 
 	workers := []*types.LLMWorker{
 		{ID: "worker-busy", Version: 1},
@@ -1454,16 +1074,15 @@ func TestSchedule_LoadBalancing_CacheHitWithOverload(t *testing.T) {
 	}
 	lrsClient := createTestLRSClient(workers)
 
-	// worker-idle has 3 requests (under threshold)
-	simulateWorkerLoad(lrsClient, "worker-idle", 9, 100)
-	// worker-busy has 10 requests (exceeds threshold)
-	simulateWorkerLoad(lrsClient, "worker-busy", 10, 100)
+	// Initial state: worker-idle has fewer tokens (900), worker-busy has more (1000)
+	simulateWorkerLoad(lrsClient, "worker-idle", 9, 100)  // 900 tokens
+	simulateWorkerLoad(lrsClient, "worker-busy", 10, 100) // 1000 tokens
 
 	lrsClient.PrintInstanceViews()
 
 	pc := NewPrefixCachePolicy(config, consts.NormalInferMode, lrsClient)
 
-	// First request - creates cache entry
+	// First request - creates cache entry on worker-idle (least loaded)
 	req1 := &types.ScheduleRequest{
 		Id:         "req-1",
 		PromptText: buildChatPrompt(systemPromptCoder, nil, "Write a function"),
@@ -1473,13 +1092,17 @@ func TestSchedule_LoadBalancing_CacheHitWithOverload(t *testing.T) {
 	lrsClient.RUnlock()
 	assert.NoError(t, err)
 	firstWorker := req1.ScheduleResult[0].ID
-	assert.NoError(t, err)
-	assert.Equal(t, "worker-idle", req1.ScheduleResult[0].ID,
+	assert.Equal(t, "worker-idle", firstWorker,
 		"should select worker with fewer tokens when no cache hit")
 
-	simulateWorkerLoad(lrsClient, "worker-idle", 12, 500)
+	// Now overload worker-idle with additional tokens, making it exceed the tolerance threshold
+	// After this: worker-idle has 900 + 6000 = 6900 tokens, worker-busy has 1000 tokens
+	// Mean = (6900 + 1000) / 2 = 3950, threshold = 3950 * 1.3 = 5135
+	// worker-idle (6900) exceeds threshold, worker-busy (1000) is within threshold
+	simulateWorkerLoad(lrsClient, "worker-idle", 12, 500) // +6000 tokens
 
-	// If first worker is busy one, second request should prefer idle one due to threshold
+	// Second request has cache hit on worker-idle, but worker-idle is overloaded
+	// Scheduler should fallback to worker-busy (least loaded globally)
 	req2 := &types.ScheduleRequest{
 		Id:         "req-2",
 		PromptText: buildChatPrompt(systemPromptCoder, nil, "Optimize this code"),
@@ -1490,16 +1113,17 @@ func TestSchedule_LoadBalancing_CacheHitWithOverload(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, "worker-busy", req2.ScheduleResult[0].ID,
-		"should select worker with fewer tokens when no cache hit")
+		"should fallback to least-loaded worker when cache-hit worker exceeds token threshold")
 
 	t.Logf("First request -> %s, Second request -> %s", firstWorker, req2.ScheduleResult[0].ID)
 }
 
-// TestSchedule_HighConcurrencyWithLoad tests concurrent scheduling with varying loads.
+// TestSchedule_HighConcurrencyWithLoad tests concurrent scheduling with varying token loads.
+// Validates that load-aware scheduling properly distributes requests when combined with prefix caching.
+// Workers with lower token counts should receive more requests even with concurrent access.
 func TestSchedule_HighConcurrencyWithLoad(t *testing.T) {
 	config := createTestConfig()
-	config.RequestsThreshold = 20
-	config.PrefixCacheLoadTolerance = 0.3
+	config.PrefixCacheLoadTolerance = 0.3 // threshold = mean * 1.3
 
 	workers := []*types.LLMWorker{
 		{ID: "concurrent-w0", Version: 1},
@@ -1509,11 +1133,13 @@ func TestSchedule_HighConcurrencyWithLoad(t *testing.T) {
 	}
 	lrsClient := createTestLRSClient(workers)
 
-	// Varying initial loads
-	simulateWorkerLoad(lrsClient, "concurrent-w0", 15, 800)
-	simulateWorkerLoad(lrsClient, "concurrent-w1", 5, 200)
-	simulateWorkerLoad(lrsClient, "concurrent-w2", 10, 500)
-	simulateWorkerLoad(lrsClient, "concurrent-w3", 3, 100)
+	// Setup varying token loads across workers
+	// Total tokens: w0=12000, w1=1000, w2=5000, w3=300
+	// Mean = 4575 tokens, threshold = 4575 * 1.3 = 5947.5
+	simulateWorkerLoad(lrsClient, "concurrent-w0", 15, 800) // 12000 tokens (exceeds threshold)
+	simulateWorkerLoad(lrsClient, "concurrent-w1", 5, 200)  // 1000 tokens (within threshold)
+	simulateWorkerLoad(lrsClient, "concurrent-w2", 10, 500) // 5000 tokens (within threshold)
+	simulateWorkerLoad(lrsClient, "concurrent-w3", 3, 100)  // 300 tokens (within threshold, lowest)
 
 	pc := NewPrefixCachePolicy(config, consts.NormalInferMode, lrsClient)
 
@@ -1556,4 +1182,392 @@ func TestSchedule_HighConcurrencyWithLoad(t *testing.T) {
 func init() {
 	klog.InitFlags(nil)
 	flag.Set("v", "2")
+}
+
+// =============================================================================
+// Benchmark Tests
+// =============================================================================
+
+func BenchmarkWorkerWithLRU_Touch(b *testing.B) {
+	worker := &types.LLMWorker{ID: "worker-1"}
+	wl := NewWorkerWithLRU(worker)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		wl.Touch()
+	}
+}
+
+func BenchmarkTreeNode_AddWorker(b *testing.B) {
+	tn := NewTreeNode()
+	worker := &types.LLMWorker{ID: "worker-1"}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		tn.AddWorker(worker)
+	}
+}
+
+func BenchmarkPrefixCacheIndexer_AddPrefix(b *testing.B) {
+	pci := NewPrefixCacheIndexer(5*time.Second, 1024*1024*1024, 2*time.Second, "")
+	node := NewTreeNode()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		prefix := fmt.Sprintf("prefix-%d", i)
+		pci.AddPrefix(prefix, node)
+	}
+}
+
+func BenchmarkPrefixCacheIndexer_MatchPrefix(b *testing.B) {
+	pci := NewPrefixCacheIndexer(5*time.Second, 1024*1024*1024, 2*time.Second, "")
+	node := NewTreeNode()
+
+	// Pre-populate with prefixes
+	for i := 0; i < 1000; i++ {
+		prefix := fmt.Sprintf("prefix-%d", i)
+		pci.AddPrefix(prefix, node)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		prefix := fmt.Sprintf("prefix-%d-extra", i%1000)
+		pci.MatchPrefix(prefix)
+	}
+}
+
+// generateLongString creates a string of specified size (in bytes) with randomized content.
+// Each call generates different random content to prevent pattern-based cache optimization.
+//
+// Algorithm:
+// - Uses crypto-quality randomness for realistic LLM prompt simulation
+// - Character set: [a-zA-Z0-9 ] (63 chars) matches typical text distribution
+// - No repeating patterns that could trigger string interning or SIMD shortcuts
+func generateLongString(size int) string {
+	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 "
+	charsetLen := len(charset)
+
+	builder := strings.Builder{}
+	builder.Grow(size)
+
+	// Generate random content byte by byte
+	for i := 0; i < size; i++ {
+		builder.WriteByte(charset[rand.Intn(charsetLen)])
+	}
+
+	return builder.String()
+}
+
+// BenchmarkPrefixCacheIndexer_MatchPrefix_LongStrings tests MatchPrefix performance with various string lengths.
+// Tests scenarios from 1KB to 10MB to validate performance characteristics under LLM long input scenarios.
+//
+// Performance expectations:
+// - Sub-linear time complexity due to WalkPrefix optimization
+// - strings.HasPrefix provides SIMD-accelerated prefix detection
+// - Adaptive prefix length reduces candidate set for long strings (>=128 chars)
+// - Early termination on perfect match
+//
+// High-density cache simulation:
+// - Single shared PrefixCacheIndexer instance across all size benchmarks
+// - 1000+ cached entries per size to stress radix tree traversal
+// - Multiple prefix variations to maximize candidate branches
+func BenchmarkPrefixCacheIndexer_MatchPrefix_LongStrings(b *testing.B) {
+	// Shared cache indexer for high-density testing
+	pci := NewPrefixCacheIndexer(1*time.Hour, 100*1024*1024*1024, 2*time.Second, "") // 100GB limit
+	node := NewTreeNode()
+	node.AddWorker(&types.LLMWorker{ID: "worker-1"})
+
+	sizes := []struct {
+		name string
+		size int
+	}{
+		{"1KB", 1 * 1024},
+		{"8KB", 8 * 1024},
+		{"16KB", 16 * 1024},
+		{"32KB", 32 * 1024},
+		{"128KB", 128 * 1024},
+		{"512KB", 512 * 1024},
+		{"1MB", 1024 * 1024},
+		{"10MB", 10 * 1024 * 1024},
+	}
+
+	// Store generated base strings for each size to ensure query strings match cached entries
+	baseStrings := make(map[int]string)
+	for _, tc := range sizes {
+		baseStrings[tc.size] = generateLongString(tc.size)
+	}
+
+	// Pre-populate cache with high-density data across all sizes
+	for _, tc := range sizes {
+		baseStr := baseStrings[tc.size]
+
+		// Add 1000 cached entries per size with varying prefixes
+		// This creates a dense radix tree with many candidate branches
+		for i := 0; i < 1000; i++ {
+			// Create variations at different positions to maximize tree branching:
+			// - Vary prefix (first 20 chars)
+			// - Vary middle (around 50% position)
+			// - Vary suffix (last 20 chars)
+			midPos := tc.size / 2
+			if midPos > 20 && midPos+20 < tc.size {
+				variation := fmt.Sprintf("%03d", i%100) + baseStr[3:midPos] +
+					fmt.Sprintf("-%04d-", i) + baseStr[midPos+6:tc.size-10] +
+					fmt.Sprintf("-v%03d", i%100)
+				pci.AddPrefix(variation, node)
+			} else {
+				variation := fmt.Sprintf("%03d", i%100) + baseStr[3:tc.size-10] + fmt.Sprintf("-v%03d", i%100)
+				pci.AddPrefix(variation, node)
+			}
+		}
+	}
+
+	for _, tc := range sizes {
+		b.Run(tc.name, func(b *testing.B) {
+			baseStr := baseStrings[tc.size]
+
+			// Query string: shares prefix with cached entries (uses index 50 variation)
+			midPos := tc.size / 2
+			var queryStr string
+			if midPos > 20 && midPos+20 < tc.size {
+				queryStr = "050" + baseStr[3:midPos] + "-9999-" + baseStr[midPos+6:tc.size-10] + "-query"
+			} else {
+				queryStr = "050" + baseStr[3:tc.size-10] + "-query"
+			}
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				pci.MatchPrefix(queryStr)
+			}
+		})
+	}
+}
+
+// BenchmarkPrefixCacheIndexer_MatchPrefix_ExactMatch benchmarks exact match scenarios.
+// Tests best-case performance when query exactly matches a cached key in high-density cache.
+func BenchmarkPrefixCacheIndexer_MatchPrefix_ExactMatch(b *testing.B) {
+	// Shared cache indexer for high-density testing
+	pci := NewPrefixCacheIndexer(1*time.Hour, 100*1024*1024*1024, 2*time.Second, "")
+	sizes := []struct {
+		name string
+		size int
+		node *TreeNode
+	}{
+		{"1KB", 1 * 1024, NewTreeNode()},
+		{"8KB", 8 * 1024, NewTreeNode()},
+		{"16KB", 16 * 1024, NewTreeNode()},
+		{"32KB", 32 * 1024, NewTreeNode()},
+		{"128KB", 128 * 1024, NewTreeNode()},
+		{"512KB", 512 * 1024, NewTreeNode()},
+		{"1MB", 1024 * 1024, NewTreeNode()},
+		{"10MB", 10 * 1024 * 1024, NewTreeNode()},
+	}
+
+	// Store base strings and target cached strings for each size
+	baseStrings := make(map[string]string)
+	for _, tc := range sizes {
+		baseStr := generateLongString(tc.size)
+		baseStrings[tc.name] = baseStr
+		pci.AddPrefix(baseStr, tc.node)
+	}
+
+	for _, tc := range sizes {
+		b.Run(tc.name, func(b *testing.B) {
+			// Use the exact cached string from pre-population
+			cachedStr := baseStrings[tc.name]
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				n, m, _ := pci.MatchPrefix(cachedStr)
+				if m == 0 {
+					b.Fatalf("MatchPrefix: %d, %v, %d\n", len(cachedStr), n, m)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkPrefixCacheIndexer_MatchPrefix_PrefixMatch benchmarks prefix match scenarios.
+// Query is longer than cached key, testing when cached key is a prefix of query in dense cache.
+func BenchmarkPrefixCacheIndexer_MatchPrefix_PrefixMatch(b *testing.B) {
+	// Shared cache indexer for high-density testing
+	pci := NewPrefixCacheIndexer(1*time.Hour, 100*1024*1024*1024, 2*time.Second, "")
+	node := NewTreeNode()
+	node.AddWorker(&types.LLMWorker{ID: "worker-1"})
+
+	sizes := []struct {
+		name string
+		size int
+	}{
+		{"1KB", 1 * 1024},
+		{"8KB", 8 * 1024},
+		{"16KB", 16 * 1024},
+		{"32KB", 32 * 1024},
+		{"128KB", 128 * 1024},
+		{"512KB", 512 * 1024},
+		{"1MB", 1024 * 1024},
+		{"10MB", 10 * 1024 * 1024},
+	}
+
+	// Store base strings and target cached strings
+	baseStrings := make(map[int]string)
+	cachedTargets := make(map[int]string)
+	for _, tc := range sizes {
+		baseStrings[tc.size] = generateLongString(tc.size)
+	}
+
+	// Pre-populate with 500 entries per size
+	for _, tc := range sizes {
+		baseStr := baseStrings[tc.size]
+		for i := 0; i < 500; i++ {
+			variation := fmt.Sprintf("%03d-", i) + baseStr[4:]
+			pci.AddPrefix(variation, node)
+			cachedTargets[tc.size] = variation
+		}
+	}
+
+	for _, tc := range sizes {
+		b.Run(tc.name, func(b *testing.B) {
+			cachedStr := cachedTargets[tc.size]
+
+			// Query is longer - append suffix to cached string
+			queryStr := cachedStr + "-additional-suffix-with-more-content"
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				pci.MatchPrefix(queryStr)
+			}
+		})
+	}
+}
+
+// BenchmarkPrefixCacheIndexer_MatchPrefix_NoMatch benchmarks worst-case scenarios.
+// Query has no common prefix with any cached key in dense cache, testing traversal overhead.
+func BenchmarkPrefixCacheIndexer_MatchPrefix_NoMatch(b *testing.B) {
+	// Shared cache indexer for high-density testing
+	pci := NewPrefixCacheIndexer(1*time.Hour, 100*1024*1024*1024, 2*time.Second, "")
+	node := NewTreeNode()
+	node.AddWorker(&types.LLMWorker{ID: "worker-1"})
+
+	sizes := []struct {
+		name string
+		size int
+	}{
+		{"1KB", 1 * 1024},
+		{"8KB", 8 * 1024},
+		{"16KB", 16 * 1024},
+		{"32KB", 32 * 1024},
+		{"128KB", 128 * 1024},
+		{"512KB", 512 * 1024},
+		{"1MB", 1024 * 1024},
+		{"10MB", 10 * 1024 * 1024},
+	}
+
+	// Generate base strings for each size
+	baseStrings := make(map[int]string)
+	queryStrings := make(map[int]string)
+	for _, tc := range sizes {
+		baseStrings[tc.size] = generateLongString(tc.size - 1)
+		queryStrings[tc.size] = generateLongString(tc.size - 1)
+	}
+
+	// Pre-populate with 500 entries per size, all starting with 'a'-'m' range
+	for _, tc := range sizes {
+		baseStr := baseStrings[tc.size]
+		for i := 0; i < 500; i++ {
+			// Use 'a' through 'm' prefix (first half of alphabet)
+			prefixChar := rune('a' + (i % 13))
+			cachedStr := string(prefixChar) + baseStr
+			pci.AddPrefix(cachedStr, node)
+		}
+	}
+
+	for _, tc := range sizes {
+		b.Run(tc.name, func(b *testing.B) {
+			// Query starts with 'z' - completely different from all cached entries
+			queryStr := "z" + queryStrings[tc.size]
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				pci.MatchPrefix(queryStr)
+			}
+		})
+	}
+}
+
+// BenchmarkPrefixCacheIndexer_MatchPrefix_ManyCandidates benchmarks with extremely dense cache.
+// Simulates worst-case scenario where WalkPrefix must traverse many candidates with shared prefixes.
+func BenchmarkPrefixCacheIndexer_MatchPrefix_ManyCandidates(b *testing.B) {
+	// Shared cache indexer for maximum density testing
+	pci := NewPrefixCacheIndexer(1*time.Hour, 100*1024*1024*1024, 2*time.Second, "")
+	node := NewTreeNode()
+	node.AddWorker(&types.LLMWorker{ID: "worker-1"})
+
+	sizes := []struct {
+		name string
+		size int
+	}{
+		{"1KB", 1 * 1024},
+		{"8KB", 8 * 1024},
+		{"16KB", 16 * 1024},
+		{"32KB", 32 * 1024},
+		{"128KB", 128 * 1024},
+		{"512KB", 512 * 1024},
+		{"1MB", 1024 * 1024},
+		{"10MB", 10 * 1024 * 1024},
+	}
+
+	// Generate base strings for each size
+	baseStrings := make(map[int]string)
+	for _, tc := range sizes {
+		baseStrings[tc.size] = generateLongString(tc.size)
+	}
+
+	// Pre-populate with 2000+ entries per size, all sharing common prefixes
+	// This creates maximum branching factor in the radix tree
+	for _, tc := range sizes {
+		baseStr := baseStrings[tc.size]
+		commonPrefixLen := min(tc.size-20, 100)
+
+		cnt := 100
+
+		// Add entries sharing the same initial prefix
+		for i := 0; i < cnt; i++ {
+			// All share first 100 chars (or tc.size-20), diverge after
+			if commonPrefixLen+20 < tc.size {
+				variation := baseStr[:commonPrefixLen] +
+					fmt.Sprintf("-var%04d-", i) +
+					baseStr[commonPrefixLen+10:]
+				if len(variation) > tc.size {
+					variation = variation[:tc.size]
+				}
+				pci.AddPrefix(variation, node)
+			} else {
+				variation := baseStr[:tc.size-15] + fmt.Sprintf("-v%04d", i)
+				pci.AddPrefix(variation, node)
+			}
+		}
+	}
+
+	for _, tc := range sizes {
+		b.Run(tc.name, func(b *testing.B) {
+			baseStr := baseStrings[tc.size]
+			commonPrefixLen := min(tc.size-20, 100)
+
+			// Query shares common prefix, forcing traversal of many candidates
+			queryStr := baseStr[:commonPrefixLen] + "-query-9999"
+
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				pci.MatchPrefix(queryStr)
+			}
+		})
+	}
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

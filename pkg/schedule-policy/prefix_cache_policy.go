@@ -5,6 +5,7 @@ import (
 	"llm-gateway/cmd/llm-gateway/app/options"
 	"llm-gateway/pkg/consts"
 	"llm-gateway/pkg/lrs"
+	"llm-gateway/pkg/metrics"
 	ratelimiter "llm-gateway/pkg/service/rate-limiter"
 	"llm-gateway/pkg/types"
 	"llm-gateway/pkg/utils/radix"
@@ -114,39 +115,58 @@ func (tn *TreeNode) CheckAndRemoveInvalidWorkers(ttl time.Duration) bool {
 // PrefixCacheIndexer implements a radix tree-based cache indexer with LRU eviction.
 // It uses longest prefix matching to locate cached workers and maintains memory limits.
 type PrefixCacheIndexer struct {
-	tLock    sync.RWMutex
-	tree     *radix.Tree
-	ttl      time.Duration
-	memLimit int64
-	memUsed  atomic.Int64
+	tLock               sync.RWMutex
+	tree                *radix.Tree
+	ttl                 time.Duration
+	memLimit            int64
+	memUsed             atomic.Int64
+	inferMode           string
+	maintenanceInterval time.Duration // interval for maintenance loop (default: 60s production, 2s testing)
+
+	// Cache hit rate metrics (cumulative counters)
+	hitChars   atomic.Int64 // Total matched characters
+	totalChars atomic.Int64 // Total prompt characters processed
+	hitReqs    atomic.Int64 // Requests with cache hit (matchLen > 0)
+	totalReqs  atomic.Int64 // Total requests processed
 }
 
-// NewPrefixCacheIndexer creates a new prefix cache indexer with specified TTL and memory limit.
-func NewPrefixCacheIndexer(ttl time.Duration, memLimit int64) *PrefixCacheIndexer {
+// NewPrefixCacheIndexer creates a new prefix cache indexer with specified TTL, memory limit, and maintenance interval.
+func NewPrefixCacheIndexer(ttl time.Duration, memLimit int64, maintenanceInterval time.Duration, inferMode string) *PrefixCacheIndexer {
 	pci := &PrefixCacheIndexer{
-		tree:     radix.New(),
-		ttl:      ttl,
-		memLimit: memLimit,
+		tree:                radix.New(),
+		ttl:                 ttl,
+		memLimit:            memLimit,
+		maintenanceInterval: maintenanceInterval,
+		inferMode:           inferMode,
 	}
-	go pci.RecycleLoop()
+	// Set limit metric once at construction time, as it never changes.
+	metrics.StatusValue("prefix_cache_mem_limit_bytes", metrics.Labels{
+		{Name: "infer_mode", Value: inferMode},
+	}).Set(float32(memLimit))
+	go pci.MaintenanceLoop()
 	return pci
 }
 
-// RecycleLoop periodically removes stale workers and manages memory pressure.
-// It runs every 5 seconds and recycles 1/3 of memory limit when exceeded.
-func (pci *PrefixCacheIndexer) RecycleLoop() {
+// MaintenanceLoop runs periodically to perform background maintenance tasks:
+// - Updates monitoring metrics (memory usage, cache hit rates)
+// - Removes stale workers based on TTL
+// - Manages memory pressure by evicting 1/3 of entries when limit exceeded
+// Interval is configurable via PrefixCacheMaintenanceInterval (default: 60s).
+func (pci *PrefixCacheIndexer) MaintenanceLoop() {
 	for {
-		time.Sleep(5 * time.Second)
+		time.Sleep(pci.maintenanceInterval)
 
-		memRecycle := false
-		recycleMemSize := int64(0)
-		if pci.memUsed.Load() > pci.memLimit {
-			memRecycle = true // recycle 1/3 * pci.memLimit
-		}
+		memUsed := pci.memUsed.Load()
+		memRecycle := memUsed > pci.memLimit
 
+		// Update metrics for monitoring.
+		pci.updateMetrics(memUsed)
+
+		// Recycle stale workers and manage memory pressure.
 		tStart := time.Now()
 		pci.tLock.RLock()
 		var removes []string
+		recycleMemSize := int64(0)
 		pci.tree.WalkPostOrder(func(s string, v interface{}) bool {
 			if memRecycle && recycleMemSize < pci.memLimit/3 {
 				recycleMemSize += int64(len(s))
@@ -168,6 +188,9 @@ func (pci *PrefixCacheIndexer) RecycleLoop() {
 
 		for _, r := range removes {
 			pci.DeletePrefix(r)
+		}
+		if len(removes) > 0 {
+			klog.Infof("prefix cache indexer recycled %d entries, now using %d MB", len(removes), pci.memUsed.Load()/consts.MB)
 		}
 	}
 }
@@ -214,6 +237,50 @@ func (pci *PrefixCacheIndexer) GetMemUsed() int64 {
 	return pci.memUsed.Load()
 }
 
+// recordStats records cache hit statistics for monitoring.
+// matchLen: the length of matched prefix (0 means no hit)
+// promptLen: the total length of the prompt
+func (pci *PrefixCacheIndexer) recordStats(matchLen int, promptLen int) {
+	pci.totalChars.Add(int64(promptLen))
+	pci.totalReqs.Add(1)
+	if matchLen > 0 {
+		pci.hitChars.Add(int64(matchLen))
+		pci.hitReqs.Add(1)
+	}
+}
+
+// updateMetrics exposes monitoring metrics for prefix cache.
+// It reports memory usage and cache hit rates (incremental stats for the last interval).
+func (pci *PrefixCacheIndexer) updateMetrics(memUsed int64) {
+	// Memory usage metric.
+	metrics.StatusValue("prefix_cache_mem_used_bytes", metrics.Labels{
+		{Name: "infer_mode", Value: pci.inferMode},
+	}).Set(float32(memUsed))
+
+	// Cache hit rate metrics (incremental stats, swap-and-reset for next interval).
+	// Character hit rate: percentage of prompt characters that matched cached prefixes.
+	// Request hit rate: percentage of requests that had any cache hit (matchLen > 0).
+	hitChars := pci.hitChars.Swap(0)
+	totalChars := pci.totalChars.Swap(0)
+	hitReqs := pci.hitReqs.Swap(0)
+	totalReqs := pci.totalReqs.Swap(0)
+
+	charHitRate := float32(0)
+	reqHitRate := float32(0)
+	if totalChars > 0 {
+		charHitRate = float32(hitChars) / float32(totalChars)
+	}
+	if totalReqs > 0 {
+		reqHitRate = float32(hitReqs) / float32(totalReqs)
+	}
+	metrics.StatusValue("prefix_cache_char_hit_rate", metrics.Labels{
+		{Name: "infer_mode", Value: pci.inferMode},
+	}).Set(charHitRate)
+	metrics.StatusValue("prefix_cache_req_hit_rate", metrics.Labels{
+		{Name: "infer_mode", Value: pci.inferMode},
+	}).Set(reqHitRate)
+}
+
 type PrefixCachePolicy struct {
 	config       *options.Config
 	cacheIndexer *PrefixCacheIndexer
@@ -224,9 +291,10 @@ type PrefixCachePolicy struct {
 func NewPrefixCachePolicy(config *options.Config, inferMode string, lrsClient *lrs.LocalRealtimeStateClient) *PrefixCachePolicy {
 	ttl := time.Duration(config.PrefixCacheTTL) * time.Second
 	memLimit := config.PrefixCacheLimit
+	maintenanceInterval := time.Duration(config.PrefixCacheMaintenanceInterval) * time.Second
 	pc := &PrefixCachePolicy{
 		config:       config,
-		cacheIndexer: NewPrefixCacheIndexer(ttl, memLimit),
+		cacheIndexer: NewPrefixCacheIndexer(ttl, memLimit, maintenanceInterval, inferMode),
 		lrsClient:    lrsClient,
 		inferMode:    inferMode,
 	}
@@ -289,19 +357,6 @@ func (pc *PrefixCachePolicy) filterCandidatesByLoad(
 		return nil
 	}
 
-	filtered := make(map[string]*lrs.InstanceView)
-	for _, iv := range instanceViews {
-		if iv != nil {
-			// the num of requests is less than threshold
-			if iv.NumRequests() <= int64(pc.config.RequestsThreshold) {
-				filtered[iv.GetInstance().Id()] = iv
-			}
-		}
-	}
-	if len(filtered) > 0 {
-		return filtered
-	}
-
 	// Calculate mean load (NumTokens) across all available workers
 	var totalTokens int64
 	count := 0
@@ -324,7 +379,7 @@ func (pc *PrefixCachePolicy) filterCandidatesByLoad(
 		requestId, meanTokens, pc.config.PrefixCacheLoadTolerance, threshold)
 
 	// Filter candidates: keep only those within acceptable load range
-	filtered = make(map[string]*lrs.InstanceView)
+	filtered := make(map[string]*lrs.InstanceView)
 	for _, iv := range instanceViews {
 		load := float64(iv.NumTokens())
 		if load <= threshold {
@@ -367,6 +422,8 @@ func (pc *PrefixCachePolicy) trySelectBestOf(requestId string, prompt string, in
 		candidates = cacheNode.GetWorkers()
 	}
 
+	promptLen := len(prompt)
+
 	// No prefix cache hit
 	if len(candidates) == 0 {
 		selected := selectLeastTokenOne(instanceViews)
@@ -376,6 +433,8 @@ func (pc *PrefixCachePolicy) trySelectBestOf(requestId string, prompt string, in
 		}
 		klog.V(2).Infof("[PrefixCache][Req:%s] Selected worker %s with least tokens and no cache hit", requestId, selected.Id())
 		pc.addNewPrefixWithWorker(prompt, selected)
+		// No cache hit, record 0 matched chars.
+		pc.cacheIndexer.recordStats(0, promptLen)
 		return selected
 	}
 
@@ -393,17 +452,22 @@ func (pc *PrefixCachePolicy) trySelectBestOf(requestId string, prompt string, in
 		klog.V(2).Infof("[PrefixCache][Req:%s] Selected worker %s with least load (reason: all cache-hit workers overloaded)",
 			requestId, selected.Id())
 
-		touched := false
+		// Check if selected is in candidates for touch and hit rate calculation.
+		hitLen := 0
 		for _, worker := range candidates {
-			if worker.Id() == selected.Id() && exactMatch {
-				cacheNode.TouchWorker(selected)
-				touched = true
+			if worker.Id() == selected.Id() {
+				hitLen = matchLen
+				if exactMatch {
+					cacheNode.TouchWorker(selected)
+				}
+				break
 			}
 		}
-		if !touched {
+		if hitLen == 0 {
 			// TODO(wingo.zwt) Add a threshold for cache control, e.g., skip adding if match rate exceeds 80%
 			pc.addNewPrefixWithWorker(prompt, selected)
 		}
+		pc.cacheIndexer.recordStats(hitLen, promptLen)
 		return selected
 	}
 
@@ -415,12 +479,14 @@ func (pc *PrefixCachePolicy) trySelectBestOf(requestId string, prompt string, in
 	}
 	if iv, exists := filtered[selected.Id()]; exists && iv != nil {
 		klog.V(2).Infof("[PrefixCache][Req:%s] Selected worker %s with cache hit %.2f%% (reason: cache hit + lowest load within tolerance)",
-			requestId, selected.Id(), float64(matchLen)/float64(len(prompt))*100)
+			requestId, selected.Id(), float64(matchLen)/float64(promptLen)*100)
 	}
 	if exactMatch {
 		cacheNode.TouchWorker(selected)
 	} else {
 		pc.addNewPrefixWithWorker(prompt, selected)
 	}
+	// Selected from filtered candidates, this is a real cache hit.
+	pc.cacheIndexer.recordStats(matchLen, promptLen)
 	return selected
 }

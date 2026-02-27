@@ -504,11 +504,13 @@ func (er *EasResolver) notifyObservers(added, removed []types.Endpoint) {
 	for _, ep := range added {
 		addedWorkers = append(addedWorkers, types.LLMWorker{
 			Endpoint: ep,
+			Role:     types.InferRole(er.role),
 		})
 	}
 	for _, ep := range removed {
 		removedWorkers = append(removedWorkers, types.LLMWorker{
 			Endpoint: ep,
+			Role:     types.InferRole(er.role),
 		})
 	}
 	er.watcher.notifyObservers(addedWorkers, removedWorkers)

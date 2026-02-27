@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"llm-gateway/pkg/consts"
 	"os"
 	"strconv"
 	"strings"
@@ -24,7 +25,7 @@ func GetLimitMemory() int64 {
 	// 1: Check MEM_LIMIT environment variable for explicit configuration
 	if memLimitStr := os.Getenv("MEM_LIMIT"); memLimitStr != "" {
 		if memLimit, err := strconv.ParseInt(memLimitStr, 10, 64); err == nil && memLimit > 0 {
-			klog.Infof("Using MEM_LIMIT from environment: %d bytes", memLimit)
+			// klog.Infof("Using MEM_LIMIT from environment: %d MB", memLimit/consts.MB)
 			return memLimit
 		}
 		klog.Warningf("Invalid MEM_LIMIT value: %s, falling back to cgroup/system memory", memLimitStr)
@@ -36,7 +37,7 @@ func GetLimitMemory() int64 {
 		limitStr := strings.TrimSpace(string(data))
 		if limitStr != "max" {
 			if limit, err := strconv.ParseInt(limitStr, 10, 64); err == nil && limit > 0 {
-				klog.Infof("using cgroup v2 memory limit: %d bytes", limit)
+				klog.Infof("using cgroup v2 memory limit: %d MB", limit/consts.MB)
 				return limit
 			}
 		}
@@ -51,10 +52,10 @@ func GetLimitMemory() int64 {
 		if limit, err := strconv.ParseInt(limitStr, 10, 64); err == nil && limit > 0 {
 			const maxReasonableLimit = 1 << 50 // 1 PB = 1125899906842624 bytes
 			if limit < maxReasonableLimit {
-				klog.Infof("using cgroup v1 memory limit: %d bytes", limit)
+				klog.Infof("using cgroup v1 memory limit: %d MB", limit/consts.MB)
 				return limit
 			}
-			klog.V(4).Infof("cgroup v1 memory limit too large (%d bytes), likely unlimited", limit)
+			klog.V(4).Infof("cgroup v1 memory limit too large (%d MB), likely unlimited", limit/consts.MB)
 		}
 	}
 
@@ -68,7 +69,7 @@ func GetLimitMemory() int64 {
 				if len(fields) >= 2 {
 					if memKB, err := strconv.ParseInt(fields[1], 10, 64); err == nil && memKB > 0 {
 						memBytes := memKB * 1024
-						klog.Infof("using system physical memory: %d bytes", memBytes)
+						klog.Infof("using system physical memory: %d MB", memBytes/consts.MB)
 						return memBytes
 					}
 				}
