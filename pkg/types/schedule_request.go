@@ -39,6 +39,16 @@ func (sr ScheduledResult) GetWorkerByRole(role InferRole) *LLMWorker {
 	return nil
 }
 
+func (sr ScheduledResult) RemoveWorker(worker *LLMWorker) ScheduledResult {
+	var result ScheduledResult
+	for _, w := range sr {
+		if w.Id() != worker.Id() {
+			result = append(result, w)
+		}
+	}
+	return result
+}
+
 type ScheduleRequest struct {
 	// Schedule information
 	Id           string       `json:"id"`

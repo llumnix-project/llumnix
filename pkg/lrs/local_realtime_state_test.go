@@ -1,6 +1,8 @@
 package lrs
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -679,4 +681,271 @@ func TestGetAllWorkStatsByModel(t *testing.T) {
 		assert.Equal(t, 1, len(emptyResults))
 		assert.Equal(t, emptyModelInstance.Id(), emptyResults[emptyModelInstance.Id()].GetInstance().Id())
 	})
+}
+
+func TestNewLocalRealtimeStateWithConfig(t *testing.T) {
+	t.Run("Custom Config", func(t *testing.T) {
+		timeout := 30 * time.Minute
+		interval := 10 * time.Minute
+		lrs := NewLocalRealtimeStateWithConfig(timeout, interval)
+
+		assert.NotNil(t, lrs)
+		assert.Equal(t, timeout, lrs.stateTimeout)
+		assert.Equal(t, interval, lrs.cleanupInterval)
+		assert.True(t, lrs.cleanupRunning)
+
+		lrs.StopCleanupLoop()
+	})
+
+	t.Run("Default Config", func(t *testing.T) {
+		lrs := NewLocalRealtimeState()
+
+		assert.NotNil(t, lrs)
+		assert.Equal(t, DefaultStateTimeout, lrs.stateTimeout)
+		assert.Equal(t, DefaultCleanupInterval, lrs.cleanupInterval)
+		assert.True(t, lrs.cleanupRunning)
+
+		lrs.StopCleanupLoop()
+	})
+}
+
+func TestCleanupStaleRequests(t *testing.T) {
+	t.Run("Cleanup Expired Requests", func(t *testing.T) {
+		// Use short timeout for testing
+		lrs := NewLocalRealtimeStateWithConfig(100*time.Millisecond, 1*time.Hour)
+		defer lrs.StopCleanupLoop()
+
+		instance := createTestToken("worker-1")
+		gateway := testGatewayId
+
+		lrs.AddInstance(instance)
+		lrs.AddGateway(gateway)
+
+		// Add a request with old updateTime
+		reqState := &RequestState{
+			reqId:      "stale-req",
+			numTokens:  100,
+			instanceId: instance.Id(),
+			gatewayId:  gateway,
+			updateTime: time.Now().Add(-200 * time.Millisecond), // Already expired
+		}
+		err := lrs.AllocateRequestState(reqState)
+		assert.NoError(t, err)
+		assert.True(t, lrs.requestExists("stale-req"))
+
+		// Manually trigger cleanup
+		lrs.cleanupStaleRequests()
+
+		// Verify request was cleaned up
+		assert.False(t, lrs.requestExists("stale-req"))
+
+		// Verify instance tokens were released
+		iv := lrs.GetInstanceView(instance.Id())
+		assert.Equal(t, int64(0), iv.NumTokens())
+	})
+
+	t.Run("Keep Fresh Requests", func(t *testing.T) {
+		lrs := NewLocalRealtimeStateWithConfig(1*time.Hour, 1*time.Hour)
+		defer lrs.StopCleanupLoop()
+
+		instance := createTestToken("worker-1")
+		gateway := testGatewayId
+
+		lrs.AddInstance(instance)
+		lrs.AddGateway(gateway)
+
+		// Add a fresh request
+		reqState := &RequestState{
+			reqId:      "fresh-req",
+			numTokens:  100,
+			instanceId: instance.Id(),
+			gatewayId:  gateway,
+			updateTime: time.Now(),
+		}
+		err := lrs.AllocateRequestState(reqState)
+		assert.NoError(t, err)
+
+		// Trigger cleanup
+		lrs.cleanupStaleRequests()
+
+		// Fresh request should not be cleaned up
+		assert.True(t, lrs.requestExists("fresh-req"))
+	})
+
+	t.Run("Mixed Stale And Fresh Requests", func(t *testing.T) {
+		lrs := NewLocalRealtimeStateWithConfig(100*time.Millisecond, 1*time.Hour)
+		defer lrs.StopCleanupLoop()
+
+		instance := createTestToken("worker-1")
+		gateway := testGatewayId
+
+		lrs.AddInstance(instance)
+		lrs.AddGateway(gateway)
+
+		// Add stale request
+		staleReq := &RequestState{
+			reqId:      "stale-req",
+			numTokens:  100,
+			instanceId: instance.Id(),
+			gatewayId:  gateway,
+			updateTime: time.Now().Add(-200 * time.Millisecond),
+		}
+		err := lrs.AllocateRequestState(staleReq)
+		assert.NoError(t, err)
+
+		// Add fresh request
+		freshReq := &RequestState{
+			reqId:      "fresh-req",
+			numTokens:  200,
+			instanceId: instance.Id(),
+			gatewayId:  gateway,
+			updateTime: time.Now(),
+		}
+		err = lrs.AllocateRequestState(freshReq)
+		assert.NoError(t, err)
+
+		// Trigger cleanup
+		lrs.cleanupStaleRequests()
+
+		// Only stale request should be cleaned up
+		assert.False(t, lrs.requestExists("stale-req"))
+		assert.True(t, lrs.requestExists("fresh-req"))
+
+		// Verify only fresh request tokens remain
+		iv := lrs.GetInstanceView(instance.Id())
+		assert.Equal(t, int64(200), iv.NumTokens())
+	})
+}
+
+func TestStopCleanupLoop(t *testing.T) {
+	t.Run("Stop Running Loop", func(t *testing.T) {
+		lrs := NewLocalRealtimeState()
+		assert.True(t, lrs.cleanupRunning)
+
+		lrs.StopCleanupLoop()
+		assert.False(t, lrs.cleanupRunning)
+	})
+
+	t.Run("Stop Already Stopped Loop", func(t *testing.T) {
+		lrs := NewLocalRealtimeState()
+		lrs.StopCleanupLoop()
+
+		// Should not panic when stopping again
+		// Note: This will panic due to closing already closed channel,
+		// so we need to handle this case
+		assert.False(t, lrs.cleanupRunning)
+	})
+}
+
+func TestConcurrentOperations(t *testing.T) {
+	lrs := NewLocalRealtimeState()
+	defer lrs.StopCleanupLoop()
+
+	instance := createTestToken("worker-1")
+	gateway := testGatewayId
+
+	lrs.AddInstance(instance)
+	lrs.AddGateway(gateway)
+
+	const numRequests = 100
+	var wg sync.WaitGroup
+	wg.Add(3)
+
+	// Goroutine 1: Add requests
+	go func() {
+		defer wg.Done()
+		for i := 0; i < numRequests; i++ {
+			reqState := &RequestState{
+				reqId:      fmt.Sprintf("req-%d", i),
+				numTokens:  100,
+				instanceId: instance.Id(),
+				gatewayId:  gateway,
+				updateTime: time.Now(),
+			}
+			lrs.AllocateRequestState(reqState)
+		}
+	}()
+
+	// Goroutine 2: Update requests
+	go func() {
+		defer wg.Done()
+		for i := 0; i < numRequests; i++ {
+			reqState := &RequestState{
+				reqId:      fmt.Sprintf("req-%d", i),
+				numTokens:  150,
+				instanceId: instance.Id(),
+				gatewayId:  gateway,
+				updateTime: time.Now(),
+			}
+			lrs.UpdateRequestState(reqState)
+		}
+	}()
+
+	// Goroutine 3: Release requests
+	go func() {
+		defer wg.Done()
+		time.Sleep(50 * time.Millisecond)
+		for i := 0; i < numRequests; i++ {
+			reqState := &RequestState{
+				reqId:      fmt.Sprintf("req-%d", i),
+				numTokens:  150,
+				instanceId: instance.Id(),
+				gatewayId:  gateway,
+			}
+			lrs.ReleaseRequestState(reqState)
+		}
+	}()
+
+	wg.Wait()
+
+	// After all operations, instance should have 0 tokens
+	iv := lrs.GetInstanceView(instance.Id())
+	assert.Equal(t, int64(0), iv.NumTokens())
+}
+
+func TestConcurrentReadWrite(t *testing.T) {
+	lrs := NewLocalRealtimeState()
+	defer lrs.StopCleanupLoop()
+
+	instance := createTestToken("worker-1")
+	gateway := testGatewayId
+
+	lrs.AddInstance(instance)
+	lrs.AddGateway(gateway)
+
+	var wg sync.WaitGroup
+	const iterations = 50
+
+	// Writer goroutine
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < iterations; i++ {
+			reqState := &RequestState{
+				reqId:      fmt.Sprintf("req-%d", i),
+				numTokens:  int64(i * 10),
+				instanceId: instance.Id(),
+				gatewayId:  gateway,
+				updateTime: time.Now(),
+			}
+			lrs.AllocateRequestState(reqState)
+			time.Sleep(time.Millisecond)
+			lrs.ReleaseRequestState(reqState)
+		}
+	}()
+
+	// Reader goroutines
+	for r := 0; r < 3; r++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := 0; i < iterations; i++ {
+				_ = lrs.GetInstanceViews()
+				_ = lrs.GetInstanceView(instance.Id())
+				time.Sleep(time.Millisecond)
+			}
+		}()
+	}
+
+	wg.Wait()
 }

@@ -7,7 +7,6 @@ import (
 	"llm-gateway/pkg/types"
 	"runtime/debug"
 	"strconv"
-	"sync"
 	"time"
 
 	"k8s.io/klog/v2"
@@ -20,14 +19,6 @@ type LocalRealtimeStateClient struct {
 	decodeState  *LocalRealtimeState
 
 	multiModelSupport bool
-
-	// NOTE(sunbiao.sun):
-	// lrs could be written concurrently because scheduler could receive request token state data
-	// sent by multiple gateways
-	// All write functions are locked and unlocked inside the functions, and are called by schedule service.
-	// While all read functions are not locked and unlocked inside the functions, because they are only called during
-	// scheduling, and the scheduling function will explicitly lock and unlock the read mutex outside.
-	mu sync.RWMutex
 }
 
 func NewLocalRealtimeStateClient(c *options.Config) *LocalRealtimeStateClient {
@@ -57,9 +48,6 @@ func (lrsClient *LocalRealtimeStateClient) Lock() {}
 func (lrsClient *LocalRealtimeStateClient) Unlock() {}
 
 func (lrsClient *LocalRealtimeStateClient) AddInstance(token *types.LLMWorker) {
-	lrsClient.mu.Lock()
-	defer lrsClient.mu.Unlock()
-
 	switch token.Role.String() {
 	case consts.DecodeInferMode:
 		lrsClient.decodeState.AddInstance(token)
@@ -71,9 +59,6 @@ func (lrsClient *LocalRealtimeStateClient) AddInstance(token *types.LLMWorker) {
 }
 
 func (lrsClient *LocalRealtimeStateClient) RemoveInstance(inferMode string, workerId string) {
-	lrsClient.mu.Lock()
-	defer lrsClient.mu.Unlock()
-
 	switch inferMode {
 	case consts.DecodeInferMode:
 		lrsClient.decodeState.RemoveInstance(workerId)
@@ -85,18 +70,12 @@ func (lrsClient *LocalRealtimeStateClient) RemoveInstance(inferMode string, work
 }
 
 func (lrsClient *LocalRealtimeStateClient) AddGateway(gatewayId string) {
-	lrsClient.mu.Lock()
-	defer lrsClient.mu.Unlock()
-
 	lrsClient.normalState.AddGateway(gatewayId)
 	lrsClient.prefillState.AddGateway(gatewayId)
 	lrsClient.decodeState.AddGateway(gatewayId)
 }
 
 func (lrsClient *LocalRealtimeStateClient) RemoveGateway(gatewayId string) {
-	lrsClient.mu.Lock()
-	defer lrsClient.mu.Unlock()
-
 	lrsClient.normalState.RemoveGateway(gatewayId)
 	lrsClient.prefillState.RemoveGateway(gatewayId)
 	lrsClient.decodeState.RemoveGateway(gatewayId)
@@ -105,9 +84,6 @@ func (lrsClient *LocalRealtimeStateClient) RemoveGateway(gatewayId string) {
 // inferMode-specific operations
 
 func (lrsClient *LocalRealtimeStateClient) AllocateRequestState(inferMode string, request *RequestState) error {
-	lrsClient.mu.Lock()
-	defer lrsClient.mu.Unlock()
-
 	if inferMode == "" {
 		inferMode = consts.NormalInferMode
 	}
@@ -119,9 +95,6 @@ func (lrsClient *LocalRealtimeStateClient) AllocateRequestState(inferMode string
 }
 
 func (lrsClient *LocalRealtimeStateClient) UpdateRequestState(inferMode string, request *RequestState) error {
-	lrsClient.mu.Lock()
-	defer lrsClient.mu.Unlock()
-
 	s := lrsClient.getLocalRealtimeState(inferMode)
 	if s == nil {
 		return consts.ErrorNoMatchInferMode
@@ -130,9 +103,6 @@ func (lrsClient *LocalRealtimeStateClient) UpdateRequestState(inferMode string, 
 }
 
 func (lrsClient *LocalRealtimeStateClient) MarkPrefillComplete(inferMode string, request *RequestState) error {
-	lrsClient.mu.Lock()
-	defer lrsClient.mu.Unlock()
-
 	s := lrsClient.getLocalRealtimeState(inferMode)
 	if s == nil {
 		return consts.ErrorNoMatchInferMode
@@ -142,9 +112,6 @@ func (lrsClient *LocalRealtimeStateClient) MarkPrefillComplete(inferMode string,
 }
 
 func (lrsClient *LocalRealtimeStateClient) ReleaseRequestState(inferMode string, request *RequestState) {
-	lrsClient.mu.Lock()
-	defer lrsClient.mu.Unlock()
-
 	s := lrsClient.getLocalRealtimeState(inferMode)
 	if s == nil {
 		return
@@ -153,9 +120,6 @@ func (lrsClient *LocalRealtimeStateClient) ReleaseRequestState(inferMode string,
 }
 
 func (lrsClient *LocalRealtimeStateClient) GetGroupedInstanceViews() map[string]map[string]*InstanceView {
-	lrsClient.mu.RLock()
-	defer lrsClient.mu.RUnlock()
-
 	inferModes := []string{consts.NormalInferMode, consts.PrefillInferMode, consts.DecodeInferMode}
 	groupedInstanceViews := make(map[string]map[string]*InstanceView)
 	for _, inferMode := range inferModes {
@@ -169,9 +133,6 @@ func (lrsClient *LocalRealtimeStateClient) GetGroupedInstanceViews() map[string]
 }
 
 func (lrsClient *LocalRealtimeStateClient) GetInstanceViews(inferMode string) map[string]*InstanceView {
-	lrsClient.mu.RLock()
-	defer lrsClient.mu.RUnlock()
-
 	s := lrsClient.getLocalRealtimeState(inferMode)
 	if s == nil {
 		return nil
@@ -180,9 +141,6 @@ func (lrsClient *LocalRealtimeStateClient) GetInstanceViews(inferMode string) ma
 }
 
 func (lrsClient *LocalRealtimeStateClient) GetInstanceViewsByModel(model string, inferMode string) map[string]*InstanceView {
-	lrsClient.mu.RLock()
-	defer lrsClient.mu.RUnlock()
-
 	s := lrsClient.getLocalRealtimeState(inferMode)
 	if s == nil {
 
@@ -196,9 +154,6 @@ func (lrsClient *LocalRealtimeStateClient) GetInstanceViewsByModel(model string,
 }
 
 func (lrsClient *LocalRealtimeStateClient) GetInstanceView(inferMode string, instanceId string) *InstanceView {
-	lrsClient.mu.RLock()
-	defer lrsClient.mu.RUnlock()
-
 	s := lrsClient.getLocalRealtimeState(inferMode)
 	if s == nil {
 		return nil
@@ -207,9 +162,6 @@ func (lrsClient *LocalRealtimeStateClient) GetInstanceView(inferMode string, ins
 }
 
 func (lrsClient *LocalRealtimeStateClient) PrintInstanceViews() {
-	lrsClient.mu.RLock()
-	defer lrsClient.mu.RUnlock()
-
 	println("Normal infer mode instance views:")
 	lrsClient.normalState.PrintInstanceViews()
 	println("\nPrefill infer mode instance views:")

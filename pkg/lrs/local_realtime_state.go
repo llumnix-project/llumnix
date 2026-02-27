@@ -4,9 +4,17 @@ import (
 	"fmt"
 	"llm-gateway/pkg/consts"
 	"llm-gateway/pkg/types"
+	"sync"
 	"time"
 
 	"k8s.io/klog/v2"
+)
+
+const (
+	// DefaultStateTimeout is the default duration after which a request state is considered stale
+	DefaultStateTimeout = 15 * time.Minute
+	// DefaultCleanupInterval is the default interval for checking and cleaning up stale request states
+	DefaultCleanupInterval = 2 * time.Minute
 )
 
 // Notes on the scheduler state store shard Algorithm
@@ -197,27 +205,134 @@ func (iv *InstanceView) GetModel() string {
 // these request states. This enables timely allocate, update and release of in-use request states
 // when instances or gateways fail.
 type LocalRealtimeState struct {
+	mu sync.RWMutex
+
 	// request id -> request state
 	requestStates map[string]*RequestState
 	// instance id -> instance view
 	instanceViews map[string]*InstanceView
 	// gateway id -> request set
 	gatewayRequestSet map[string]map[string]struct{}
+
+	// stateTimeout is the duration after which a request state is considered stale
+	stateTimeout time.Duration
+	// cleanupInterval is the interval for checking and cleaning up stale request states
+	cleanupInterval time.Duration
+	// stopCh is used to signal the cleanup goroutine to stop
+	stopCh chan struct{}
+	// cleanupRunning indicates whether the cleanup goroutine is running
+	cleanupRunning bool
 }
 
 func NewLocalRealtimeState() *LocalRealtimeState {
-	return &LocalRealtimeState{
+	return NewLocalRealtimeStateWithConfig(DefaultStateTimeout, DefaultCleanupInterval)
+}
+
+func NewLocalRealtimeStateWithConfig(stateTimeout, cleanupInterval time.Duration) *LocalRealtimeState {
+	lrs := &LocalRealtimeState{
 		requestStates:     make(map[string]*RequestState),
 		instanceViews:     make(map[string]*InstanceView),
 		gatewayRequestSet: make(map[string]map[string]struct{}),
+		stateTimeout:      stateTimeout,
+		cleanupInterval:   cleanupInterval,
+		stopCh:            make(chan struct{}),
+	}
+	lrs.startCleanupLoop()
+	return lrs
+}
+
+// startCleanupLoop starts the background goroutine that periodically cleans up stale request states.
+func (lrs *LocalRealtimeState) startCleanupLoop() {
+	lrs.cleanupRunning = true
+	go lrs.cleanupLoop()
+	klog.Infof("Local Realtime Request State cleanup loop started, timeout: %v, interval: %v",
+		lrs.stateTimeout, lrs.cleanupInterval)
+}
+
+// StopCleanupLoop stops the background cleanup goroutine.
+// This method is safe to call multiple times.
+func (lrs *LocalRealtimeState) StopCleanupLoop() {
+	lrs.mu.Lock()
+	if !lrs.cleanupRunning {
+		lrs.mu.Unlock()
+		return
+	}
+	lrs.cleanupRunning = false
+	lrs.mu.Unlock()
+
+	close(lrs.stopCh)
+	klog.Infof("Local Realtime Request State cleanup loop stopped")
+}
+
+// cleanupLoop runs in a separate goroutine and periodically cleans up stale request states.
+func (lrs *LocalRealtimeState) cleanupLoop() {
+	ticker := time.NewTicker(lrs.cleanupInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-lrs.stopCh:
+			return
+		case <-ticker.C:
+			lrs.cleanupStaleRequests()
+		}
+	}
+}
+
+// cleanupStaleRequests removes request states that haven't been updated within the stateTimeout duration.
+func (lrs *LocalRealtimeState) cleanupStaleRequests() {
+	lrs.mu.Lock()
+	defer lrs.mu.Unlock()
+
+	now := time.Now()
+	staleReqIds := make([]string, 0)
+
+	// Identify stale request states
+	for reqId, reqState := range lrs.requestStates {
+		if now.Sub(reqState.updateTime) > lrs.stateTimeout {
+			staleReqIds = append(staleReqIds, reqId)
+		}
+	}
+
+	// Clean up stale request states
+	for _, reqId := range staleReqIds {
+		reqState := lrs.requestStates[reqId]
+		if reqState == nil {
+			continue
+		}
+
+		// Release from instance view
+		instanceView := lrs.instanceViews[reqState.instanceId]
+		if instanceView != nil {
+			instanceView.ReleaseRequestState(reqId)
+		}
+
+		// Remove from gateway request set
+		if gatewayReqs, exists := lrs.gatewayRequestSet[reqState.gatewayId]; exists {
+			delete(gatewayReqs, reqId)
+		}
+
+		// Remove from request states
+		delete(lrs.requestStates, reqId)
+
+		klog.Infof("Cleaned up stale request state: reqId=%s, instanceId=%s, gatewayId=%s, lastUpdate=%v, staleFor=%v",
+			reqId, reqState.instanceId, reqState.gatewayId, reqState.updateTime, now.Sub(reqState.updateTime))
+	}
+
+	if len(staleReqIds) > 0 {
+		klog.Infof("Cleaned up %d stale request states", len(staleReqIds))
 	}
 }
 
 func (lrs *LocalRealtimeState) GetInstanceViews() map[string]*InstanceView {
+	lrs.mu.RLock()
+	defer lrs.mu.RUnlock()
 	return lrs.instanceViews
 }
 
 func (lrs *LocalRealtimeState) GetInstanceViewsByModel(model string) map[string]*InstanceView {
+	lrs.mu.RLock()
+	defer lrs.mu.RUnlock()
 	results := make(map[string]*InstanceView)
 	for _, instance := range lrs.instanceViews {
 		if instance.worker.Model == model || instance.worker.Model == "" {
@@ -228,6 +343,8 @@ func (lrs *LocalRealtimeState) GetInstanceViewsByModel(model string) map[string]
 }
 
 func (lrs *LocalRealtimeState) GetInstanceView(instanceId string) *InstanceView {
+	lrs.mu.RLock()
+	defer lrs.mu.RUnlock()
 	return lrs.instanceViews[instanceId]
 }
 
@@ -249,6 +366,8 @@ func (lrs *LocalRealtimeState) removeInstance(instanceId string) {
 }
 
 func (lrs *LocalRealtimeState) AddInstance(worker *types.LLMWorker) {
+	lrs.mu.Lock()
+	defer lrs.mu.Unlock()
 	id := worker.Id()
 	oldInstance := lrs.instanceViews[id]
 	if oldInstance != nil {
@@ -268,16 +387,22 @@ func (lrs *LocalRealtimeState) AddInstance(worker *types.LLMWorker) {
 }
 
 func (lrs *LocalRealtimeState) RemoveInstance(instanceId string) {
+	lrs.mu.Lock()
+	defer lrs.mu.Unlock()
 	lrs.removeInstance(instanceId)
 }
 
 func (lrs *LocalRealtimeState) AddGateway(gatewayId string) {
+	lrs.mu.Lock()
+	defer lrs.mu.Unlock()
 	if lrs.gatewayRequestSet[gatewayId] == nil {
 		lrs.gatewayRequestSet[gatewayId] = make(map[string]struct{})
 	}
 }
 
 func (lrs *LocalRealtimeState) RemoveGateway(gatewayId string) {
+	lrs.mu.Lock()
+	defer lrs.mu.Unlock()
 	requestSet, exist := lrs.gatewayRequestSet[gatewayId]
 	if !exist {
 		return
@@ -313,6 +438,8 @@ func (lrs *LocalRealtimeState) gatewayExists(gatewayId string) bool {
 }
 
 func (lrs *LocalRealtimeState) PrintInstanceViews() {
+	lrs.mu.RLock()
+	defer lrs.mu.RUnlock()
 	for _, instanceView := range lrs.instanceViews {
 		fmt.Printf("worker: %s, reqs: %d, tokens: %d\n",
 			instanceView.worker.Id(), instanceView.NumRequests(), instanceView.NumTokens())
@@ -320,6 +447,8 @@ func (lrs *LocalRealtimeState) PrintInstanceViews() {
 }
 
 func (lrs *LocalRealtimeState) AllocateRequestState(reqState *RequestState) error {
+	lrs.mu.Lock()
+	defer lrs.mu.Unlock()
 	req := lrs.requestStates[reqState.reqId]
 	if req != nil {
 		klog.Errorf("allocate request %s already exists.", reqState.reqId)
@@ -357,6 +486,8 @@ func (lrs *LocalRealtimeState) AllocateRequestState(reqState *RequestState) erro
 }
 
 func (lrs *LocalRealtimeState) UpdateRequestState(reqState *RequestState) error {
+	lrs.mu.Lock()
+	defer lrs.mu.Unlock()
 	if !lrs.requestExists(reqState.reqId) {
 		klog.Errorf("update request %s not exist.", reqState.reqId)
 		return consts.ErrorRequestNotExits
@@ -380,6 +511,8 @@ func (lrs *LocalRealtimeState) UpdateRequestState(reqState *RequestState) error 
 
 // MarkPrefillComplete marks the prefill phase of a resource request as complete.
 func (lrs *LocalRealtimeState) MarkPrefillComplete(reqState *RequestState) error {
+	lrs.mu.Lock()
+	defer lrs.mu.Unlock()
 	if !lrs.requestExists(reqState.reqId) {
 		klog.Errorf("update request %s not exist.", reqState.reqId)
 		return consts.ErrorRequestNotExits
@@ -402,22 +535,26 @@ func (lrs *LocalRealtimeState) MarkPrefillComplete(reqState *RequestState) error
 }
 
 func (lrs *LocalRealtimeState) ReleaseRequestState(reqState *RequestState) {
-	if !lrs.requestExists(reqState.reqId) {
+	lrs.mu.Lock()
+	defer lrs.mu.Unlock()
+
+	innerReqState := lrs.requestStates[reqState.reqId]
+	if innerReqState == nil {
 		klog.Warningf("release request %s not exist.", reqState.reqId)
-		return
+		innerReqState = reqState
 	}
 
-	if !lrs.instanceExists(reqState.instanceId) {
-		klog.Warningf("release request %s scheduled instance %s not exist.", reqState.reqId, reqState.instanceId)
-		return
+	// Release from instance view (if exists)
+	instanceView := lrs.instanceViews[innerReqState.instanceId]
+	if instanceView != nil {
+		instanceView.ReleaseRequestState(reqState.reqId)
 	}
 
-	if !lrs.gatewayExists(reqState.gatewayId) {
-		klog.Warningf("release request %s created gateway %s not exist.", reqState.reqId, reqState.gatewayId)
-		return
+	// Remove from gateway request set (if exists)
+	if gatewayReqs, exists := lrs.gatewayRequestSet[innerReqState.gatewayId]; exists {
+		delete(gatewayReqs, reqState.reqId)
 	}
 
-	lrs.instanceViews[reqState.instanceId].ReleaseRequestState(reqState.reqId)
+	// Remove from request states
 	delete(lrs.requestStates, reqState.reqId)
-	delete(lrs.gatewayRequestSet[reqState.gatewayId], reqState.reqId)
 }

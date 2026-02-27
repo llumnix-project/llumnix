@@ -310,6 +310,7 @@ func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext,
 	defer func() {
 		klog.V(3).Infof("request [%s] internalRouteRequest end", reqCtx.Id)
 		close(reqCtx.ResponseChan)
+		defer reqCtx.TriggerPostRequest()
 	}()
 	reqCtx.TriggerPreRequest()
 
@@ -317,6 +318,12 @@ func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext,
 	maxRetries := lgs.config.RetryCount
 	for attempt := 0; attempt <= maxRetries; attempt++ {
 		if attempt > 0 {
+			// release previous resources
+			for _, worker := range reqCtx.ScheduleCtx.ScheduleResults {
+				lgs.balancer.Release(reqCtx, &worker)
+			}
+			reqCtx.ScheduleCtx.ScheduleResults = nil
+
 			// Reschedule to a different worker for retry
 			schResult, err := lgs.balancer.Get(reqCtx)
 			if err != nil {
@@ -332,7 +339,6 @@ func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext,
 			}
 			klog.V(3).Infof("request [%s] scheduled to %s", reqCtx.Id, schResult.String())
 			reqCtx.ScheduleCtx.ScheduleResults = schResult
-
 		}
 
 		// Execute the handler
@@ -373,7 +379,6 @@ func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext,
 		time.Sleep(backoff)
 	}
 
-	reqCtx.TriggerPostRequest()
 }
 
 // tryFallback attempts router fallback first, sends error if fallback fails or unavailable.
@@ -417,28 +422,6 @@ func (lgs *LlmGatewayService) tryFallback(reqCtx *types.RequestContext) error {
 	}
 	klog.Warningf("request [%s] all %d fallback attempts failed: %v", reqCtx.Id, tryCnt, err)
 	return fmt.Errorf("request %s all fallback attempts failed: %v", reqCtx.Id, err)
-}
-
-// doSchedule schedules the request using the balancer
-func (lgs *LlmGatewayService) doSchedule(reqCtx *types.RequestContext) error {
-	schResult, err := lgs.balancer.Get(reqCtx)
-	if err != nil {
-		klog.V(3).Infof("request [%s] scheduling failed: %v", reqCtx.Id, err)
-		if router.GetServiceRouter().CanFallback(reqCtx) {
-			if e := lgs.tryFallback(reqCtx); e != nil {
-				reqCtx.WriteErrorResponse(e)
-				return e
-			} else {
-				return nil
-			}
-		} else {
-			reqCtx.WriteErrorResponse(err)
-			return err
-		}
-	}
-	klog.V(3).Infof("request [%s] scheduled to %s", reqCtx.Id, schResult.String())
-	reqCtx.ScheduleCtx.ScheduleResults = schResult
-	return nil
 }
 
 // dispatchRequest routes the request and dispatches it to appropriate handler
@@ -542,6 +525,7 @@ func (h *RequestLifecycleHooksImpl) OnPostPrefillStream(req *types.RequestContex
 	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
 	if pWorker != nil {
 		h.balancer.Release(req, pWorker)
+		req.ScheduleCtx.ScheduleResults = req.ScheduleCtx.ScheduleResults.RemoveWorker(pWorker)
 	}
 
 	req.ScheduleCtx.InferStage = types.InferStageDecode
@@ -567,18 +551,11 @@ func (h *RequestLifecycleHooksImpl) OnPostRequest(req *types.RequestContext) {
 	// Delete request state after request completes
 	h.reqStateTracker.DeleteRequestState(req.Id)
 
-	if req.ScheduleCtx.ScheduleResults != nil {
-		// For non-PD mode, resources also need to be released at the end of the request.
-		nWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleNormal)
-		if nWorker != nil {
-			h.balancer.Release(req, nWorker)
-		}
-		// For PD separated mode, only decode resources need to be released
-		dWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRoleDecode)
-		if dWorker != nil {
-			h.balancer.Release(req, dWorker)
-		}
+	// Release all workers in the schedule results, to prevent resource leaks in some abnormal situations
+	for _, worker := range req.ScheduleCtx.ScheduleResults {
+		h.balancer.Release(req, &worker)
 	}
+	req.ScheduleCtx.ScheduleResults = nil
 }
 
 // HandleAPIEntry is the main entry point for handling LLM inference requests
