@@ -21,10 +21,10 @@ type GatewayConfig struct {
 	WaitQueueThreads int
 
 	ServiceToken string
-	// waiting schedule timeout if no schedule result, unit is milliseconds, 0 means that drop request
-	WaitScheduleTimeout time.Duration
-	// retry interval of waiting schedule results, unit is milliseconds
-	WaitScheduleRetryInterval time.Duration
+	// waiting scheduling timeout if no scheduling result, unit is milliseconds, 0 means that drop request
+	WaitSchedulingTimeout time.Duration
+	// retry interval of waiting scheduling results, unit is milliseconds
+	WaitSchedulingRetryInterval time.Duration
 	// whether forward tokens to scheduler
 	ForwardTokens bool
 
@@ -40,16 +40,16 @@ type GatewayConfig struct {
 	config.ProcessorConfig
 	config.RouteConfig
 	config.PDDisaggConfig
-	config.ScheduleBaseConfig
-	config.LiteModeScheduleConfig
+	config.SchedulingBaseConfig
+	config.LiteModeSchedulingConfig
 	config.BatchServiceConfig
 }
 
 func (c *GatewayConfig) AddFlags(flags *pflag.FlagSet) {
 	c.AddConfigFlags(flags)
 	c.AddDiscoveryConfigFlags(flags)
-	c.AddScheduleBaseConfigFlags(flags)
-	c.AddLiteModeScheduleConfigFlags(flags)
+	c.AddSchedulingBaseConfigFlags(flags)
+	c.AddLiteModeSchedulingConfigFlags(flags)
 	c.AddPDDisaggConfigFlags(flags)
 	c.AddRouteConfigFlags(flags)
 	c.AddProcessorConfigFlags(flags)
@@ -65,8 +65,8 @@ func (c *GatewayConfig) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&c.WaitQueueThreads, "wait-queue-threads", 5, "number of coroutines which read the requests from queue")
 
 	flags.StringVar(&c.ServiceToken, "service-token", "", "service token")
-	flags.DurationVar(&c.WaitScheduleTimeout, "wait-schedule-timeout", 10000*time.Millisecond, "waiting timeout if no free token")
-	flags.DurationVar(&c.WaitScheduleRetryInterval, "wait-schedule-try-period", 1000*time.Millisecond, "retry period while waiting free tokens")
+	flags.DurationVar(&c.WaitSchedulingTimeout, "wait-scheduling-timeout", 10000*time.Millisecond, "waiting timeout if no free token")
+	flags.DurationVar(&c.WaitSchedulingRetryInterval, "wait-scheduling-retry-interval", 1000*time.Millisecond, "retry interval while waiting free tokens")
 	flags.BoolVar(&c.ForwardTokens, "forward-tokens", true, "whether forward tokens to scheduler")
 
 	flags.BoolVar(&c.EnableLogInput, "enable-log-input", false, "enable log input or not")
@@ -83,7 +83,7 @@ func (c *GatewayConfig) IsPDDisagg() bool {
 }
 
 func (c *GatewayConfig) IsPDRoundRobin() bool {
-	return c.IsPDDisagg() && c.SchedulePolicy == consts.SchedulePolicyRoundRobin
+	return c.IsPDDisagg() && c.SchedulingPolicy == consts.SchedulingPolicyRoundRobin
 }
 
 func (c *GatewayConfig) EnableRequestStateTracking() bool {

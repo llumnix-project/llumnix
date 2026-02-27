@@ -32,7 +32,7 @@ def get_gateway_command(
     tokenizer_path: str = MODEL_PATH,
     enable_pd: bool = False,
     enable_full_mode_scheduling: bool = False,
-    separate_pd_schedule: bool = False,
+    separate_pd_scheduling: bool = False,
     connector_type: str = "HybridConnector",
 ) -> str:
     command = (
@@ -45,7 +45,7 @@ def get_gateway_command(
         f"--discovery-redis-status-ttl-ms=20000 "
         f"--discovery-redis-host=127.0.0.1 "
         f"--discovery-redis-port=6379 "
-        f"--schedule-policy={policy} "
+        f"--scheduling-policy={policy} "
         f"--tokenizer-path={tokenizer_path} "
         f"-v=4 "
     )
@@ -61,10 +61,10 @@ def get_gateway_command(
         else:
             command += "--pd-disagg-protocol=vllm-kvt "
 
-    if separate_pd_schedule:
-        command += "--separate-pd-schedule "
+    if separate_pd_scheduling:
+        command += "--separate-pd-scheduling "
     else:
-        command += "--separate-pd-schedule=false "
+        command += "--separate-pd-scheduling=false "
 
     print(f"gateway command: {command}")
 
@@ -86,7 +86,7 @@ def get_scheduler_command(
         f"--discovery-redis-host=127.0.0.1 "
         f"--discovery-redis-port=6379 "
         f"--discovery-redis-status-ttl-ms=20000 "
-        f"--schedule-policy={policy} "
+        f"--scheduling-policy={policy} "
         f"--cms-redis-host=127.0.0.1 "
         f"--cms-redis-port=6379 "
         f"--cms-pull-status-interval-ms=100 "
@@ -100,16 +100,16 @@ def get_scheduler_command(
         command += "--enable-full-mode-scheduling=false "
 
     if enable_migration:
-        reschedule_policy = "decode_load" if enable_pd else "neutral_load"
-        command += "--colocated-reschedule-mode "
+        rescheduling_policy = "decode_load" if enable_pd else "neutral_load"
+        command += "--colocated-rescheduling-mode "
         command += "--enable-rescheduling "
-        command += f"--reschedule-policies={reschedule_policy} "
-        command += "--reschedule-load-balance-threshold=0 "
-        command += "--reschedule-neutral-load-threshold=0 "
-        command += "--reschedule-decode-load-threshold=0 "
-        command += "--reschedule-req-select-rule=NUM_REQ "
+        command += f"--rescheduling-policies={rescheduling_policy} "
+        command += "--rescheduling-load-balance-threshold=0 "
+        command += "--rescheduling-neutral-load-threshold=0 "
+        command += "--rescheduling-decode-load-threshold=0 "
+        command += "--rescheduling-req-select-rule=NUM_REQ "
     else:
-        command += "--colocated-reschedule-mode=false "
+        command += "--colocated-rescheduling-mode=false "
         command += "--enable-rescheduling=false "
 
     print(f"scheduler command: {command}")

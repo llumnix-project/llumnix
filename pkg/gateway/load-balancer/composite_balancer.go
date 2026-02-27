@@ -82,7 +82,7 @@ func (bp *CompositeBalancer) setupNormalBalancer(config *options.GatewayConfig) 
 	bp.balanceMode = LocalBalancer
 	r := resolver.CreateBackendServiceResolver(&config.DiscoveryConfig, types.InferRoleNormal)
 	bp.localBalancer = NewRoundRobinBalancer(r)
-	if config.SchedulePolicy != consts.SchedulePolicyRoundRobin {
+	if config.SchedulingPolicy != consts.SchedulingPolicyRoundRobin {
 		bp.balanceMode = RemoteBalancer
 		bp.remoteBalancer = NewSchedulerClient(config)
 	}
@@ -91,15 +91,15 @@ func (bp *CompositeBalancer) setupNormalBalancer(config *options.GatewayConfig) 
 // pdDisaggLocalGet handles endpoint selection in PD-disagg mode.
 // For staged scheduling, it routes to the appropriate stage balancer.
 // For non-staged, it combines results from both prefill and decode balancers.
-func (bp *CompositeBalancer) pdDisaggLocalGet(req *types.RequestContext) (types.ScheduledResult, error) {
-	if req.ScheduleCtx.ScheduleMode == types.ScheduleModePDStaged {
-		switch req.ScheduleCtx.ScheduleStage {
-		case types.ScheduleStagePrefill:
+func (bp *CompositeBalancer) pdDisaggLocalGet(req *types.RequestContext) (types.SchedulingResult, error) {
+	if req.SchedulingCtx.SchedulingMode == types.SchedulingModePDStaged {
+		switch req.SchedulingCtx.SchedulingStage {
+		case types.SchedulingStagePrefill:
 			return bp.prefillLocalBalancer.Get(req)
-		case types.ScheduleStageDecode:
+		case types.SchedulingStageDecode:
 			return bp.decodeLocalBalancer.Get(req)
 		default:
-			return nil, fmt.Errorf("invalid schedule stage: %s", req.ScheduleCtx.ScheduleStage)
+			return nil, fmt.Errorf("invalid scheduling stage: %s", req.SchedulingCtx.SchedulingStage)
 		}
 	} else {
 		pResult, err := bp.prefillLocalBalancer.Get(req)
@@ -118,7 +118,7 @@ func (bp *CompositeBalancer) pdDisaggLocalGet(req *types.RequestContext) (types.
 }
 
 // getWithFallback tries remote scheduler first, falls back to local balancer if scheduler is not ready.
-func (bp *CompositeBalancer) getWithFallback(req *types.RequestContext) (types.ScheduledResult, error) {
+func (bp *CompositeBalancer) getWithFallback(req *types.RequestContext) (types.SchedulingResult, error) {
 	result, err := bp.remoteBalancer.Get(req)
 	if !errors.Is(err, consts.ErrorSchedulerNotReady) {
 		return result, err
@@ -138,7 +138,7 @@ func (bp *CompositeBalancer) getWithFallback(req *types.RequestContext) (types.S
 	return result, err
 }
 
-func (bp *CompositeBalancer) localGet(req *types.RequestContext) (types.ScheduledResult, error) {
+func (bp *CompositeBalancer) localGet(req *types.RequestContext) (types.SchedulingResult, error) {
 	switch bp.balanceMode {
 	case LocalBalancer, RemoteBalancer:
 		return bp.localBalancer.Get(req)
@@ -151,8 +151,8 @@ func (bp *CompositeBalancer) localGet(req *types.RequestContext) (types.Schedule
 
 // Get selects appropriate endpoints for the request based on the current balance mode.
 // It implements the Balancer interface.
-func (bp *CompositeBalancer) Get(req *types.RequestContext) (types.ScheduledResult, error) {
-	if req.ScheduleCtx.NeedSchedule {
+func (bp *CompositeBalancer) Get(req *types.RequestContext) (types.SchedulingResult, error) {
+	if req.SchedulingCtx.NeedScheduling {
 		return bp.localGet(req)
 	}
 

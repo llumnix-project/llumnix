@@ -18,7 +18,7 @@ type LocalRealtimeStateClient struct {
 	// NOTE(sunbiao.sun):
 	// lrs could be written concurrently because scheduler could receive request token state data
 	// sent by multiple gateways
-	// All write functions are locked and unlocked inside the functions, and are called by schedule service.
+	// All write functions are locked and unlocked inside the functions, and are called by scheduler service.
 	// While all read functions are not locked and unlocked inside the functions, because they are only called during
 	// scheduling, and the scheduling function will explicitly lock and unlock the read mutex outside.
 	mu sync.RWMutex

@@ -54,14 +54,14 @@ func NewCommand() *cobra.Command {
 			config.ParseLlumnixExtraArgs(cmd.Flags(), cfg.ExtraArgs)
 			klog.Infof("scheduler config: %+v", cfg)
 
-			if cfg.StandaloneRescheduleMode {
-				r := service.NewRescheduleService(cfg)
+			if cfg.StandaloneReschedulingMode {
+				r := service.NewReschedulerService(cfg)
 				klog.Info("llm rescheduler start ...")
 				if err := r.Start(); err != nil {
 					klog.Fatalf("llm rescheduler exit: %v", err)
 				}
 			} else {
-				cs := service.NewScheduleService(cfg)
+				cs := service.NewSchedulerService(cfg)
 				klog.Info("llm scheduler start ...")
 				if err := cs.Start(); err != nil {
 					klog.Fatalf("llm scheduler exit: %v", err)

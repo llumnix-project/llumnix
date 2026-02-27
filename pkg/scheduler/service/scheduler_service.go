@@ -10,7 +10,7 @@ import (
 	"llumnix/pkg/lrs"
 	"llumnix/pkg/metrics"
 	"llumnix/pkg/resolver"
-	policy "llumnix/pkg/scheduler/schedule-policy"
+	policy "llumnix/pkg/scheduler/scheduling-policy"
 	"net/http"
 	"time"
 
@@ -22,11 +22,11 @@ import (
 	"llumnix/pkg/types"
 )
 
-type ScheduleService struct {
+type SchedulerService struct {
 	config *options.SchedulerConfig
 
-	schedulePolicy   policy.SchedulePolicy
-	reschedulePolicy policy.RescheduleInterface
+	schedulingPolicy   policy.SchedulingPolicy
+	reschedulingPolicy policy.ReschedulingInterface
 
 	resolver  resolver.LLMResolver
 	addChan   <-chan types.LLMInstanceSlice
@@ -34,17 +34,17 @@ type ScheduleService struct {
 	lrsClient *lrs.LocalRealtimeStateClient
 }
 
-func NewScheduleService(c *options.SchedulerConfig) *ScheduleService {
+func NewSchedulerService(c *options.SchedulerConfig) *SchedulerService {
 	lrsClient := lrs.NewLocalRealtimeStateClient(c)
 
-	ss := &ScheduleService{
-		config:         c,
-		lrsClient:      lrsClient,
-		schedulePolicy: policy.NewSchedulePolicy(c.SchedulePolicy, c, lrsClient),
+	ss := &SchedulerService{
+		config:           c,
+		lrsClient:        lrsClient,
+		schedulingPolicy: policy.NewSchedulingPolicy(c.SchedulingPolicy, c, lrsClient),
 	}
 
-	if c.ColocatedRescheduleMode {
-		ss.reschedulePolicy = policy.NewReschedulePolicy(c)
+	if c.ColocatedReschedulingMode {
+		ss.reschedulingPolicy = policy.NewReschedulingPolicy(c)
 	}
 
 	if c.EnableMetrics {
@@ -84,7 +84,7 @@ func NewScheduleService(c *options.SchedulerConfig) *ScheduleService {
 
 // handleKeepalive do keepalive with gateway.
 // URL: /keepalive
-func (ss *ScheduleService) handleKeepalive(w http.ResponseWriter, r *http.Request) {
+func (ss *SchedulerService) handleKeepalive(w http.ResponseWriter, r *http.Request) {
 	// upgrade WebSocket connection.
 	defaultUpgrader := websocket.Upgrader{}
 	conn, err := defaultUpgrader.Upgrade(w, r, http.Header{})
@@ -118,7 +118,7 @@ func (ss *ScheduleService) handleKeepalive(w http.ResponseWriter, r *http.Reques
 
 // handleSchedule returns the instance of the backend service with the minimum load.
 // URL: /schedule
-func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request) {
+func (ss *SchedulerService) handleSchedule(w http.ResponseWriter, r *http.Request) {
 	tStart := time.Now()
 
 	body, err := io.ReadAll(r.Body)
@@ -127,15 +127,15 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var schReq types.ScheduleRequest
+	var schReq types.SchedulingRequest
 	if err := json.Unmarshal(body, &schReq); err != nil {
-		klog.Warningf("invalid schedule req: %s", body)
-		http.Error(w, "invalid schedule req", http.StatusBadRequest)
+		klog.Warningf("invalid scheduling req: %s", body)
+		http.Error(w, "invalid scheduling req", http.StatusBadRequest)
 		return
 	}
 
 	var statusCode int
-	err = ss.schedulePolicy.Schedule(&schReq)
+	err = ss.schedulingPolicy.Schedule(&schReq)
 	if errors.Is(err, consts.ErrorEndpointNotFound) {
 		klog.Errorf("%vms| gateway(%s) request failed: no endpoint exits", time.Since(tStart).Milliseconds(), schReq.GatewayId)
 		statusCode = http.StatusNotFound
@@ -147,7 +147,7 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 			statusCode = http.StatusBadRequest
 			klog.Errorf("%s %vms| gateway(%s) request failed: %v", schReq.Id, time.Since(tStart).Milliseconds(), schReq.GatewayId, err)
 		}
-	} else if len(schReq.ScheduleResult) == 0 {
+	} else if len(schReq.SchedulingResult) == 0 {
 		err = consts.ErrorNoAvailableEndpoint
 		statusCode = http.StatusTooManyRequests
 		klog.Errorf("%s %vms| gateway(%s) request failed: get endpoints empty", schReq.Id, time.Since(tStart).Milliseconds(), schReq.GatewayId)
@@ -155,7 +155,7 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 
 	if err != nil {
 		metrics.IncrLlumnixCounterByOne(
-			metrics.LlumnixMetricScheduleFailedCount, metrics.Labels{{"error_type", err.Error()}})
+			metrics.LlumnixMetricSchedulingFailedCount, metrics.Labels{{"error_type", err.Error()}})
 		w.WriteHeader(statusCode)
 		w.Write([]byte(err.Error()))
 		if ss.config.EnableLogInput {
@@ -166,7 +166,7 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 
 	// record realtime state for the scheduled instance
 	if ss.config.EnableRequestStateTracking() {
-		for _, instance := range schReq.ScheduleResult {
+		for _, instance := range schReq.SchedulingResult {
 			reqState := lrs.NewRequestState(schReq.Id, int64(schReq.PromptNumTokens), instance.Id(), schReq.GatewayId)
 			err := ss.lrsClient.AllocateRequestState(instance.Role.String(), reqState)
 			if err != nil {
@@ -180,13 +180,13 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusOK)
 	w.Write(retBytes)
 	if ss.config.EnableLogInput {
-		klog.Infof("[%s] status_code:%d,response_time:%vms,schedule results:%s", schReq.Id, http.StatusOK, time.Since(tStart).Milliseconds(), schReq.String())
+		klog.Infof("[%s] status_code:%d,response_time:%vms,scheduling results:%s", schReq.Id, http.StatusOK, time.Since(tStart).Milliseconds(), schReq.String())
 	}
 }
 
 // handleRelease accepts the request released by the gateway
 // URL: /release
-func (ss *ScheduleService) handleRelease(w http.ResponseWriter, r *http.Request) {
+func (ss *SchedulerService) handleRelease(w http.ResponseWriter, r *http.Request) {
 	tStart := time.Now()
 
 	body, err := io.ReadAll(r.Body)
@@ -195,20 +195,20 @@ func (ss *ScheduleService) handleRelease(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var schReq types.ScheduleRequest
+	var schReq types.SchedulingRequest
 	if err := json.Unmarshal(body, &schReq); err != nil {
 		klog.Warningf("invalid release request: %s", body)
 		http.Error(w, "invalid release request", http.StatusBadRequest)
 		return
 	}
 
-	if len(schReq.ScheduleResult) == 0 {
+	if len(schReq.SchedulingResult) == 0 {
 		klog.Warningf("ignore, release 0 request.")
 		http.Error(w, "ignore, release 0 request.", http.StatusBadRequest)
 		return
 	}
 
-	for _, instance := range schReq.ScheduleResult {
+	for _, instance := range schReq.SchedulingResult {
 		reqState := lrs.NewRequestState(schReq.Id, 0, instance.Id(), schReq.GatewayId)
 		ss.lrsClient.ReleaseRequestState(instance.Role.String(), reqState)
 	}
@@ -219,7 +219,7 @@ func (ss *ScheduleService) handleRelease(w http.ResponseWriter, r *http.Request)
 
 // handleReport accepts the request reported by the gateway
 // URL: /report
-func (ss *ScheduleService) handleReport(w http.ResponseWriter, r *http.Request) {
+func (ss *SchedulerService) handleReport(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		klog.Errorf("io read err: %v", err)
@@ -242,7 +242,7 @@ func (ss *ScheduleService) handleReport(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-func (ss *ScheduleService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (ss *SchedulerService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/schedule":
 		ss.handleSchedule(w, r)
@@ -259,15 +259,15 @@ func (ss *ScheduleService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (ss *ScheduleService) Start() error {
+func (ss *SchedulerService) Start() error {
 	go func() {
 		address := fmt.Sprintf("%s:%d", ss.config.Host, ss.config.Port)
 		klog.Infof("http service start listen on %s", address)
 		klog.Fatal(http.ListenAndServe(address, ss))
 	}()
 
-	if ss.reschedulePolicy != nil {
-		go ss.reschedulePolicy.RescheduleLoop()
+	if ss.reschedulingPolicy != nil {
+		go ss.reschedulingPolicy.ReschedulingLoop()
 	}
 
 	return nil

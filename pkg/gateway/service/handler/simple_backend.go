@@ -15,7 +15,7 @@ const (
 )
 
 func init() {
-	RegisterBackend(BackendTypeSimple, func(scheduleMode types.ScheduleMode) (InferenceBackend, error) {
+	RegisterBackend(BackendTypeSimple, func(schedulingMode types.SchedulingMode) (InferenceBackend, error) {
 		return NewSimpleBackend(), nil
 	})
 }
@@ -36,7 +36,7 @@ func NewSimpleBackend() *SimpleBackend {
 func (b *SimpleBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
 	chunkChan := make(chan StreamChunk, 100)
 
-	instance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRoleNormal)
+	instance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRoleNormal)
 	if instance == nil {
 		return nil, fmt.Errorf("no available instance for role: %s", types.InferRoleNormal)
 	}

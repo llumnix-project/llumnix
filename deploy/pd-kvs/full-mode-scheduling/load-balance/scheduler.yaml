@@ -56,7 +56,7 @@ spec:
         - "6379"
         - "--discovery-redis-status-ttl-ms"
         - "60000"
-        - "--schedule-policy"
+        - "--scheduling-policy"
         - "load-balance"
         - "--cms-redis-host"
         - "redis"

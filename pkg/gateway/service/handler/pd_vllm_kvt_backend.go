@@ -13,23 +13,23 @@ import (
 )
 
 func init() {
-	RegisterBackend(consts.PDDisaggProtocolVllmKvt, func(scheduleMode types.ScheduleMode) (InferenceBackend, error) {
-		return NewPDDisaggVllmKvtBackend(scheduleMode)
+	RegisterBackend(consts.PDDisaggProtocolVllmKvt, func(schedulingMode types.SchedulingMode) (InferenceBackend, error) {
+		return NewPDDisaggVllmKvtBackend(schedulingMode)
 	})
 }
 
 type PDDisaggVllmKvtBackend struct {
 	client       *http.Client
-	scheduleMode types.ScheduleMode
+	schedulingMode types.SchedulingMode
 }
 
-func NewPDDisaggVllmKvtBackend(schMode types.ScheduleMode) (InferenceBackend, error) {
-	if schMode != types.ScheduleModePDBatch && schMode != types.ScheduleModePDStaged {
-		return nil, fmt.Errorf("unsupported schedule mode: %s", schMode)
+func NewPDDisaggVllmKvtBackend(schMode types.SchedulingMode) (InferenceBackend, error) {
+	if schMode != types.SchedulingModePDBatch && schMode != types.SchedulingModePDStaged {
+		return nil, fmt.Errorf("unsupported scheduling mode: %s", schMode)
 	}
 	return &PDDisaggVllmKvtBackend{
 		client:       NewLlmForwardClient(),
-		scheduleMode: schMode,
+		schedulingMode: schMode,
 	}, nil
 }
 
@@ -38,18 +38,18 @@ func (b *PDDisaggVllmKvtBackend) buildTransferParams(pInstance *types.LLMInstanc
 		"remote_host": pInstance.AuxIp,
 		"remote_port": pInstance.AuxPort,
 	}
-	if b.scheduleMode == types.ScheduleModePDStaged {
+	if b.schedulingMode == types.SchedulingModePDStaged {
 		p["do_remote_prefill"] = true
 	}
 	return p
 }
 
 func (b *PDDisaggVllmKvtBackend) BatchScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	pInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRolePrefill)
+	pInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRolePrefill)
 	if pInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
 	}
-	dInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRoleDecode)
+	dInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRoleDecode)
 	if dInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled decode instance", req.Id)
 	}
@@ -137,7 +137,7 @@ func (b *PDDisaggVllmKvtBackend) doDecode(
 }
 
 func (b *PDDisaggVllmKvtBackend) StagedScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	pInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRolePrefill)
+	pInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRolePrefill)
 	if pInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
 	}
@@ -176,12 +176,12 @@ func (b *PDDisaggVllmKvtBackend) StagedScheduleStreamInference(req *types.Reques
 // StreamInference implements InferBackend interface
 // Performs streaming inference by forwarding request to backend and streaming response chunks
 func (b *PDDisaggVllmKvtBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	switch b.scheduleMode {
-	case types.ScheduleModePDBatch:
+	switch b.schedulingMode {
+	case types.SchedulingModePDBatch:
 		return b.BatchScheduleStreamInference(req)
-	case types.ScheduleModePDStaged:
+	case types.SchedulingModePDStaged:
 		return b.StagedScheduleStreamInference(req)
 	default:
-		return nil, fmt.Errorf("[%s] unsupported schedule mode: %s", req.Id, b.scheduleMode)
+		return nil, fmt.Errorf("[%s] unsupported scheduling mode: %s", req.Id, b.schedulingMode)
 	}
 }

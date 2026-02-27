@@ -1,4 +1,4 @@
-package schedule_policy
+package scheduling_policy
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 )
 
 func calculateMetrics(
-	request *types.ScheduleRequest,
+	request *types.SchedulingRequest,
 	instances map[string]*instanceViewScheduling,
 	metrics map[string]func() instanceSchedulingMetric) {
 	for _, instanceView := range instances {
@@ -32,7 +32,7 @@ func calculateMetrics(
 type instanceSchedulingMetric interface {
 	GetName() string
 	GetValue() float32
-	Calculate(request *types.ScheduleRequest, instanceView *instanceViewScheduling)
+	Calculate(request *types.SchedulingRequest, instanceView *instanceViewScheduling)
 	Less(metric instanceSchedulingMetric) bool
 	ValueLess(value float32) bool
 }
@@ -176,7 +176,7 @@ type kvCacheUsageRatioProjected struct {
 }
 
 func (br *kvCacheUsageRatioProjected) Calculate(
-	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
+	request *types.SchedulingRequest, instanceView *instanceViewScheduling) {
 	if instanceView.cmsView.Status.NumTotalGpuTokens == 0 {
 		br.value = float32(math.MaxFloat32)
 		klog.V(3).Infof(
@@ -221,7 +221,7 @@ type decodeBatchSize struct {
 }
 
 func (dbs *decodeBatchSize) Calculate(
-	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
+	request *types.SchedulingRequest, instanceView *instanceViewScheduling) {
 	dbs.value = float32(instanceView.cmsView.Status.HybridSchedulerWaitingToDecodeRequestsNum +
 		instanceView.cmsView.Status.NumLoadingRequests +
 		instanceView.cmsView.Status.SchedulerWaitingToDecodeRequestsNum +
@@ -253,7 +253,7 @@ type numWaitingRequests struct {
 }
 
 func (nr *numWaitingRequests) Calculate(
-	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
+	request *types.SchedulingRequest, instanceView *instanceViewScheduling) {
 	nr.value = float32(instanceView.cmsView.Status.NumWaitingRequests +
 		instanceView.cmsView.NumInflightDispatchRequests)
 	klog.V(3).Infof(
@@ -278,7 +278,7 @@ type allPrefillsTokensNum struct {
 }
 
 func (pb *allPrefillsTokensNum) Calculate(
-	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
+	request *types.SchedulingRequest, instanceView *instanceViewScheduling) {
 	pb.value = float32(
 		instanceView.cmsView.Status.NumUncomputedTokensAllWaitingPrefills +
 			instanceView.cmsView.Status.NumUncomputedTokensSchedulerRunningPrefills +
@@ -311,7 +311,7 @@ type numRequests struct {
 }
 
 func (nr *numRequests) Calculate(
-	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
+	request *types.SchedulingRequest, instanceView *instanceViewScheduling) {
 	if nr.enableFullModeScheduling {
 		nr.value = float32(
 			instanceView.cmsView.Status.NumWaitingRequests +
@@ -349,7 +349,7 @@ type kvCacheHitLen struct {
 }
 
 func (hl *kvCacheHitLen) Calculate(
-	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
+	request *types.SchedulingRequest, instanceView *instanceViewScheduling) {
 	// prefixHitTokens is written when calculating the prompt cache locality for each instances before.
 	hl.value = float32(instanceView.schedulingCtx.prefixHitTokens)
 	klog.V(3).Infof(
@@ -374,7 +374,7 @@ type CacheAwareAllPrefillsTokensNum struct {
 }
 
 func (cpb *CacheAwareAllPrefillsTokensNum) Calculate(
-	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
+	request *types.SchedulingRequest, instanceView *instanceViewScheduling) {
 	cpb.allPrefillsTokensNumMetric.Calculate(request, instanceView)
 	allPrefillsTokensNum := cpb.allPrefillsTokensNumMetric.GetValue()
 	cpb.value = float32(instanceView.schedulingCtx.prefixMissTokens) + allPrefillsTokensNum
@@ -400,7 +400,7 @@ type allDecodesTokensNum struct {
 }
 
 func (adb *allDecodesTokensNum) Calculate(
-	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
+	request *types.SchedulingRequest, instanceView *instanceViewScheduling) {
 	allDecodeTokens := instanceView.cmsView.Status.HybridSchedulerWaitingToDecodeTokensNum +
 		instanceView.cmsView.Status.SchedulerWaitingToDecodeTokensNum +
 		instanceView.cmsView.Status.SchedulerRunningToDecodeTokensNum +
@@ -439,7 +439,7 @@ type PredictedTtft struct {
 }
 
 func (tl *PredictedTtft) Calculate(
-	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
+	request *types.SchedulingRequest, instanceView *instanceViewScheduling) {
 	tl.allPrefillsTokensNum.Calculate(request, instanceView)
 	tl.allDecodesTokensNum.Calculate(request, instanceView)
 	tl.decodeBatchSize.Calculate(request, instanceView)
@@ -523,7 +523,7 @@ type PredictedTpot struct {
 }
 
 func (il *PredictedTpot) Calculate(
-	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
+	request *types.SchedulingRequest, instanceView *instanceViewScheduling) {
 	il.allDecodesTokensNum.Calculate(request, instanceView)
 	il.decodeBatchSize.Calculate(request, instanceView)
 
@@ -562,7 +562,7 @@ type numTokens struct {
 }
 
 func (nt *numTokens) Calculate(
-	request *types.ScheduleRequest, instanceView *instanceViewScheduling) {
+	request *types.SchedulingRequest, instanceView *instanceViewScheduling) {
 	nt.value = float32(instanceView.lrsView.NumTokens())
 	klog.V(3).Infof("Instance %s NumTokens calculated: (numTokens:%d) = %f",
 		instanceView.GetInstanceId(), instanceView.lrsView.NumTokens(), nt.value)

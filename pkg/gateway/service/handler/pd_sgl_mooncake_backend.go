@@ -14,23 +14,23 @@ import (
 )
 
 func init() {
-	RegisterBackend(consts.PDDisaggProtocolSGlangMooncake, func(scheduleMode types.ScheduleMode) (InferenceBackend, error) {
-		return NewPDDisaggSglMoonCakeBackend(scheduleMode)
+	RegisterBackend(consts.PDDisaggProtocolSGlangMooncake, func(schedulingMode types.SchedulingMode) (InferenceBackend, error) {
+		return NewPDDisaggSglMoonCakeBackend(schedulingMode)
 	})
 }
 
 type PDDisaggSglMoonCakeBackend struct {
 	client       *http.Client
-	scheduleMode types.ScheduleMode
+	schedulingMode types.SchedulingMode
 }
 
-func NewPDDisaggSglMoonCakeBackend(schMode types.ScheduleMode) (InferenceBackend, error) {
-	if schMode != types.ScheduleModePDBatch {
-		return nil, fmt.Errorf("unsupported schedule mode: %s", schMode)
+func NewPDDisaggSglMoonCakeBackend(schMode types.SchedulingMode) (InferenceBackend, error) {
+	if schMode != types.SchedulingModePDBatch {
+		return nil, fmt.Errorf("unsupported scheduling mode: %s", schMode)
 	}
 	return &PDDisaggSglMoonCakeBackend{
 		client:       NewLlmForwardClient(),
-		scheduleMode: schMode,
+		schedulingMode: schMode,
 	}, nil
 }
 
@@ -106,11 +106,11 @@ func (b *PDDisaggSglMoonCakeBackend) parallelRequestAndStream(req *types.Request
 }
 
 func (b *PDDisaggSglMoonCakeBackend) BatchScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	pInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRolePrefill)
+	pInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRolePrefill)
 	if pInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
 	}
-	dInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRoleDecode)
+	dInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRoleDecode)
 	if dInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled decode instance", req.Id)
 	}
