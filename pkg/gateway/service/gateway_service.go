@@ -264,7 +264,7 @@ func (lgs *LlmGatewayService) externalRouteRequest(reqCtx *types.RequestContext,
 
 // dispatchRequest routes the request and dispatches it to appropriate handler
 // It supports three routing types:
-//   - Internal: schedule to internal instances via balancer
+//   - Internal: dispatch to internal instances via balancer
 //   - External: proxy to external service
 //   - Fallback: use fallback service when no route matches
 func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext) {
@@ -281,7 +281,7 @@ func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext) {
 			return
 		}
 		klog.V(3).Infof("request [%s] scheduled to %s", reqCtx.Id, schResult.String())
-		reqCtx.ScheduleCtx.ScheduleResults = schResult
+		reqCtx.SchedulingCtx.SchedulingResults = schResult
 		go lgs.reqHandler.Handle(reqCtx)
 	case router.RouteExternal:
 		// Match external route
@@ -297,14 +297,14 @@ func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext) {
 	}
 }
 
-func (lgs *LlmGatewayService) scheduleMode() types.ScheduleMode {
+func (lgs *LlmGatewayService) schedulingMode() types.SchedulingMode {
 	if !lgs.config.IsPDDisagg() {
-		return types.ScheduleModeNormal
+		return types.SchedulingModeNormal
 	}
-	if lgs.config.SeparatePDSchedule {
-		return types.ScheduleModePDStaged
+	if lgs.config.SeparatePDScheduling {
+		return types.SchedulingModePDStaged
 	} else {
-		return types.ScheduleModePDBatch
+		return types.SchedulingModePDBatch
 	}
 }
 
@@ -320,11 +320,11 @@ func (lgs *LlmGatewayService) HandleOpenAIRequest(w http.ResponseWriter, r *http
 
 	ctx := r.Context()
 	reqCtx := types.NewRequestContext(ctx, r, w)
-	// Set schedule mode based on configuration
-	scheduleMode := lgs.scheduleMode()
-	reqCtx.ScheduleCtx.ScheduleMode = scheduleMode
-	reqCtx.ScheduleCtx.ScheduleStage = types.ScheduleStagePrefill
-	reqCtx.SetPDSeparateScheduleHooks(&PDSeparateScheduleHooks{balancer: lgs.balancer})
+	// Set scheduling mode based on configuration
+	schedulingMode := lgs.schedulingMode()
+	reqCtx.SchedulingCtx.SchedulingMode = schedulingMode
+	reqCtx.SchedulingCtx.SchedulingStage = types.SchedulingStagePrefill
+	reqCtx.SetPDSeparateSchedulingHooks(&PDSeparateSchedulingHooks{balancer: lgs.balancer})
 	reqCtx.SetRequestStateManagementHooks(&RequestStateManagementHooks{gateway: lgs, balancer: lgs.balancer})
 
 	// Parse and validate OpenAI format request parameters
@@ -369,7 +369,7 @@ func (lgs *LlmGatewayService) HandleOpenAIRequest(w http.ResponseWriter, r *http
 func (lgs *LlmGatewayService) HandleSimpleRequest(w http.ResponseWriter, r *http.Request) {
 	// For this scenario, create a request context but disable scheduling
 	reqCtx := types.NewRequestContext(r.Context(), r, w)
-	reqCtx.ScheduleCtx.NeedSchedule = false
+	reqCtx.SchedulingCtx.NeedScheduling = false
 
 	// Get an available endpoint from the balancer
 	schResult, err := lgs.balancer.Get(reqCtx)
@@ -492,7 +492,7 @@ func (lgs *LlmGatewayService) LogRequestAccess(req *types.RequestContext) {
 		req.Id,
 		httpReq.StatusCode,
 		httpReq.Request.Method,
-		req.ScheduleCtx.ScheduleResults.String(),
+		req.SchedulingCtx.SchedulingResults.String(),
 		httpReq.Request.URL.String(),
 		stats.String(),
 		stats.InputTokensLen,
@@ -504,23 +504,23 @@ func (lgs *LlmGatewayService) LogRequestAccess(req *types.RequestContext) {
 		req.LLMRequest.Model)
 }
 
-type PDSeparateScheduleHooks struct {
+type PDSeparateSchedulingHooks struct {
 	balancer balancer.Balancer
 }
 
-func (h *PDSeparateScheduleHooks) ScheduleDecode(req *types.RequestContext) (types.ScheduledResult, error) {
-	if req.ScheduleCtx.ScheduleMode != types.ScheduleModePDStaged {
-		klog.Warningf("request %s is not in staged schedule mode, decode does not need to be scheduled separately.", req.Id)
-		return nil, fmt.Errorf("not in staged schedule mode")
+func (h *PDSeparateSchedulingHooks) ScheduleDecode(req *types.RequestContext) (types.SchedulingResult, error) {
+	if req.SchedulingCtx.SchedulingMode != types.SchedulingModePDStaged {
+		klog.Warningf("request %s is not in staged scheduling mode, decode does not need to be scheduled separately.", req.Id)
+		return nil, fmt.Errorf("not in staged scheduling mode")
 	}
-	req.ScheduleCtx.ScheduleStage = types.ScheduleStageDecode
+	req.SchedulingCtx.SchedulingStage = types.SchedulingStageDecode
 	results, err := h.balancer.Get(req)
 	if err != nil {
 		return nil, err
 	}
-	schResult := req.ScheduleCtx.ScheduleResults
+	schResult := req.SchedulingCtx.SchedulingResults
 	klog.V(3).Infof("decode request [%s] scheduled to %s", req.Id, results.String())
-	req.ScheduleCtx.ScheduleResults = append(schResult, results...)
+	req.SchedulingCtx.SchedulingResults = append(schResult, results...)
 	return results, nil
 }
 
@@ -533,11 +533,11 @@ func (h *RequestStateManagementHooks) OnPostPrefill(req *types.RequestContext) {
 	if h.gateway.config.EnableRequestStateTracking() {
 		klog.V(3).Infof("[%s] Post-prefill hook triggered", req.Id)
 
-		pInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRolePrefill)
+		pInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRolePrefill)
 		if pInstance != nil {
 			h.balancer.Release(req, pInstance)
 		}
-		req.ScheduleCtx.ScheduleStage = types.ScheduleStageDecode
+		req.SchedulingCtx.SchedulingStage = types.SchedulingStageDecode
 	}
 }
 
@@ -545,11 +545,11 @@ func (h *RequestStateManagementHooks) OnPostRequest(req *types.RequestContext) {
 	if h.gateway.config.EnableRequestStateTracking() {
 		klog.V(3).Infof("[%s] Post-request hook triggered", req.Id)
 
-		nInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRoleNormal)
+		nInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRoleNormal)
 		if nInstance != nil {
 			h.balancer.Release(req, nInstance)
 		}
-		dInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRoleDecode)
+		dInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRoleDecode)
 		if dInstance != nil {
 			h.balancer.Release(req, dInstance)
 		}
@@ -562,14 +562,14 @@ func (h *RequestStateManagementHooks) OnPostDecodeFirstStreamResponse(req *types
 
 		var inferMode string
 		var instanceID string
-		if instance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRoleDecode); instance != nil {
+		if instance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRoleDecode); instance != nil {
 			inferMode = consts.DecodeInferMode
 			instanceID = instance.Id()
-		} else if instance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRoleNormal); instance != nil {
+		} else if instance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRoleNormal); instance != nil {
 			inferMode = consts.NormalInferMode
 			instanceID = instance.Id()
 		}
-		reqTokenState := lrs.NewRequestTokenState(req, req.LLMRequest.Model, inferMode, instanceID, req.ScheduleCtx.GatewayId)
+		reqTokenState := lrs.NewRequestTokenState(req, req.LLMRequest.Model, inferMode, instanceID, req.SchedulingCtx.GatewayId)
 		h.gateway.requestStateTracker.AddRequestState(reqTokenState)
 		req.RequestTokenState = reqTokenState
 		defer h.gateway.requestStateTracker.DeleteRequestState(req.Id)

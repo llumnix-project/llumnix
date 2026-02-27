@@ -28,12 +28,12 @@ const (
 	RouteInternalURL  = "local"
 )
 
-// llm scheduler policy with use a remote concertized scheduler
+// llm scheduling policy with use a remote concertized scheduler
 const (
-	SchedulePolicyRoundRobin  = "round-robin"
-	SchedulePolicyLoadBalance = "load-balance"
-	SchedulePolicyFlood       = "flood"
-	SchedulePolicySlo         = "slo"
+	SchedulingPolicyRoundRobin  = "round-robin"
+	SchedulingPolicyLoadBalance = "load-balance"
+	SchedulingPolicyFlood       = "flood"
+	SchedulingPolicySlo         = "slo"
 )
 
 const (
@@ -70,20 +70,20 @@ const (
 )
 
 const (
-	ReschedulePolicyNeutralLoad     = "neutral_load"
-	ReschedulePolicyDecodeLoad      = "decode_load"
-	ReschedulePolicyPrefillFailover = "prefill_failover"
-	ReschedulePolicyDecodeFailover  = "decode_failover"
-	ReschedulePolicyNeutralFailover = "neutral_failover"
+	ReschedulingPolicyNeutralLoad     = "neutral_load"
+	ReschedulingPolicyDecodeLoad      = "decode_load"
+	ReschedulingPolicyPrefillFailover = "prefill_failover"
+	ReschedulingPolicyDecodeFailover  = "decode_failover"
+	ReschedulingPolicyNeutralFailover = "neutral_failover"
 
-	ReschedulePolicyCleanUpDecodeRequestsOnPrefill   = "clean_up_decode_requests_on_prefill"
-	ReschedulePolicyAggregateDecodeRequestsOnPrefill = "aggregate_decode_requests_on_prefill"
-	ReschedulePolicyEaseBusyDecodeWithFreePrefill    = "ease_busy_decode_with_free_prefill"
+	ReschedulingPolicyCleanUpDecodeRequestsOnPrefill   = "clean_up_decode_requests_on_prefill"
+	ReschedulingPolicyAggregateDecodeRequestsOnPrefill = "aggregate_decode_requests_on_prefill"
+	ReschedulingPolicyEaseBusyDecodeWithFreePrefill    = "ease_busy_decode_with_free_prefill"
 )
 
 const (
-	RescheduleLoadBalanceScopeCluster = "cluster"
-	RescheduleLoadBalanceScopeUnit    = "unit"
+	ReschedulingLoadBalanceScopeCluster = "cluster"
+	ReschedulingLoadBalanceScopeUnit    = "unit"
 )
 
 // different pd-disagg protocol
@@ -149,7 +149,7 @@ const (
 	DefaultKvsMetadataServiceHttpServerPort       = "9003"
 	DefaultKvsHashAlgo             = KvsHashAlgoSha256CBOR
 
-	// Schedule defaults
+	// Scheduling defaults
 	DefaultDispatchTopK                        = 1
 	DefaultDispatchNeutralLoadMetric           = SchedulingMetricAllPrefillsTokensNum
 	DefaultDispatchNeutralLoadThreshold        = 8192
@@ -160,7 +160,7 @@ const (
 	DefaultDispatchPrefillCacheLocalityMetric  = SchedulingMetricCacheAwareAllPrefillsTokensNum
 	DefaultEnableInstanceStatusLocalAccount    = true
 	DefaultRequestLocalAccountStalenessSeconds = 10
-	DefaultAllowConcurrentSchedule             = false
+	DefaultAllowConcurrentScheduling           = false
 	DefaultEnablePredictorEnhancedScheduling   = false
 	DefaultMaxNumBatchedTokens                 = 65536
 	DefaultNumPredictorWarmupSamples           = 20
@@ -179,20 +179,20 @@ const (
 	DefaultFailoverScope            = FailoverScopeInstanceUnit
 	DefaultInstanceStalenessSeconds = 60
 
-	// Reschedule defaults
-	DefaultEnableRescheduling             = false
-	DefaultReschedulePolicies             = "decode_load,prefill_failover,decode_failover,neutral_failover"
-	DefaultRescheduleIntervalMs           = 500
-	DefaultRescheduleDecodeLoadMetric     = SchedulingMetricKVCacheUsageRatioProjected
-	DefaultRescheduleDecodeLoadThreshold  = 1.0
-	DefaultReschedulePrefillLoadMetric    = SchedulingMetricKVCacheUsageRatioProjected
-	DefaultRescheduleNeutralLoadMetric    = SchedulingMetricKVCacheUsageRatioProjected
-	DefaultRescheduleNeutralLoadThreshold = 1.0
-	DefaultRescheduleReqSelectOrder       = MigrationReqSelectOrderSR
-	DefaultRescheduleReqSelectRule        = MigrationReqSelectRuleToken
-	DefaultRescheduleReqSelectValue       = 1
-	DefaultRescheduleLoadBalanceThreshold = 0.01
-	DefaultRescheduleLoadBalanceScope     = RescheduleLoadBalanceScopeCluster
+	// Rescheduling defaults
+	DefaultEnableRescheduling               = false
+	DefaultReschedulingPolicies             = "decode_load,prefill_failover,decode_failover,neutral_failover"
+	DefaultReschedulingIntervalMs           = 500
+	DefaultReschedulingDecodeLoadMetric     = SchedulingMetricKVCacheUsageRatioProjected
+	DefaultReschedulingDecodeLoadThreshold  = 1.0
+	DefaultReschedulingPrefillLoadMetric    = SchedulingMetricKVCacheUsageRatioProjected
+	DefaultReschedulingNeutralLoadMetric    = SchedulingMetricKVCacheUsageRatioProjected
+	DefaultReschedulingNeutralLoadThreshold = 1.0
+	DefaultReschedulingReqSelectOrder       = MigrationReqSelectOrderSR
+	DefaultReschedulingReqSelectRule        = MigrationReqSelectRuleToken
+	DefaultReschedulingReqSelectValue       = 1
+	DefaultReschedulingLoadBalanceThreshold = 0.01
+	DefaultReschedulingLoadBalanceScope     = ReschedulingLoadBalanceScopeCluster
 
 	// Llumlet defaults
 	DefaultLlumletGrpcConnectionPoolSize = -1

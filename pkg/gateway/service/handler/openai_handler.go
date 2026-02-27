@@ -65,13 +65,13 @@ func NewOpenAIHandler(config *options.GatewayConfig) (RequestHandler, error) {
 	if name == "" {
 		name = "simple"
 	}
-	var scheduleMode types.ScheduleMode
-	if config.SeparatePDSchedule {
-		scheduleMode = types.ScheduleModePDStaged
+	var schedulingMode types.SchedulingMode
+	if config.SeparatePDScheduling {
+		schedulingMode = types.SchedulingModePDStaged
 	} else {
-		scheduleMode = types.ScheduleModePDBatch
+		schedulingMode = types.SchedulingModePDBatch
 	}
-	backend, err := BuildBackend(name, scheduleMode)
+	backend, err := BuildBackend(name, schedulingMode)
 	if err != nil {
 		klog.Errorf("build inference backend failed: %v", err)
 		return nil, err

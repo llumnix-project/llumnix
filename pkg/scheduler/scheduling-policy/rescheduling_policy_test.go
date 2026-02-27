@@ -1,4 +1,4 @@
-package schedule_policy
+package scheduling_policy
 
 import (
 	"reflect"
@@ -17,57 +17,57 @@ import (
 	"llumnix/pkg/types"
 )
 
-func NewReschedulePolicyPartial(c *options.SchedulerConfig) *ReschedulePolicy {
-	rp := &ReschedulePolicy{
+func NewReschedulingPolicyPartial(c *options.SchedulerConfig) *ReschedulingPolicy {
+	rp := &ReschedulingPolicy{
 		c:                    c,
 		cmsClient:            nil,
-		rescheduleIntervalMs: c.RescheduleIntervalMs,
+		reschedulingIntervalMs: c.ReschedulingIntervalMs,
 		grpcTimeoutSeconds:   5,
 		stopChan:             make(chan bool),
 	}
 
-	if len(c.ReschedulePolicies) > 0 {
-		polices := strings.Split(c.ReschedulePolicies, ",")
+	if len(c.ReschedulingPolicies) > 0 {
+		polices := strings.Split(c.ReschedulingPolicies, ",")
 		for _, policy := range polices {
-			rp.policies = append(rp.policies, newReschedulePolicyInternal(c, policy))
+			rp.policies = append(rp.policies, newReschedulingPolicyInternal(c, policy))
 		}
 	}
 
 	if c.EnableAdaptivePD {
-		rp.policies = append(rp.policies, newReschedulePolicyInternal(c,
-			consts.ReschedulePolicyCleanUpDecodeRequestsOnPrefill))
-		rp.policies = append(rp.policies, newReschedulePolicyInternal(c,
-			consts.ReschedulePolicyAggregateDecodeRequestsOnPrefill))
-		rp.policies = append(rp.policies, newReschedulePolicyInternal(c,
-			consts.ReschedulePolicyEaseBusyDecodeWithFreePrefill))
+		rp.policies = append(rp.policies, newReschedulingPolicyInternal(c,
+			consts.ReschedulingPolicyCleanUpDecodeRequestsOnPrefill))
+		rp.policies = append(rp.policies, newReschedulingPolicyInternal(c,
+			consts.ReschedulingPolicyAggregateDecodeRequestsOnPrefill))
+		rp.policies = append(rp.policies, newReschedulingPolicyInternal(c,
+			consts.ReschedulingPolicyEaseBusyDecodeWithFreePrefill))
 	}
 
 	return rp
 }
 
-func TestReschedulePolicy(t *testing.T) {
+func TestReschedulingPolicy(t *testing.T) {
 	config := &options.SchedulerConfig{
-		FullModeScheduleConfig: config.FullModeScheduleConfig{
-			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVCacheUsageRatioProjected,
-			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
-			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
-			ReschedulePolicies:          "decode_load,prefill_failover,decode_failover,neutral_failover",
-			RescheduleLoadBalanceScope:  consts.RescheduleLoadBalanceScopeCluster,
+		FullModeSchedulingConfig: config.FullModeSchedulingConfig{
+			ReschedulingDecodeLoadMetric:  consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingPrefillLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingNeutralLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingPolicies:          "decode_load,prefill_failover,decode_failover,neutral_failover",
+			ReschedulingLoadBalanceScope:  consts.ReschedulingLoadBalanceScopeCluster,
 		},
 	}
-	rp := NewReschedulePolicyPartial(config)
+	rp := NewReschedulingPolicyPartial(config)
 
 	assert.Equal(t, 4, len(rp.policies))
 
 	for _, policy := range rp.policies {
 		typeName := reflect.TypeOf(policy).Elem().Name()
 
-		if typeName == "decodeLoadBalanceReschedule" {
+		if typeName == "decodeLoadBalanceRescheduling" {
 			continue
 		}
 
-		if typeName == "failoverReschedule" {
-			failoverPolicy, ok := policy.(*failoverReschedule)
+		if typeName == "failoverRescheduling" {
+			failoverPolicy, ok := policy.(*failoverRescheduling)
 			assert.True(t, ok)
 			assert.Contains(t,
 				[]string{
@@ -84,35 +84,35 @@ func TestReschedulePolicy(t *testing.T) {
 	}
 }
 
-func TestRescheduleLoop(t *testing.T) {
+func TestReschedulingLoop(t *testing.T) {
 	config := &options.SchedulerConfig{
-		FullModeScheduleConfig: config.FullModeScheduleConfig{
-			RescheduleIntervalMs: 100,
+		FullModeSchedulingConfig: config.FullModeSchedulingConfig{
+			ReschedulingIntervalMs: 100,
 		},
 	}
 
-	rp := &ReschedulePolicy{
+	rp := &ReschedulingPolicy{
 		c:                    config,
 		cmsClient:            nil,
-		rescheduleIntervalMs: config.RescheduleIntervalMs,
+		reschedulingIntervalMs: config.ReschedulingIntervalMs,
 		stopChan:             make(chan bool),
 	}
 
 	executionCount := 0
-	patches := gomonkey.ApplyFunc((*ReschedulePolicy).reschedule,
-		func(_ *ReschedulePolicy) []*reschedulePair {
+	patches := gomonkey.ApplyFunc((*ReschedulingPolicy).reschedule,
+		func(_ *ReschedulingPolicy) []*reschedulingPair {
 			executionCount++
 			return nil
 		})
 	defer patches.Reset()
 
-	go rp.RescheduleLoop()
+	go rp.ReschedulingLoop()
 
 	time.Sleep(350 * time.Millisecond)
 
 	rp.stopChan <- true
 
-	// wait RescheduleLoop goroutine to finish
+	// wait ReschedulingLoop goroutine to finish
 	time.Sleep(100 * time.Millisecond)
 
 	assert.GreaterOrEqual(t, executionCount, 2)
@@ -512,21 +512,21 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 	return instanceViews
 }
 
-func TestDecodeLoadBalanceReschedulePolicy(t *testing.T) {
+func TestDecodeLoadBalanceReschedulingPolicy(t *testing.T) {
 	config := &options.SchedulerConfig{
-		FullModeScheduleConfig: config.FullModeScheduleConfig{
-			FailoverScope:                  consts.FailoverScopeNode,
-			RescheduleDecodeLoadMetric:     consts.SchedulingMetricKVCacheUsageRatioProjected,
-			RescheduleDecodeLoadThreshold:  1.0,
-			ReschedulePrefillLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
-			RescheduleNeutralLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
-			ReschedulePolicies:             consts.ReschedulePolicyDecodeLoad,
-			RescheduleReqSelectRule:        consts.MigrationReqSelectRuleToken,
-			RescheduleLoadBalanceThreshold: 0.7,
-			RescheduleLoadBalanceScope:     consts.RescheduleLoadBalanceScopeCluster,
+		FullModeSchedulingConfig: config.FullModeSchedulingConfig{
+			FailoverScope:                    consts.FailoverScopeNode,
+			ReschedulingDecodeLoadMetric:     consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingDecodeLoadThreshold:  1.0,
+			ReschedulingPrefillLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingNeutralLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingPolicies:             consts.ReschedulingPolicyDecodeLoad,
+			ReschedulingReqSelectRule:        consts.MigrationReqSelectRuleToken,
+			ReschedulingLoadBalanceThreshold: 0.7,
+			ReschedulingLoadBalanceScope:     consts.ReschedulingLoadBalanceScopeCluster,
 		},
 	}
-	rp := NewReschedulePolicyPartial(config)
+	rp := NewReschedulingPolicyPartial(config)
 
 	instanceViews := generateReschedulerInstances()
 
@@ -537,20 +537,20 @@ func TestDecodeLoadBalanceReschedulePolicy(t *testing.T) {
 	assert.Equal(t, "instance-decode-1", migrationPairs[0].dstView.GetInstanceId())
 }
 
-func TestNeutralLoadBalanceReschedulePolicy(t *testing.T) {
+func TestNeutralLoadBalanceReschedulingPolicy(t *testing.T) {
 	config := &options.SchedulerConfig{
-		FullModeScheduleConfig: config.FullModeScheduleConfig{
-			FailoverScope:                  consts.FailoverScopeNode,
-			RescheduleDecodeLoadMetric:     consts.SchedulingMetricKVCacheUsageRatioProjected,
-			RescheduleDecodeLoadThreshold:  1.0,
-			ReschedulePrefillLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
-			RescheduleNeutralLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
-			RescheduleNeutralLoadThreshold: 1.0,
-			ReschedulePolicies:             consts.ReschedulePolicyNeutralLoad,
-			RescheduleLoadBalanceScope:     consts.RescheduleLoadBalanceScopeCluster,
+		FullModeSchedulingConfig: config.FullModeSchedulingConfig{
+			FailoverScope:                    consts.FailoverScopeNode,
+			ReschedulingDecodeLoadMetric:     consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingDecodeLoadThreshold:  1.0,
+			ReschedulingPrefillLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingNeutralLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingNeutralLoadThreshold: 1.0,
+			ReschedulingPolicies:             consts.ReschedulingPolicyNeutralLoad,
+			ReschedulingLoadBalanceScope:     consts.ReschedulingLoadBalanceScopeCluster,
 		},
 	}
-	rp := NewReschedulePolicyPartial(config)
+	rp := NewReschedulingPolicyPartial(config)
 
 	instanceViews := generateReschedulerInstances()
 
@@ -561,20 +561,20 @@ func TestNeutralLoadBalanceReschedulePolicy(t *testing.T) {
 	assert.Equal(t, "instance-neutral-1", migrationPairs[0].dstView.GetInstanceId())
 }
 
-func TestFailoverReschedulePolicy(t *testing.T) {
+func TestFailoverReschedulingPolicy(t *testing.T) {
 	config := &options.SchedulerConfig{
-		FullModeScheduleConfig: config.FullModeScheduleConfig{
-			FailoverScope:                 consts.FailoverScopeNode,
-			InstanceStalenessSeconds:      100,
-			RescheduleDecodeLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
-			RescheduleDecodeLoadThreshold: 1.0,
-			ReschedulePrefillLoadMetric:   consts.SchedulingMetricKVCacheUsageRatioProjected,
-			RescheduleNeutralLoadMetric:   consts.SchedulingMetricKVCacheUsageRatioProjected,
-			ReschedulePolicies:            "prefill_failover,decode_failover,neutral_failover",
-			RescheduleLoadBalanceScope:    consts.RescheduleLoadBalanceScopeCluster,
+		FullModeSchedulingConfig: config.FullModeSchedulingConfig{
+			FailoverScope:                   consts.FailoverScopeNode,
+			InstanceStalenessSeconds:        100,
+			ReschedulingDecodeLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingDecodeLoadThreshold: 1.0,
+			ReschedulingPrefillLoadMetric:   consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingNeutralLoadMetric:   consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingPolicies:            "prefill_failover,decode_failover,neutral_failover",
+			ReschedulingLoadBalanceScope:    consts.ReschedulingLoadBalanceScopeCluster,
 		},
 	}
-	rp := NewReschedulePolicyPartial(config)
+	rp := NewReschedulingPolicyPartial(config)
 
 	instanceViews := generateReschedulerInstances()
 	migrationPairs := rp.getMigrationPairs(instanceViews)
@@ -603,26 +603,26 @@ func TestFailoverReschedulePolicy(t *testing.T) {
 	assert.Equal(t, "instance-prefill-2", migrationPairs[7].dstView.GetInstanceId())
 }
 
-// TestDecodeLoadBalanceReschedulePolicyUnitLoadBalance tests the decode load balancing reschedule policy
+// TestDecodeLoadBalanceReschedulingPolicyUnitLoadBalance tests the decode load balancing rescheduling policy
 // when the scope is set to 'unit'. It verifies that pairs are only created within the same unit,
 // and also accounts for the effects of pre-filtering like schedulabilityFilter and stalenessFilter.
-func TestDecodeLoadBalanceReschedulePolicyUnitLoadBalance(t *testing.T) {
+func TestDecodeLoadBalanceReschedulingPolicyUnitLoadBalance(t *testing.T) {
 	config := &options.SchedulerConfig{
-		FullModeScheduleConfig: config.FullModeScheduleConfig{
+		FullModeSchedulingConfig: config.FullModeSchedulingConfig{
 			// Key configuration: set the load balancing scope to 'unit'
-			RescheduleLoadBalanceScope:     consts.RescheduleLoadBalanceScopeUnit,
-			RescheduleDecodeLoadMetric:     consts.SchedulingMetricKVCacheUsageRatioProjected,
-			RescheduleDecodeLoadThreshold:  1.0,
-			ReschedulePrefillLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
-			RescheduleNeutralLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
-			ReschedulePolicies:             consts.ReschedulePolicyDecodeLoad,
-			RescheduleReqSelectRule:        consts.MigrationReqSelectRuleToken,
-			RescheduleLoadBalanceThreshold: 0.0,
-			InstanceStalenessSeconds:       100,
-			FailoverScope:                  consts.FailoverScopeNode,
+			ReschedulingLoadBalanceScope:     consts.ReschedulingLoadBalanceScopeUnit,
+			ReschedulingDecodeLoadMetric:     consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingDecodeLoadThreshold:  1.0,
+			ReschedulingPrefillLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingNeutralLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingPolicies:             consts.ReschedulingPolicyDecodeLoad,
+			ReschedulingReqSelectRule:        consts.MigrationReqSelectRuleToken,
+			ReschedulingLoadBalanceThreshold: 0.0,
+			InstanceStalenessSeconds:         100,
+			FailoverScope:                    consts.FailoverScopeNode,
 		},
 	}
-	rp := NewReschedulePolicyPartial(config)
+	rp := NewReschedulingPolicyPartial(config)
 
 	// 1. Get the basic instance data
 	instanceViews := generateReschedulerInstances()

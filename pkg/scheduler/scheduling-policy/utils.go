@@ -1,4 +1,4 @@
-package schedule_policy
+package scheduling_policy
 
 import (
 	"fmt"
@@ -21,26 +21,26 @@ func getKeySliceFromMap[M ~map[K]V, K comparable, V any](m M) []K {
 }
 
 func verifyConfig(c *options.SchedulerConfig) {
-	verifySchedulePolicy(c)
+	verifySchedulingPolicy(c)
 	verifySchedulingFeature(c)
 	verifyDispatchLoadMetric(c)
 }
 
-func verifySchedulePolicy(c *options.SchedulerConfig) {
-	liteModeSchedulePolicySet := sets.NewString(consts.SchedulePolicyLoadBalance)
-	fullModeSchedulePolicySet := sets.NewString(
-		consts.SchedulePolicyLoadBalance,
-		consts.SchedulePolicyFlood,
-		consts.SchedulePolicySlo)
+func verifySchedulingPolicy(c *options.SchedulerConfig) {
+	liteModeSchedulingPolicySet := sets.NewString(consts.SchedulingPolicyLoadBalance)
+	fullModeSchedulingPolicySet := sets.NewString(
+		consts.SchedulingPolicyLoadBalance,
+		consts.SchedulingPolicyFlood,
+		consts.SchedulingPolicySlo)
 
-	policy := c.SchedulePolicy
+	policy := c.SchedulingPolicy
 	if !c.EnableFullModeScheduling {
-		if !liteModeSchedulePolicySet.Has(policy) {
-			panic(fmt.Sprintf("The schedule policy %s is not supported when not enable full-mode scheduling.", policy))
+		if !liteModeSchedulingPolicySet.Has(policy) {
+			panic(fmt.Sprintf("The scheduling policy %s is not supported when not enable full-mode scheduling.", policy))
 		}
 	} else {
-		if !fullModeSchedulePolicySet.Has(policy) {
-			panic(fmt.Sprintf("The schedule policy %s is not supported when enabling full-mode scheduling.", policy))
+		if !fullModeSchedulingPolicySet.Has(policy) {
+			panic(fmt.Sprintf("The scheduling policy %s is not supported when enabling full-mode scheduling.", policy))
 		}
 	}
 }

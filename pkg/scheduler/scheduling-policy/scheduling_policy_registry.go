@@ -1,4 +1,4 @@
-package schedule_policy
+package scheduling_policy
 
 import (
 	"fmt"
@@ -10,19 +10,19 @@ import (
 )
 
 func newDispatchPolicyInternal(c *options.SchedulerConfig) dispatchPolicyInternal {
-	switch c.SchedulePolicy {
-	case consts.SchedulePolicyLoadBalance:
+	switch c.SchedulingPolicy {
+	case consts.SchedulingPolicyLoadBalance:
 		if c.EnableFullModeScheduling {
 			return newLoadBalanceDispatchFullMode(c)
 		} else {
 			return newLoadBalanceDispatchLiteMode(c)
 		}
-	case consts.SchedulePolicyFlood:
+	case consts.SchedulingPolicyFlood:
 		return newFloodDispatchPolicyFullMode(c)
-	case consts.SchedulePolicySlo:
+	case consts.SchedulingPolicySlo:
 		return newSloDispatchMode(c)
 	default:
-		panic(fmt.Sprintf("unsupported schedule policy: %s", c.SchedulePolicy))
+		panic(fmt.Sprintf("unsupported scheduling policy: %s", c.SchedulingPolicy))
 	}
 }
 

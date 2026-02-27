@@ -1,4 +1,4 @@
-package schedule_policy
+package scheduling_policy
 
 import (
 	"context"
@@ -132,19 +132,19 @@ func genInstanceViewScheduling(instanceId string, llumletPort int32, kvtPort int
 
 func TestExecuteMigrationsSuccess(t *testing.T) {
 	config := &options.SchedulerConfig{
-		FullModeScheduleConfig: config.FullModeScheduleConfig{
-			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVCacheUsageRatioProjected,
-			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
-			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
-			ReschedulePolicies:          "decode_load,prefill_failover,decode_failover,neutral_failover",
-			RescheduleLoadBalanceScope:  consts.RescheduleLoadBalanceScopeCluster,
+		FullModeSchedulingConfig: config.FullModeSchedulingConfig{
+			ReschedulingDecodeLoadMetric:  consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingPrefillLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingNeutralLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingPolicies:          "decode_load,prefill_failover,decode_failover,neutral_failover",
+			ReschedulingLoadBalanceScope:  consts.ReschedulingLoadBalanceScopeCluster,
 		},
 	}
-	rp := NewReschedulePolicyPartial(config)
+	rp := NewReschedulingPolicyPartial(config)
 	rp.llumletClientManager = llumletClientManager
-	reschedulePairs := []*reschedulePair{}
+	reschedulingPairs := []*reschedulingPair{}
 	for i := 0; i < 5; i++ {
-		reschedulePairs = append(reschedulePairs, &reschedulePair{
+		reschedulingPairs = append(reschedulingPairs, &reschedulingPair{
 			srcView:        genInstanceViewScheduling("instanceId-"+strconv.Itoa(i), int32(basePort+i), 0),
 			dstView:        genInstanceViewScheduling("instanceId-"+strconv.Itoa((i+1)%5), int32(basePort+i), 0),
 			reqSelectRule:  consts.MigrationReqSelectRuleNumReq,
@@ -152,7 +152,7 @@ func TestExecuteMigrationsSuccess(t *testing.T) {
 			reqSelectValue: 1.0,
 		})
 	}
-	results := rp.executeMigrations(reschedulePairs)
+	results := rp.executeMigrations(reschedulingPairs)
 	for _, res := range results {
 		assert.Nil(t, res.err)
 	}
@@ -160,17 +160,17 @@ func TestExecuteMigrationsSuccess(t *testing.T) {
 
 func TestExecuteMigrationsGrpcConnectFailed(t *testing.T) {
 	config := &options.SchedulerConfig{
-		FullModeScheduleConfig: config.FullModeScheduleConfig{
-			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVCacheUsageRatioProjected,
-			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
-			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
-			ReschedulePolicies:          "decode_load,prefill_failover,decode_failover,neutral_failover",
-			RescheduleLoadBalanceScope:  consts.RescheduleLoadBalanceScopeCluster,
+		FullModeSchedulingConfig: config.FullModeSchedulingConfig{
+			ReschedulingDecodeLoadMetric:  consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingPrefillLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingNeutralLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingPolicies:          "decode_load,prefill_failover,decode_failover,neutral_failover",
+			ReschedulingLoadBalanceScope:  consts.ReschedulingLoadBalanceScopeCluster,
 		},
 	}
-	rp := NewReschedulePolicyPartial(config)
+	rp := NewReschedulingPolicyPartial(config)
 	rp.llumletClientManager = llumletClientManager
-	reschedulePairs := []*reschedulePair{
+	reschedulingPairs := []*reschedulingPair{
 		{
 			srcView:        genInstanceViewScheduling("instanceId-100", int32(basePort+1000), 0),
 			dstView:        genInstanceViewScheduling("instanceId-1", int32(basePort+1000), 0),
@@ -179,7 +179,7 @@ func TestExecuteMigrationsGrpcConnectFailed(t *testing.T) {
 			reqSelectValue: 1.0,
 		},
 	}
-	results := rp.executeMigrations(reschedulePairs)
+	results := rp.executeMigrations(reschedulingPairs)
 	assert.Len(t, results, 1)
 	for _, res := range results {
 		assert.NotNil(t, res.err)
@@ -189,17 +189,17 @@ func TestExecuteMigrationsGrpcConnectFailed(t *testing.T) {
 
 func TestExecuteMigrationsLlumletMigrateFailed(t *testing.T) {
 	config := &options.SchedulerConfig{
-		FullModeScheduleConfig: config.FullModeScheduleConfig{
-			RescheduleDecodeLoadMetric:  consts.SchedulingMetricKVCacheUsageRatioProjected,
-			ReschedulePrefillLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
-			RescheduleNeutralLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
-			ReschedulePolicies:          "decode_load,prefill_failover,decode_failover,neutral_failover",
-			RescheduleLoadBalanceScope:  consts.RescheduleLoadBalanceScopeCluster,
+		FullModeSchedulingConfig: config.FullModeSchedulingConfig{
+			ReschedulingDecodeLoadMetric:  consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingPrefillLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingNeutralLoadMetric: consts.SchedulingMetricKVCacheUsageRatioProjected,
+			ReschedulingPolicies:          "decode_load,prefill_failover,decode_failover,neutral_failover",
+			ReschedulingLoadBalanceScope:  consts.ReschedulingLoadBalanceScopeCluster,
 		},
 	}
-	rp := NewReschedulePolicyPartial(config)
+	rp := NewReschedulingPolicyPartial(config)
 	rp.llumletClientManager = llumletClientManager
-	reschedulePairs := []*reschedulePair{
+	reschedulingPairs := []*reschedulingPair{
 		{
 			srcView:        genInstanceViewScheduling("instanceId-4", int32(basePort+4), 0),
 			dstView:        genInstanceViewScheduling("instanceId-0", int32(basePort+4), 0),
@@ -208,7 +208,7 @@ func TestExecuteMigrationsLlumletMigrateFailed(t *testing.T) {
 			reqSelectValue: 1.0,
 		},
 	}
-	results := rp.executeMigrations(reschedulePairs)
+	results := rp.executeMigrations(reschedulingPairs)
 	assert.Len(t, results, 1)
 	for _, res := range results {
 		assert.Nil(t, res.err)

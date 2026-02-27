@@ -13,23 +13,23 @@ import (
 )
 
 func init() {
-	RegisterBackend(consts.PDDisaggProtocolVllmMooncake, func(scheduleMode types.ScheduleMode) (InferenceBackend, error) {
-		return NewPDDisaggVllmMoonCakeBackend(scheduleMode)
+	RegisterBackend(consts.PDDisaggProtocolVllmMooncake, func(schedulingMode types.SchedulingMode) (InferenceBackend, error) {
+		return NewPDDisaggVllmMoonCakeBackend(schedulingMode)
 	})
 }
 
 type PDDisaggVllmMoonCakeBackend struct {
 	client       *http.Client
-	scheduleMode types.ScheduleMode
+	schedulingMode types.SchedulingMode
 }
 
-func NewPDDisaggVllmMoonCakeBackend(schMode types.ScheduleMode) (InferenceBackend, error) {
-	if schMode != types.ScheduleModePDBatch && schMode != types.ScheduleModePDStaged {
-		return nil, fmt.Errorf("unsupported schedule mode: %s", schMode)
+func NewPDDisaggVllmMoonCakeBackend(schMode types.SchedulingMode) (InferenceBackend, error) {
+	if schMode != types.SchedulingModePDBatch && schMode != types.SchedulingModePDStaged {
+		return nil, fmt.Errorf("unsupported scheduling mode: %s", schMode)
 	}
 	return &PDDisaggVllmMoonCakeBackend{
 		client:       NewLlmForwardClient(),
-		scheduleMode: schMode,
+		schedulingMode: schMode,
 	}, nil
 }
 
@@ -100,12 +100,12 @@ func (b *PDDisaggVllmMoonCakeBackend) doDecode(req *types.RequestContext, chunkC
 }
 
 func (b *PDDisaggVllmMoonCakeBackend) BatchScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	pInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRolePrefill)
+	pInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRolePrefill)
 	if pInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
 	}
 
-	dInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRoleDecode)
+	dInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRoleDecode)
 	if dInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled decode instance", req.Id)
 	}
@@ -133,7 +133,7 @@ func (b *PDDisaggVllmMoonCakeBackend) BatchScheduleStreamInference(req *types.Re
 }
 
 func (b *PDDisaggVllmMoonCakeBackend) StagedScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	pInstance := req.ScheduleCtx.ScheduleResults.GetInstanceByRole(types.InferRolePrefill)
+	pInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRolePrefill)
 	if pInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
 	}
@@ -172,12 +172,12 @@ func (b *PDDisaggVllmMoonCakeBackend) StagedScheduleStreamInference(req *types.R
 // StreamInference implements InferBackend interface
 // Performs streaming inference by forwarding request to backend and streaming response chunks
 func (b *PDDisaggVllmMoonCakeBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	switch b.scheduleMode {
-	case types.ScheduleModePDBatch:
+	switch b.schedulingMode {
+	case types.SchedulingModePDBatch:
 		return b.BatchScheduleStreamInference(req)
-	case types.ScheduleModePDStaged:
+	case types.SchedulingModePDStaged:
 		return b.StagedScheduleStreamInference(req)
 	default:
-		return nil, fmt.Errorf("[%s] unsupported schedule mode: %s", req.Id, b.scheduleMode)
+		return nil, fmt.Errorf("[%s] unsupported scheduling mode: %s", req.Id, b.schedulingMode)
 	}
 }

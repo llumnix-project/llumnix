@@ -15,7 +15,7 @@ INVALID = -9999
 
 def generate_mig_correct_config():
     base_configs = [
-        {'policy': 'load-balance', 'enable_full_mode_scheduling': True, 'enable_migration': True, 'enable_pd': True, 'separate_pd_schedule': False},
+        {'policy': 'load-balance', 'enable_full_mode_scheduling': True, 'enable_migration': True, 'enable_pd': True, 'separate_pd_scheduling': False},
     ]
 
     update_configs = []

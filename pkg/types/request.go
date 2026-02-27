@@ -184,15 +184,15 @@ func (req *LLMRequest) Stream() bool {
 	}
 }
 
-type ScheduleContext struct {
+type SchedulingContext struct {
 	// forward target instance
-	ScheduleResults ScheduledResult
+	SchedulingResults SchedulingResult
 
-	// schedule mode
-	ScheduleMode ScheduleMode
+	// scheduling mode
+	SchedulingMode SchedulingMode
 
 	// inference stage, prefill or decode
-	ScheduleStage ScheduleStage
+	SchedulingStage SchedulingStage
 
 	// after the gateway obtains resources from the scheduler, it may return them. However,
 	// due to network partitioning between the gateway and scheduler, the gateway's address
@@ -201,7 +201,7 @@ type ScheduleContext struct {
 	GatewayId string
 
 	// whether to schedule the request
-	NeedSchedule bool
+	NeedScheduling bool
 }
 
 // ErrorResponse is used when the engine returns an error directly.
@@ -245,19 +245,19 @@ type RequestContext struct {
 	ResponseChan chan *ResponseMsg
 
 	// Some information forwarded to a specific inference backend
-	ScheduleCtx *ScheduleContext
+	SchedulingCtx *SchedulingContext
 
-	// hooks for pd separate schedule
-	pdSeparateScheduleHooks PDSeparateScheduleHooks
+	// hooks for pd separate scheduling
+	pdSeparateSchedulingHooks PDSeparateSchedulingHooks
 
 	// hooks for realtime state management
 	requestStateManagementHooks RequestStateManagementHooks
 }
 
-// PDSeparateScheduleHooks implements the hooks for pd separate schedule
-type PDSeparateScheduleHooks interface {
+// PDSeparateSchedulingHooks implements the hooks for pd separate scheduling
+type PDSeparateSchedulingHooks interface {
 	// ScheduleDecode schedules the request for decoding using the balancer
-	ScheduleDecode(req *RequestContext) (ScheduledResult, error)
+	ScheduleDecode(req *RequestContext) (SchedulingResult, error)
 }
 
 // RequestStateManagementHooks implements the hooks for request state management
@@ -279,8 +279,8 @@ type RequestStateManagementHooks interface {
 	OnPostDecodeEachStreamResponse(req *RequestContext)
 }
 
-func (req *RequestContext) SetPDSeparateScheduleHooks(hooks PDSeparateScheduleHooks) {
-	req.pdSeparateScheduleHooks = hooks
+func (req *RequestContext) SetPDSeparateSchedulingHooks(hooks PDSeparateSchedulingHooks) {
+	req.pdSeparateSchedulingHooks = hooks
 }
 
 func (req *RequestContext) SetRequestStateManagementHooks(hooks RequestStateManagementHooks) {
@@ -288,9 +288,9 @@ func (req *RequestContext) SetRequestStateManagementHooks(hooks RequestStateMana
 }
 
 // ScheduleDecode schedules the request for decoding stage.
-func (req *RequestContext) ScheduleDecode() (ScheduledResult, error) {
-	if req.pdSeparateScheduleHooks != nil {
-		return req.pdSeparateScheduleHooks.ScheduleDecode(req)
+func (req *RequestContext) ScheduleDecode() (SchedulingResult, error) {
+	if req.pdSeparateSchedulingHooks != nil {
+		return req.pdSeparateSchedulingHooks.ScheduleDecode(req)
 	}
 	return nil, nil
 }
@@ -338,16 +338,16 @@ func NewRequestContext(ctx context.Context, r *http.Request, w http.ResponseWrit
 
 	httpReq := &HttpRequest{Request: r, Writer: w}
 	llmRequest := &LLMRequest{}
-	scheduleCtx := &ScheduleContext{}
+	schedulingCtx := &SchedulingContext{}
 
 	// create a request context for the new request
 	req := &RequestContext{
-		Context:      ctx,
-		Id:           id,
-		HttpRequest:  httpReq,
-		LLMRequest:   llmRequest,
-		RequestStats: stats,
-		ScheduleCtx:  scheduleCtx,
+		Context:       ctx,
+		Id:            id,
+		HttpRequest:   httpReq,
+		LLMRequest:    llmRequest,
+		RequestStats:  stats,
+		SchedulingCtx: schedulingCtx,
 	}
 	return req
 }

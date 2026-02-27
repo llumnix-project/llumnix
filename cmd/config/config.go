@@ -98,12 +98,12 @@ type PDDisaggConfig struct {
 	// and decode phases, which can be distinguished by this configuration
 	PDDisaggProtocol string
 	// separate scheduling for p and d or not
-	SeparatePDSchedule bool
+	SeparatePDScheduling bool
 }
 
 func (c *PDDisaggConfig) AddPDDisaggConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.PDDisaggProtocol, "pd-disagg-protocol", "", "pd disaggregation protocol, this configuration only takes effect under the pd-disagg policy, now support vllm-mooncake, vllm-kvt, sglang-mooncake")
-	flags.BoolVar(&c.SeparatePDSchedule, "separate-pd-schedule", false, "Specify whether to separate pd schedule")
+	flags.BoolVar(&c.SeparatePDScheduling, "separate-pd-scheduling", false, "Specify whether to separate pd scheduling")
 }
 
 type BatchServiceConfig struct {
@@ -134,7 +134,7 @@ func (c *BatchServiceConfig) AddBatchServiceConfigFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&c.BatchRequestRetryTimes, "batch-request-retry-times", 3, "HTTP retry times")
 }
 
-type ScheduleBaseConfig struct {
+type SchedulingBaseConfig struct {
 	// lite-mode scheduling: When not enabling full mode scheduling (lite-mode scheduling), llumnix does not
 	// intrusively modify inference engine, and only support basic load balance scheduling.
 	// In lite mode scheduling, LLM gateway collect update realtime request token states and report these data to
@@ -145,24 +145,24 @@ type ScheduleBaseConfig struct {
 	// support advanced scheduling feature like rescheduling, adaptive pd, etc.
 	EnableFullModeScheduling bool
 
-	SchedulePolicy string
+	SchedulingPolicy string
 }
 
-func (c *ScheduleBaseConfig) AddScheduleBaseConfigFlags(flags *pflag.FlagSet) {
+func (c *SchedulingBaseConfig) AddSchedulingBaseConfigFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&c.EnableFullModeScheduling, "enable-full-mode-scheduling", consts.DefaultEnableFullModeScheduling, "Enable full mode scheduling")
-	flags.StringVar(&c.SchedulePolicy, "schedule-policy", "load-balance", "schedule policy, now support round-robin, load-balance, flood")
+	flags.StringVar(&c.SchedulingPolicy, "scheduling-policy", "load-balance", "scheduling policy, now support round-robin, load-balance, flood")
 }
 
-type LiteModeScheduleConfig struct {
+type LiteModeSchedulingConfig struct {
 	// request token state report (report to llm scheduler) interval (seconds)
 	RequestStateReportInterval int
 }
 
-func (c *LiteModeScheduleConfig) AddLiteModeScheduleConfigFlags(flags *pflag.FlagSet) {
+func (c *LiteModeSchedulingConfig) AddLiteModeSchedulingConfigFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&c.RequestStateReportInterval, "requests-report-duration", 0, "Specify requests reporter duration")
 }
 
-type FullModeScheduleConfig struct {
+type FullModeSchedulingConfig struct {
 	// cms
 	CmsRedisHost              string
 	CmsRedisPort              string
@@ -202,7 +202,7 @@ type FullModeScheduleConfig struct {
 	DispatchPrefillCacheLocalityMetric  string
 	EnableInstanceStatusLocalAccount    bool
 	RequestLocalAccountStalenessSeconds int32
-	AllowConcurrentSchedule             bool
+	AllowConcurrentScheduling             bool
 	EnablePredictorEnhancedScheduling   bool
 	MaxNumBatchedTokens                 int
 	NumPredictorWarmupSamples           int
@@ -224,20 +224,20 @@ type FullModeScheduleConfig struct {
 	FailoverScope            string
 	InstanceStalenessSeconds int64
 
-	// reschedule
-	EnableRescheduling             bool
-	ReschedulePolicies             string
-	RescheduleIntervalMs           int32
-	RescheduleDecodeLoadMetric     string
-	RescheduleDecodeLoadThreshold  float32
-	ReschedulePrefillLoadMetric    string
-	RescheduleNeutralLoadMetric    string
-	RescheduleNeutralLoadThreshold float32
-	RescheduleReqSelectOrder       string
-	RescheduleReqSelectRule        string
-	RescheduleReqSelectValue       float32
-	RescheduleLoadBalanceThreshold float32
-	RescheduleLoadBalanceScope     string
+	// rescheduling
+	EnableRescheduling               bool
+	ReschedulingPolicies             string
+	ReschedulingIntervalMs           int32
+	ReschedulingDecodeLoadMetric     string
+	ReschedulingDecodeLoadThreshold  float32
+	ReschedulingPrefillLoadMetric    string
+	ReschedulingNeutralLoadMetric    string
+	ReschedulingNeutralLoadThreshold float32
+	ReschedulingReqSelectOrder       string
+	ReschedulingReqSelectRule        string
+	ReschedulingReqSelectValue       float32
+	ReschedulingLoadBalanceThreshold float32
+	ReschedulingLoadBalanceScope     string
 
 	// llumlet
 	LlumletGrpcConnectionPoolSize int
@@ -248,7 +248,7 @@ type FullModeScheduleConfig struct {
 	CmsRecordMetricsInterval int32
 }
 
-func (c *FullModeScheduleConfig) AddFullModeScheduleConfigFlags(flags *pflag.FlagSet) {
+func (c *FullModeSchedulingConfig) AddFullModeSchedulingConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.CmsRedisHost, "cms-redis-host", consts.DefaultCmsRedisHost, "Llumnix CMS redis host")
 	flags.StringVar(&c.CmsRedisPort, "cms-redis-port", consts.DefaultCmsRedisPort, "Llumnix CMS redis port")
 	flags.StringVar(&c.CmsRedisUsername, "cms-redis-username", consts.DefaultCmsRedisUsername, "Llumnix CMS redis username")
@@ -286,7 +286,7 @@ func (c *FullModeScheduleConfig) AddFullModeScheduleConfigFlags(flags *pflag.Fla
 	flags.StringVar(&c.DispatchPrefillCacheLocalityMetric, "dispatch-prefill-cache-locality-metric", consts.DefaultDispatchPrefillCacheLocalityMetric, "Llumnix dispatch prefill cache locality metric")
 	flags.BoolVar(&c.EnableInstanceStatusLocalAccount, "enable-instance-status-local-account", consts.DefaultEnableInstanceStatusLocalAccount, "Llumnix enable instance status local account")
 	flags.Int32Var(&c.RequestLocalAccountStalenessSeconds, "request-local-account-staleness-seconds", consts.DefaultRequestLocalAccountStalenessSeconds, "Llumnix request local account staleness seconds")
-	flags.BoolVar(&c.AllowConcurrentSchedule, "allow-concurrent-schedule", consts.DefaultAllowConcurrentSchedule, "Llumnix allow concurrent schedule")
+	flags.BoolVar(&c.AllowConcurrentScheduling, "allow-concurrent-scheduling", consts.DefaultAllowConcurrentScheduling, "Llumnix allow concurrent scheduling")
 	flags.BoolVar(&c.EnablePredictorEnhancedScheduling, "enable-predictor-enhanced-scheduling", consts.DefaultEnablePredictorEnhancedScheduling, "Llumnix enable predictor enhanced scheduling")
 	flags.IntVar(&c.MaxNumBatchedTokens, "max-num-batched-tokens", consts.DefaultMaxNumBatchedTokens, "Llumnix max num batched tokens")
 	flags.IntVar(&c.NumPredictorWarmupSamples, "num-predictor-warmup-samples", consts.DefaultNumPredictorWarmupSamples, "Llumnix num predictor warmup samples")
@@ -306,18 +306,18 @@ func (c *FullModeScheduleConfig) AddFullModeScheduleConfigFlags(flags *pflag.Fla
 	flags.Int64Var(&c.InstanceStalenessSeconds, "instance-staleness-seconds", consts.DefaultInstanceStalenessSeconds, "Llumnix instance staleness seconds")
 
 	flags.BoolVar(&c.EnableRescheduling, "enable-rescheduling", consts.DefaultEnableRescheduling, "Llumnix enable rescheduling")
-	flags.StringVar(&c.ReschedulePolicies, "reschedule-policies", consts.DefaultReschedulePolicies, "Llumnix reschedule policies, comma separated")
-	flags.Int32Var(&c.RescheduleIntervalMs, "reschedule-interval-ms", consts.DefaultRescheduleIntervalMs, "Llumnix reschedule interval milliseconds")
-	flags.StringVar(&c.RescheduleDecodeLoadMetric, "reschedule-decode-load-metric", consts.DefaultRescheduleDecodeLoadMetric, "Llumnix reschedule decode load metric")
-	flags.Float32Var(&c.RescheduleDecodeLoadThreshold, "reschedule-decode-load-threshold", consts.DefaultRescheduleDecodeLoadThreshold, "Llumnix reschedule decode load threshold")
-	flags.StringVar(&c.ReschedulePrefillLoadMetric, "reschedule-prefill-load-metric", consts.DefaultReschedulePrefillLoadMetric, "Llumnix reschedule prefill load metric")
-	flags.StringVar(&c.RescheduleNeutralLoadMetric, "reschedule-neutral-load-metric", consts.DefaultRescheduleNeutralLoadMetric, "Llumnix reschedule neutral load metric")
-	flags.Float32Var(&c.RescheduleNeutralLoadThreshold, "reschedule-neutral-load-threshold", consts.DefaultRescheduleNeutralLoadThreshold, "Llumnix reschedule neutral load threshold")
-	flags.StringVar(&c.RescheduleReqSelectOrder, "reschedule-req-select-order", consts.DefaultRescheduleReqSelectOrder, "Llumnix reschedule req selection order")
-	flags.StringVar(&c.RescheduleReqSelectRule, "reschedule-req-select-rule", consts.DefaultRescheduleReqSelectRule, "Llumnix reschedule req selection rule")
-	flags.Float32Var(&c.RescheduleReqSelectValue, "reschedule-req-select-value", consts.DefaultRescheduleReqSelectValue, "Llumnix reschedule req selection value")
-	flags.Float32Var(&c.RescheduleLoadBalanceThreshold, "reschedule-load-balance-threshold", consts.DefaultRescheduleLoadBalanceThreshold, "Llumnix reschedule load balance threshold")
-	flags.StringVar(&c.RescheduleLoadBalanceScope, "reschedule-load-balance-scope", consts.DefaultRescheduleLoadBalanceScope, "Llumnix reschedule load balance scope")
+	flags.StringVar(&c.ReschedulingPolicies, "rescheduling-policies", consts.DefaultReschedulingPolicies, "Llumnix rescheduling policies, comma separated")
+	flags.Int32Var(&c.ReschedulingIntervalMs, "rescheduling-interval-ms", consts.DefaultReschedulingIntervalMs, "Llumnix rescheduling interval milliseconds")
+	flags.StringVar(&c.ReschedulingDecodeLoadMetric, "rescheduling-decode-load-metric", consts.DefaultReschedulingDecodeLoadMetric, "Llumnix rescheduling decode load metric")
+	flags.Float32Var(&c.ReschedulingDecodeLoadThreshold, "rescheduling-decode-load-threshold", consts.DefaultReschedulingDecodeLoadThreshold, "Llumnix rescheduling decode load threshold")
+	flags.StringVar(&c.ReschedulingPrefillLoadMetric, "rescheduling-prefill-load-metric", consts.DefaultReschedulingPrefillLoadMetric, "Llumnix rescheduling prefill load metric")
+	flags.StringVar(&c.ReschedulingNeutralLoadMetric, "rescheduling-neutral-load-metric", consts.DefaultReschedulingNeutralLoadMetric, "Llumnix rescheduling neutral load metric")
+	flags.Float32Var(&c.ReschedulingNeutralLoadThreshold, "rescheduling-neutral-load-threshold", consts.DefaultReschedulingNeutralLoadThreshold, "Llumnix rescheduling neutral load threshold")
+	flags.StringVar(&c.ReschedulingReqSelectOrder, "rescheduling-req-select-order", consts.DefaultReschedulingReqSelectOrder, "Llumnix rescheduling req selection order")
+	flags.StringVar(&c.ReschedulingReqSelectRule, "rescheduling-req-select-rule", consts.DefaultReschedulingReqSelectRule, "Llumnix rescheduling req selection rule")
+	flags.Float32Var(&c.ReschedulingReqSelectValue, "rescheduling-req-select-value", consts.DefaultReschedulingReqSelectValue, "Llumnix rescheduling req selection value")
+	flags.Float32Var(&c.ReschedulingLoadBalanceThreshold, "rescheduling-load-balance-threshold", consts.DefaultReschedulingLoadBalanceThreshold, "Llumnix rescheduling load balance threshold")
+	flags.StringVar(&c.ReschedulingLoadBalanceScope, "rescheduling-load-balance-scope", consts.DefaultReschedulingLoadBalanceScope, "Llumnix rescheduling load balance scope")
 
 	flags.IntVar(&c.LlumletGrpcConnectionPoolSize, "llumlet-grpc-connection-pool-size", consts.DefaultLlumletGrpcConnectionPoolSize, "Llumnix llumlet grpc connection pool size")
 	flags.IntVar(&c.LlumletGrpcTimeoutSeconds, "llumlet-grpc-timeout-seconds", consts.DefaultLlumletGrpcTimeoutSeconds, "Llumnix llumlet grpc timeout seconds")

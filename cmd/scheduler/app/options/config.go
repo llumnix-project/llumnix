@@ -13,11 +13,11 @@ type SchedulerConfig struct {
 
 	MultiModelSupport bool
 
-	// ColocatedRescheduleMode means whether to start a rescheduler inside a scheduler process
+	// ColocatedReschedulingMode means whether to start a rescheduler inside a scheduler process
 	// (so that they can share the cms client).
-	ColocatedRescheduleMode bool
-	// StandaloneRescheduleMode means whether to start a rescheduler as a separate process.
-	StandaloneRescheduleMode bool
+	ColocatedReschedulingMode bool
+	// StandaloneReschedulingMode means whether to start a rescheduler as a separate process.
+	StandaloneReschedulingMode bool
 
 	// enable input log
 	EnableLogInput bool
@@ -27,18 +27,18 @@ type SchedulerConfig struct {
 
 	config.DiscoveryConfig
 	config.PDDisaggConfig
-	config.ScheduleBaseConfig
-	config.LiteModeScheduleConfig
-	config.FullModeScheduleConfig
+	config.SchedulingBaseConfig
+	config.LiteModeSchedulingConfig
+	config.FullModeSchedulingConfig
 }
 
 func (c *SchedulerConfig) AddFlags(flags *pflag.FlagSet) {
 	c.AddConfigFlags(flags)
 	c.DiscoveryConfig.AddDiscoveryConfigFlags(flags)
 	c.PDDisaggConfig.AddPDDisaggConfigFlags(flags)
-	c.ScheduleBaseConfig.AddScheduleBaseConfigFlags(flags)
-	c.LiteModeScheduleConfig.AddLiteModeScheduleConfigFlags(flags)
-	c.FullModeScheduleConfig.AddFullModeScheduleConfigFlags(flags)
+	c.SchedulingBaseConfig.AddSchedulingBaseConfigFlags(flags)
+	c.LiteModeSchedulingConfig.AddLiteModeSchedulingConfigFlags(flags)
+	c.FullModeSchedulingConfig.AddFullModeSchedulingConfigFlags(flags)
 	flags.AddGoFlagSet(flag.CommandLine)
 }
 
@@ -48,8 +48,8 @@ func (c *SchedulerConfig) AddConfigFlags(flags *pflag.FlagSet) {
 
 	flags.BoolVar(&c.MultiModelSupport, "multi-model-support", false, "enable multi model support")
 
-	flags.BoolVar(&c.ColocatedRescheduleMode, "colocated-reschedule-mode", false, "enable colocated reschedule mode")
-	flags.BoolVar(&c.StandaloneRescheduleMode, "standalone-reschedule-mode", false, "enable standalone reschedule mode")
+	flags.BoolVar(&c.ColocatedReschedulingMode, "colocated-rescheduling-mode", false, "enable colocated rescheduling mode")
+	flags.BoolVar(&c.StandaloneReschedulingMode, "standalone-rescheduling-mode", false, "enable standalone rescheduling mode")
 
 	flags.BoolVar(&c.EnableLogInput, "enable-log-input", false, "enable log input or not")
 	flags.BoolVar(&c.EnablePprof, "enable-pprof", false, "enable pprof")
@@ -57,5 +57,5 @@ func (c *SchedulerConfig) AddConfigFlags(flags *pflag.FlagSet) {
 }
 
 func (c *SchedulerConfig) EnableRequestStateTracking() bool {
-	return !c.EnableFullModeScheduling && !c.StandaloneRescheduleMode
+	return !c.EnableFullModeScheduling && !c.StandaloneReschedulingMode
 }
