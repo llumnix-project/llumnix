@@ -13,7 +13,7 @@ spec:
         terminationGracePeriodSeconds: 30
         containers:
         - name: vllm
-          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-mooncake-20260210-100213
+          image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:mooncake-20260210-100213
           securityContext:
             privileged: true
             capabilities:
@@ -183,7 +183,7 @@ spec:
               memory: 128Gi
               nvidia.com/gpu: "1"
         - name: discovery
-          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:discovery-20260205-133632
+          image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/discovery:20260226-170427
           command:
             - /bin/bash
             - -c

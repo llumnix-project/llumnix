@@ -38,7 +38,7 @@ spec:
       - name: aliyun-registry-secret
       initContainers:
       - name: download-tokenizer
-        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:python3.12-slim-bookworm
+        image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/python3:3.12-slim-bookworm
         command: ["/bin/sh", "-c"]
         args:
         - |
@@ -66,7 +66,7 @@ spec:
             cpu: "1000m"
       containers:
       - name: gateway
-        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:gateway-20260226-164420
+        image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/gateway:20260226-164420
         imagePullPolicy: Always
         command: ["/usr/local/bin/gateway"]
         args:

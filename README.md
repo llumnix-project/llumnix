@@ -90,7 +90,7 @@ Run `bash group_delete.sh $<group-name>` to delete group.
 
 # Development Guide
 
-`beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-20260204-140225` is recommended for development. Then, you should run the following commands to set up the environment:
+`llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225` is recommended for development. Then, you should run the following commands to set up the environment:
 
 ```bash
 go mod tidy
