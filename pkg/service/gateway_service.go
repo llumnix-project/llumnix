@@ -630,17 +630,32 @@ func (lgs *LlmGatewayService) HandleAnthropicRequest(w http.ResponseWriter, r *h
 //   - w: HTTP response writer
 //   - r: HTTP request
 func (lgs *LlmGatewayService) HandleCountTokens(w http.ResponseWriter, r *http.Request) {
+	tStart := time.Now()
+
+	// Get request ID from context
+	reqCtx := types.NewRequestContext(r.Context(), r, w)
+	requestId := reqCtx.Id
+
+	// Wrap ResponseWriter to capture status code
+	statusCode := http.StatusOK
+	rw := &statusCaptureResponseWriter{ResponseWriter: w, statusCode: &statusCode}
+
+	// Log access log with defer to ensure it's always recorded
+	defer func() {
+		logging.Logf("[%s] status_code:%d,response_time:%vms,method:%s,url:%s", requestId, statusCode, time.Since(tStart).Milliseconds(), r.Method, r.URL.Path)
+	}()
+
 	// Validate request method
 	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		http.Error(rw, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
 	// Read request body
 	data, err := io.ReadAll(r.Body)
 	if err != nil {
-		klog.Errorf("Failed to read request body: %v", err)
-		http.Error(w, "failed to read request body", http.StatusBadRequest)
+		klog.Errorf("[%s] Failed to read request body: %v", requestId, err)
+		http.Error(rw, "failed to read request body", http.StatusBadRequest)
 		return
 	}
 	defer r.Body.Close()
@@ -656,16 +671,16 @@ func (lgs *LlmGatewayService) HandleCountTokens(w http.ResponseWriter, r *http.R
 	// Marshal response
 	responseData, err := json.Marshal(response)
 	if err != nil {
-		klog.Errorf("Failed to marshal response: %v", err)
-		http.Error(w, "failed to marshal response", http.StatusInternalServerError)
+		klog.Errorf("[%s] Failed to marshal response: %v", requestId, err)
+		http.Error(rw, "failed to marshal response", http.StatusInternalServerError)
 		return
 	}
 
 	// Set response headers and write response
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write(responseData); err != nil {
-		klog.Errorf("Failed to write response: %v", err)
+	rw.Header().Set("Content-Type", "application/json")
+	rw.WriteHeader(http.StatusOK)
+	if _, err := rw.Write(responseData); err != nil {
+		klog.Errorf("[%s] Failed to write response: %v", requestId, err)
 	}
 }
 

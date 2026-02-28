@@ -117,7 +117,7 @@ llumnix-unit-test: llm-gateway-proto-build
 
 # ------------------- Tokenizer -------------------
 tokenizer-lib-download:
-	@set -x; \
+	@set +x; \
 	if [ "$(LOCAL_OS)" = "darwin" ] && [ "$(ARCH)" = "arm64" ]; then \
 		if [ ! -f /tmp/libsgl_model_gateway_go.tar.gz ] || [ "$$(md5 -q /tmp/libsgl_model_gateway_go.tar.gz)" != "4e62233aeeb84175c331a48475999a26" ]; then \
 			wget https://eas-data.oss-cn-shanghai.aliyuncs.com/3rdparty/tokenizers/20260115/libsgl_model_gateway_go.darwin-aarch64.tar.gz -O /tmp/libsgl_model_gateway_go.tar.gz; \

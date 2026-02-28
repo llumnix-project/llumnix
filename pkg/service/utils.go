@@ -109,7 +109,10 @@ func SimpleHTTPProxy(client *http.Client, url string, w http.ResponseWriter, r *
 	w.WriteHeader(resp.StatusCode)
 
 	// Copy response body to client
-	io.Copy(w, resp.Body)
+	_, err = io.Copy(w, resp.Body)
+	if err != nil {
+		klog.Errorf("Failed to copy response body to client: %v", err)
+	}
 }
 
 // EstimateTokens estimates input tokens from Anthropic request JSON
