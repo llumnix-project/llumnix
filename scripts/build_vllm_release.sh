@@ -17,6 +17,7 @@ IMAGE_TAG="llumnix-vllm-${TIMESTAMP}"
 BASE_IMAGE="vllm/vllm-openai:v0.12.0"
 
 DOCKER_BUILDKIT=1 docker build \
+    --network=host \
     --build-arg BASE_IMAGE=${BASE_IMAGE} \
     -t ${REPOSITORY}:${IMAGE_TAG} \
     -f ./container/Dockerfile.vllm \

@@ -1,0 +1,8 @@
+sphinx==7.4.7
+sphinx-book-theme
+myst-parser
+sphinx-copybutton
+sphinx-autodoc2
+sphinx-design
+sphinx-togglebutton
+requests
