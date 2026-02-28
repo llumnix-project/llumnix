@@ -11,7 +11,7 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-REPOSITORY="beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev"
+REPOSITORY="beijing-pooling-registry.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev"
 TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
 IMAGE_TAG="discovery-${TIMESTAMP}"
 
