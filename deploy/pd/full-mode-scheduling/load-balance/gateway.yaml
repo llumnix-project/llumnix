@@ -47,7 +47,7 @@ spec:
           from modelscope import snapshot_download
           
           model_dir = snapshot_download(
-              'deepseek-ai/deepseek-moe-16b-base',
+              'Qwen/Qwen3-30B-A3B',
               cache_dir='/tokenizers',
               allow_patterns=['tokenizer.json', 'tokenizer_config.json']
           )
@@ -73,11 +73,13 @@ spec:
         - "--port"
         - "8089"
         - "-v"
-        - "3"
+        - "2"
         - "--scheduler-discovery"
         - "endpoints"
         - "--scheduler-endpoints"
         - "scheduler:8088"
+        - "--discovery-redis-status-ttl-ms"
+        - "60000"
         - "--llm-backend-discovery"
         - "redis"
         - "--discovery-redis-host"
@@ -87,7 +89,7 @@ spec:
         - "--scheduling-policy"
         - "load-balance"
         - "--tokenizer-path"
-        - "/tokenizers/deepseek-ai/deepseek-moe-16b-base"
+        - "/tokenizers/Qwen/Qwen3-30B-A3B"
         - "--pd-disagg-protocol"
         - "vllm-mooncake"
         - "--enable-full-mode-scheduling=true"

@@ -8,7 +8,6 @@ spec:
     size: 1
     workerTemplate:
       spec:
-        serviceAccountName: deepseek-r1
         imagePullSecrets:
           - name: aliyun-registry-secret
         terminationGracePeriodSeconds: 30
@@ -29,8 +28,6 @@ spec:
             - -c
           args:
             - |-
-             # Clear /dev/shm on start to prevent running out of space when crashes occur
-             find /dev/shm -type f -delete
 
              #################
              # RUN vLLM prefill worker
@@ -44,7 +41,7 @@ spec:
              # --enable-eplb:  Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU Divisibility constraint: num_routed_experts (256 for DSv3) + num_redundant_experts must be divisible by the number of GPUs.
 
              exec vllm serve \
-                deepseek-ai/deepseek-moe-16b-base \
+                Qwen/Qwen3-235B-A22B-FP8 \
                 --port 8000 \
                 --trust-remote-code \
                 --enable-expert-parallel \
@@ -80,7 +77,7 @@ spec:
           - name: DP_SIZE_LOCAL
             value: "1"
           - name: TP_SIZE
-            value: "4"
+            value: "8"
           - name: TRITON_LIBCUDA_PATH
             value: /usr/lib64
           - name: VLLM_SKIP_P2P_CHECK
@@ -91,12 +88,6 @@ spec:
             value: "1"
           - name: NVIDIA_GDRCOPY
             value: enabled
-          - name: NVSHMEM_REMOTE_TRANSPORT
-            value: ibgda
-          - name: NVSHMEM_IB_ENABLE_IBGDA
-            value: "true"
-          - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
-            value: eth0
           - name: GLOO_SOCKET_IFNAME
             value: eth0
           - name: NCCL_SOCKET_IFNAME
@@ -150,14 +141,14 @@ spec:
             failureThreshold: 3
           resources:
             limits:
-              ephemeral-storage: 256Gi
+              ephemeral-storage: 512Gi
               memory: 512Gi
-              nvidia.com/gpu: "4"
+              nvidia.com/gpu: "8"
             requests:
-              cpu: "32"
-              ephemeral-storage: 256Gi
+              cpu: "64"
+              ephemeral-storage: 512Gi
               memory: 512Gi
-              nvidia.com/gpu: "4"
+              nvidia.com/gpu: "8"
         - name: discovery
           image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:discovery-20260226-170427
           command:
@@ -173,7 +164,7 @@ spec:
               --entrypoint_port 8000 \
               --kv_transfer_ip $(POD_IP) \
               --kv_transfer_port 28000 \
-              --dp_size_local 4 \
+              --dp_size_local 1 \
               --redis_address redis \
               --redis_port 6379
           env:
