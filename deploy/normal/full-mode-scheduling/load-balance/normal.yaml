@@ -13,7 +13,7 @@ spec:
         terminationGracePeriodSeconds: 30
         containers:
         - name: vllm
-          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-20260130-105854
+          image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:20260130-105854
           securityContext:
             capabilities:
               add:
@@ -182,7 +182,7 @@ spec:
               memory: 256Gi
               nvidia.com/gpu: "4"
         - name: discovery
-          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:discovery-20260226-170427
+          image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/discovery:20260226-170427
           command:
             - /bin/bash
             - -c

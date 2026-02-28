@@ -47,7 +47,7 @@ spec:
       - name: aliyun-registry-secret
       containers:
       - name: mooncake
-        image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-mooncake-20260210-100213
+        image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:mooncake-20260210-100213
         command: ["/bin/bash", "-lc"]
         args:
         - |

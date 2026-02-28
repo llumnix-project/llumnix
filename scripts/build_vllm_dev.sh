@@ -11,9 +11,9 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-REPOSITORY="beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev"
+REPOSITORY="llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm"
 TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
-IMAGE_TAG="llumnix-vllm-dev-${TIMESTAMP}"
+IMAGE_TAG="dev-${TIMESTAMP}"
 
 DOCKER_BUILDKIT=1 docker build \
     --no-cache \
