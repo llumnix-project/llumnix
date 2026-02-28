@@ -19,8 +19,28 @@ vllm-install:
 
 .PHONY: llumlet-install
 llumlet-install:
+	cd ./python/llumnix && pythons setup.py bdist_wheel -d ./dist && pip install ./dist/llumlet-*.whl
 	cd ./python/llumnix && make vllm_install && make proto
+
+.PHONY: mooncake-install
+mooncake-install:
+	pip uninstall -y mooncake-transfer-engine || true
+	rm -rf /tmp/Mooncake
+	git clone https://github.com/kvcache-ai/Mooncake.git /tmp/Mooncake
+	cd /tmp/Mooncake && bash dependencies.sh
+	cd /tmp/Mooncake && mkdir -p build && cd build && \
+		cmake .. \
+			-DPython_EXECUTABLE=/usr/bin/python3.12 \
+			-DPython3_EXECUTABLE=/usr/bin/python3.12 \
+			-DPython_INCLUDE_DIR=/usr/include/python3.12 \
+			-DPython_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.12.so \
+			-DPython3_INCLUDE_DIR=/usr/include/python3.12 \
+			-DPython3_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.12.so && \
+		make -j$$(nproc) && \
+		make install
+	rm -rf /tmp/Mooncake
 	cp ./patches/vllm/mooncake/mooncake_connector_v1.py /usr/local/lib/python3.12/dist-packages/mooncake/mooncake_connector_v1.py
+
 
 .PHONY: lib-tokenizers-build
 lib-tokenizers-build:
