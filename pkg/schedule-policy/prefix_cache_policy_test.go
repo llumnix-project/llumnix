@@ -795,11 +795,14 @@ const (
 // - PrefixCacheTTL: 1800s (30min) - how long cached prefixes remain valid
 // - PrefixCacheLimit: 100MB - memory limit for prefix cache
 // - PrefixCacheLoadTolerance: 0.3 - workers with load > mean*(1+tolerance) are filtered out
+// - RequestsThreshold: 10 - workers with requests >= threshold are filtered out from cache-hit candidates
 func createTestConfig() *options.Config {
 	return &options.Config{
-		PrefixCacheTTL:           1800,              // 30 minutes
-		PrefixCacheLimit:         100 * 1024 * 1024, // 100MB
-		PrefixCacheLoadTolerance: 0.3,               // threshold = mean * 1.3
+		PrefixCacheTTL:                 1800,              // 30 minutes
+		PrefixCacheLimit:               100 * 1024 * 1024, // 100MB
+		PrefixCacheLoadTolerance:       0.3,               // threshold = mean * 1.3
+		PrefixCacheMaintenanceInterval: 2,                 // 2 seconds for testing
+		RequestsThreshold:              10,                // filter out workers with >= 10 requests
 	}
 }
 
@@ -1116,6 +1119,64 @@ func TestSchedule_LoadBalancing_CacheHitWithOverload(t *testing.T) {
 		"should fallback to least-loaded worker when cache-hit worker exceeds token threshold")
 
 	t.Logf("First request -> %s, Second request -> %s", firstWorker, req2.ScheduleResult[0].ID)
+}
+
+// TestSchedule_LoadBalancing_RequestsThreshold verifies that workers exceeding RequestsThreshold are filtered out.
+// When a cache-hit worker's request count > RequestsThreshold AND token load exceeds tolerance,
+// scheduler should fallback to the least-loaded worker globally.
+func TestSchedule_LoadBalancing_RequestsThreshold(t *testing.T) {
+	config := createTestConfig()
+	config.RequestsThreshold = 5 // lower threshold for easier testing
+
+	workers := []*types.LLMWorker{
+		{ID: "worker-a", Version: 1},
+		{ID: "worker-b", Version: 1},
+	}
+	lrsClient := createTestLRSClient(workers)
+
+	// Setup: worker-a has low load, worker-b starts empty
+	simulateWorkerLoad(lrsClient, "worker-a", 2, 100) // 2 requests, 200 tokens
+
+	pc := NewPrefixCachePolicy(config, consts.NormalInferMode, lrsClient)
+
+	// First request - creates cache entry on worker-b (least loaded)
+	req1 := &types.ScheduleRequest{
+		Id:         "req-threshold-1",
+		PromptText: buildChatPrompt(systemPromptAssistant, nil, "Hello threshold test"),
+	}
+	lrsClient.RLock()
+	err := pc.Schedule(req1)
+	lrsClient.RUnlock()
+	assert.NoError(t, err)
+	firstWorker := req1.ScheduleResult[0].ID
+	assert.Equal(t, "worker-b", firstWorker, "first request should go to least loaded worker")
+	t.Logf("First request -> %s", firstWorker)
+
+	// Overload worker-b: exceed both RequestsThreshold AND token load tolerance
+	// After this: worker-b has 10 requests and 5000 tokens
+	// worker-a has 2 requests and 200 tokens
+	// Mean tokens = (200 + 5000) / 2 = 2600, threshold = 2600 * 1.3 = 3380
+	// worker-b (5000) exceeds threshold, worker-a (200) is within threshold
+	simulateWorkerLoad(lrsClient, "worker-b", 10, 500) // +10 requests, +5000 tokens
+
+	// Second request has cache hit on worker-b, but:
+	// 1. worker-b exceeds RequestsThreshold (10 > 5)
+	// 2. worker-b exceeds token load tolerance (5000 > 3380)
+	// Should fallback to worker-a (least loaded globally)
+	req2 := &types.ScheduleRequest{
+		Id:         "req-threshold-2",
+		PromptText: buildChatPrompt(systemPromptAssistant, nil, "Another threshold test"),
+	}
+	lrsClient.RLock()
+	err = pc.Schedule(req2)
+	lrsClient.RUnlock()
+	assert.NoError(t, err)
+
+	secondWorker := req2.ScheduleResult[0].ID
+	t.Logf("Second request -> %s (worker-b had %d requests and high token load)", secondWorker, 10)
+
+	assert.Equal(t, "worker-a", secondWorker,
+		"should fallback to worker-a when worker-b exceeds both RequestsThreshold and token load tolerance")
 }
 
 // TestSchedule_HighConcurrencyWithLoad tests concurrent scheduling with varying token loads.

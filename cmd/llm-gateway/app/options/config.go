@@ -25,7 +25,8 @@ type Config struct {
 	LlmScheduler         string // llm scheduler service
 	LlmGateway           string // llm gateway service
 	Redis                string // redis service
-	LocalTestIPs         string // local test ips
+	LocalTestIPs         string // local test ips (uses RoundRobinBalancer, no scheduler)
+	LocalTestBackendIPs  string // local test backend ips for Gateway+Scheduler integration test
 	LocalTestSchedulerIP string // local test ip for scheduler
 	EnablePprof          bool   // enable pprof
 
@@ -243,6 +244,7 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.LlmScheduler, "llm-scheduler", "", "llm scheduler service")
 
 	flags.StringVar(&c.LocalTestIPs, "local-test-ip", "", "local test")
+	flags.StringVar(&c.LocalTestBackendIPs, "local-test-backend-ip", "", "local test backend ip for gateway scheduler integration")
 	flags.StringVar(&c.LocalTestSchedulerIP, "local-test-scheduler-ip", "", "local test scheduler ip")
 
 	flags.StringVar(&c.DiscoveryEndpoint, "discovery-endpoint", "", "discovery endpoint")
@@ -583,6 +585,7 @@ func (c *Config) printConfigSummary() {
 	logIfNotEmpty("  use-discovery: %s", c.UseDiscovery)
 	logIfNotEmpty("  discovery-endpoint: %s", c.DiscoveryEndpoint)
 	logIfNotEmpty("  local-test-ips: %s", c.LocalTestIPs)
+	logIfNotEmpty("  local-test-backend-ips: %s", c.LocalTestBackendIPs)
 	logIfNotEmpty("  local-test-scheduler-ip: %s", c.LocalTestSchedulerIP)
 
 	// Network and connection settings

@@ -458,6 +458,29 @@ func createTestGatewayConfig(localTestIPs string) *options.Config {
 	}
 }
 
+// createTestGatewayConfigWithScheduler creates a gateway configuration for Gateway+Scheduler integration test.
+// IMPORTANT: LocalTestIPs is empty to trigger CompositeBalancer, which creates SchedulerClient.
+// LocalTestBackendIPs is used for backend resolver, LocalTestSchedulerIP for scheduler connection.
+func createTestGatewayConfigWithScheduler(backendService, schedulerAddr string) *options.Config {
+	return &options.Config{
+		Host:                  "127.0.0.1",
+		Port:                  0, // Random port
+		LocalTestIPs:          "",
+		LocalTestBackendIPs:   backendService,
+		LocalTestSchedulerIP:  schedulerAddr,
+		SchedulePolicy:        consts.SchedulePolicyLeastRequest,
+		MaxQueueSize:          100,
+		WaitQueueThreads:      4,
+		RetryCount:            2,
+		WaitScheduleTimeout:   5000,
+		WaitScheduleTryPeriod: 100,
+		EnableAccessLog:       false,
+		EnableLogInput:        false,
+		PDSplitMode:           "",
+		SeparatePDSchedule:    false,
+	}
+}
+
 // createTestSchedulerConfig creates a minimal scheduler configuration for testing.
 func createTestSchedulerConfig(backendService string) *options.Config {
 	return &options.Config{
@@ -1013,8 +1036,9 @@ func TestGatewayWithScheduler_Integration(t *testing.T) {
 	schedulerAddr := strings.TrimPrefix(schedulerServer.URL, "http://")
 
 	// Create and start gateway service with scheduler
-	gatewayConfig := createTestGatewayConfig(serverAddr) // Use same backend for fallback
-	gatewayConfig.LocalTestSchedulerIP = schedulerAddr   // Use local test scheduler IP
+	// IMPORTANT: Use createTestGatewayConfigWithScheduler to trigger CompositeBalancer with SchedulerClient.
+	// This ensures GetPromptTokens() is called during scheduling.
+	gatewayConfig := createTestGatewayConfigWithScheduler(serverAddr, schedulerAddr)
 	gateway := NewGatewayService(gatewayConfig)
 	require.NotNil(t, gateway)
 

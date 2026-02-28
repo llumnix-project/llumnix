@@ -357,6 +357,20 @@ func (pc *PrefixCachePolicy) filterCandidatesByLoad(
 		return nil
 	}
 
+	// When the number of requests is less than the threshold, try to hit the same instance as much as possible
+	filtered := make(map[string]*lrs.InstanceView)
+	for _, iv := range instanceViews {
+		if iv != nil {
+			// the num of requests is less than threshold
+			if iv.NumRequests() <= int64(pc.config.RequestsThreshold) {
+				filtered[iv.GetInstance().Id()] = iv
+			}
+		}
+	}
+	if len(filtered) > 0 {
+		return filtered
+	}
+
 	// Calculate mean load (NumTokens) across all available workers
 	var totalTokens int64
 	count := 0
@@ -379,7 +393,7 @@ func (pc *PrefixCachePolicy) filterCandidatesByLoad(
 		requestId, meanTokens, pc.config.PrefixCacheLoadTolerance, threshold)
 
 	// Filter candidates: keep only those within acceptable load range
-	filtered := make(map[string]*lrs.InstanceView)
+	filtered = make(map[string]*lrs.InstanceView)
 	for _, iv := range instanceViews {
 		load := float64(iv.NumTokens())
 		if load <= threshold {

@@ -216,6 +216,13 @@ func (req *LLMRequest) getRequestModel() string {
 }
 
 func (req *LLMRequest) getPromptTokens() ([]uint32, error) {
+	// Note: This method is only called when tokenizer is enabled.
+	// When tokenizer is enabled, CompletionRequest is guaranteed to be non-nil because
+	// the tokenizer processes the prompt and stores token IDs in CompletionRequest.Prompt.
+	// The nil check below is a defensive safeguard for unexpected edge cases.
+	if req.CompletionRequest == nil {
+		return nil, fmt.Errorf("completion request is nil, this should not happen when tokenizer is enabled")
+	}
 	// Here we read CompletionRequest.Prompt because after being processed by the tokenizer,
 	// it becomes token IDs, not the original prompt string
 	if tokens, ok := req.CompletionRequest.Prompt.GetUint32Slice(); ok {

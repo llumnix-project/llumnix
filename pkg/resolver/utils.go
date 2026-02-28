@@ -74,6 +74,16 @@ func CreateBackendServiceResolver(config *options.Config, role types.InferRole) 
 		return r
 	}
 
+	// Support Gateway+Scheduler integration test mode (uses CompositeBalancer with SchedulerClient)
+	if len(config.LocalTestBackendIPs) > 0 {
+		uri := fmt.Sprintf("llm+endpoints://%s", config.LocalTestBackendIPs)
+		r, err := BuildLlmResolver(uri, buildArgs)
+		if err != nil {
+			klog.Fatalf("create endpoints resolver from LocalTestBackendIPs failed: %v", err)
+		}
+		return r
+	}
+
 	switch config.UseDiscovery {
 	case consts.DiscoveryMessageBus:
 		r, err := BuildLlmResolver(MsgBusURI, buildArgs)
