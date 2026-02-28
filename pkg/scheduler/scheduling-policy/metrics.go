@@ -2,12 +2,12 @@ package scheduling_policy
 
 import (
 	"fmt"
-	"llumnix/pkg/types"
 	"math"
 	"time"
 
 	"k8s.io/klog/v2"
 
+	"llumnix/pkg/types"
 	"llumnix/cmd/scheduler/app/options"
 	"llumnix/pkg/consts"
 )

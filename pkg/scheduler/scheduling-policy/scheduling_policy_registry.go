@@ -20,7 +20,7 @@ func newDispatchPolicyInternal(c *options.SchedulerConfig) dispatchPolicyInterna
 	case consts.SchedulingPolicyFlood:
 		return newFloodDispatchPolicyFullMode(c)
 	case consts.SchedulingPolicySlo:
-		return newSloDispatchMode(c)
+		return newSloDispatchFullMode(c)
 	default:
 		panic(fmt.Sprintf("unsupported scheduling policy: %s", c.SchedulingPolicy))
 	}
@@ -129,7 +129,7 @@ type sloDispatchPolicy struct {
 	baseDispatchPolicy
 }
 
-func newSloDispatchMode(p *options.SchedulerConfig) *sloDispatchPolicy {
+func newSloDispatchFullMode(p *options.SchedulerConfig) *sloDispatchPolicy {
 	// init latency predictor, fast fail
 	GetLatencyPredictor(p.TtftProfilingDataPath, p.TpotProfilingDataPath)
 
