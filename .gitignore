@@ -208,3 +208,6 @@ version.py
 # ai
 AGENTS.md
 .qoder
+
+# docs requirements file
+!docs/requirements_docs.txt

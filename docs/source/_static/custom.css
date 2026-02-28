@@ -1,0 +1,32 @@
+.bd-toc {
+    position: sticky;
+    top: 1rem;
+}
+
+.bd-sidebar-secondary {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+}
+
+.bd-article-container {
+    max-width: 100%;
+    overflow-x: hidden;
+}
+
+p, li, td {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: normal;
+}
+
+pre, code {
+    white-space: pre-wrap !important;
+    word-wrap: break-word;
+    overflow-x: auto;
+}
+
+code.literal {
+    word-break: break-all;
+}
