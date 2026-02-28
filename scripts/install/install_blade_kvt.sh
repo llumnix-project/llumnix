@@ -52,7 +52,7 @@ main() {
     
     setup_cuda_env
     
-    cp ./scripts/install_barex.sh "$work_dir/tools/install_barex.sh"
+    cp ./scripts/install/install_barex.sh "$work_dir/tools/install_barex.sh"
     cd "$work_dir"
     cd tools && bash ./install_barex.sh
 

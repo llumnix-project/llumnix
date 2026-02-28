@@ -11,6 +11,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"llumnix/cmd/gateway/app/options"
+	"llumnix/pkg/consts"
 	"llumnix/pkg/gateway/processor"
 	"llumnix/pkg/gateway/protocol"
 	"llumnix/pkg/types"
@@ -18,8 +19,8 @@ import (
 
 // init registers the OpenAI handler factory function with the handler registry.
 func init() {
-	RegisterHandler("openai", func(config *options.GatewayConfig) (RequestHandler, error) {
-		return NewOpenAIHandler(config)
+	registerHandler("openai", func(config *options.GatewayConfig) (RequestHandler, error) {
+		return newOpenAIHandler(config)
 	})
 }
 
@@ -37,14 +38,14 @@ type OpenAIHandler struct {
 	// postProcessors chain for response postprocessing
 	postProcessors *processor.PostProcessorChain
 
-	// backend handles the actual inference execution
-	backend InferenceBackend
+	// forwarder handles request forwarding to inference engines
+	forwarder Forwarder
 }
 
-// NewOpenAIHandler creates a new OpenAIHandler with configured processor chains.
+// newOpenAIHandler creates a new OpenAIHandler with configured processor chains.
 // It initializes pre-processors for request transformation and post-processors for response handling.
 // Returns the handler instance or an error if initialization fails.
-func NewOpenAIHandler(config *options.GatewayConfig) (RequestHandler, error) {
+func newOpenAIHandler(config *options.GatewayConfig) (RequestHandler, error) {
 	// Setup pre-processor chain for request transformation
 	preProcessors := processor.CreatePreProcessorChain()
 	convertor := processor.NewRequestCompletionConverter()
@@ -63,7 +64,7 @@ func NewOpenAIHandler(config *options.GatewayConfig) (RequestHandler, error) {
 
 	name := config.PDDisaggProtocol
 	if name == "" {
-		name = "simple"
+		name = consts.ForwarderTypeNormal
 	}
 	var schedulingMode types.SchedulingMode
 	if config.SeparatePDScheduling {
@@ -71,9 +72,9 @@ func NewOpenAIHandler(config *options.GatewayConfig) (RequestHandler, error) {
 	} else {
 		schedulingMode = types.SchedulingModePDBatch
 	}
-	backend, err := BuildBackend(name, schedulingMode)
+	forwarder, err := buildForwarder(name, schedulingMode)
 	if err != nil {
-		klog.Errorf("build inference backend failed: %v", err)
+		klog.Errorf("build forwarder failed: %v", err)
 		return nil, err
 	}
 
@@ -81,7 +82,7 @@ func NewOpenAIHandler(config *options.GatewayConfig) (RequestHandler, error) {
 		config:         config,
 		preProcessors:  preProcessors,
 		postProcessors: postProcessor,
-		backend:        backend,
+		forwarder:      forwarder,
 	}
 	return handler, nil
 }
@@ -228,14 +229,14 @@ func (h *OpenAIHandler) marshalResponse(reqCtx *types.RequestContext) ([]byte, e
 func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 	defer func() {
 		close(req.ResponseChan)
-		req.TriggerPostRequest()
+		req.OnPostRequest()
 	}()
 
 	// Initiate streaming inference from the backend
-	chunkChan, err := h.backend.StreamInference(req)
+	chunkChan, err := h.forwarder.Forward(req)
 	if err != nil {
 		klog.Errorf("failed to stream inference: %v", err)
-		WriteErrorResponse(req, err)
+		writeErrorResponse(req, err)
 		return
 	}
 
@@ -255,7 +256,7 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 			req.RequestStats.FirstTime = lastTime
 
 			// Trigger post-prefill hook to release prefill node resource if PD mode
-			req.TriggerPostPrefill()
+			req.OnPostPrefill()
 
 			isFirst = false
 		} else {
@@ -265,7 +266,7 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 
 			// Trigger post-decode-first-stream-response hook to add request state of decode instance
 			if isFirstDecode {
-				req.TriggerPostDecodeFirstStreamResponse()
+				req.OnPostDecodeFirstStreamResponse()
 			}
 			isFirstDecode = false
 		}
@@ -279,12 +280,12 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 					err := h.parseResponse(req, chunk.Data)
 					if err != nil && err != io.EOF {
 						klog.Errorf("failed to parse final response: %v", err)
-						WriteErrorResponse(req, err)
+						writeErrorResponse(req, err)
 						return
 					}
 					if err := h.processAndWriteChunk(req, true); err != nil {
 						klog.Errorf("failed to process final chunk: %v", err)
-						WriteErrorResponse(req, err)
+						writeErrorResponse(req, err)
 						return
 					}
 				}
@@ -292,7 +293,7 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 			}
 			// Handle unexpected errors during streaming
 			klog.Errorf("error during stream inference: %v", chunk.err)
-			WriteErrorResponse(req, chunk.err)
+			writeErrorResponse(req, chunk.err)
 			return
 		}
 
@@ -300,13 +301,13 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 		err := h.parseResponse(req, chunk.Data)
 		if err != nil && err != io.EOF {
 			klog.Errorf("failed to parse response: %v", err)
-			WriteErrorResponse(req, err)
+			writeErrorResponse(req, err)
 			return
 		}
 
 		// Trigger post-decode-each-stream-response hook to update request state of decode instance
 		if len(req.RequestStats.ITLs) > 0 {
-			req.TriggerPostDecodeEachStreamResponse()
+			req.OnPostDecodeEachStreamResponse()
 		}
 
 		// Determine if this is the final chunk in the stream
@@ -315,7 +316,7 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 		// Process through post-processor chain and write to client
 		if err := h.processAndWriteChunk(req, isStreamEnd); err != nil {
 			klog.Errorf("failed to process and write chunk: %v", err)
-			WriteErrorResponse(req, err)
+			writeErrorResponse(req, err)
 			return
 		}
 
@@ -353,13 +354,13 @@ func (h *OpenAIHandler) processAndWriteChunk(req *types.RequestContext, done boo
 	// Write response chunk if there's data to send
 	if len(data) > 0 {
 		klog.V(3).Infof("writing response chunk: %s", string(data))
-		WriteResponse(req, data)
+		writeResponse(req, data)
 	}
 
 	// Send the stream completion marker if this is the final chunk
 	if done {
 		klog.V(3).Infof("writing done chunk")
-		WriteResponse(req, []byte("[DONE]"))
+		writeResponse(req, []byte("[DONE]"))
 	}
 
 	return nil

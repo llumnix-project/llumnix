@@ -279,6 +279,21 @@ type RequestStateManagementHooks interface {
 	OnPostDecodeEachStreamResponse(req *RequestContext)
 }
 
+// noopPDSeparateSchedulingHooks is a no-op implementation of PDSeparateSchedulingHooks.
+type noopPDSeparateSchedulingHooks struct{}
+
+func (*noopPDSeparateSchedulingHooks) ScheduleDecode(_ *RequestContext) (SchedulingResult, error) {
+	return nil, nil
+}
+
+// noopRequestStateManagementHooks is a no-op implementation of RequestStateManagementHooks.
+type noopRequestStateManagementHooks struct{}
+
+func (*noopRequestStateManagementHooks) OnPostPrefill(_ *RequestContext)                {}
+func (*noopRequestStateManagementHooks) OnPostRequest(_ *RequestContext)                {}
+func (*noopRequestStateManagementHooks) OnPostDecodeFirstStreamResponse(_ *RequestContext) {}
+func (*noopRequestStateManagementHooks) OnPostDecodeEachStreamResponse(_ *RequestContext)  {}
+
 func (req *RequestContext) SetPDSeparateSchedulingHooks(hooks PDSeparateSchedulingHooks) {
 	req.pdSeparateSchedulingHooks = hooks
 }
@@ -289,38 +304,27 @@ func (req *RequestContext) SetRequestStateManagementHooks(hooks RequestStateMana
 
 // ScheduleDecode schedules the request for decoding stage.
 func (req *RequestContext) ScheduleDecode() (SchedulingResult, error) {
-	if req.pdSeparateSchedulingHooks != nil {
-		return req.pdSeparateSchedulingHooks.ScheduleDecode(req)
-	}
-	return nil, nil
+	return req.pdSeparateSchedulingHooks.ScheduleDecode(req)
 }
 
-// TriggerPostPrefill triggers the post-prefill hook.
-func (req *RequestContext) TriggerPostPrefill() {
-	if req.requestStateManagementHooks != nil {
-		req.requestStateManagementHooks.OnPostPrefill(req)
-	}
+// OnPostPrefill invokes the post-prefill hook.
+func (req *RequestContext) OnPostPrefill() {
+	req.requestStateManagementHooks.OnPostPrefill(req)
 }
 
-// TriggerPostRequest triggers the post-request hook.
-func (req *RequestContext) TriggerPostRequest() {
-	if req.requestStateManagementHooks != nil {
-		req.requestStateManagementHooks.OnPostRequest(req)
-	}
+// OnPostRequest invokes the post-request hook.
+func (req *RequestContext) OnPostRequest() {
+	req.requestStateManagementHooks.OnPostRequest(req)
 }
 
-// TriggerPostDecodeFirstStreamResponse triggers the post-decode-first-stream-response hook.
-func (req *RequestContext) TriggerPostDecodeFirstStreamResponse() {
-	if req.requestStateManagementHooks != nil {
-		req.requestStateManagementHooks.OnPostDecodeFirstStreamResponse(req)
-	}
+// OnPostDecodeFirstStreamResponse invokes the post-decode-first-stream-response hook.
+func (req *RequestContext) OnPostDecodeFirstStreamResponse() {
+	req.requestStateManagementHooks.OnPostDecodeFirstStreamResponse(req)
 }
 
-// TriggerPostDecodeEachStreamResponse triggers the post-decode-each-stream-response hook.
-func (req *RequestContext) TriggerPostDecodeEachStreamResponse() {
-	if req.requestStateManagementHooks != nil {
-		req.requestStateManagementHooks.OnPostDecodeEachStreamResponse(req)
-	}
+// OnPostDecodeEachStreamResponse invokes the post-decode-each-stream-response hook.
+func (req *RequestContext) OnPostDecodeEachStreamResponse() {
+	req.requestStateManagementHooks.OnPostDecodeEachStreamResponse(req)
 }
 
 func NewRequestContext(ctx context.Context, r *http.Request, w http.ResponseWriter) *RequestContext {
@@ -342,12 +346,14 @@ func NewRequestContext(ctx context.Context, r *http.Request, w http.ResponseWrit
 
 	// create a request context for the new request
 	req := &RequestContext{
-		Context:       ctx,
-		Id:            id,
-		HttpRequest:   httpReq,
-		LLMRequest:    llmRequest,
-		RequestStats:  stats,
-		SchedulingCtx: schedulingCtx,
+		Context:                     ctx,
+		Id:                          id,
+		HttpRequest:                 httpReq,
+		LLMRequest:                  llmRequest,
+		RequestStats:                stats,
+		SchedulingCtx:               schedulingCtx,
+		pdSeparateSchedulingHooks:   &noopPDSeparateSchedulingHooks{},
+		requestStateManagementHooks: &noopRequestStateManagementHooks{},
 	}
 	return req
 }

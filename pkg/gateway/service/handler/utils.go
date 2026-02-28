@@ -23,8 +23,8 @@ const (
 	dialTimeout           = 3 * time.Second
 )
 
-// NewLlmForwardClient creates a shared HTTP client optimized for forwarding LLM requests
-func NewLlmForwardClient() *http.Client {
+// newLlmForwardClient creates a shared HTTP client optimized for forwarding LLM requests
+func newLlmForwardClient() *http.Client {
 	// Clone default transport to customize connection pooling and timeout settings
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 
@@ -46,16 +46,16 @@ func NewLlmForwardClient() *http.Client {
 	return &http.Client{Transport: transport}
 }
 
-func WriteErrorResponse(req *types.RequestContext, err error) {
+func writeErrorResponse(req *types.RequestContext, err error) {
 	req.ResponseChan <- &types.ResponseMsg{Err: err}
 }
 
-func WriteResponse(req *types.RequestContext, chunk []byte) {
+func writeResponse(req *types.RequestContext, chunk []byte) {
 	req.ResponseChan <- &types.ResponseMsg{Err: nil, Message: chunk}
 }
 
-// MakeNewBackendRequest creates HTTP request for backend inference
-func MakeNewBackendRequest(req *types.RequestContext, body []byte, instance *types.LLMInstance) (*http.Request, error) {
+// makeBackendRequest creates HTTP request for forwarding to the inference engine.
+func makeBackendRequest(req *types.RequestContext, body []byte, instance *types.LLMInstance) (*http.Request, error) {
 	httpReq := req.HttpRequest.Request
 	if instance == nil {
 		klog.Errorf("failed to get instance for request: %s", req.Id)
@@ -64,7 +64,7 @@ func MakeNewBackendRequest(req *types.RequestContext, body []byte, instance *typ
 	url := fmt.Sprintf("http://%s%s", instance.Endpoint.String(), protocol.CompletionsPath)
 	klog.V(3).Infof("Forwarding request to %s body: %s", url, string(body))
 
-	// Create a new request to forward to the backend
+	// Create a new request to forward to the inference engine
 	proxyReq, err := http.NewRequestWithContext(req.Context, "POST", url, bytes.NewBuffer(body))
 	if err != nil {
 		klog.Errorf("failed to create proxy request: %v", err)
@@ -80,8 +80,8 @@ func MakeNewBackendRequest(req *types.RequestContext, body []byte, instance *typ
 	return proxyReq, nil
 }
 
-// DoRequest executes HTTP request with retry mechanism
-func DoRequest(req *http.Request, client *http.Client, body []byte) (io.ReadCloser, error) {
+// doRequest executes HTTP request with retry mechanism
+func doRequest(req *http.Request, client *http.Client, body []byte) (io.ReadCloser, error) {
 	var resp *http.Response
 	var err error
 
@@ -123,10 +123,10 @@ func DoRequest(req *http.Request, client *http.Client, body []byte) (io.ReadClos
 	return resp.Body, nil
 }
 
-// StreamRead reads SSE stream and sends chunks to channel
-func StreamRead(req *types.RequestContext, chunkChan chan StreamChunk, r io.ReadCloser) error {
+// streamRead reads SSE stream and sends chunks to channel
+func streamRead(req *types.RequestContext, chunkChan chan StreamChunk, r io.ReadCloser) error {
 	ctx := req.Context
-	reader := NewSSEReaderWithTimeout(ctx, r, ReadTimeout)
+	reader := newSSEReaderWithTimeout(ctx, r, ReadTimeout)
 	defer reader.Close()
 	buf := make([]byte, ReadBufferSize)
 	klog.V(3).Infof("start reading response Http SSE stream")
@@ -151,21 +151,21 @@ func StreamRead(req *types.RequestContext, chunkChan chan StreamChunk, r io.Read
 	}
 }
 
-// StreamResponseFromBackend starts streaming read from backend and sends chunks to channel
-func StreamResponseFromBackend(req *types.RequestContext, client *http.Client, body []byte, instance *types.LLMInstance, chunkChan chan StreamChunk) {
-	newReq, err := MakeNewBackendRequest(req, body, instance)
+// streamBackendResponse starts streaming read from the inference engine and sends chunks to channel.
+func streamBackendResponse(req *types.RequestContext, client *http.Client, body []byte, instance *types.LLMInstance, chunkChan chan StreamChunk) {
+	newReq, err := makeBackendRequest(req, body, instance)
 	if err != nil {
 		chunkChan <- StreamChunk{err: err}
 		return
 	}
 	// Execute request with retry
-	respBody, err := DoRequest(newReq, client, body)
+	respBody, err := doRequest(newReq, client, body)
 	if err != nil {
 		chunkChan <- StreamChunk{err: err}
 		return
 	}
 	// Stream read response
-	if err := StreamRead(req, chunkChan, respBody); err != nil {
+	if err := streamRead(req, chunkChan, respBody); err != nil {
 		chunkChan <- StreamChunk{err: err}
 	}
 }

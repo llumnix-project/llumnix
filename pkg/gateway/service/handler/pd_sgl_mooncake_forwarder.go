@@ -14,27 +14,27 @@ import (
 )
 
 func init() {
-	RegisterBackend(consts.PDDisaggProtocolSGlangMooncake, func(schedulingMode types.SchedulingMode) (InferenceBackend, error) {
-		return NewPDDisaggSglMoonCakeBackend(schedulingMode)
+	registerForwarder(consts.ForwarderTypeSglangMooncake, func(schedulingMode types.SchedulingMode) (Forwarder, error) {
+		return newPDDisaggSglMoonCakeForwarder(schedulingMode)
 	})
 }
 
-type PDDisaggSglMoonCakeBackend struct {
+type PDDisaggSglMoonCakeForwarder struct {
 	client       *http.Client
 	schedulingMode types.SchedulingMode
 }
 
-func NewPDDisaggSglMoonCakeBackend(schMode types.SchedulingMode) (InferenceBackend, error) {
+func newPDDisaggSglMoonCakeForwarder(schMode types.SchedulingMode) (Forwarder, error) {
 	if schMode != types.SchedulingModePDBatch {
 		return nil, fmt.Errorf("unsupported scheduling mode: %s", schMode)
 	}
-	return &PDDisaggSglMoonCakeBackend{
-		client:       NewLlmForwardClient(),
+	return &PDDisaggSglMoonCakeForwarder{
+		client:       newLlmForwardClient(),
 		schedulingMode: schMode,
 	}, nil
 }
 
-func (b *PDDisaggSglMoonCakeBackend) buildRequestData(req *types.RequestContext, pInstance, dInstance *types.LLMInstance) ([]byte, error) {
+func (b *PDDisaggSglMoonCakeForwarder) buildRequestData(req *types.RequestContext, pInstance, dInstance *types.LLMInstance) ([]byte, error) {
 	dpRank, dpSize := dInstance.DPRank, dInstance.DPSize
 	bootstrapRoom := rand.Intn(1<<63 - 1)
 	bootstrapRoom = bootstrapRoom/dpSize*dpSize + dpRank
@@ -46,13 +46,13 @@ func (b *PDDisaggSglMoonCakeBackend) buildRequestData(req *types.RequestContext,
 	return json.Marshal(cmplReq)
 }
 
-func (b *PDDisaggSglMoonCakeBackend) requestDecodeResponse(req *types.RequestContext, data []byte, instance *types.LLMInstance) (io.ReadCloser, error) {
-	httpReq, err := MakeNewBackendRequest(req, data, instance)
+func (b *PDDisaggSglMoonCakeForwarder) requestDecodeResponse(req *types.RequestContext, data []byte, instance *types.LLMInstance) (io.ReadCloser, error) {
+	httpReq, err := makeBackendRequest(req, data, instance)
 	if err != nil {
-		klog.Errorf("[%s] failed to make new backend request: %v", err, req.Id)
+		klog.Errorf("[%s] failed to make backend request: %v", err, req.Id)
 		return nil, err
 	}
-	body, err := DoRequest(httpReq, b.client, data)
+	body, err := doRequest(httpReq, b.client, data)
 	if err != nil {
 		klog.Errorf("[%s] failed to do request: %v", req.Id, err)
 		return nil, err
@@ -60,7 +60,7 @@ func (b *PDDisaggSglMoonCakeBackend) requestDecodeResponse(req *types.RequestCon
 	return body, nil
 }
 
-func (b *PDDisaggSglMoonCakeBackend) parallelRequestAndStream(req *types.RequestContext, body []byte, pInstance, dInstance *types.LLMInstance, chunkChan chan StreamChunk) {
+func (b *PDDisaggSglMoonCakeForwarder) parallelRequestAndStream(req *types.RequestContext, body []byte, pInstance, dInstance *types.LLMInstance, chunkChan chan StreamChunk) {
 	var (
 		decodeResp  io.ReadCloser
 		prefillResp io.ReadCloser
@@ -99,13 +99,13 @@ func (b *PDDisaggSglMoonCakeBackend) parallelRequestAndStream(req *types.Request
 		}
 	}()
 
-	if err := StreamRead(req, chunkChan, decodeResp); err != nil {
+	if err := streamRead(req, chunkChan, decodeResp); err != nil {
 		chunkChan <- StreamChunk{err: err}
 		return
 	}
 }
 
-func (b *PDDisaggSglMoonCakeBackend) BatchScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
+func (b *PDDisaggSglMoonCakeForwarder) batchSchedulingForward(req *types.RequestContext) (<-chan StreamChunk, error) {
 	pInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRolePrefill)
 	if pInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
@@ -130,8 +130,7 @@ func (b *PDDisaggSglMoonCakeBackend) BatchScheduleStreamInference(req *types.Req
 	return chunkChan, nil
 }
 
-// StreamInference implements InferBackend interface
-// Performs streaming inference by forwarding request to backend and streaming response chunks
-func (b *PDDisaggSglMoonCakeBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	return b.BatchScheduleStreamInference(req)
+// Forward implements Forwarder interface.
+func (b *PDDisaggSglMoonCakeForwarder) Forward(req *types.RequestContext) (<-chan StreamChunk, error) {
+	return b.batchSchedulingForward(req)
 }

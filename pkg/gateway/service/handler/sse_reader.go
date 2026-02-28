@@ -67,10 +67,10 @@ type SSEReader struct {
 	pending  *ReadEvent
 }
 
-// NewSSEReader creates a new SSE reader instance
+// newSSEReader creates a new SSE reader instance
 // r: io.ReadCloser representing the SSE stream
 // Returns a pointer to SSEReader that processes events asynchronously
-func NewSSEReader(r io.ReadCloser) *SSEReader {
+func newSSEReader(r io.ReadCloser) *SSEReader {
 	sr := &SSEReader{
 		r:        r,
 		resultCh: make(chan *ReadEvent, 100),
@@ -153,14 +153,14 @@ func (s *SSEReader) Close() error {
 	return err
 }
 
-// NewSSEReaderWithTimeout creates a new SSE reader with timeout and context awareness
+// newSSEReaderWithTimeout creates a new SSE reader with timeout and context awareness
 // ctx: context for cancellation and timeout control
 // r: io.ReadCloser representing the SSE stream
 // timeout: duration for read operation timeout
 // Returns an io.ReadCloser that wraps SSE processing with timeout and context cancellation capabilities
-func NewSSEReaderWithTimeout(ctx context.Context, r io.ReadCloser, timeout time.Duration) io.ReadCloser {
+func newSSEReaderWithTimeout(ctx context.Context, r io.ReadCloser, timeout time.Duration) io.ReadCloser {
 	return &TimeoutReader{
-		r:       NewSSEReader(r),
+		r:       newSSEReader(r),
 		timeout: timeout,
 		ctx:     ctx,
 	}

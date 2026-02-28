@@ -93,6 +93,14 @@ const (
 	PDDisaggProtocolVllmMooncake   = "vllm-mooncake"
 )
 
+// forwarder type constants, mapping to config PDDisaggProtocol values
+const (
+	ForwarderTypeNormal         = "normal"
+	ForwarderTypeVllmKvt        = PDDisaggProtocolVllmKvt
+	ForwarderTypeSglangMooncake = PDDisaggProtocolSGlangMooncake
+	ForwarderTypeVllmMooncake   = PDDisaggProtocolVllmMooncake
+)
+
 // gateway support different discovery mode
 const (
 	DiscoveryEndpoints = "endpoints"
