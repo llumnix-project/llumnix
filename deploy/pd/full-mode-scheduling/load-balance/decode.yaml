@@ -4,7 +4,14 @@ metadata:
   name: decode
 spec:
   replicas: 1
+  startupPolicy: LeaderCreated
+  rolloutStrategy:
+    type: RollingUpdate
+    rollingUpdateConfiguration:
+      maxUnavailable: 1
+      maxSurge: 0
   leaderWorkerTemplate:
+    restartPolicy: RecreateGroupOnPodRestart
     size: 1
     workerTemplate:
       spec:
@@ -28,9 +35,6 @@ spec:
 
           args:
             - |-
-              # Clear /dev/shm on start to prevent running out of space when crashes occur
-              find /dev/shm -type f -delete
-
               #################
               # RUN vLLM decode worker
               #################
@@ -42,23 +46,31 @@ spec:
               # --enable-dbo:  Dual batch overlap (DBO) overlaps compute with collective communication.
               # --enable-eplb: Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU Divisibility constraint: num_routed_experts (256 for DSv3) + num_redundant_experts must be divisible by the number of GPUs.
 
-              exec vllm serve \
-                deepseek-ai/deepseek-moe-16b-base \
-                --port 8000 \
-                --trust-remote-code \
-                --data-parallel-hybrid-lb \
-                --enable-expert-parallel \
-                --tensor-parallel-size $TP_SIZE \
-                --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
-                --data-parallel-size-local $DP_SIZE_LOCAL \
-                --data-parallel-address ${LWS_LEADER_ADDRESS} \
-                --data-parallel-rpc-port 5555 \
-                --data-parallel-start-rank $START_RANK \
-                --async-scheduling \
-                --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-} \
-                --gpu-memory-utilization 0.7 \
-                --kv-transfer-config '{"kv_connector":"MooncakeConnector","kv_role":"kv_consumer", "kv_connector_module_path":"mooncake.mooncake_connector_v1"}' \
-                --compilation_config '{"level":"0", "cudagraph_mode":2}'
+              for i in $(seq 0 $((DP_SIZE_LOCAL - 1))); do
+                RANK=$((START_RANK + i))
+                PORT=$((8000 + i))
+              
+                CUDA_VISIBLE_DEVICES=$i vllm serve \
+                  Qwen/Qwen3-235B-A22B-FP8 \
+                  --port $PORT \
+                  --trust-remote-code \
+                  --data-parallel-external-lb \
+                  --enable-expert-parallel \
+                  --tensor-parallel-size $TP_SIZE \
+                  --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
+                  --data-parallel-rank $RANK \
+                  --data-parallel-address ${LWS_LEADER_ADDRESS} \
+                  --data-parallel-rpc-port 5555 \
+                  --async-scheduling \
+                  --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-} \
+                  --gpu-memory-utilization 0.85 \
+                  --kv-transfer-config '{"kv_connector":"MooncakeConnector","kv_role":"kv_consumer", "kv_connector_module_path":"mooncake.mooncake_connector_v1"}' \
+                  --compilation_config '{"level":"0", "cudagraph_mode":2}' \
+                  &
+              done
+              
+              # Wait for all background processes
+              wait
           env:
           # configuration for Llumnix
           - name: LLUMNIX_CMS_REDIS_ADDRESS
@@ -102,15 +114,7 @@ spec:
           - name: VLLM_USE_DEEP_GEMM
             value: "1"
           - name: VLLM_ALL2ALL_BACKEND
-            value: deepep_low_latency
-          - name: NVIDIA_GDRCOPY
-            value: enabled
-          - name: NVSHMEM_REMOTE_TRANSPORT
-            value: ibgda
-          - name: NVSHMEM_IB_ENABLE_IBGDA
-            value: "true"
-          - name: NVSHMEM_BOOTSTRAP_UID_SOCK_IFNAME
-            value: eth0
+            value: allgather_reducescatter
           - name: GLOO_SOCKET_IFNAME
             value: eth0
           - name: NCCL_SOCKET_IFNAME
@@ -173,7 +177,7 @@ spec:
               memory: 256Gi
               nvidia.com/gpu: "4"
         - name: discovery
-          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:discovery-20260130-111823
+          image: beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:discovery-20260226-170427
           command:
             - /bin/bash
             - -c
