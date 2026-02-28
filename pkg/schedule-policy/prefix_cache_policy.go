@@ -2,6 +2,7 @@ package schedule_policy
 
 import (
 	"container/list"
+	"fmt"
 	"llm-gateway/cmd/llm-gateway/app/options"
 	"llm-gateway/pkg/consts"
 	"llm-gateway/pkg/lrs"
@@ -282,10 +283,11 @@ func (pci *PrefixCacheIndexer) updateMetrics(memUsed int64) {
 }
 
 type PrefixCachePolicy struct {
-	config       *options.Config
-	cacheIndexer *PrefixCacheIndexer
-	lrsClient    *lrs.LocalRealtimeStateClient
-	inferMode    string
+	config           *options.Config
+	cacheIndexer     *PrefixCacheIndexer
+	lrsClient        *lrs.LocalRealtimeStateClient
+	inferMode        string
+	hitRateThreshold float64
 }
 
 func NewPrefixCachePolicy(config *options.Config, inferMode string, lrsClient *lrs.LocalRealtimeStateClient) *PrefixCachePolicy {
@@ -293,10 +295,11 @@ func NewPrefixCachePolicy(config *options.Config, inferMode string, lrsClient *l
 	memLimit := config.PrefixCacheLimit
 	maintenanceInterval := time.Duration(config.PrefixCacheMaintenanceInterval) * time.Second
 	pc := &PrefixCachePolicy{
-		config:       config,
-		cacheIndexer: NewPrefixCacheIndexer(ttl, memLimit, maintenanceInterval, inferMode),
-		lrsClient:    lrsClient,
-		inferMode:    inferMode,
+		config:           config,
+		cacheIndexer:     NewPrefixCacheIndexer(ttl, memLimit, maintenanceInterval, inferMode),
+		lrsClient:        lrsClient,
+		inferMode:        inferMode,
+		hitRateThreshold: config.PrefixCacheHitRateThreshold,
 	}
 	return pc
 }
@@ -362,7 +365,7 @@ func (pc *PrefixCachePolicy) filterCandidatesByLoad(
 	for _, iv := range instanceViews {
 		if iv != nil {
 			// the num of requests is less than threshold
-			if iv.NumRequests() <= int64(pc.config.RequestsThreshold) {
+			if iv.NumWaitingRequests() <= int64(pc.config.PrefixCacheWaitingRequestsThreshold) {
 				filtered[iv.GetInstance().Id()] = iv
 			}
 		}
@@ -437,15 +440,23 @@ func (pc *PrefixCachePolicy) trySelectBestOf(requestId string, prompt string, in
 	}
 
 	promptLen := len(prompt)
+	hitRateThreshold := pc.hitRateThreshold
+	hitRate := float64(matchLen) / float64(promptLen)
 
 	// No prefix cache hit
-	if len(candidates) == 0 {
+	if len(candidates) == 0 || hitRate < hitRateThreshold {
 		selected := selectLeastTokenOne(instanceViews)
 		if selected == nil {
 			klog.Warningf("[PrefixCache][Req:%s] No valid worker available", requestId)
 			return nil
 		}
-		klog.V(2).Infof("[PrefixCache][Req:%s] Selected worker %s with least tokens and no cache hit", requestId, selected.Id())
+		instanceView := instanceViews[selected.Id()]
+		reason := "no_candidates"
+		if len(candidates) > 0 {
+			reason = fmt.Sprintf("hit_rate_%.2f_below_threshold_%.2f", hitRate, hitRateThreshold)
+		}
+		klog.V(2).Infof("[PrefixCache][Req:%s] Selected worker %s (tokens: %d, reason: %s, prompt_len: %d)",
+			requestId, selected.Id(), instanceView.NumTokens(), reason, promptLen)
 		pc.addNewPrefixWithWorker(prompt, selected)
 		// No cache hit, record 0 matched chars.
 		pc.cacheIndexer.recordStats(0, promptLen)

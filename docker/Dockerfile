@@ -1,6 +1,6 @@
 ARG ARCH=amd64
 ARG TAG_LLM_GATEWAY=0.0.1
-FROM registry.cn-shanghai.aliyuncs.com/eas/golang-${ARCH}-cache:1.23.0 AS builder
+FROM registry.cn-shanghai.aliyuncs.com/eas/golang-${ARCH}-cache:1.23.12 AS builder
 
 COPY .ssh /root/.ssh
 COPY .gitconfig /root/.gitconfig

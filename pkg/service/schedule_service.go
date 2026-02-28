@@ -249,9 +249,19 @@ func (ss *ScheduleService) handleReport(w http.ResponseWriter, r *http.Request) 
 
 	for _, reqData := range reports {
 		reqState := lrs.NewRequestState(reqData.Id, int64(reqData.NumTokens), reqData.InstanceId, reqData.GatewayId)
-		err := ss.lrsClient.UpdateRequestState(reqData.InferMode, reqState)
-		if err != nil {
-			klog.Errorf("update request state failed: %v", err)
+		var err error
+		switch reqData.Kind {
+		case lrs.KindPrefillDone:
+			err = ss.lrsClient.MarkPrefillComplete(reqData.InferMode, reqState)
+			if err != nil {
+				klog.Errorf("mark prefill complete failed: %v", err)
+			}
+		default:
+			// KindStateUpdate or default case
+			err = ss.lrsClient.UpdateRequestState(reqData.InferMode, reqState)
+			if err != nil {
+				klog.Errorf("update request state failed: %v", err)
+			}
 		}
 	}
 }

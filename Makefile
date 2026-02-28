@@ -14,19 +14,18 @@ else
 	$(error Unsupported OS: $(OS))
 endif
 
-ARCH := $(shell uname -m)
-ifeq ($(ARCH),x86_64)
+ifdef BUILD_ARCH
+	ARCH = $(BUILD_ARCH)
+else
+	ARCH = $(shell go env GOARCH)
+endif
+
+ifeq ($(ARCH),amd64)
     LOCAL_ARCH := amd64
 else ifeq ($(ARCH),arm64)
     LOCAL_ARCH := arm64
 else
     $(error Unsupported architecture: $(ARCH))
-endif
-
-ifdef BUILD_ARCH
-	ARCH = $(BUILD_ARCH)
-else
-	ARCH = $(shell go env GOARCH)
 endif
 
 ifdef BUILD_GOOS
@@ -122,10 +121,16 @@ tokenizer-lib-download:
 		if [ ! -f /tmp/libsgl_model_gateway_go.tar.gz ] || [ "$$(md5 -q /tmp/libsgl_model_gateway_go.tar.gz)" != "4e62233aeeb84175c331a48475999a26" ]; then \
 			wget https://eas-data.oss-cn-shanghai.aliyuncs.com/3rdparty/tokenizers/20260115/libsgl_model_gateway_go.darwin-aarch64.tar.gz -O /tmp/libsgl_model_gateway_go.tar.gz; \
 		fi; \
-	elif [ "$(LOCAL_OS)" = "linux" ] && [ "$(ARCH)" = "amd64" ]; then \
-	    if [ ! -f /tmp/libsgl_model_gateway_go.tar.gz ] || [ "$$(md5sum /tmp/libsgl_model_gateway_go.tar.gz | cut -d' ' -f1)" != "dfd3e15582d42246f9ede99f78f46799" ]; then \
-			wget https://eas-data.oss-cn-shanghai.aliyuncs.com/3rdparty/tokenizers/20260115/libsgl_model_gateway_go.linux-amd64.tar.gz -O /tmp/libsgl_model_gateway_go.tar.gz; \
-		fi; \
+	elif [ "$(LOCAL_OS)" = "linux" ]; then \
+		if [ "$(ARCH)" = "amd64"  ]; then \
+			if [ ! -f /tmp/libsgl_model_gateway_go.tar.gz ] || [ "$$(md5sum /tmp/libsgl_model_gateway_go.tar.gz | cut -d' ' -f1)" != "dfd3e15582d42246f9ede99f78f46799" ]; then \
+				wget https://eas-data.oss-cn-shanghai.aliyuncs.com/3rdparty/tokenizers/20260115/libsgl_model_gateway_go.linux-amd64.tar.gz -O /tmp/libsgl_model_gateway_go.tar.gz; \
+			fi; \
+		elif [ "$(ARCH)" = "arm64" ]; then \
+			if [ ! -f /tmp/libsgl_model_gateway_go.tar.gz ] || [ "$$(md5sum /tmp/libsgl_model_gateway_go.tar.gz | cut -d' ' -f1)" != "416f896d876c62bce57a54f073db89e7" ]; then \
+				wget https://eas-data.oss-cn-shanghai.aliyuncs.com/3rdparty/tokenizers/20260115/libsgl_model_gateway_go.linux-arm64.tar.gz -O /tmp/libsgl_model_gateway_go.tar.gz; \
+			fi; \
+		fi \
 	fi; \
 	tar xzf /tmp/libsgl_model_gateway_go.tar.gz -C /tmp;
 

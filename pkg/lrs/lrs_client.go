@@ -206,9 +206,9 @@ func (lrsClient *LocalRealtimeStateClient) SubmitMetric() {
 					{Name: "infer_role", Value: iv.GetInferMode()},
 					{Name: "dp_rank", Value: strconv.Itoa(iv.worker.DPRank)},
 				}
-				metrics.StatusValue("instance_tokens", labels).Set(float32(tokens))
-				metrics.StatusValue("instance_requests", labels).Set(float32(reqs))
-				metrics.StatusValue("instance_waiting_requests", labels).Set(float32(waitingReqs))
+				metrics.StatusValue("llm_schedule_tokens", labels).Set(float32(tokens))
+				metrics.StatusValue("llm_schedule_requests", labels).Set(float32(reqs))
+				metrics.StatusValue("llm_schedule_waiting_requests", labels).Set(float32(waitingReqs))
 			}
 		}
 

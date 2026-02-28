@@ -101,7 +101,11 @@ type Config struct {
 	PrefixCacheMaintenanceInterval int
 	// if the number of requests for an instance exceeds this value when the prefix
 	// cache is satisfied, a new instance will be selected to be a more suitable one
-	RequestsThreshold int
+	PrefixCacheWaitingRequestsThreshold int
+	// hit rate threshold for prefix cache selection (0.0-1.0)
+	// only workers with prefix match rate >= this threshold will be considered as cache hit
+	// default: 0.5 means at least 50% prefix match is required
+	PrefixCacheHitRateThreshold float64
 
 	// Tokenizer related configuration
 	// builtin tokenizer name
@@ -255,7 +259,8 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&c.PrefixCacheTTL, "prefix-cache-ttl", 1800, "prefix cache time to live")
 	flags.Float64Var(&c.PrefixCacheLoadTolerance, "prefix-cache-load-tolerance", 0.3, "load tolerance factor (0.0-1.0) for prefix cache worker selection")
 	flags.IntVar(&c.PrefixCacheMaintenanceInterval, "prefix-cache-maintenance-interval", 60, "maintenance loop interval in seconds for prefix cache (default: 60s)")
-	flags.IntVar(&c.RequestsThreshold, "requests-threshold", 10, "the threshold of try to choose other instance, 0 indicates the average value of usage requests")
+	flags.IntVar(&c.PrefixCacheWaitingRequestsThreshold, "prefix-cache-waiting-requests-threshold", 2, "the threshold of try to choose other instance, 0 indicates the average value of usage requests")
+	flags.Float64Var(&c.PrefixCacheHitRateThreshold, "prefix-cache-hit-rate-threshold", 0.5, "hit rate threshold (0.0-1.0) for prefix cache selection, default 0.5")
 
 	flags.StringVar(&c.PDSplitMode, "pdsplit-mode", "", "pd split mode, this configuration only takes effect under the pd-split policy, now support vllm-vineyard, vllm-kvt, sglang-mooncake")
 
@@ -284,7 +289,7 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.ReasoningParser, "reasoning-parser", "", "reasoning parser type")
 	flags.StringVar(&c.TokenizerMode, "tokenizer-mode", "", "builtin tokenizer mode, support formatter or leave null as vllmv0")
 
-	flags.IntVar(&c.RequestsReporterDuration, "requests-report-duration", 0, "Specify requests reporter duration")
+	flags.IntVar(&c.RequestsReporterDuration, "requests-report-duration", 5, "Specify requests reporter duration")
 	flags.BoolVar(&c.SeparatePDSchedule, "separate-pd-schedule", false, "Specify whether to separate pd schedule")
 
 	// TODO(sunbiao.sun): remove
@@ -619,7 +624,8 @@ func (c *Config) printConfigSummary() {
 	logIfNotEmpty("  prefix-cache-ttl: %ds", c.PrefixCacheTTL)
 	logIfNotEmpty("  prefix-cache-limit: %d MB", c.PrefixCacheLimit/consts.MB)
 	logIfNotEmpty("  prefix-cache-load-tolerance: %.2f", c.PrefixCacheLoadTolerance)
-	logIfNotEmpty("  requests-threshold: %d", c.RequestsThreshold)
+	logIfNotEmpty("  prefix-cache-waiting-requests-threshold: %d", c.PrefixCacheWaitingRequestsThreshold)
+	logIfNotEmpty("  prefix-cache-hit-rate-threshold: %.2f", c.PrefixCacheHitRateThreshold)
 
 	// Redis and batch processing
 	if c.RedisAddrs != "" || c.BatchOSSPath != "" {

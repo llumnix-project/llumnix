@@ -555,7 +555,9 @@ func (h *RequestLifecycleHooksImpl) OnPostRequest(req *types.RequestContext) {
 	for _, worker := range req.ScheduleCtx.ScheduleResults {
 		h.balancer.Release(req, &worker)
 	}
-	req.ScheduleCtx.ScheduleResults = nil
+
+	// Could not set to nil because it will be used by Logging
+	// req.ScheduleCtx.ScheduleResults = nil
 }
 
 // HandleAPIEntry is the main entry point for handling LLM inference requests

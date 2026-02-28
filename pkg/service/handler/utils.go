@@ -85,6 +85,11 @@ func DoRequest(req *http.Request, client *http.Client, body []byte, worker *type
 
 		klog.V(3).Infof("failed to do request: %v", err)
 
+		// Do not retry if the request was cancelled
+		if errors.Is(err, context.Canceled) {
+			break
+		}
+
 		// Log detailed error information for debugging
 		if netErr, ok := err.(net.Error); ok {
 			// Timeout connections do not need to be retried.
@@ -104,6 +109,9 @@ func DoRequest(req *http.Request, client *http.Client, body []byte, worker *type
 	}
 
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			return nil, err
+		}
 		return nil, consts.NewNetworkError(req.URL.String(), err, worker.Id())
 	}
 
