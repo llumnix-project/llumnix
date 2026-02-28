@@ -37,7 +37,7 @@ ENV CUDA_HOME=/usr/local/cuda \
     PATH=/usr/local/cuda/bin:$PATH 
 
 # Install blade-kvt
-COPY ./scripts/install_barex.sh /tmp/install_barex.sh
+COPY ./scripts/install/install_barex.sh /tmp/install_barex.sh
 RUN bash /tmp/install_barex.sh
 COPY ./lib/blade_kvt-*.whl /tmp/
 RUN pip install /tmp/blade_kvt-*.whl

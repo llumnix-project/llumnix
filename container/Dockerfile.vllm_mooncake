@@ -37,7 +37,7 @@ ENV CUDA_HOME=/usr/local/cuda \
     PATH=/usr/local/cuda/bin:$PATH 
 
 # Install blade-kvt
-COPY ./scripts/install_barex.sh /tmp/install_barex.sh
+COPY ./scripts/install/install_barex.sh /tmp/install_barex.sh
 RUN bash /tmp/install_barex.sh
 COPY ./lib/blade_kvt-*.whl /tmp/
 RUN pip install /tmp/blade_kvt-*.whl
@@ -45,7 +45,7 @@ RUN pip install /tmp/blade_kvt-*.whl
 # Build mooncake from source
 RUN pip uninstall -y mooncake-transfer-engine
 RUN git clone https://github.com/kvcache-ai/Mooncake.git /tmp/Mooncake/
-COPY ./scripts/install_go.sh /tmp/install_go.sh
+COPY ./scripts/install/install_go.sh /tmp/install_go.sh
 RUN bash /tmp/install_go.sh
 ENV PATH="/usr/local/go/bin:${PATH}"
 RUN cd /tmp/Mooncake \

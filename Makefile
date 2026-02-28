@@ -74,7 +74,7 @@ discovery-install:
 
 .PHONY: blade-kvt-install
 blade-kvt-install:
-	./scripts/install_blade_kvt.sh
+	./scripts/install/install_blade_kvt.sh
 
 .PHONY: simple-tests
 simple-tests: llumlet-proto-build discovery-proto-build gateway-build scheduler-build

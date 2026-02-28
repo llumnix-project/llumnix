@@ -13,27 +13,27 @@ import (
 )
 
 func init() {
-	RegisterBackend(consts.PDDisaggProtocolVllmKvt, func(schedulingMode types.SchedulingMode) (InferenceBackend, error) {
-		return NewPDDisaggVllmKvtBackend(schedulingMode)
+	registerForwarder(consts.ForwarderTypeVllmKvt, func(schedulingMode types.SchedulingMode) (Forwarder, error) {
+		return newPDDisaggVllmKvtForwarder(schedulingMode)
 	})
 }
 
-type PDDisaggVllmKvtBackend struct {
+type PDDisaggVllmKvtForwarder struct {
 	client       *http.Client
 	schedulingMode types.SchedulingMode
 }
 
-func NewPDDisaggVllmKvtBackend(schMode types.SchedulingMode) (InferenceBackend, error) {
+func newPDDisaggVllmKvtForwarder(schMode types.SchedulingMode) (Forwarder, error) {
 	if schMode != types.SchedulingModePDBatch && schMode != types.SchedulingModePDStaged {
 		return nil, fmt.Errorf("unsupported scheduling mode: %s", schMode)
 	}
-	return &PDDisaggVllmKvtBackend{
-		client:       NewLlmForwardClient(),
+	return &PDDisaggVllmKvtForwarder{
+		client:       newLlmForwardClient(),
 		schedulingMode: schMode,
 	}, nil
 }
 
-func (b *PDDisaggVllmKvtBackend) buildTransferParams(pInstance *types.LLMInstance) map[string]interface{} {
+func (b *PDDisaggVllmKvtForwarder) buildTransferParams(pInstance *types.LLMInstance) map[string]interface{} {
 	p := map[string]interface{}{
 		"remote_host": pInstance.AuxIp,
 		"remote_port": pInstance.AuxPort,
@@ -44,7 +44,7 @@ func (b *PDDisaggVllmKvtBackend) buildTransferParams(pInstance *types.LLMInstanc
 	return p
 }
 
-func (b *PDDisaggVllmKvtBackend) BatchScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
+func (b *PDDisaggVllmKvtForwarder) batchSchedulingForward(req *types.RequestContext) (<-chan StreamChunk, error) {
 	pInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRolePrefill)
 	if pInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
@@ -66,14 +66,14 @@ func (b *PDDisaggVllmKvtBackend) BatchScheduleStreamInference(req *types.Request
 			return
 		}
 
-		// build new backend request and stream read
-		StreamResponseFromBackend(req, b.client, body, dInstance, chunkChan)
+		// build backend request and stream read
+		streamBackendResponse(req, b.client, body, dInstance, chunkChan)
 	}()
 
 	return chunkChan, nil
 }
 
-func (b *PDDisaggVllmKvtBackend) buildPrefillRequestData(req *types.RequestContext) ([]byte, error) {
+func (b *PDDisaggVllmKvtForwarder) buildPrefillRequestData(req *types.RequestContext) ([]byte, error) {
 	cmplReq := *(req.LLMRequest.CompletionRequest)
 	maxTokens := uint64(1)
 	cmplReq.MaxTokens = &maxTokens
@@ -84,7 +84,7 @@ func (b *PDDisaggVllmKvtBackend) buildPrefillRequestData(req *types.RequestConte
 	return json.Marshal(cmplReq)
 }
 
-func (b *PDDisaggVllmKvtBackend) doPrefill(req *types.RequestContext, pInstance *types.LLMInstance) error {
+func (b *PDDisaggVllmKvtForwarder) doPrefill(req *types.RequestContext, pInstance *types.LLMInstance) error {
 	// build prefill request
 	data, err := b.buildPrefillRequestData(req)
 	if err != nil {
@@ -92,12 +92,12 @@ func (b *PDDisaggVllmKvtBackend) doPrefill(req *types.RequestContext, pInstance 
 		return err
 	}
 
-	newReq, err := MakeNewBackendRequest(req, data, pInstance)
+	newReq, err := makeBackendRequest(req, data, pInstance)
 	if err != nil {
-		klog.Errorf("[%s] failed to make new backend request: %v", err, req.Id)
+		klog.Errorf("[%s] failed to make backend request: %v", err, req.Id)
 		return err
 	}
-	body, err := DoRequest(newReq, b.client, data)
+	body, err := doRequest(newReq, b.client, data)
 	if err != nil {
 		klog.Errorf("[%s] failed to do request: %v", req.Id, err)
 		return err
@@ -111,7 +111,7 @@ func (b *PDDisaggVllmKvtBackend) doPrefill(req *types.RequestContext, pInstance 
 	return nil
 }
 
-func (b *PDDisaggVllmKvtBackend) buildDecodeRequestData(req *types.RequestContext, instance *types.LLMInstance) ([]byte, error) {
+func (b *PDDisaggVllmKvtForwarder) buildDecodeRequestData(req *types.RequestContext, instance *types.LLMInstance) ([]byte, error) {
 	cmplReq := req.LLMRequest.CompletionRequest
 	if cmplReq.KvTransferParams == nil {
 		cmplReq.KvTransferParams = make(map[string]interface{})
@@ -122,7 +122,7 @@ func (b *PDDisaggVllmKvtBackend) buildDecodeRequestData(req *types.RequestContex
 	return json.Marshal(cmplReq)
 }
 
-func (b *PDDisaggVllmKvtBackend) doDecode(
+func (b *PDDisaggVllmKvtForwarder) doDecode(
 	req *types.RequestContext,
 	chunkChan chan StreamChunk,
 	pInstance *types.LLMInstance,
@@ -133,54 +133,25 @@ func (b *PDDisaggVllmKvtBackend) doDecode(
 		chunkChan <- StreamChunk{err: err}
 		return
 	}
-	StreamResponseFromBackend(req, b.client, data, dInstance, chunkChan)
+	streamBackendResponse(req, b.client, data, dInstance, chunkChan)
 }
 
-func (b *PDDisaggVllmKvtBackend) StagedScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
-	pInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRolePrefill)
-	if pInstance == nil {
-		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
-	}
-
-	chunkChan := make(chan StreamChunk, 100)
-	go func() {
-		defer close(chunkChan)
-
-		err := b.doPrefill(req, pInstance)
-		if err != nil {
-			chunkChan <- StreamChunk{err: err}
-			return
-		}
-
-		// start decode scheduling
-		results, err := req.ScheduleDecode()
-		if err != nil {
-			klog.Errorf("[%s] decode scheduling failed: %v", req.Id, err)
-			chunkChan <- StreamChunk{err: err}
-			return
-		}
-
-		dInstance := results.GetInstanceByRole(types.InferRoleDecode)
-		if dInstance == nil {
-			klog.Errorf("[%s] decode instance not found", req.Id)
-			chunkChan <- StreamChunk{err: fmt.Errorf("decode instance not found")}
-			return
-		}
-
-		b.doDecode(req, chunkChan, pInstance, dInstance)
-	}()
-
-	return chunkChan, nil
+func (b *PDDisaggVllmKvtForwarder) stagedSchedulingForward(req *types.RequestContext) (<-chan StreamChunk, error) {
+	return stagedScheduleForward(req,
+		b.doPrefill,
+		func(req *types.RequestContext, chunkChan chan StreamChunk, pInstance, dInstance *types.LLMInstance) {
+			b.doDecode(req, chunkChan, pInstance, dInstance)
+		},
+	)
 }
 
-// StreamInference implements InferBackend interface
-// Performs streaming inference by forwarding request to backend and streaming response chunks
-func (b *PDDisaggVllmKvtBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
+// Forward implements Forwarder interface.
+func (b *PDDisaggVllmKvtForwarder) Forward(req *types.RequestContext) (<-chan StreamChunk, error) {
 	switch b.schedulingMode {
 	case types.SchedulingModePDBatch:
-		return b.BatchScheduleStreamInference(req)
+		return b.batchSchedulingForward(req)
 	case types.SchedulingModePDStaged:
-		return b.StagedScheduleStreamInference(req)
+		return b.stagedSchedulingForward(req)
 	default:
 		return nil, fmt.Errorf("[%s] unsupported scheduling mode: %s", req.Id, b.schedulingMode)
 	}

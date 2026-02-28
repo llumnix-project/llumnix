@@ -7,33 +7,30 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"llumnix/pkg/consts"
 	"llumnix/pkg/types"
 )
 
-const (
-	BackendTypeSimple = "simple"
-)
-
 func init() {
-	RegisterBackend(BackendTypeSimple, func(schedulingMode types.SchedulingMode) (InferenceBackend, error) {
-		return NewSimpleBackend(), nil
+	registerForwarder(consts.ForwarderTypeNormal, func(schedulingMode types.SchedulingMode) (Forwarder, error) {
+		return newNormalForwarder(), nil
 	})
 }
 
-type SimpleBackend struct {
+type NormalForwarder struct {
 	client *http.Client
 }
 
-// NewSimpleBackend creates a new SimpleBackend instance
-func NewSimpleBackend() *SimpleBackend {
-	return &SimpleBackend{
-		client: NewLlmForwardClient(),
+// newNormalForwarder creates a new NormalForwarder instance.
+func newNormalForwarder() *NormalForwarder {
+	return &NormalForwarder{
+		client: newLlmForwardClient(),
 	}
 }
 
-// StreamInference implements InferBackend interface
-// Performs streaming inference by forwarding request to backend and streaming response chunks
-func (b *SimpleBackend) StreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
+// Forward implements Forwarder interface.
+// Forwards the request to the inference engine and streams response chunks.
+func (b *NormalForwarder) Forward(req *types.RequestContext) (<-chan StreamChunk, error) {
 	chunkChan := make(chan StreamChunk, 100)
 
 	instance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRoleNormal)
@@ -52,15 +49,15 @@ func (b *SimpleBackend) StreamInference(req *types.RequestContext) (<-chan Strea
 		}
 
 		// Build backend request
-		newReq, err := MakeNewBackendRequest(req, body, instance)
+		newReq, err := makeBackendRequest(req, body, instance)
 		if err != nil {
-			klog.Errorf("failed to create new backend request: %v", err)
+			klog.Errorf("failed to create backend request: %v", err)
 			chunkChan <- StreamChunk{err: err}
 			return
 		}
 
 		// Execute request with retry
-		respBody, err := DoRequest(newReq, b.client, body)
+		respBody, err := doRequest(newReq, b.client, body)
 		if err != nil {
 			klog.Errorf("failed to do backend request: %v", err)
 			chunkChan <- StreamChunk{err: err}
@@ -69,7 +66,7 @@ func (b *SimpleBackend) StreamInference(req *types.RequestContext) (<-chan Strea
 		defer respBody.Close()
 
 		// Stream read response
-		if err := StreamRead(req, chunkChan, respBody); err != nil {
+		if err := streamRead(req, chunkChan, respBody); err != nil {
 			chunkChan <- StreamChunk{err: err}
 		}
 	}()

@@ -39,9 +39,9 @@ var (
 	handlerMu       sync.RWMutex
 )
 
-// RegisterHandler registers a request handler factory with the specified protocol type
+// registerHandler registers a request handler factory with the specified protocol type
 // The protocol type is typically "openai", "anthropic", etc.
-func RegisterHandler(protocol string, factory HandlerFactory) {
+func registerHandler(protocol string, factory HandlerFactory) {
 	handlerMu.Lock()
 	defer handlerMu.Unlock()
 	handlerRegistry[protocol] = factory
