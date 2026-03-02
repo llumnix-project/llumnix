@@ -34,8 +34,6 @@ spec:
         role: scheduler
     spec:
       terminationGracePeriodSeconds: 300
-      imagePullSecrets:
-        - name: aliyun-registry-secret
       containers:
         - name: scheduler
           image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/scheduler:20260226-164555

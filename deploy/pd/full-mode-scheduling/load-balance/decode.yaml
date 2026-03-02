@@ -15,8 +15,6 @@ spec:
     size: 1
     workerTemplate:
       spec:
-        imagePullSecrets:
-          - name: aliyun-registry-secret
         terminationGracePeriodSeconds: 30
         containers:
         - name: vllm

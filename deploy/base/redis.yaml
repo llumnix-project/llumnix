@@ -30,8 +30,6 @@ spec:
       labels:
         app: redis
     spec:
-      imagePullSecrets:
-      - name: aliyun-registry-secret
       containers:
       - name: redis
         image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/redis:latest

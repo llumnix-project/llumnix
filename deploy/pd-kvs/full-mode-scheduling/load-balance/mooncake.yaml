@@ -43,8 +43,6 @@ spec:
       labels:
         app: mooncake
     spec:
-      imagePullSecrets:
-      - name: aliyun-registry-secret
       containers:
       - name: mooncake
         image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:mooncake-20260210-100213
