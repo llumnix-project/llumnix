@@ -34,8 +34,6 @@ spec:
         role: gateway
     spec:
       terminationGracePeriodSeconds: 300
-      imagePullSecrets:
-        - name: aliyun-registry-secret
       initContainers:
         - name: download-tokenizer
           image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/python3:3.12-slim-bookworm
