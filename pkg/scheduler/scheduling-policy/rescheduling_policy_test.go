@@ -70,12 +70,12 @@ func TestReschedulingPolicy(t *testing.T) {
 			failoverPolicy, ok := policy.(*failoverRescheduling)
 			assert.True(t, ok)
 			assert.Contains(t,
-				[]string{
-					consts.PrefillInferMode,
-					consts.DecodeInferMode,
-					consts.NormalInferMode,
+				[]consts.InferType{
+					consts.InferTypePrefill,
+					consts.InferTypeDecode,
+					consts.InferTypeNeutral,
 				},
-				failoverPolicy.inferMode,
+				failoverPolicy.inferType,
 			)
 			continue
 		}
@@ -125,7 +125,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-					Role:     consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral-1",
@@ -149,7 +149,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-					Role:     consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral-2",
@@ -173,7 +173,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-					Role:     consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral-3",
@@ -197,7 +197,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-					Role:     consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral-4",
@@ -221,7 +221,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-					Role:     consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral-x",
@@ -245,7 +245,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-					Role:     consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-1",
@@ -269,7 +269,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-					Role:     consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-2",
@@ -293,7 +293,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-					Role:     consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-3",
@@ -317,7 +317,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-					Role:     consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill-4",
@@ -341,7 +341,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-					Role:     consts.DecodeInferMode,
+					InferType: consts.InferTypeDecode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-1",
@@ -365,7 +365,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-					Role:     consts.DecodeInferMode,
+					InferType: consts.InferTypeDecode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-2",
@@ -389,7 +389,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-					Role:     consts.DecodeInferMode,
+					InferType: consts.InferTypeDecode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-3",
@@ -413,7 +413,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-					Role:     consts.DecodeInferMode,
+					InferType: consts.InferTypeDecode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-4",
@@ -437,7 +437,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-					Role:     consts.DecodeInferMode,
+					InferType: consts.InferTypeDecode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-5",
@@ -461,7 +461,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-					Role:     consts.DecodeInferMode,
+					InferType: consts.InferTypeDecode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-6",
@@ -485,7 +485,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-					Role:     consts.DecodeInferMode,
+					InferType: consts.InferTypeDecode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode-x",

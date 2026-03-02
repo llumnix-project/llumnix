@@ -279,16 +279,16 @@ func TestFailoverFilter(t *testing.T) {
 	}
 }
 
-func TestInferModeFilter(t *testing.T) {
+func TestInferTypeFilter(t *testing.T) {
 	// Helper function to create test instance
-	createInstance := func(instanceId string, inferMode string) *instanceViewScheduling {
+	createInstance := func(instanceId string, inferType consts.InferType) *instanceViewScheduling {
 		result := &instanceViewScheduling{
 			cmsView: &cms.InstanceView{
 				Status: &cms.InstanceStatus{
 					InstanceId: instanceId,
 				},
 				Instance: &types.LLMInstance{
-					Role: types.InferRole(inferMode),
+					InferType: inferType,
 				},
 				Metadata: &cms.InstanceMetadata{
 					InstanceId: instanceId,
@@ -301,40 +301,40 @@ func TestInferModeFilter(t *testing.T) {
 
 	tests := []struct {
 		testName                     string
-		targetInferMode              string
+		targetInferType              consts.InferType
 		expectedFilteredOutInstances []string
 	}{
 		{
-			testName:                     "prefill infer mode filter",
-			targetInferMode:              consts.PrefillInferMode,
-			expectedFilteredOutInstances: []string{"1", "2"}, // decode and normal instances
+			testName:                     "prefill infer type filter",
+			targetInferType:              consts.InferTypePrefill,
+			expectedFilteredOutInstances: []string{"1", "2"}, // decode and neutral instances
 		},
 		{
-			testName:                     "decode infer mode filter",
-			targetInferMode:              consts.DecodeInferMode,
-			expectedFilteredOutInstances: []string{"0", "2"}, // prefill and normal instances
+			testName:                     "decode infer type filter",
+			targetInferType:              consts.InferTypeDecode,
+			expectedFilteredOutInstances: []string{"0", "2"}, // prefill and neutral instances
 		},
 		{
-			testName:                     "normal infer mode filter",
-			targetInferMode:              consts.NormalInferMode,
+			testName:                     "neutral infer type filter",
+			targetInferType:              consts.InferTypeNeutral,
 			expectedFilteredOutInstances: []string{"0", "1"}, // prefill and decode instances
 		},
 	}
 
 	// Create test instances
 	instances := []*instanceViewScheduling{
-		createInstance("0", consts.PrefillInferMode), // prefill instance
-		createInstance("1", consts.DecodeInferMode),  // decode instance
-		createInstance("2", consts.NormalInferMode),  // normal instance
+		createInstance("0", consts.InferTypePrefill), // prefill instance
+		createInstance("1", consts.InferTypeDecode),  // decode instance
+		createInstance("2", consts.InferTypeNeutral),  // neutral instance
 	}
 
 	for _, test := range tests {
 		t.Run(test.testName, func(t *testing.T) {
-			inferModeFilter := &inferModeFilter{targetInferMode: test.targetInferMode}
-			assert.False(t, inferModeFilter.skipWhenFallback())
+			inferTypeFilter := &inferTypeFilter{targetInferType: test.targetInferType}
+			assert.False(t, inferTypeFilter.skipWhenFallback())
 			filteredOutInstances := sets.NewString()
 			for _, instance := range instances {
-				if inferModeFilter.instanceFilteredOut(instance) {
+				if inferTypeFilter.instanceFilteredOut(instance) {
 					filteredOutInstances.Insert(instance.GetInstanceId())
 				}
 			}

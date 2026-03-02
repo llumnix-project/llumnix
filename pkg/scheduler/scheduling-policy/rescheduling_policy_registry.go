@@ -12,15 +12,15 @@ import (
 func newReschedulingPolicyInternal(p *options.SchedulerConfig, policy string) reschedulingPolicyInternal {
 	switch policy {
 	case consts.ReschedulingPolicyNeutralLoad:
-		return newLoadBalanceRescheduling(p, consts.NormalInferMode)
+		return newLoadBalanceRescheduling(p, consts.InferTypeNeutral)
 	case consts.ReschedulingPolicyDecodeLoad:
-		return newLoadBalanceRescheduling(p, consts.DecodeInferMode)
+		return newLoadBalanceRescheduling(p, consts.InferTypeDecode)
 	case consts.ReschedulingPolicyPrefillFailover:
-		return newFailoverRescheduling(p, consts.PrefillInferMode)
+		return newFailoverRescheduling(p, consts.InferTypePrefill)
 	case consts.ReschedulingPolicyDecodeFailover:
-		return newFailoverRescheduling(p, consts.DecodeInferMode)
+		return newFailoverRescheduling(p, consts.InferTypeDecode)
 	case consts.ReschedulingPolicyNeutralFailover:
-		return newFailoverRescheduling(p, consts.NormalInferMode)
+		return newFailoverRescheduling(p, consts.InferTypeNeutral)
 	default:
 		panic(fmt.Sprintf("unsupported rescheduling policy: %s", p.ReschedulingPolicies))
 	}
@@ -80,19 +80,19 @@ Filters:
 Selector:
   - Source instances with high load are preferentially paired with destination instances with low load.
 */
-func newLoadBalanceRescheduling(p *options.SchedulerConfig, inferMode string) *decodeLoadBalanceRescheduling {
+func newLoadBalanceRescheduling(p *options.SchedulerConfig, inferType consts.InferType) *decodeLoadBalanceRescheduling {
 	var targetLoadMetric string
 	var targetLoadThreshold float32
 
-	switch inferMode {
-	case consts.DecodeInferMode:
+	switch inferType {
+	case consts.InferTypeDecode:
 		targetLoadMetric = p.ReschedulingDecodeLoadMetric
 		targetLoadThreshold = p.ReschedulingDecodeLoadThreshold
-	case consts.NormalInferMode:
+	case consts.InferTypeNeutral:
 		targetLoadMetric = p.ReschedulingNeutralLoadMetric
 		targetLoadThreshold = p.ReschedulingNeutralLoadThreshold
 	default:
-		panic(fmt.Sprintf("unsupported failover rescheduling infer mode: %s", inferMode))
+		panic(fmt.Sprintf("unsupported failover rescheduling infer type: %s", inferType))
 	}
 
 	if p.ReschedulingLoadBalanceScope != consts.ReschedulingLoadBalanceScopeCluster &&
@@ -106,14 +106,14 @@ func newLoadBalanceRescheduling(p *options.SchedulerConfig, inferMode string) *d
 				targetLoadMetric: getSchedulingMetric(p, targetLoadMetric),
 			},
 			srcSingleInstanceFilters: []singleInstanceFilter{
-				&inferModeFilter{targetInferMode: inferMode},
+				&inferTypeFilter{targetInferType: inferType},
 				&schedulabilityFilter{},
 				&stalenessFilter{
 					instanceStalenessSeconds: p.InstanceStalenessSeconds,
 				},
 			},
 			dstSingleInstanceFilters: []singleInstanceFilter{
-				&inferModeFilter{targetInferMode: inferMode},
+				&inferTypeFilter{targetInferType: inferType},
 				&schedulabilityFilter{},
 				&stalenessFilter{
 					instanceStalenessSeconds: p.InstanceStalenessSeconds,
@@ -164,7 +164,7 @@ func newLoadBalanceRescheduling(p *options.SchedulerConfig, inferMode string) *d
 
 type failoverRescheduling struct {
 	baseReschedulingPolicy
-	inferMode string
+	inferType consts.InferType
 }
 
 func (p *failoverRescheduling) getMigrationReqSelectPolicy() migrationReqSelectPolicy {
@@ -178,31 +178,31 @@ func (p *failoverRescheduling) getMigrationReqSelectPolicy() migrationReqSelectP
 
 /*
 FailoverRescheduling enables fault tolerance by migrating workloads from unhealthy or failing
-Decode/Prefill/Normal instances to healthy, available ones within the same infer mode.
+Decode/Prefill/Neutral instances to healthy, available ones within the same infer type.
 
 Instance Type:
-  - Source: Prefill / Decode / Normal (depending on infer mode)
-  - Destination: Prefill / Decode / Normal (same infer mode as source)
+  - Source: Prefill / Decode / Neutral (depending on infer type)
+  - Destination: Prefill / Decode / Neutral (same infer type as source)
 
 Filters:
-  - Source: An instance that is in the target infer mode and identified as failing.
-  - Destination: An instance that is in the same infer mode, schedulable, healthy,
+  - Source: An instance that is in the target infer type and identified as failing.
+  - Destination: An instance that is in the same infer type, schedulable, healthy,
     and has non-expired instance information.
 
 Selector:
   - Source instances with high load are preferentially paired with destination instances with low load.
 */
-func newFailoverRescheduling(p *options.SchedulerConfig, inferMode string) *failoverRescheduling {
+func newFailoverRescheduling(p *options.SchedulerConfig, inferType consts.InferType) *failoverRescheduling {
 	var reschedulerMetric string
-	switch inferMode {
-	case consts.PrefillInferMode:
+	switch inferType {
+	case consts.InferTypePrefill:
 		reschedulerMetric = p.ReschedulingPrefillLoadMetric
-	case consts.DecodeInferMode:
+	case consts.InferTypeDecode:
 		reschedulerMetric = p.ReschedulingDecodeLoadMetric
-	case consts.NormalInferMode:
+	case consts.InferTypeNeutral:
 		reschedulerMetric = p.ReschedulingNeutralLoadMetric
 	default:
-		panic(fmt.Sprintf("unsupported failover rescheduling infer mode: %s", inferMode))
+		panic(fmt.Sprintf("unsupported failover rescheduling infer type: %s", inferType))
 	}
 	return &failoverRescheduling{
 		baseReschedulingPolicy: baseReschedulingPolicy{
@@ -210,10 +210,10 @@ func newFailoverRescheduling(p *options.SchedulerConfig, inferMode string) *fail
 				reschedulerMetric: getSchedulingMetric(p, reschedulerMetric),
 			},
 			srcSingleInstanceFilters: []singleInstanceFilter{
-				&inferModeFilter{targetInferMode: inferMode},
+				&inferTypeFilter{targetInferType: inferType},
 			},
 			dstSingleInstanceFilters: []singleInstanceFilter{
-				&inferModeFilter{targetInferMode: inferMode},
+				&inferTypeFilter{targetInferType: inferType},
 				&schedulabilityFilter{},
 				&stalenessFilter{
 					instanceStalenessSeconds: p.InstanceStalenessSeconds,
@@ -232,6 +232,6 @@ func newFailoverRescheduling(p *options.SchedulerConfig, inferMode string) *fail
 			},
 			selector: &roundRobinSelector{},
 		},
-		inferMode: inferMode,
+		inferType: inferType,
 	}
 }

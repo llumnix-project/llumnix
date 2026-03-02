@@ -17,7 +17,6 @@ import (
 
 	"llumnix/pkg/consts"
 	"llumnix/pkg/types"
-	"llumnix/pkg/utils"
 )
 
 const (
@@ -44,8 +43,8 @@ func (iv *InstanceView) GetInstanceId() string {
 	return iv.Metadata.InstanceId
 }
 
-func (iv *InstanceView) GetInferMode() string {
-	return iv.Instance.Role.String()
+func (iv *InstanceView) GetInferType() consts.InferType {
+	return iv.Instance.InferType
 }
 
 type CMSReadClientInterface interface {
@@ -78,8 +77,8 @@ type CMSReadClientInterface interface {
 	// GetInstanceViews returns all instance views
 	GetInstanceViews() map[string]*InstanceView
 
-	// GetGroupedInstanceViews returns all instance views grouped by infer mode
-	GetGroupedInstanceViews() map[string]map[string]*InstanceView
+	// GetGroupedInstanceViews returns all instance views grouped by infer type
+	GetGroupedInstanceViews() map[consts.InferType]map[string]*InstanceView
 }
 
 // CMSReadClient provides CMS read operation interfaces
@@ -94,7 +93,7 @@ type CMSReadClient struct {
 	instanceMetadatas     map[string]*InstanceMetadata
 	instanceStatuses      map[string]*InstanceStatus
 	instanceViews         map[string]*InstanceView
-	groupedInstanceViews  map[string]map[string]*InstanceView
+	groupedInstanceViews  map[consts.InferType]map[string]*InstanceView
 	statusUnmarshalBuffer InstanceStatus
 	ipToInstanceIDs       map[string]sets.String
 	instanceIDToIP        map[string]string
@@ -182,7 +181,7 @@ func NewCMSReadClient(
 		instanceMetadatas:                 make(map[string]*InstanceMetadata),
 		instanceStatuses:                  make(map[string]*InstanceStatus),
 		instanceViews:                     make(map[string]*InstanceView),
-		groupedInstanceViews:              make(map[string]map[string]*InstanceView),
+		groupedInstanceViews:              make(map[consts.InferType]map[string]*InstanceView),
 		statusUnmarshalBuffer:             InstanceStatus{},
 		instanceIDToIP:                    make(map[string]string),
 		ipToInstanceIDs:                   make(map[string]sets.String),
@@ -465,10 +464,10 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 		if !c.instanceIDsSet.Has(instanceID) {
 			delete(c.instanceStatuses, instanceID)
 			delete(c.instanceViews, instanceID)
-			for inferMode, instanceViews := range c.groupedInstanceViews {
+			for inferType, instanceViews := range c.groupedInstanceViews {
 				delete(instanceViews, instanceID)
 				if len(instanceViews) == 0 {
-					delete(c.groupedInstanceViews, inferMode)
+					delete(c.groupedInstanceViews, inferType)
 				}
 			}
 		}
@@ -479,10 +478,10 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 		if instanceStatusBytes == nil {
 			delete(c.instanceStatuses, instanceID)
 			delete(c.instanceViews, instanceID)
-			for inferMode, instanceViews := range c.groupedInstanceViews {
+			for inferType, instanceViews := range c.groupedInstanceViews {
 				delete(instanceViews, instanceID)
 				if len(instanceViews) == 0 {
-					delete(c.groupedInstanceViews, inferMode)
+					delete(c.groupedInstanceViews, inferType)
 				}
 			}
 			continue // status does not exist
@@ -495,7 +494,7 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 				StepId: math.MinInt32, UpdateId: math.MinInt32, TimestampMs: math.MinInt64,
 				ProfilingId: math.MinInt32,
 			}
-			instanceRole := utils.TransformInstanceType2InferMode(c.instanceMetadatas[instanceID].InstanceType)
+			inferType := consts.InferType(c.instanceMetadatas[instanceID].InstanceType)
 			c.instanceViews[instanceID] = &InstanceView{
 				Metadata: c.instanceMetadatas[instanceID],
 				Status:   c.instanceStatuses[instanceID],
@@ -504,9 +503,9 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 						Host: c.instanceMetadatas[instanceID].Ip,
 						Port: int(c.instanceMetadatas[instanceID].ApiServerPort),
 					},
-					AuxIp:   c.instanceMetadatas[instanceID].IpKvt,
-					AuxPort: int(c.instanceMetadatas[instanceID].KvtPort),
-					Role:    types.InferRole(instanceRole),
+					AuxIp:     c.instanceMetadatas[instanceID].IpKvt,
+					AuxPort:   int(c.instanceMetadatas[instanceID].KvtPort),
+					InferType: inferType,
 					DPRank:  int(c.instanceMetadatas[instanceID].DpRank),
 					DPSize:  int(c.instanceMetadatas[instanceID].DataParallelSize),
 					// NOTE(zhaohanyu.zhy): use v6d parser format by default
@@ -524,10 +523,10 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 					NumTokensInflightDispatchDecodeRequests:            0,
 				},
 			}
-			if c.groupedInstanceViews[instanceRole] == nil {
-				c.groupedInstanceViews[instanceRole] = make(map[string]*InstanceView)
+			if c.groupedInstanceViews[inferType] == nil {
+				c.groupedInstanceViews[inferType] = make(map[string]*InstanceView)
 			}
-			c.groupedInstanceViews[instanceRole][instanceID] = c.instanceViews[instanceID]
+			c.groupedInstanceViews[inferType][instanceID] = c.instanceViews[instanceID]
 		}
 		err := proto.Unmarshal(instanceStatusBytes, &c.statusUnmarshalBuffer)
 		if err != nil {
@@ -589,7 +588,7 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 }
 
 func (c *CMSReadClient) AddRequestLocalAccount(
-	instanceInfo *InstanceView, inferMode string, numTokens int32, prefixHitNumTokens int32, requestId string, firstUpdate bool) {
+	instanceInfo *InstanceView, inferType consts.InferType, numTokens int32, prefixHitNumTokens int32, requestId string, firstUpdate bool) {
 	if c.allowConcurrentSchedule {
 		c.RUnlock()
 		defer c.RLock()
@@ -597,7 +596,7 @@ func (c *CMSReadClient) AddRequestLocalAccount(
 		defer c.Unlock()
 	}
 	c.instanceStatusLocalAccountEditor.addRequestLocalAccount(
-		instanceInfo, inferMode, numTokens, prefixHitNumTokens, requestId, firstUpdate)
+		instanceInfo, inferType, numTokens, prefixHitNumTokens, requestId, firstUpdate)
 }
 
 func (c *CMSReadClient) RevertRequestPrefillLocalAccount(
@@ -613,7 +612,7 @@ func (c *CMSReadClient) RevertRequestPrefillLocalAccount(
 }
 
 func (c *CMSReadClient) addSampleToTTFTPredictor(instanceID string) {
-	if c.instanceViews[instanceID].GetInferMode() != consts.PrefillInferMode {
+	if c.instanceViews[instanceID].GetInferType() != consts.InferTypePrefill {
 		return
 	}
 	if c.instanceViews[instanceID].Status.NumScheduledPrefillTokens == 0 ||
@@ -681,7 +680,7 @@ func (c *CMSReadClient) GetInstanceViews() map[string]*InstanceView {
 	return c.instanceViews
 }
 
-func (c *CMSReadClient) GetGroupedInstanceViews() map[string]map[string]*InstanceView {
+func (c *CMSReadClient) GetGroupedInstanceViews() map[consts.InferType]map[string]*InstanceView {
 	return c.groupedInstanceViews
 }
 

@@ -3,20 +3,21 @@ package resolver
 import (
 	"context"
 	"fmt"
-	"llumnix/pkg/redis"
-	"llumnix/pkg/types"
 	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
 
 	"google.golang.org/protobuf/proto"
-
 	"k8s.io/klog/v2"
+
+	"llumnix/pkg/consts"
+	"llumnix/pkg/redis"
+	"llumnix/pkg/types"
 )
 
 type redisResolver struct {
-	role string
+	inferType consts.InferType
 
 	mu                sync.RWMutex
 	instances         types.LLMInstanceSlice
@@ -31,7 +32,7 @@ type redisResolver struct {
 }
 
 func newRedisResolver(
-	role string,
+	inferType consts.InferType,
 	host string,
 	port string,
 	username string,
@@ -47,7 +48,7 @@ func newRedisResolver(
 	}
 
 	r := &redisResolver{
-		role:              role,
+		inferType:         inferType,
 		redisClient:       redisClient,
 		ctx:               context.Background(),
 		watcher:           NewWatcher(),
@@ -124,8 +125,8 @@ func (r *redisResolver) refresh() {
 
 		var filteredInstances []*InstanceDiscoveryInfo
 		for _, instance := range podInfo.Instances {
-			if instance.Role != r.role && r.role != types.InferRoleAll.String() {
-				// all dp ranks in a pod should be in the same role
+			if consts.InferType(instance.InstanceType) != r.inferType && r.inferType != consts.InferTypeAll {
+				// all dp ranks in a pod should be in the same infer type
 				continue
 			}
 
@@ -133,7 +134,7 @@ func (r *redisResolver) refresh() {
 				Version: instance.Version,
 				ID:      fmt.Sprintf("%s_dp%d", podInfo.PodName, instance.DpRank),
 				Model:   instance.Model,
-				Role:    types.InferRole(instance.Role),
+				InferType: consts.InferType(instance.InstanceType),
 				Endpoint: types.Endpoint{
 					Host: instance.EntrypointIp,
 					Port: int(instance.EntrypointPort),
@@ -157,8 +158,8 @@ func (r *redisResolver) refresh() {
 		return w.Id()
 	})
 	if len(added) > 0 || len(removed) > 0 {
-		klog.V(4).Infof("redis resolover (role=%s): Added: %d, Removed: %d, Total: %d",
-			r.role, len(added), len(removed), len(newInstances))
+		klog.V(4).Infof("redis resolver (inferType=%s): Added: %d, Removed: %d, Total: %d",
+			r.inferType, len(added), len(removed), len(newInstances))
 	}
 	r.podDiscoveryInfos = newPodDiscoveryInfos
 	r.instances = newInstances
@@ -195,10 +196,11 @@ func (r *RedisResolverBuilder) Build(uri string, args BuildArgs) (LLMResolver, e
 	host := parts[0]
 	port := parts[1]
 
-	role, ok := args["role"].(string)
-	if !ok || role == "" {
-		return nil, fmt.Errorf("missing role or invalid role build args: %v", role)
+	instanceTypeStr, ok := args["instance_type"].(string)
+	if !ok || instanceTypeStr == "" {
+		return nil, fmt.Errorf("missing instance_type or invalid instance_type build args: %v", instanceTypeStr)
 	}
+	inferType := consts.InferType(instanceTypeStr)
 
 	username, ok := args["redis_username"].(string)
 	if !ok {
@@ -230,7 +232,7 @@ func (r *RedisResolverBuilder) Build(uri string, args BuildArgs) (LLMResolver, e
 		return nil, fmt.Errorf("missing statusTTLMs or invalid statusTTLMs build args: %v", statusTTLMs)
 	}
 
-	return newRedisResolver(role, host, port, username, password, socketTimeout, retryTimes, refreshIntervalMs, statusTTLMs)
+	return newRedisResolver(inferType, host, port, username, password, socketTimeout, retryTimes, refreshIntervalMs, statusTTLMs)
 }
 
 const (

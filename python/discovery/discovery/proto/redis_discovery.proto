@@ -11,7 +11,7 @@ message PodDiscoveryInfo {
 }
 
 message InstanceDiscoveryInfo {
-  string role = 1; // prefill, decode or normal
+  string instance_type = 1; // prefill, decode or neutral
   string entrypoint_ip = 2;
   int32 entrypoint_port = 3;
   string kv_transfer_ip = 4;

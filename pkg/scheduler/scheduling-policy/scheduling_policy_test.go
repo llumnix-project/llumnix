@@ -96,7 +96,7 @@ func newConfig() *options.SchedulerConfig {
 	}
 }
 
-func newDispatchPolicy(t *testing.T, config *options.SchedulerConfig, inferMode string) DispatchPolicy {
+func newDispatchPolicy(t *testing.T, config *options.SchedulerConfig, inferType consts.InferType) DispatchPolicy {
 	cmsReadClient, _ := cms.NewCMSReadClient(
 		getRedisClient(t), config.CmsPullStatusIntervalMs, config.CmsPullMetadataIntervalMs,
 		false, config.EnableInstanceStatusLocalAccount, config.EnableCacheAwareScheduling,
@@ -141,7 +141,7 @@ func TestDispatchPolicyScheduleNeutral(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-					Role:     consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					NumTotalGpuTokens:                     100,
@@ -165,8 +165,8 @@ func TestDispatchPolicyScheduleNeutral(t *testing.T) {
 		instance.InstanceViewInterface = instance.cmsView
 	}
 
-	groupedInstanceViews := make(map[string]map[string]*instanceViewScheduling)
-	groupedInstanceViews[consts.NormalInferMode] = instanceViews
+	groupedInstanceViews := make(map[consts.InferType]map[string]*instanceViewScheduling)
+	groupedInstanceViews[consts.InferTypeNeutral] = instanceViews
 	clusterViewScheduling := clusterViewScheduling{
 		groupedInstanceViews: groupedInstanceViews,
 		instanceViews:        instanceViews,
@@ -188,7 +188,7 @@ func TestDispatchPolicySchedulePD(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
-					Role:     consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill",
@@ -211,7 +211,7 @@ func TestDispatchPolicySchedulePD(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
-					Role:     consts.DecodeInferMode,
+					InferType: consts.InferTypeDecode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
@@ -235,11 +235,11 @@ func TestDispatchPolicySchedulePD(t *testing.T) {
 		instance.InstanceViewInterface = instance.cmsView
 	}
 
-	groupedInstanceViews := make(map[string]map[string]*instanceViewScheduling)
-	groupedInstanceViews[consts.PrefillInferMode] = map[string]*instanceViewScheduling{
+	groupedInstanceViews := make(map[consts.InferType]map[string]*instanceViewScheduling)
+	groupedInstanceViews[consts.InferTypePrefill] = map[string]*instanceViewScheduling{
 		"instance-prefill": instanceViews["instance-prefill"],
 	}
-	groupedInstanceViews[consts.DecodeInferMode] = map[string]*instanceViewScheduling{
+	groupedInstanceViews[consts.InferTypeDecode] = map[string]*instanceViewScheduling{
 		"instance-decode": instanceViews["instance-decode"],
 	}
 
@@ -267,7 +267,7 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 		"instance-prefill": {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
-					Role: consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill",
@@ -292,8 +292,8 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 		instance.InstanceViewInterface = instance.cmsView
 	}
 
-	groupedInstanceViews1 := make(map[string]map[string]*instanceViewScheduling)
-	groupedInstanceViews1[consts.PrefillInferMode] = instanceViews1
+	groupedInstanceViews1 := make(map[consts.InferType]map[string]*instanceViewScheduling)
+	groupedInstanceViews1[consts.InferTypePrefill] = instanceViews1
 
 	clusterViewScheduling1 := clusterViewScheduling{
 		groupedInstanceViews: groupedInstanceViews1,
@@ -308,7 +308,7 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 		"instance-decode": {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
-					Role: consts.DecodeInferMode,
+					InferType: consts.InferTypeDecode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
@@ -333,8 +333,8 @@ func TestDispatchPolicySchedulePDMissingInstance(t *testing.T) {
 		instance.InstanceViewInterface = instance.cmsView
 	}
 
-	groupedInstanceViews2 := make(map[string]map[string]*instanceViewScheduling)
-	groupedInstanceViews2[consts.DecodeInferMode] = instanceViews2
+	groupedInstanceViews2 := make(map[consts.InferType]map[string]*instanceViewScheduling)
+	groupedInstanceViews2[consts.InferTypeDecode] = instanceViews2
 
 	clusterViewScheduling2 := clusterViewScheduling{
 		groupedInstanceViews: groupedInstanceViews2,
@@ -359,7 +359,7 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
-					Role:     consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-1",
@@ -383,7 +383,7 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
-					Role:     consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-2",
@@ -407,7 +407,7 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8003},
-					Role:     consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-3",
@@ -431,7 +431,7 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8004},
-					Role:     consts.DecodeInferMode,
+					InferType: consts.InferTypeDecode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
@@ -455,13 +455,13 @@ func TestCacheAwareSchedulingSchedulePD(t *testing.T) {
 		instance.InstanceViewInterface = instance.cmsView
 	}
 
-	groupedInstanceViews := make(map[string]map[string]*instanceViewScheduling)
-	groupedInstanceViews[consts.PrefillInferMode] = map[string]*instanceViewScheduling{
+	groupedInstanceViews := make(map[consts.InferType]map[string]*instanceViewScheduling)
+	groupedInstanceViews[consts.InferTypePrefill] = map[string]*instanceViewScheduling{
 		"instance-prefill-1": instanceViews["instance-prefill-1"],
 		"instance-prefill-2": instanceViews["instance-prefill-2"],
 		"instance-prefill-3": instanceViews["instance-prefill-3"],
 	}
-	groupedInstanceViews[consts.DecodeInferMode] = map[string]*instanceViewScheduling{
+	groupedInstanceViews[consts.InferTypeDecode] = map[string]*instanceViewScheduling{
 		"instance-decode": instanceViews["instance-decode"],
 	}
 
@@ -495,7 +495,7 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
-					Role:     consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-1",
@@ -519,7 +519,7 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
-					Role:     consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-2",
@@ -543,7 +543,7 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8003},
-					Role:     consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-3",
@@ -567,7 +567,7 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8004},
-					Role:     consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-prefill-4",
@@ -591,7 +591,7 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8005},
-					Role:     consts.DecodeInferMode,
+					InferType: consts.InferTypeDecode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode",
@@ -615,14 +615,14 @@ func TestCacheAwareSchedulingSchedulePDTopK(t *testing.T) {
 		instance.InstanceViewInterface = instance.cmsView
 	}
 
-	groupedInstanceViews := make(map[string]map[string]*instanceViewScheduling)
-	groupedInstanceViews[consts.PrefillInferMode] = map[string]*instanceViewScheduling{
+	groupedInstanceViews := make(map[consts.InferType]map[string]*instanceViewScheduling)
+	groupedInstanceViews[consts.InferTypePrefill] = map[string]*instanceViewScheduling{
 		"instance-prefill-1": instanceViews["instance-prefill-1"],
 		"instance-prefill-2": instanceViews["instance-prefill-2"],
 		"instance-prefill-3": instanceViews["instance-prefill-3"],
 		"instance-prefill-4": instanceViews["instance-prefill-4"],
 	}
-	groupedInstanceViews[consts.DecodeInferMode] = map[string]*instanceViewScheduling{
+	groupedInstanceViews[consts.InferTypeDecode] = map[string]*instanceViewScheduling{
 		"instance-decode": instanceViews["instance-decode"],
 	}
 
@@ -670,7 +670,7 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
-					Role:     consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-neutral-1",
@@ -694,7 +694,7 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
-					Role:     consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-neutral-2",
@@ -718,7 +718,7 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8003},
-					Role:     consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-neutral-3",
@@ -743,8 +743,8 @@ func TestCacheAwareSchedulingScheduleNeutral(t *testing.T) {
 		instance.InstanceViewInterface = instance.cmsView
 	}
 
-	groupedInstanceViews := make(map[string]map[string]*instanceViewScheduling)
-	groupedInstanceViews[consts.NormalInferMode] = instanceViews
+	groupedInstanceViews := make(map[consts.InferType]map[string]*instanceViewScheduling)
+	groupedInstanceViews[consts.InferTypeNeutral] = instanceViews
 
 	clusterViewScheduling := clusterViewScheduling{
 		groupedInstanceViews: groupedInstanceViews,
@@ -770,7 +770,7 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
-					Role:     consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral1",
@@ -794,7 +794,7 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
-					Role:     consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral2",
@@ -818,7 +818,7 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8003},
-					Role:     consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral3",
@@ -842,7 +842,7 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8004},
-					Role:     consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral4",
@@ -866,7 +866,7 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8005},
-					Role:     consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-neutral5",
@@ -891,8 +891,8 @@ func TestFloodDispatchPolicyScheduleNeutral(t *testing.T) {
 		instance.InstanceViewInterface = instance.cmsView
 	}
 
-	groupedInstanceViews := make(map[string]map[string]*instanceViewScheduling)
-	groupedInstanceViews[consts.NormalInferMode] = instanceViews
+	groupedInstanceViews := make(map[consts.InferType]map[string]*instanceViewScheduling)
+	groupedInstanceViews[consts.InferTypeNeutral] = instanceViews
 
 	clusterViewScheduling := clusterViewScheduling{
 		groupedInstanceViews: groupedInstanceViews,
@@ -921,7 +921,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
-					Role:     consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill1",
@@ -945,7 +945,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
-					Role:     consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill2",
@@ -969,7 +969,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
-					Role:     consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill3",
@@ -993,7 +993,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
-					Role:     consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill4",
@@ -1017,7 +1017,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
-					Role:     consts.PrefillInferMode,
+					InferType: consts.InferTypePrefill,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-prefill5",
@@ -1041,7 +1041,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
-					Role:     consts.DecodeInferMode,
+					InferType: consts.InferTypeDecode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode1",
@@ -1065,7 +1065,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
-					Role:     consts.DecodeInferMode,
+					InferType: consts.InferTypeDecode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode2",
@@ -1089,7 +1089,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
-					Role:     consts.DecodeInferMode,
+					InferType: consts.InferTypeDecode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode3",
@@ -1113,7 +1113,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
-					Role:     consts.DecodeInferMode,
+					InferType: consts.InferTypeDecode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode4",
@@ -1137,7 +1137,7 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
-					Role:     consts.DecodeInferMode,
+					InferType: consts.InferTypeDecode,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:                            "instance-decode5",
@@ -1162,15 +1162,15 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 		instance.InstanceViewInterface = instance.cmsView
 	}
 
-	groupedInstanceViews := make(map[string]map[string]*instanceViewScheduling)
-	groupedInstanceViews[consts.PrefillInferMode] = map[string]*instanceViewScheduling{
+	groupedInstanceViews := make(map[consts.InferType]map[string]*instanceViewScheduling)
+	groupedInstanceViews[consts.InferTypePrefill] = map[string]*instanceViewScheduling{
 		"instance-prefill1": instanceViews["instance-prefill1"],
 		"instance-prefill2": instanceViews["instance-prefill2"],
 		"instance-prefill3": instanceViews["instance-prefill3"],
 		"instance-prefill4": instanceViews["instance-prefill4"],
 		"instance-prefill5": instanceViews["instance-prefill5"],
 	}
-	groupedInstanceViews[consts.DecodeInferMode] = map[string]*instanceViewScheduling{
+	groupedInstanceViews[consts.InferTypeDecode] = map[string]*instanceViewScheduling{
 		"instance-decode1": instanceViews["instance-decode1"],
 		"instance-decode2": instanceViews["instance-decode2"],
 		"instance-decode3": instanceViews["instance-decode3"],
@@ -1187,8 +1187,8 @@ func TestFloodDispatchPolicySchedulePD(t *testing.T) {
 	assert.Len(t, result1, 2)
 	assert.Len(t, result1[0], 1)
 	assert.Len(t, result1[1], 1)
-	assert.Equal(t, consts.PrefillInferMode, result1[0][0].GetInferMode())
-	assert.Equal(t, consts.DecodeInferMode, result1[1][0].GetInferMode())
+	assert.Equal(t, consts.InferTypePrefill, result1[0][0].GetInferType())
+	assert.Equal(t, consts.InferTypeDecode, result1[1][0].GetInferType())
 
 	result2 := policy.schedule(&types.SchedulingRequest{SchedulingMode: types.SchedulingModePDBatch}, clusterViewScheduling)
 	assert.Len(t, result2, 2)
@@ -1211,7 +1211,7 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8001},
-					Role:     consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-neutral-1",
@@ -1239,7 +1239,7 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
 					Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8002},
-					Role:     consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId:        "instance-neutral-2",
@@ -1268,8 +1268,8 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 		instance.InstanceViewInterface = instance.cmsView
 	}
 
-	groupedInstanceViews := make(map[string]map[string]*instanceViewScheduling)
-	groupedInstanceViews[consts.NormalInferMode] = instanceViews
+	groupedInstanceViews := make(map[consts.InferType]map[string]*instanceViewScheduling)
+	groupedInstanceViews[consts.InferTypeNeutral] = instanceViews
 
 	clusterViewScheduling := clusterViewScheduling{
 		groupedInstanceViews: groupedInstanceViews,

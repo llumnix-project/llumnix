@@ -3,11 +3,11 @@ package balancer
 import (
 	"errors"
 	"fmt"
-	"llumnix/cmd/gateway/app/options"
-	"llumnix/pkg/resolver"
 
 	"k8s.io/klog/v2"
 
+	"llumnix/cmd/gateway/app/options"
+	"llumnix/pkg/resolver"
 	"llumnix/pkg/consts"
 	"llumnix/pkg/types"
 )
@@ -63,9 +63,9 @@ func NewCompositeBalancer(config *options.GatewayConfig) *CompositeBalancer {
 // setupPDDisaggBalancer initializes balancers for prefill-decode split mode.
 // It creates separate balancers for prefill and decode stages.
 func (bp *CompositeBalancer) setupPDDisaggBalancer(config *options.GatewayConfig) {
-	prefillResolver := resolver.CreateBackendServiceResolver(&config.DiscoveryConfig, types.InferRolePrefill)
+	prefillResolver := resolver.CreateBackendServiceResolver(&config.DiscoveryConfig, consts.InferTypePrefill)
 	bp.prefillLocalBalancer = NewRoundRobinBalancer(prefillResolver)
-	decodeResolver := resolver.CreateBackendServiceResolver(&config.DiscoveryConfig, types.InferRoleDecode)
+	decodeResolver := resolver.CreateBackendServiceResolver(&config.DiscoveryConfig, consts.InferTypeDecode)
 	bp.decodeLocalBalancer = NewRoundRobinBalancer(decodeResolver)
 
 	if config.IsPDRoundRobin() {
@@ -80,7 +80,7 @@ func (bp *CompositeBalancer) setupPDDisaggBalancer(config *options.GatewayConfig
 // It creates a local balancer and optionally a remote scheduler balancer.
 func (bp *CompositeBalancer) setupNormalBalancer(config *options.GatewayConfig) {
 	bp.balanceMode = LocalBalancer
-	r := resolver.CreateBackendServiceResolver(&config.DiscoveryConfig, types.InferRoleNormal)
+	r := resolver.CreateBackendServiceResolver(&config.DiscoveryConfig, consts.InferTypeNeutral)
 	bp.localBalancer = NewRoundRobinBalancer(r)
 	if config.SchedulingPolicy != consts.SchedulingPolicyRoundRobin {
 		bp.balanceMode = RemoteBalancer
@@ -94,9 +94,9 @@ func (bp *CompositeBalancer) setupNormalBalancer(config *options.GatewayConfig) 
 func (bp *CompositeBalancer) pdDisaggLocalGet(req *types.RequestContext) (types.SchedulingResult, error) {
 	if req.SchedulingCtx.SchedulingMode == types.SchedulingModePDStaged {
 		switch req.SchedulingCtx.SchedulingStage {
-		case types.SchedulingStagePrefill:
+		case consts.SchedulingStagePrefill:
 			return bp.prefillLocalBalancer.Get(req)
-		case types.SchedulingStageDecode:
+		case consts.SchedulingStageDecode:
 			return bp.decodeLocalBalancer.Get(req)
 		default:
 			return nil, fmt.Errorf("invalid scheduling stage: %s", req.SchedulingCtx.SchedulingStage)

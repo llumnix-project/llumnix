@@ -118,21 +118,21 @@ def get_scheduler_command(
 
 
 def get_vllm_command(
-    role: str,
+    instance_type: str,
     port: int,
     cuda: int,
     enable_full_mode_scheduling: bool,
     tag: str,
     connector_type: str,
 ) -> str:
-    if role == "prefill":
+    if instance_type == "prefill":
         kv_role = "kv_producer"
-    elif role == "decode":
+    elif instance_type == "decode":
         kv_role = "kv_consumer"
     else:
         kv_role = "kv_both"
     if connector_type == "HybridConnector":
-        if role == "prefill":
+        if instance_type == "prefill":
             backend = "kvt"
         else:
             backend = "kvt+migration"
@@ -171,13 +171,13 @@ def get_vllm_command(
 
 
 def get_discovery_command(
-    role: str = "normal",
+    instance_type: str = "neutral",
     port: int = 8000,
     dp_size_local: int = 1,
 ):
     command = (
         f"python3 -m discovery.discovery "
-        f"--role {role} "
+        f"--instance_type {instance_type} "
         f"--pod_name {uuid.uuid4()} "
         f"--entrypoint_ip {get_ip()} " 
         f"--entrypoint_port {port} " 

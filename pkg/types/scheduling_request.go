@@ -1,6 +1,10 @@
 package types
 
-import "fmt"
+import (
+	"fmt"
+
+	"llumnix/pkg/consts"
+)
 
 type SchedulingMode string
 
@@ -8,13 +12,6 @@ const (
 	SchedulingModeNormal   SchedulingMode = "normal"
 	SchedulingModePDBatch  SchedulingMode = "pd_batch"
 	SchedulingModePDStaged SchedulingMode = "pd_staged"
-)
-
-type SchedulingStage string
-
-const (
-	SchedulingStagePrefill SchedulingStage = "prefill"
-	SchedulingStageDecode  SchedulingStage = "decode"
 )
 
 type SchedulingResult []LLMInstance
@@ -30,9 +27,9 @@ func (sr SchedulingResult) String() string {
 	return str
 }
 
-func (sr SchedulingResult) GetInstanceByRole(role InferRole) *LLMInstance {
+func (sr SchedulingResult) GetInstanceByInferType(inferType consts.InferType) *LLMInstance {
 	for _, instance := range sr {
-		if instance.Role == role {
+		if instance.InferType == inferType {
 			return &instance
 		}
 	}
@@ -41,11 +38,11 @@ func (sr SchedulingResult) GetInstanceByRole(role InferRole) *LLMInstance {
 
 type SchedulingRequest struct {
 	// Scheduling information
-	Id             string         `json:"id"`
-	Model          string         `json:"model"`
-	GatewayId      string         `json:"gateway_id,omitempty"`
-	SchedulingMode  SchedulingMode  `json:"scheduling_mode"`
-	SchedulingStage SchedulingStage `json:"scheduling_stage"`
+	Id              string                 `json:"id"`
+	Model           string                 `json:"model"`
+	GatewayId       string                 `json:"gateway_id,omitempty"`
+	SchedulingMode  SchedulingMode         `json:"scheduling_mode"`
+	SchedulingStage consts.SchedulingStage `json:"scheduling_stage"`
 
 	// LLM Prompt
 	PromptNumTokens int      `json:"prompt_num_tokens,omitempty"`

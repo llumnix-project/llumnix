@@ -45,11 +45,11 @@ func (b *PDDisaggVllmKvtForwarder) buildTransferParams(pInstance *types.LLMInsta
 }
 
 func (b *PDDisaggVllmKvtForwarder) batchSchedulingForward(req *types.RequestContext) (<-chan StreamChunk, error) {
-	pInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRolePrefill)
+	pInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByInferType(consts.InferTypePrefill)
 	if pInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
 	}
-	dInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRoleDecode)
+	dInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByInferType(consts.InferTypeDecode)
 	if dInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled decode instance", req.Id)
 	}

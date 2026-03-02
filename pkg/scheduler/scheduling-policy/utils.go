@@ -115,12 +115,12 @@ func verifyDispatchLoadMetric(c *options.SchedulerConfig) {
 }
 
 func toInstanceViewInterfaceMap[T InstanceViewInterface](
-	raw map[string]map[string]T) map[string]map[string]InstanceViewInterface {
+	raw map[consts.InferType]map[string]T) map[consts.InferType]map[string]InstanceViewInterface {
 	if raw == nil {
 		return nil
 	}
 
-	res := make(map[string]map[string]InstanceViewInterface, len(raw))
+	res := make(map[consts.InferType]map[string]InstanceViewInterface, len(raw))
 	for mode, views := range raw {
 		inner := make(map[string]InstanceViewInterface, len(views))
 		for id, v := range views {
@@ -132,16 +132,16 @@ func toInstanceViewInterfaceMap[T InstanceViewInterface](
 }
 
 func toClusterViewScheduling(cv clusterView) clusterViewScheduling {
-	var groupedInstanceViews map[string]map[string]*instanceViewScheduling
+	var groupedInstanceViews map[consts.InferType]map[string]*instanceViewScheduling
 	var instanceViews map[string]*instanceViewScheduling
-	groupedInstanceViews = make(map[string]map[string]*instanceViewScheduling, len(cv.groupedInstanceViews))
+	groupedInstanceViews = make(map[consts.InferType]map[string]*instanceViewScheduling, len(cv.groupedInstanceViews))
 	instanceViews = make(map[string]*instanceViewScheduling)
-	for inferMode, views := range cv.groupedInstanceViews {
-		if groupedInstanceViews[inferMode] == nil {
-			groupedInstanceViews[inferMode] = make(map[string]*instanceViewScheduling, len(views))
+	for inferType, views := range cv.groupedInstanceViews {
+		if groupedInstanceViews[inferType] == nil {
+			groupedInstanceViews[inferType] = make(map[string]*instanceViewScheduling, len(views))
 		}
 		for instanceID, view := range views {
-			groupedInstanceViews[inferMode][instanceID] = &instanceViewScheduling{
+			groupedInstanceViews[inferType][instanceID] = &instanceViewScheduling{
 				InstanceViewInterface: view,
 				schedulingCtx: schedulingCtx{
 					metrics:          map[string]instanceSchedulingMetric{},
@@ -153,11 +153,11 @@ func toClusterViewScheduling(cv clusterView) clusterViewScheduling {
 			}
 			switch v := view.(type) {
 			case *cms.InstanceView:
-				groupedInstanceViews[inferMode][instanceID].cmsView = v
-				groupedInstanceViews[inferMode][instanceID].lrsView = nil
+				groupedInstanceViews[inferType][instanceID].cmsView = v
+				groupedInstanceViews[inferType][instanceID].lrsView = nil
 			case *lrs.InstanceView:
-				groupedInstanceViews[inferMode][instanceID].lrsView = v
-				groupedInstanceViews[inferMode][instanceID].cmsView = nil
+				groupedInstanceViews[inferType][instanceID].lrsView = v
+				groupedInstanceViews[inferType][instanceID].cmsView = nil
 			default:
 				if v == nil {
 					klog.Errorf("Instance view is nil for instance %s", instanceID)
@@ -165,7 +165,7 @@ func toClusterViewScheduling(cv clusterView) clusterViewScheduling {
 					klog.Errorf("Unexpected instance view type of instance %s: %T", instanceID, v)
 				}
 			}
-			instanceViews[instanceID] = groupedInstanceViews[inferMode][instanceID]
+			instanceViews[instanceID] = groupedInstanceViews[inferType][instanceID]
 		}
 	}
 	result := clusterViewScheduling{
@@ -188,7 +188,7 @@ func getRemainingInstanceIds(
 }
 
 func logSelectedInstance(
-	instance *instanceViewScheduling, requestId string, requestInferMode string, enableFullModeScheduling bool) {
+	instance *instanceViewScheduling, requestId string, requestInferType consts.InferType, enableFullModeScheduling bool) {
 	var loadMetric instanceSchedulingMetric
 	if enableFullModeScheduling {
 		loadMetric = &kvCacheUsageRatioProjected{
@@ -205,6 +205,6 @@ func logSelectedInstance(
 	}
 	loadMetric.Calculate(nil, instance)
 	klog.V(3).Infof("[GetToken] dispatch request %s to %s instance %s for %s, %s: %.4f",
-		requestId, instance.GetInferMode(), instance.GetInstanceId(), requestInferMode,
+		requestId, instance.GetInferType(), instance.GetInstanceId(), requestInferType,
 		loadMetric.GetName(), loadMetric.GetValue())
 }

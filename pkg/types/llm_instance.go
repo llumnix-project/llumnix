@@ -3,32 +3,9 @@ package types
 import (
 	"fmt"
 	"strings"
+
+	"llumnix/pkg/consts"
 )
-
-type InferRole string
-
-const (
-	InferRoleNormal  InferRole = "normal"
-	InferRolePrefill InferRole = "prefill"
-	InferRoleDecode  InferRole = "decode"
-
-	InferRoleAll InferRole = "all" // Only for filtering purposes, will not appear in llm worker
-)
-
-func (r InferRole) String() string {
-	switch r {
-	case InferRoleNormal:
-		return "normal"
-	case InferRolePrefill:
-		return "prefill"
-	case InferRoleDecode:
-		return "decode"
-	case InferRoleAll:
-		return "all"
-	default:
-		return "unknown"
-	}
-}
 
 // LLMInstance represents a single LLM inference worker instance.
 // It contains all necessary information to identify and connect to the worker.
@@ -39,8 +16,8 @@ type LLMInstance struct {
 	ID string `json:"id"`
 	// Model is the name of the model served by this worker
 	Model string `json:"model"`
-	// Role is the inference mode (prefill/decode/normal) of the worker
-	Role InferRole `json:"role"`
+	// InferType is the inference type (prefill/decode/neutral) of the worker
+	InferType consts.InferType `json:"infer_type"`
 	// Endpoint is the network address where the worker can be reached
 	Endpoint Endpoint `json:"endpoint"`
 	// AuxIp is the auxiliary ip of the worker for PD disaggregation
@@ -69,13 +46,13 @@ func (w *LLMInstance) Id() string {
 func (w *LLMInstance) String() string {
 	var parts []string
 
-	// Build the prefix part (Model and/or Role)
-	if w.Model != "" && w.Role != "" {
-		parts = append(parts, fmt.Sprintf("%s|%s", w.Model, w.Role))
+	// Build the prefix part (Model and/or InferType)
+	if w.Model != "" && w.InferType != "" {
+		parts = append(parts, fmt.Sprintf("%s|%s", w.Model, w.InferType))
 	} else if w.Model != "" {
 		parts = append(parts, w.Model)
-	} else if w.Role != "" {
-		parts = append(parts, string(w.Role))
+	} else if w.InferType != "" {
+		parts = append(parts, string(w.InferType))
 	}
 
 	// Add endpoint

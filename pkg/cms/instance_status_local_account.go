@@ -12,7 +12,7 @@ import (
 
 type RequestLocalAccount struct {
 	ScheduleTimestampMs int64
-	InferMode           string
+	InferType           consts.InferType
 	NumTokens           int32
 	NumUncomputedTokens int32
 	FoundInCMS          bool
@@ -118,15 +118,15 @@ func (e *InstanceStatusLocalAccountEditor) deleteRequestLocalAccount(
 		return
 	}
 
-	if requestLocalAccount.InferMode == consts.PrefillInferMode ||
-		requestLocalAccount.InferMode == consts.NormalInferMode {
+	if requestLocalAccount.InferType == consts.InferTypePrefill ||
+		requestLocalAccount.InferType == consts.InferTypeNeutral {
 		instanceView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests -= 1
 		instanceView.InstanceStatusLocalAccount.NumUncomputedTokensInflightDispatchPrefillRequests -=
 			requestLocalAccount.NumUncomputedTokens
 	}
 
-	if requestLocalAccount.InferMode == consts.DecodeInferMode ||
-		requestLocalAccount.InferMode == consts.NormalInferMode {
+	if requestLocalAccount.InferType == consts.InferTypeDecode ||
+		requestLocalAccount.InferType == consts.InferTypeNeutral {
 		instanceView.InstanceStatusLocalAccount.NumInflightDispatchDecodeRequests -= 1
 		instanceView.InstanceStatusLocalAccount.NumTokensInflightDispatchDecodeRequests -=
 			requestLocalAccount.NumTokens
@@ -141,7 +141,7 @@ func (e *InstanceStatusLocalAccountEditor) deleteRequestLocalAccount(
 
 func (e *InstanceStatusLocalAccountEditor) addRequestLocalAccount(
 	instanceView *InstanceView,
-	inferMode string,
+	inferType consts.InferType,
 	numTokens int32,
 	prefixHitNumTokens int32,
 	requestId string,
@@ -157,27 +157,27 @@ func (e *InstanceStatusLocalAccountEditor) addRequestLocalAccount(
 		instanceView.InstanceStatusLocalAccount.RequestLocalAccount[requestId] =
 			&RequestLocalAccount{
 				ScheduleTimestampMs: time.Now().UnixMilli(),
-				InferMode:           inferMode,
+				InferType:           inferType,
 				NumTokens:           numTokens,
 				NumUncomputedTokens: numUncomputedTokens,
 				FoundInCMS:          false,
 			}
 	}
 
-	if inferMode == consts.PrefillInferMode || inferMode == consts.NormalInferMode {
+	if inferType == consts.InferTypePrefill || inferType == consts.InferTypeNeutral {
 		instanceView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests += 1
 		instanceView.InstanceStatusLocalAccount.NumUncomputedTokensInflightDispatchPrefillRequests += numUncomputedTokens
 	}
 
-	if inferMode == consts.DecodeInferMode || inferMode == consts.NormalInferMode {
+	if inferType == consts.InferTypeDecode || inferType == consts.InferTypeNeutral {
 		instanceView.InstanceStatusLocalAccount.NumInflightDispatchDecodeRequests += 1
 		instanceView.InstanceStatusLocalAccount.NumTokensInflightDispatchDecodeRequests += numTokens
 	}
 
 	if !firstAdd {
 		// Not first update means that this instance is selected as both prefill and decode,
-		// so this instance should be considered as normal infer mode.
-		instanceView.InstanceStatusLocalAccount.RequestLocalAccount[requestId].InferMode = consts.NormalInferMode
+		// so this instance should be considered as neutral infer type.
+		instanceView.InstanceStatusLocalAccount.RequestLocalAccount[requestId].InferType = consts.InferTypeNeutral
 	}
 }
 

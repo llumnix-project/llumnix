@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"llumnix/pkg/consts"
 	"llumnix/pkg/types"
 )
 
@@ -17,7 +18,7 @@ const (
 // EndpointsResolver implements both Resolver and LLMResolver interfaces
 // for static endpoint lists specified in a URI.
 type EndpointsResolver struct {
-	role      string
+	inferType consts.InferType
 	mu        sync.RWMutex
 	endpoints types.EndpointSlice
 	watcher   *Watcher
@@ -25,7 +26,7 @@ type EndpointsResolver struct {
 
 // newEndpointsResolver creates a new EndpointsResolver from a URI.
 // If no port is specified, default port 80 is used.
-func newEndpointsResolver(uri, role string) (*EndpointsResolver, error) {
+func newEndpointsResolver(uri string, inferType consts.InferType) (*EndpointsResolver, error) {
 	// Split by comma to get endpoint strings
 	endpointStrs := strings.Split(uri, ",")
 	if len(endpointStrs) == 0 {
@@ -53,7 +54,7 @@ func newEndpointsResolver(uri, role string) (*EndpointsResolver, error) {
 	}
 
 	return &EndpointsResolver{
-		role:      role,
+		inferType: inferType,
 		endpoints: endpoints,
 		watcher:   NewWatcher(),
 	}, nil
@@ -94,7 +95,7 @@ func (er *EndpointsResolver) GetLLMInstances() (types.LLMInstanceSlice, error) {
 	for _, ep := range er.endpoints {
 		instances = append(instances, types.LLMInstance{
 			Endpoint: ep,
-			Role:     types.InferRole(er.role),
+			InferType: er.inferType,
 			// endpoints discovery for backend is just used for testing, hack it here!
 			AuxIp:   ep.Host,
 			AuxPort: 20000 + ep.Port,
@@ -128,7 +129,7 @@ func (b *EndpointsResolverBuilder) Build(uri string, args BuildArgs) (Resolver, 
 		return nil, fmt.Errorf("invalid endpoints URI format: must start with '%s'", EndpointsUriPrefix)
 	}
 	uri = strings.TrimPrefix(uri, EndpointsUriPrefix)
-	return newEndpointsResolver(uri, types.InferRoleNormal.String())
+	return newEndpointsResolver(uri, consts.InferTypeNeutral)
 }
 
 // EndpointsLlmResolverBuilder implements LLMResolverBuilder for creating EndpointsResolver instances.
@@ -152,13 +153,13 @@ func (b *EndpointsLlmResolverBuilder) Build(uri string, args BuildArgs) (LLMReso
 	// Remove the endpoints+llm:// prefix and treat it as regular endpoints URI
 	uri = strings.TrimPrefix(uri, EndpointsLlmUriPrefix)
 
-	// Read role build args
-	role, ok := args["role"].(string)
-	if !ok || role == "" {
-		return nil, fmt.Errorf("missing role or invalid role build args: %v", role)
+	// Read instance type build args
+	instanceTypeStr, ok := args["instance_type"].(string)
+	if !ok || instanceTypeStr == "" {
+		return nil, fmt.Errorf("missing instance_type or invalid instance_type build args: %v", instanceTypeStr)
 	}
 
-	return newEndpointsResolver(uri, role)
+	return newEndpointsResolver(uri, consts.InferType(instanceTypeStr))
 }
 
 func init() {
