@@ -9,17 +9,17 @@ Usage: $0 <group-name> <kustomize-dir>
 Arguments:
   group-name         Namespace name (e.g., llumnix1)
   kustomize-dir      Directory containing kustomization.yaml
-                     Supports nested directories (e.g., 'pd', 'normal/lite-mode-scheduling')
+                     Supports nested directories (e.g., 'pd', 'neutral/lite-mode-scheduling')
 
 Examples:
   # Update pd mode with full-mode scheduling
   $0 llumnix1 pd/full-mode-scheduling
   
-  # Update normal mode with lite-mode scheduling
-  $0 llumnix2 normal/lite-mode-scheduling/load-balance
+  # Update neutral mode with lite-mode scheduling
+  $0 llumnix2 neutral/lite-mode-scheduling/load-balance
   
-  # Update normal mode with full-mode scheduling
-  $0 llumnix3 normal/full-mode-scheduling/load-balance
+  # Update neutral mode with full-mode scheduling
+  $0 llumnix3 neutral/full-mode-scheduling/load-balance
 EOF
 }
 

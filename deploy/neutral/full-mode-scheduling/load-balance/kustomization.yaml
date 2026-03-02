@@ -3,6 +3,6 @@ kind: Kustomization
 
 resources:
   - ../../../base
-  - normal.yaml
+  - neutral.yaml
   - gateway.yaml
   - scheduler.yaml

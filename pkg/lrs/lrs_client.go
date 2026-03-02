@@ -7,9 +7,9 @@ import (
 	"sync"
 )
 
-// LocalRealtimeStateClient manages different scheduler state stores for different inference inferModes
+// LocalRealtimeStateClient manages different scheduler state stores for different inference inferTypes
 type LocalRealtimeStateClient struct {
-	normalState  *LocalRealtimeState
+	neutralState  *LocalRealtimeState
 	prefillState *LocalRealtimeState
 	decodeState  *LocalRealtimeState
 
@@ -27,12 +27,12 @@ type LocalRealtimeStateClient struct {
 func NewLocalRealtimeStateClient(c *options.SchedulerConfig) *LocalRealtimeStateClient {
 	w := &LocalRealtimeStateClient{
 		multiModelSupport: c.MultiModelSupport,
-		normalState:       NewLocalRealtimeState(),
+		neutralState:       NewLocalRealtimeState(),
 		prefillState:      NewLocalRealtimeState(),
 		decodeState:       NewLocalRealtimeState(),
 	}
 
-	go w.normalState.SubmitMetric()
+	go w.neutralState.SubmitMetric()
 	go w.prefillState.SubmitMetric()
 	go w.decodeState.SubmitMetric()
 
@@ -59,27 +59,27 @@ func (lrsClient *LocalRealtimeStateClient) AddInstance(instance *types.LLMInstan
 	lrsClient.mu.Lock()
 	defer lrsClient.mu.Unlock()
 
-	switch instance.Role.String() {
-	case consts.DecodeInferMode:
+	switch instance.InferType {
+	case consts.InferTypeDecode:
 		lrsClient.decodeState.AddInstance(instance)
-	case consts.PrefillInferMode:
+	case consts.InferTypePrefill:
 		lrsClient.prefillState.AddInstance(instance)
 	default:
-		lrsClient.normalState.AddInstance(instance)
+		lrsClient.neutralState.AddInstance(instance)
 	}
 }
 
-func (lrsClient *LocalRealtimeStateClient) RemoveInstance(inferMode string, instanceId string) {
+func (lrsClient *LocalRealtimeStateClient) RemoveInstance(inferType consts.InferType, instanceId string) {
 	lrsClient.mu.Lock()
 	defer lrsClient.mu.Unlock()
 
-	switch inferMode {
-	case consts.DecodeInferMode:
+	switch inferType {
+	case consts.InferTypeDecode:
 		lrsClient.decodeState.RemoveInstance(instanceId)
-	case consts.PrefillInferMode:
+	case consts.InferTypePrefill:
 		lrsClient.prefillState.RemoveInstance(instanceId)
 	default:
-		lrsClient.normalState.RemoveInstance(instanceId)
+		lrsClient.neutralState.RemoveInstance(instanceId)
 	}
 }
 
@@ -87,7 +87,7 @@ func (lrsClient *LocalRealtimeStateClient) AddGateway(gatewayId string) {
 	lrsClient.mu.Lock()
 	defer lrsClient.mu.Unlock()
 
-	lrsClient.normalState.AddGateway(gatewayId)
+	lrsClient.neutralState.AddGateway(gatewayId)
 	lrsClient.prefillState.AddGateway(gatewayId)
 	lrsClient.decodeState.AddGateway(gatewayId)
 }
@@ -96,75 +96,75 @@ func (lrsClient *LocalRealtimeStateClient) RemoveGateway(gatewayId string) {
 	lrsClient.mu.Lock()
 	defer lrsClient.mu.Unlock()
 
-	lrsClient.normalState.RemoveGateway(gatewayId)
+	lrsClient.neutralState.RemoveGateway(gatewayId)
 	lrsClient.prefillState.RemoveGateway(gatewayId)
 	lrsClient.decodeState.RemoveGateway(gatewayId)
 }
 
-// inferMode-specific operations
+// inferType-specific operations
 
-func (lrsClient *LocalRealtimeStateClient) AllocateRequestState(inferMode string, request *RequestState) error {
+func (lrsClient *LocalRealtimeStateClient) AllocateRequestState(inferType consts.InferType, request *RequestState) error {
 	lrsClient.mu.Lock()
 	defer lrsClient.mu.Unlock()
 
-	if inferMode == "" {
-		inferMode = consts.NormalInferMode
+	if inferType == "" {
+		inferType = consts.InferTypeNeutral
 	}
-	s := lrsClient.getLocalRealtimeState(inferMode)
+	s := lrsClient.getLocalRealtimeState(inferType)
 	if s == nil {
-		return consts.ErrorNoMatchInferMode
+		return consts.ErrorNoMatchInferType
 	}
 	return s.AllocateRequestState(request)
 }
 
-func (lrsClient *LocalRealtimeStateClient) UpdateRequestState(inferMode string, request *RequestState) error {
+func (lrsClient *LocalRealtimeStateClient) UpdateRequestState(inferType consts.InferType, request *RequestState) error {
 	lrsClient.mu.Lock()
 	defer lrsClient.mu.Unlock()
 
-	s := lrsClient.getLocalRealtimeState(inferMode)
+	s := lrsClient.getLocalRealtimeState(inferType)
 	if s == nil {
-		return consts.ErrorNoMatchInferMode
+		return consts.ErrorNoMatchInferType
 	}
 	return s.UpdateRequestState(request)
 }
 
-func (lrsClient *LocalRealtimeStateClient) ReleaseRequestState(inferMode string, request *RequestState) {
+func (lrsClient *LocalRealtimeStateClient) ReleaseRequestState(inferType consts.InferType, request *RequestState) {
 	lrsClient.mu.Lock()
 	defer lrsClient.mu.Unlock()
 
-	s := lrsClient.getLocalRealtimeState(inferMode)
+	s := lrsClient.getLocalRealtimeState(inferType)
 	if s == nil {
 		return
 	}
 	s.ReleaseRequestState(request)
 }
 
-func (lrsClient *LocalRealtimeStateClient) GetGroupedInstanceViews() map[string]map[string]*InstanceView {
-	inferModes := []string{consts.NormalInferMode, consts.PrefillInferMode, consts.DecodeInferMode}
-	groupedInstanceViews := make(map[string]map[string]*InstanceView)
-	for _, inferMode := range inferModes {
-		s := lrsClient.getLocalRealtimeState(inferMode)
+func (lrsClient *LocalRealtimeStateClient) GetGroupedInstanceViews() map[consts.InferType]map[string]*InstanceView {
+	inferTypes := []consts.InferType{consts.InferTypeNeutral, consts.InferTypePrefill, consts.InferTypeDecode}
+	groupedInstanceViews := make(map[consts.InferType]map[string]*InstanceView)
+	for _, inferType := range inferTypes {
+		s := lrsClient.getLocalRealtimeState(inferType)
 		views := s.GetInstanceViews()
 		if len(views) > 0 {
-			groupedInstanceViews[inferMode] = views
+			groupedInstanceViews[inferType] = views
 		}
 	}
 	return groupedInstanceViews
 }
 
-func (lrsClient *LocalRealtimeStateClient) GetInstanceViews(inferMode string) map[string]*InstanceView {
-	s := lrsClient.getLocalRealtimeState(inferMode)
+func (lrsClient *LocalRealtimeStateClient) GetInstanceViews(inferType consts.InferType) map[string]*InstanceView {
+	s := lrsClient.getLocalRealtimeState(inferType)
 	if s == nil {
 		return nil
 	}
 	return s.GetInstanceViews()
 }
 
-func (lrsClient *LocalRealtimeStateClient) GetInstanceViewsByModel(model string, inferMode string) map[string]*InstanceView {
+func (lrsClient *LocalRealtimeStateClient) GetInstanceViewsByModel(model string, inferType consts.InferType) map[string]*InstanceView {
 	lrsClient.mu.RLock()
 	defer lrsClient.mu.RUnlock()
 
-	s := lrsClient.getLocalRealtimeState(inferMode)
+	s := lrsClient.getLocalRealtimeState(inferType)
 	if s == nil {
 
 		return nil
@@ -176,8 +176,8 @@ func (lrsClient *LocalRealtimeStateClient) GetInstanceViewsByModel(model string,
 	}
 }
 
-func (lrsClient *LocalRealtimeStateClient) GetInstanceView(inferMode string, instanceId string) *InstanceView {
-	s := lrsClient.getLocalRealtimeState(inferMode)
+func (lrsClient *LocalRealtimeStateClient) GetInstanceView(inferType consts.InferType, instanceId string) *InstanceView {
+	s := lrsClient.getLocalRealtimeState(inferType)
 	if s == nil {
 		return nil
 	}
@@ -185,22 +185,22 @@ func (lrsClient *LocalRealtimeStateClient) GetInstanceView(inferMode string, ins
 }
 
 func (lrsClient *LocalRealtimeStateClient) PrintInstanceViews() {
-	println("Normal infer mode instance views:")
-	lrsClient.normalState.PrintInstanceViews()
-	println("\nPrefill infer mode instance views:")
+	println("Neutral infer type instance views:")
+	lrsClient.neutralState.PrintInstanceViews()
+	println("\nPrefill infer type instance views:")
 	lrsClient.prefillState.PrintInstanceViews()
-	println("\nDecode infer mode instance views:")
+	println("\nDecode infer type instance views:")
 	lrsClient.decodeState.PrintInstanceViews()
 }
 
-func (lrsClient *LocalRealtimeStateClient) getLocalRealtimeState(inferMode string) *LocalRealtimeState {
-	switch inferMode {
-	case consts.PrefillInferMode:
+func (lrsClient *LocalRealtimeStateClient) getLocalRealtimeState(inferType consts.InferType) *LocalRealtimeState {
+	switch inferType {
+	case consts.InferTypePrefill:
 		return lrsClient.prefillState
-	case consts.DecodeInferMode:
+	case consts.InferTypeDecode:
 		return lrsClient.decodeState
-	case consts.NormalInferMode:
-		return lrsClient.normalState
+	case consts.InferTypeNeutral:
+		return lrsClient.neutralState
 	}
 	return nil
 }

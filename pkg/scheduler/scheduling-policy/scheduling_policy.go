@@ -19,11 +19,11 @@ import (
 type InstanceViewInterface interface {
 	GetInstance() *types.LLMInstance
 	GetInstanceId() string
-	GetInferMode() string
+	GetInferType() consts.InferType
 }
 
 type clusterView struct {
-	groupedInstanceViews map[string]map[string]InstanceViewInterface
+	groupedInstanceViews map[consts.InferType]map[string]InstanceViewInterface
 }
 
 type instanceViewScheduling struct {
@@ -44,7 +44,7 @@ type schedulingCtx struct {
 }
 
 type clusterViewScheduling struct {
-	groupedInstanceViews map[string]map[string]*instanceViewScheduling
+	groupedInstanceViews map[consts.InferType]map[string]*instanceViewScheduling
 	instanceViews        map[string]*instanceViewScheduling
 	clusterSchedulingCtx clusterSchedulingCtx
 }
@@ -82,7 +82,7 @@ func NewSchedulingPolicy(
 
 type DispatchPolicy struct {
 	c                 *options.SchedulerConfig
-	schedulingPolicy    string
+	schedulingPolicy  string
 	cmsClient         *cms.CMSReadClient
 	lrsClient         *lrs.LocalRealtimeStateClient
 	clusterViewClient ClusterViewClientInterface
@@ -158,7 +158,7 @@ func NewDispatchPolicy(
 
 	return &DispatchPolicy{
 		c:                 c,
-		schedulingPolicy:    schedulingPolicy,
+		schedulingPolicy:  schedulingPolicy,
 		cmsClient:         cmsClient,
 		lrsClient:         lrsClient,
 		clusterViewClient: clusterViewClient,
@@ -239,7 +239,7 @@ func (p *DispatchPolicy) Schedule(request *types.SchedulingRequest) error {
 
 		schResults = append(schResults, *instance.GetInstance())
 		klog.V(4).Infof("Added token from instance: %s", instance.GetInstanceId())
-		logSelectedInstance(instance, request.Id, consts.PrefillInferMode, p.c.EnableFullModeScheduling)
+		logSelectedInstance(instance, request.Id, consts.InferTypePrefill, p.c.EnableFullModeScheduling)
 	}
 	if len(selectedInstances) > 1 {
 		for _, instance := range selectedInstances[1] {
@@ -249,7 +249,7 @@ func (p *DispatchPolicy) Schedule(request *types.SchedulingRequest) error {
 
 			schResults = append(schResults, *instance.GetInstance())
 			klog.V(4).Infof("Added token2 from instance: %s", instance.GetInstanceId())
-			logSelectedInstance(instance, request.Id, consts.DecodeInferMode, p.c.EnableFullModeScheduling)
+			logSelectedInstance(instance, request.Id, consts.InferTypeDecode, p.c.EnableFullModeScheduling)
 		}
 	}
 	request.SchedulingResult = schResults
@@ -292,27 +292,27 @@ func (p *DispatchPolicy) schedule(
 
 	if p.c.EnablePredictorEnhancedScheduling {
 		predictNumComputedPrefillTokens(
-			clusterView.groupedInstanceViews[consts.PrefillInferMode], p.cmsClient.TTFTPredictor, int32(p.c.MaxNumBatchedTokens))
+			clusterView.groupedInstanceViews[consts.InferTypePrefill], p.cmsClient.TTFTPredictor, int32(p.c.MaxNumBatchedTokens))
 	}
-	for inferMode, instanceViews := range clusterView.groupedInstanceViews {
+	for inferType, instanceViews := range clusterView.groupedInstanceViews {
 		klog.V(3).Infof(
-			"Calculating metrics for infer mode: %s, instance count: %d", inferMode, len(instanceViews))
-		p.policyInternal.calculateMetrics(inferMode, request, instanceViews)
+			"Calculating metrics for infer type: %s, instance count: %d", inferType, len(instanceViews))
+		p.policyInternal.calculateMetrics(inferType, request, instanceViews)
 	}
 
 	if request.SchedulingMode == types.SchedulingModeNormal {
-		if _, exists := clusterView.groupedInstanceViews[consts.NormalInferMode]; exists {
-			normal := p.executeSchedule(consts.NormalInferMode, clusterView)
-			if normal != nil {
-				klog.V(4).Infof("Normal instance selected: %s", normal.GetInstanceId())
-				selectedInstances = append(selectedInstances, []*instanceViewScheduling{normal})
+		if _, exists := clusterView.groupedInstanceViews[consts.InferTypeNeutral]; exists {
+			neutral := p.executeSchedule(consts.InferTypeNeutral, clusterView)
+			if neutral != nil {
+				klog.V(4).Infof("Neutral instance selected: %s", neutral.GetInstanceId())
+				selectedInstances = append(selectedInstances, []*instanceViewScheduling{neutral})
 				if p.c.EnableInstanceStatusLocalAccount {
 					p.cmsClient.AddRequestLocalAccount(
-						normal.cmsView, consts.NormalInferMode, numTokens,
-						int32(normal.schedulingCtx.prefixHitTokens), requestId, true)
+						neutral.cmsView, consts.InferTypeNeutral, numTokens,
+						int32(neutral.schedulingCtx.prefixHitTokens), requestId, true)
 				}
 			} else {
-				klog.V(4).Info("No normal instance selected")
+				klog.V(4).Info("No neutral instance selected")
 			}
 		}
 		return
@@ -320,21 +320,21 @@ func (p *DispatchPolicy) schedule(
 
 	if len(clusterView.groupedInstanceViews) == 1 {
 		klog.V(4).Info(
-			"Only one group of instance views but not Normal mode, return empty selected instances")
+			"Only one group of instance views but not Neutral type, return empty selected instances")
 		return
 	}
 
 	var prefill *instanceViewScheduling
 	needPrefill := request.SchedulingMode == types.SchedulingModePDBatch ||
-		(request.SchedulingMode == types.SchedulingModePDStaged && request.SchedulingStage == types.SchedulingStagePrefill)
+		(request.SchedulingMode == types.SchedulingModePDStaged && request.SchedulingStage == consts.SchedulingStagePrefill)
 	if needPrefill {
-		prefill = p.executeSchedule(consts.PrefillInferMode, clusterView)
+		prefill = p.executeSchedule(consts.InferTypePrefill, clusterView)
 		if prefill == nil {
 			klog.V(4).Info("No prefill instance selected, return")
 		} else {
 			if p.c.EnableInstanceStatusLocalAccount {
 				p.cmsClient.AddRequestLocalAccount(
-					prefill.cmsView, consts.PrefillInferMode, numTokens,
+					prefill.cmsView, consts.InferTypePrefill, numTokens,
 					int32(prefill.schedulingCtx.prefixHitTokens), requestId, true)
 			}
 		}
@@ -342,9 +342,9 @@ func (p *DispatchPolicy) schedule(
 
 	var decode *instanceViewScheduling
 	needDecode := request.SchedulingMode == types.SchedulingModePDBatch ||
-		(request.SchedulingMode == types.SchedulingModePDStaged && request.SchedulingStage == types.SchedulingStageDecode)
+		(request.SchedulingMode == types.SchedulingModePDStaged && request.SchedulingStage == consts.SchedulingStageDecode)
 	if needDecode {
-		decode = p.executeSchedule(consts.DecodeInferMode, clusterView)
+		decode = p.executeSchedule(consts.InferTypeDecode, clusterView)
 		if decode == nil {
 			if p.c.EnableInstanceStatusLocalAccount && prefill != nil {
 				p.cmsClient.RevertRequestPrefillLocalAccount(
@@ -354,7 +354,7 @@ func (p *DispatchPolicy) schedule(
 		} else {
 			if p.c.EnableInstanceStatusLocalAccount {
 				p.cmsClient.AddRequestLocalAccount(
-					decode.cmsView, consts.DecodeInferMode, numTokens, int32(decode.schedulingCtx.prefixHitTokens),
+					decode.cmsView, consts.InferTypeDecode, numTokens, int32(decode.schedulingCtx.prefixHitTokens),
 					requestId, decode != prefill)
 			}
 		}
@@ -369,23 +369,23 @@ func (p *DispatchPolicy) schedule(
 // for all filters and execute them again. Then, apply the selector across all
 // available instances to choose the most suitable instance.
 func (p *DispatchPolicy) executeSchedule(
-	inferMode string,
+	inferType consts.InferType,
 	clusterView clusterViewScheduling,
 ) *instanceViewScheduling {
 	var availableInstanceViews map[string]*instanceViewScheduling
 
 	fallback := false
 	availableInstanceViews = p.policyInternal.filter(
-		inferMode,
-		clusterView.groupedInstanceViews[inferMode],
+		inferType,
+		clusterView.groupedInstanceViews[inferType],
 		fallback)
 
 	if len(availableInstanceViews) == 0 {
 		klog.V(4).Info("No instances found without fallback, executing scheduling steps with fallback=true")
 		fallback = true
 		availableInstanceViews = p.policyInternal.filter(
-			inferMode,
-			clusterView.groupedInstanceViews[inferMode],
+			inferType,
+			clusterView.groupedInstanceViews[inferType],
 			fallback)
 	}
 
@@ -397,7 +397,7 @@ func (p *DispatchPolicy) executeSchedule(
 	klog.V(4).Infof("Available instances count: %d, fallback: %v, instance IDs: %v",
 		len(availableInstanceViews), fallback, maps.Keys(availableInstanceViews))
 
-	selected := p.policyInternal.selectInstance(inferMode, availableInstanceViews)
+	selected := p.policyInternal.selectInstance(inferType, availableInstanceViews)
 	if selected == nil {
 		klog.V(4).Info("No instance selected by policy internal, return nil")
 		return nil
@@ -409,21 +409,21 @@ func (p *DispatchPolicy) executeSchedule(
 
 type dispatchPolicyInternal interface {
 	calculateMetrics(
-		inferMode string,
+		inferType consts.InferType,
 		request *types.SchedulingRequest,
 		instanceViews map[string]*instanceViewScheduling)
 	filter(
-		inferMode string,
+		inferType consts.InferType,
 		instanceViews map[string]*instanceViewScheduling,
 		fallback bool) map[string]*instanceViewScheduling
 	selectInstance(
-		inferMode string,
+		inferType consts.InferType,
 		instanceViews map[string]*instanceViewScheduling) *instanceViewScheduling
 }
 
-type baseDispatchPolicy map[string]*inferModeBaseDispatchPolicy
+type baseDispatchPolicy map[consts.InferType]*inferTypeBaseDispatchPolicy
 
-type inferModeBaseDispatchPolicy struct {
+type inferTypeBaseDispatchPolicy struct {
 	metrics               map[string]func() instanceSchedulingMetric // key: metricsName
 	globalFilters         []globalFilter
 	singleInstanceFilters []singleInstanceFilter
@@ -431,22 +431,22 @@ type inferModeBaseDispatchPolicy struct {
 }
 
 func (p baseDispatchPolicy) calculateMetrics(
-	inferMode string,
+	inferType consts.InferType,
 	request *types.SchedulingRequest,
 	instanceViews map[string]*instanceViewScheduling) {
 
-	calculateMetrics(request, instanceViews, p[inferMode].metrics)
+	calculateMetrics(request, instanceViews, p[inferType].metrics)
 }
 
 func (p baseDispatchPolicy) filter(
-	inferMode string,
+	inferType consts.InferType,
 	instanceViews map[string]*instanceViewScheduling,
 	fallback bool) map[string]*instanceViewScheduling {
 
 	availableInstanceViews := filter(
 		instanceViews,
-		p[inferMode].singleInstanceFilters,
-		p[inferMode].globalFilters,
+		p[inferType].singleInstanceFilters,
+		p[inferType].globalFilters,
 		fallback)
 
 	klog.V(4).Infof("BaseDispatchPolicy filter completed, available instances count: %d, instance IDs: %v",
@@ -456,10 +456,10 @@ func (p baseDispatchPolicy) filter(
 }
 
 func (p baseDispatchPolicy) selectInstance(
-	inferMode string,
+	inferType consts.InferType,
 	instanceViews map[string]*instanceViewScheduling) *instanceViewScheduling {
 
-	selected := p[inferMode].selectors.selectInstance(instanceViews)
+	selected := p[inferType].selectors.selectInstance(instanceViews)
 	if selected != nil {
 		klog.V(4).Infof("Instance selected: %s", selected.GetInstanceId())
 	} else {

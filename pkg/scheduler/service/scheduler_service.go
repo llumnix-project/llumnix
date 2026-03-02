@@ -52,7 +52,7 @@ func NewSchedulerService(c *options.SchedulerConfig) *SchedulerService {
 	}
 
 	if ss.config.EnableRequestStateTracking() {
-		r := resolver.CreateBackendServiceResolver(&c.DiscoveryConfig, types.InferRoleAll)
+		r := resolver.CreateBackendServiceResolver(&c.DiscoveryConfig, consts.InferTypeAll)
 		addChan, delChan, err := r.Watch(context.Background())
 		if err != nil {
 			klog.Errorf("failed to watch LLM instances: %v", err)
@@ -66,13 +66,13 @@ func NewSchedulerService(c *options.SchedulerConfig) *SchedulerService {
 				case instances := <-ss.addChan:
 					for _, w := range instances {
 						// create realtime stats for this instance
-						klog.Infof("add backend service endpoint: %s/%s", w.Role, w.String())
+						klog.Infof("add backend service endpoint: %s/%s", w.InferType, w.String())
 						ss.lrsClient.AddInstance(&w)
 					}
 				case instances := <-ss.delChan:
 					for _, w := range instances {
-						klog.Infof("remove backend service endpoint: %s/%s", w.Role, w.String())
-						ss.lrsClient.RemoveInstance(w.Role.String(), w.Id())
+						klog.Infof("remove backend service endpoint: %s/%s", w.InferType, w.String())
+						ss.lrsClient.RemoveInstance(w.InferType, w.Id())
 					}
 				}
 			}
@@ -168,9 +168,9 @@ func (ss *SchedulerService) handleSchedule(w http.ResponseWriter, r *http.Reques
 	if ss.config.EnableRequestStateTracking() {
 		for _, instance := range schReq.SchedulingResult {
 			reqState := lrs.NewRequestState(schReq.Id, int64(schReq.PromptNumTokens), instance.Id(), schReq.GatewayId)
-			err := ss.lrsClient.AllocateRequestState(instance.Role.String(), reqState)
+			err := ss.lrsClient.AllocateRequestState(instance.InferType, reqState)
 			if err != nil {
-				klog.Errorf("Allocate %s request state failed: %v", instance.Role, err)
+				klog.Errorf("Allocate %s request state failed: %v", instance.InferType, err)
 			}
 		}
 	}
@@ -210,7 +210,7 @@ func (ss *SchedulerService) handleRelease(w http.ResponseWriter, r *http.Request
 
 	for _, instance := range schReq.SchedulingResult {
 		reqState := lrs.NewRequestState(schReq.Id, 0, instance.Id(), schReq.GatewayId)
-		ss.lrsClient.ReleaseRequestState(instance.Role.String(), reqState)
+		ss.lrsClient.ReleaseRequestState(instance.InferType, reqState)
 	}
 
 	klog.V(3).Infof("%vms| do release request by %s: %v", time.Since(tStart).Milliseconds(), schReq.GatewayId, string(body))
@@ -235,7 +235,7 @@ func (ss *SchedulerService) handleReport(w http.ResponseWriter, r *http.Request)
 
 	for _, reqData := range reqDatas {
 		reqState := lrs.NewRequestState(reqData.Id, int64(reqData.NumTokens), reqData.InstanceId, reqData.GatewayId)
-		err := ss.lrsClient.UpdateRequestState(reqData.InferMode, reqState)
+		err := ss.lrsClient.UpdateRequestState(reqData.InferType, reqState)
 		if err != nil {
 			klog.Errorf("update request state failed: %v", err)
 		}

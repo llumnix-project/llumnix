@@ -11,7 +11,7 @@ var (
 	ErrorSchedulerNotReady      = errors.New("scheduler not ready")
 	ErrorMayNetworkBroken       = errors.New("may network broken")
 	ErrorAllEndpointBusy        = errors.New("all endpoints busy")
-	ErrorNoMatchInferMode       = errors.New("not match infer mode")
+	ErrorNoMatchInferType       = errors.New("not match infer type")
 	ErrorGatewayNotFound        = errors.New("gateway not found")
 	ErrorRequestExits           = errors.New("request state exists")
 	ErrorRequestNotExits        = errors.New("request state not exists")

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"llumnix/cmd/config"
 	"llumnix/pkg/consts"
-	"llumnix/pkg/types"
 
 	"k8s.io/klog/v2"
 )
@@ -53,10 +52,10 @@ func CreateSchedulerResolver(config *config.DiscoveryConfig) Resolver {
 	}
 }
 
-// CreateBackendServiceResolver creates an LLM resolver based on the provided configuration and role.
+// CreateBackendServiceResolver creates an LLM resolver based on the provided configuration and infer type.
 // It supports message bus discovery and EAS service discovery.
-func CreateBackendServiceResolver(config *config.DiscoveryConfig, role types.InferRole) LLMResolver {
-	buildArgs := BuildArgs{"role": role.String()}
+func CreateBackendServiceResolver(config *config.DiscoveryConfig, inferType consts.InferType) LLMResolver {
+	buildArgs := BuildArgs{"instance_type": inferType.String()}
 
 	switch config.LLMBackendDiscovery {
 	case consts.DiscoveryRedis:

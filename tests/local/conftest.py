@@ -84,14 +84,14 @@ def vllm_servers(test_config: Dict[str, Any]) -> Generator[List[subprocess.Popen
     policy = test_config.get('policy', 'round-robin')
     enable_full_mode_scheduling = test_config.get('enable_full_mode_scheduling', False)
 
-    def launch_vllm_process(role: str, port: int, cuda: int, tag: str, connector_type: str) -> subprocess.Popen:
+    def launch_vllm_process(instance_type: str, port: int, cuda: int, tag: str, connector_type: str) -> subprocess.Popen:
         vllm_proc = start_process(
             f"vLLM-{cuda}",
-            get_vllm_command(role, VLLM_BASE_PORT + cuda, cuda, enable_full_mode_scheduling, tag, connector_type),
+            get_vllm_command(instance_type, VLLM_BASE_PORT + cuda, cuda, enable_full_mode_scheduling, tag, connector_type),
             f"vllm_{cuda}.log")
         runtime_proc = start_process(
             f"Runtime-{cuda}",
-            get_discovery_command(role, VLLM_BASE_PORT + cuda),
+            get_discovery_command(instance_type, VLLM_BASE_PORT + cuda),
             f"runtime_{cuda}.log")
         processes.extend([vllm_proc, runtime_proc])
 
@@ -105,7 +105,7 @@ def vllm_servers(test_config: Dict[str, Any]) -> Generator[List[subprocess.Popen
             all_available_ports.append(VLLM_BASE_PORT + cuda)
     else:
         for cuda in range(2):
-            launch_vllm_process("normal", VLLM_BASE_PORT + cuda, cuda, f"normal_{cuda}", test_config.get('connector_type', 'HybridConnector'))
+            launch_vllm_process("neutral", VLLM_BASE_PORT + cuda, cuda, f"neutral_{cuda}", test_config.get('connector_type', 'HybridConnector'))
             all_available_ports.append(VLLM_BASE_PORT + cuda)
 
     print("test_config:", test_config)

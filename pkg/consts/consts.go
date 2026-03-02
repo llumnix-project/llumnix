@@ -8,18 +8,25 @@ const (
 	MetricRecordDuration = 5 * time.Second
 )
 
-// llm inference role
+// InferType represents the inference type of an instance or request.
+type InferType string
+
 const (
-	NormalInferMode  = "normal"
-	PrefillInferMode = "prefill"
-	DecodeInferMode  = "decode"
+	InferTypeNeutral InferType = "neutral"
+	InferTypePrefill InferType = "prefill"
+	InferTypeDecode  InferType = "decode"
+	InferTypeAll     InferType = "all" // Only for filtering purposes, will not appear in llm worker
 )
 
-// llm inference type for llumnix
+func (m InferType) String() string {
+	return string(m)
+}
+
+type SchedulingStage string
+
 const (
-	NeutralInstanceType = "neutral"
-	PrefillInstanceType = "prefill"
-	DecodeInstanceType  = "decode"
+	SchedulingStagePrefill SchedulingStage = "prefill"
+	SchedulingStageDecode  SchedulingStage = "decode"
 )
 
 const (
@@ -155,7 +162,7 @@ const (
 	DefaultKvsMetadataServiceRedisClusterPassword = ""
 	DefaultKvsMetadataServiceHttpServerHost       = "0.0.0.0"
 	DefaultKvsMetadataServiceHttpServerPort       = "9003"
-	DefaultKvsHashAlgo             = KvsHashAlgoSha256CBOR
+	DefaultKvsHashAlgo                            = KvsHashAlgoSha256CBOR
 
 	// Scheduling defaults
 	DefaultDispatchTopK                        = 1

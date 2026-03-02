@@ -1,7 +1,7 @@
 apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
-  name: normal
+  name: neutral
 spec:
   replicas: 1
   leaderWorkerTemplate:
@@ -188,7 +188,7 @@ spec:
             - |-
               cd /discovery && \
               exec python3 -m discovery.discovery \
-              --role normal \
+              --instance_type neutral \
               --pod_name $(POD_NAME) \
               --entrypoint_ip $(POD_IP) \
               --entrypoint_port 8000 \

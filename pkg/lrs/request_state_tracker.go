@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"llumnix/cmd/gateway/app/options"
+	"llumnix/pkg/consts"
 	"llumnix/pkg/gateway/tokenizer"
 	"llumnix/pkg/resolver"
 	"llumnix/pkg/types"
@@ -63,12 +64,12 @@ func (r *RequestStateTracker) DeleteRequestState(id string) {
 }
 
 type RequestReportData struct {
-	Id         string `json:"id"`
-	Model      string `json:"model"`
-	InferMode  string `json:"infer_mode"`
-	InstanceId string `json:"instance_id"`
-	GatewayId  string `json:"gateway_id"`
-	NumTokens  uint64 `json:"num_tokens"`
+	Id         string          `json:"id"`
+	Model      string          `json:"model"`
+	InferType  consts.InferType `json:"infer_type"`
+	InstanceId string          `json:"instance_id"`
+	GatewayId  string          `json:"gateway_id"`
+	NumTokens  uint64          `json:"num_tokens"`
 }
 
 type RequestReportDataArray = []RequestReportData
@@ -80,7 +81,7 @@ func (r *RequestStateTracker) report() {
 		reportDatas = append(reportDatas, RequestReportData{
 			Id:         rs.req.Id,
 			Model:      rs.req.LLMRequest.Model,
-			InferMode:  rs.InferMode,
+			InferType:  rs.InferType,
 			InstanceId: rs.InstanceId,
 			GatewayId:  rs.GatewayId,
 			NumTokens:  rs.GetNumTokens(),
@@ -140,7 +141,7 @@ func (r *RequestStateTracker) reportLoop() {
 type RequestTokenState struct {
 	req        *types.RequestContext
 	Model      string
-	InferMode  string
+	InferType  consts.InferType
 	InstanceId string
 	GatewayId  string
 
@@ -152,7 +153,7 @@ type RequestTokenState struct {
 }
 
 func NewRequestTokenState(
-	req *types.RequestContext, model string, inferMode string, instanceId string, gatewayId string) *RequestTokenState {
+	req *types.RequestContext, model string, inferType consts.InferType, instanceId string, gatewayId string) *RequestTokenState {
 	promptTokens, ok := req.LLMRequest.GetPromptTokens()
 	if !ok {
 		klog.Errorf("Failed to get prompt tokens.")
@@ -163,7 +164,7 @@ func NewRequestTokenState(
 		req:           req,
 		lastNumTokens: uint64(len(promptTokens)),
 		Model:         model,
-		InferMode:     inferMode,
+		InferType:     inferType,
 		InstanceId:    instanceId,
 		GatewayId:     gatewayId,
 	}

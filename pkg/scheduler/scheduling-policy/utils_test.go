@@ -131,7 +131,7 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 					cmsView: &cms.InstanceView{
 						Instance: &types.LLMInstance{
 							Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-							Role:     consts.NormalInferMode,
+							InferType: consts.InferTypeNeutral,
 						},
 						Status: &cms.InstanceStatus{
 							NumTotalGpuTokens:                     100,
@@ -150,7 +150,7 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 					cmsView: &cms.InstanceView{
 						Instance: &types.LLMInstance{
 							Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-							Role:     consts.NormalInferMode,
+							InferType: consts.InferTypeNeutral,
 						},
 						Status: &cms.InstanceStatus{
 							NumTotalGpuTokens:                     100,
@@ -185,7 +185,7 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 					cmsView: &cms.InstanceView{
 						Instance: &types.LLMInstance{
 							Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-							Role:     consts.NormalInferMode,
+							InferType: consts.InferTypeNeutral,
 						},
 						Status: &cms.InstanceStatus{
 							NumTotalGpuTokens:                     100,
@@ -224,7 +224,7 @@ func TestCalcInstancesPromptCacheHitLen(t *testing.T) {
 					cmsView: &cms.InstanceView{
 						Instance: &types.LLMInstance{
 							Endpoint: types.Endpoint{Host: "127.0.0.1", Port: 8000},
-							Role:     consts.NormalInferMode,
+							InferType: consts.InferTypeNeutral,
 						},
 						Status: &cms.InstanceStatus{
 							NumTotalGpuTokens:                     100,
@@ -391,7 +391,7 @@ func (m *MockCMSReadClient) GetInstanceViews() map[string]*cms.InstanceView {
 	return nil
 }
 
-func (m *MockCMSReadClient) GetGroupedInstanceViews() map[string]map[string]*cms.InstanceView {
+func (m *MockCMSReadClient) GetGroupedInstanceViews() map[consts.InferType]map[string]*cms.InstanceView {
 	return nil
 }
 

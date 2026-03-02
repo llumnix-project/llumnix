@@ -13,29 +13,29 @@ import (
 
 func init() {
 	registerForwarder(consts.ForwarderTypeNormal, func(schedulingMode types.SchedulingMode) (Forwarder, error) {
-		return newNormalForwarder(), nil
+		return newNeutralForwarder(), nil
 	})
 }
 
-type NormalForwarder struct {
+type NeutralForwarder struct {
 	client *http.Client
 }
 
-// newNormalForwarder creates a new NormalForwarder instance.
-func newNormalForwarder() *NormalForwarder {
-	return &NormalForwarder{
+// newNeutralForwarder creates a new NeutralForwarder instance.
+func newNeutralForwarder() *NeutralForwarder {
+	return &NeutralForwarder{
 		client: newLlmForwardClient(),
 	}
 }
 
 // Forward implements Forwarder interface.
 // Forwards the request to the inference engine and streams response chunks.
-func (b *NormalForwarder) Forward(req *types.RequestContext) (<-chan StreamChunk, error) {
+func (b *NeutralForwarder) Forward(req *types.RequestContext) (<-chan StreamChunk, error) {
 	chunkChan := make(chan StreamChunk, 100)
 
-	instance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRoleNormal)
+	instance := req.SchedulingCtx.SchedulingResults.GetInstanceByInferType(consts.InferTypeNeutral)
 	if instance == nil {
-		return nil, fmt.Errorf("no available instance for role: %s", types.InferRoleNormal)
+		return nil, fmt.Errorf("no available instance for infer type: %s", consts.InferTypeNeutral)
 	}
 
 	go func() {

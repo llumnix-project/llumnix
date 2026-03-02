@@ -89,8 +89,8 @@ func (iv *InstanceView) GetInstanceId() string {
 	return iv.instance.Id()
 }
 
-func (iv *InstanceView) GetInferMode() string {
-	return iv.instance.Role.String()
+func (iv *InstanceView) GetInferType() consts.InferType {
+	return iv.instance.InferType
 }
 
 func (iv *InstanceView) NumTokens() int64 {
@@ -390,7 +390,7 @@ func (lrs *LocalRealtimeState) SubmitMetric() {
 			labels := metrics.Labels{
 				{Name: "model", Value: iv.GetInstance().Model},
 				{Name: "instance_address", Value: instanceAddress.String()},
-				{Name: "infer_mode", Value: iv.GetInferMode()},
+				{Name: "infer_type", Value: string(iv.GetInferType())},
 			}
 			metrics.StatusValue("endpoint_llm_token_count", labels).Set(float32(tokens))
 			metrics.StatusValue("endpoint_active_token_count", labels).Set(float32(reqs))

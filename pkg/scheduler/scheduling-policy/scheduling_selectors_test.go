@@ -15,7 +15,7 @@ func genInstanceViewInternals() map[string]*instanceViewScheduling {
 		"instance-1": {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
-					Role: consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId: "instance-1",
@@ -39,7 +39,7 @@ func genInstanceViewInternals() map[string]*instanceViewScheduling {
 		"instance-2": {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
-					Role: consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId: "instance-2",
@@ -63,7 +63,7 @@ func genInstanceViewInternals() map[string]*instanceViewScheduling {
 		"instance-3": {
 			cmsView: &cms.InstanceView{
 				Instance: &types.LLMInstance{
-					Role: consts.NormalInferMode,
+					InferType: consts.InferTypeNeutral,
 				},
 				Status: &cms.InstanceStatus{
 					InstanceId: "instance-3",

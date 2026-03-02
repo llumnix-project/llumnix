@@ -22,7 +22,7 @@ class ServiceDiscovery:
         entrypoint_port: int,
         kv_transfer_ip: str,
         kv_transfer_port: int,
-        role: str,
+        instance_type: str,
         dp_size_local: int,
         redis_address: str,
         redis_port: int,
@@ -56,7 +56,7 @@ class ServiceDiscovery:
         for i in range(dp_size_local):
             instance_port = entrypoint_port + i
             instance_info = InstanceDiscoveryInfo(
-                role=role,
+                instance_type=instance_type,
                 entrypoint_ip=entrypoint_ip,
                 entrypoint_port=instance_port,
                 kv_transfer_ip=kv_transfer_ip,
@@ -133,7 +133,7 @@ async def main():
     parser.add_argument('--entrypoint_port', type=int, required=True)
     parser.add_argument('--kv_transfer_ip', type=str, required=True)
     parser.add_argument('--kv_transfer_port', type=int, required=True)
-    parser.add_argument('--role', type=str, required=True)
+    parser.add_argument('--instance_type', type=str, required=True)
     parser.add_argument('--dp_size_local', type=int, required=True)
     parser.add_argument('--redis_address', type=str, required=True)
     parser.add_argument('--redis_port', type=int, required=True)
@@ -166,7 +166,7 @@ async def main():
         entrypoint_port=args.entrypoint_port,
         kv_transfer_ip=args.kv_transfer_ip,
         kv_transfer_port=args.kv_transfer_port,
-        role=args.role,
+        instance_type=args.instance_type,
         dp_size_local=args.dp_size_local,
         redis_address=args.redis_address,
         redis_port=args.redis_port,

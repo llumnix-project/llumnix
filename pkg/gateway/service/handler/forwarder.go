@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"llumnix/pkg/consts"
 	"llumnix/pkg/types"
 	"sync"
 
@@ -66,7 +67,7 @@ func stagedScheduleForward(
 	doPrefill func(req *types.RequestContext, pInstance *types.LLMInstance) error,
 	doDecode func(req *types.RequestContext, chunkChan chan StreamChunk, pInstance, dInstance *types.LLMInstance),
 ) (<-chan StreamChunk, error) {
-	pInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByRole(types.InferRolePrefill)
+	pInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByInferType(consts.InferTypePrefill)
 	if pInstance == nil {
 		return nil, fmt.Errorf("[%s] no scheduled prefill instance", req.Id)
 	}
@@ -87,7 +88,7 @@ func stagedScheduleForward(
 			return
 		}
 
-		dInstance := results.GetInstanceByRole(types.InferRoleDecode)
+		dInstance := results.GetInstanceByInferType(consts.InferTypeDecode)
 		if dInstance == nil {
 			klog.Errorf("[%s] decode instance not found", req.Id)
 			chunkChan <- StreamChunk{err: fmt.Errorf("decode instance not found")}

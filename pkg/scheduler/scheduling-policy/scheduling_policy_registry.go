@@ -33,7 +33,7 @@ type loadBalanceDispatchPolicy struct {
 func newLoadBalanceDispatchFullMode(p *options.SchedulerConfig) *loadBalanceDispatchPolicy {
 	policy := &loadBalanceDispatchPolicy{
 		baseDispatchPolicy: baseDispatchPolicy{
-			consts.PrefillInferMode: {
+			consts.InferTypePrefill: {
 				metrics: map[string]func() instanceSchedulingMetric{
 					p.DispatchPrefillLoadMetric: getSchedulingMetric(p, p.DispatchPrefillLoadMetric),
 				},
@@ -57,7 +57,7 @@ func newLoadBalanceDispatchFullMode(p *options.SchedulerConfig) *loadBalanceDisp
 					metricNames: []string{p.DispatchPrefillLoadMetric},
 				},
 			},
-			consts.DecodeInferMode: {
+			consts.InferTypeDecode: {
 				metrics: map[string]func() instanceSchedulingMetric{
 					p.DispatchDecodeLoadMetric: getSchedulingMetric(p, p.DispatchDecodeLoadMetric),
 				},
@@ -81,7 +81,7 @@ func newLoadBalanceDispatchFullMode(p *options.SchedulerConfig) *loadBalanceDisp
 					metricNames: []string{p.DispatchDecodeLoadMetric},
 				},
 			},
-			consts.NormalInferMode: {
+			consts.InferTypeNeutral: {
 				metrics: map[string]func() instanceSchedulingMetric{
 					p.DispatchNeutralLoadMetric: getSchedulingMetric(p, p.DispatchNeutralLoadMetric),
 				},
@@ -110,14 +110,14 @@ func newLoadBalanceDispatchFullMode(p *options.SchedulerConfig) *loadBalanceDisp
 
 	// Placed the cache locality metric as the first metric to be used in the metric-based selector
 	if p.EnableCacheAwareScheduling {
-		prefillInferModeMetrics := policy.baseDispatchPolicy[consts.PrefillInferMode].metrics
-		prefillInferModeMetrics[p.DispatchPrefillCacheLocalityMetric] = getSchedulingMetric(p, p.DispatchPrefillCacheLocalityMetric)
-		prefillInstanceSelector := policy.baseDispatchPolicy[consts.PrefillInferMode].selectors.(*metricBasedSelector)
+		prefillInferTypeMetrics := policy.baseDispatchPolicy[consts.InferTypePrefill].metrics
+		prefillInferTypeMetrics[p.DispatchPrefillCacheLocalityMetric] = getSchedulingMetric(p, p.DispatchPrefillCacheLocalityMetric)
+		prefillInstanceSelector := policy.baseDispatchPolicy[consts.InferTypePrefill].selectors.(*metricBasedSelector)
 		prefillInstanceSelector.metricNames = append([]string{p.DispatchPrefillCacheLocalityMetric}, prefillInstanceSelector.metricNames...)
 
-		normalInferModeMetrics := policy.baseDispatchPolicy[consts.NormalInferMode].metrics
-		normalInferModeMetrics[p.DispatchPrefillCacheLocalityMetric] = getSchedulingMetric(p, p.DispatchPrefillCacheLocalityMetric)
-		neutralInstanceSelector := policy.baseDispatchPolicy[consts.NormalInferMode].selectors.(*metricBasedSelector)
+		normalInferTypeMetrics := policy.baseDispatchPolicy[consts.InferTypeNeutral].metrics
+		normalInferTypeMetrics[p.DispatchPrefillCacheLocalityMetric] = getSchedulingMetric(p, p.DispatchPrefillCacheLocalityMetric)
+		neutralInstanceSelector := policy.baseDispatchPolicy[consts.InferTypeNeutral].selectors.(*metricBasedSelector)
 		neutralInstanceSelector.metricNames = append([]string{p.DispatchPrefillCacheLocalityMetric}, neutralInstanceSelector.metricNames...)
 	}
 
@@ -135,7 +135,7 @@ func newSloDispatchFullMode(p *options.SchedulerConfig) *sloDispatchPolicy {
 
 	policy := &sloDispatchPolicy{
 		baseDispatchPolicy: baseDispatchPolicy{
-			consts.PrefillInferMode: {
+			consts.InferTypePrefill: {
 				metrics: map[string]func() instanceSchedulingMetric{
 					consts.SchedulingMetricPredictedTtft: getSchedulingMetric(p, consts.SchedulingMetricPredictedTtft),
 				},
@@ -160,7 +160,7 @@ func newSloDispatchFullMode(p *options.SchedulerConfig) *sloDispatchPolicy {
 					metricNames: []string{consts.SchedulingMetricPredictedTtft},
 				},
 			},
-			consts.DecodeInferMode: {
+			consts.InferTypeDecode: {
 				metrics: map[string]func() instanceSchedulingMetric{
 					consts.SchedulingMetricPredictedTpot: getSchedulingMetric(p, consts.SchedulingMetricPredictedTpot),
 				},
@@ -199,7 +199,7 @@ type floodDispatchPolicy struct {
 func newFloodDispatchPolicyFullMode(p *options.SchedulerConfig) *floodDispatchPolicy {
 	policy := &floodDispatchPolicy{
 		baseDispatchPolicy: baseDispatchPolicy{
-			consts.PrefillInferMode: {
+			consts.InferTypePrefill: {
 				metrics: map[string]func() instanceSchedulingMetric{},
 				globalFilters: []globalFilter{
 					&failoverFilter{
@@ -214,7 +214,7 @@ func newFloodDispatchPolicyFullMode(p *options.SchedulerConfig) *floodDispatchPo
 				},
 				selectors: &fixedPreferenceSelector{},
 			},
-			consts.DecodeInferMode: {
+			consts.InferTypeDecode: {
 				metrics: map[string]func() instanceSchedulingMetric{},
 				globalFilters: []globalFilter{
 					&failoverFilter{
@@ -229,7 +229,7 @@ func newFloodDispatchPolicyFullMode(p *options.SchedulerConfig) *floodDispatchPo
 				},
 				selectors: &fixedPreferenceSelector{},
 			},
-			consts.NormalInferMode: {
+			consts.InferTypeNeutral: {
 				metrics: map[string]func() instanceSchedulingMetric{},
 				globalFilters: []globalFilter{
 					&failoverFilter{
@@ -261,7 +261,7 @@ func newFloodDispatchPolicyFullMode(p *options.SchedulerConfig) *floodDispatchPo
 func newLoadBalanceDispatchLiteMode(p *options.SchedulerConfig) *loadBalanceDispatchPolicy {
 	policy := &loadBalanceDispatchPolicy{
 		baseDispatchPolicy: baseDispatchPolicy{
-			consts.PrefillInferMode: {
+			consts.InferTypePrefill: {
 				metrics: map[string]func() instanceSchedulingMetric{
 					p.DispatchPrefillLoadMetric: getSchedulingMetric(p, p.DispatchPrefillLoadMetric),
 				},
@@ -277,7 +277,7 @@ func newLoadBalanceDispatchLiteMode(p *options.SchedulerConfig) *loadBalanceDisp
 					metricNames: []string{p.DispatchPrefillLoadMetric},
 				},
 			},
-			consts.DecodeInferMode: {
+			consts.InferTypeDecode: {
 				metrics: map[string]func() instanceSchedulingMetric{
 					p.DispatchDecodeLoadMetric: getSchedulingMetric(p, p.DispatchDecodeLoadMetric),
 				},
@@ -293,7 +293,7 @@ func newLoadBalanceDispatchLiteMode(p *options.SchedulerConfig) *loadBalanceDisp
 					metricNames: []string{p.DispatchDecodeLoadMetric},
 				},
 			},
-			consts.NormalInferMode: {
+			consts.InferTypeNeutral: {
 				metrics: map[string]func() instanceSchedulingMetric{
 					p.DispatchNeutralLoadMetric: getSchedulingMetric(p, p.DispatchNeutralLoadMetric),
 				},

@@ -156,7 +156,7 @@ spec:
             - |-
               cd /discovery && \
               exec python3 -m discovery.discovery \
-              --role prefill \
+              --instance_type prefill \
               --pod_name $(POD_NAME) \
               --entrypoint_ip $(POD_IP) \
               --entrypoint_port 8000 \

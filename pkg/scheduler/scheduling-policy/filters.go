@@ -292,21 +292,21 @@ func (f *failoverFilter) filterOutInstances(instanceViews map[string]*instanceVi
 	}
 }
 
-type inferModeFilter struct {
-	targetInferMode string
+type inferTypeFilter struct {
+	targetInferType consts.InferType
 }
 
-func (f *inferModeFilter) instanceFilteredOut(instance *instanceViewScheduling) bool {
-	result := instance.GetInferMode() != f.targetInferMode
+func (f *inferTypeFilter) instanceFilteredOut(instance *instanceViewScheduling) bool {
+	result := instance.GetInferType() != f.targetInferType
 	if result {
 		klog.V(3).Infof(
-			"Infer mode filter applied, instance %s filtered out (instance mode: %s, target mode: %s)",
-			instance.GetInstanceId(), instance.GetInferMode(), f.targetInferMode)
+			"Infer type filter applied, instance %s filtered out (instance type: %s, target type: %s)",
+			instance.GetInstanceId(), instance.GetInferType(), f.targetInferType)
 	}
 	return result
 }
 
-func (f *inferModeFilter) skipWhenFallback() bool {
+func (f *inferTypeFilter) skipWhenFallback() bool {
 	return false
 }
 

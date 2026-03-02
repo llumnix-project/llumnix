@@ -52,9 +52,9 @@ func (cb *SchedulerClient) createSchedulingRequest(req *types.RequestContext) *t
 	localEndpoint := cb.kac.GetLocalEndpoint()
 	// create scheduler request
 	schRequest := &types.SchedulingRequest{
-		Id:            req.Id,
-		Model:         req.LLMRequest.Model,
-		GatewayId:     localEndpoint.String(),
+		Id:              req.Id,
+		Model:           req.LLMRequest.Model,
+		GatewayId:       localEndpoint.String(),
 		SchedulingMode:  req.SchedulingCtx.SchedulingMode,
 		SchedulingStage: req.SchedulingCtx.SchedulingStage,
 	}
@@ -176,9 +176,9 @@ func (cb *SchedulerClient) Get(req *types.RequestContext) (types.SchedulingResul
 func (cb *SchedulerClient) createReleaseRequest(req *types.RequestContext, instance *types.LLMInstance) *types.SchedulingRequest {
 	localEndpoint := cb.kac.GetLocalEndpoint()
 	return &types.SchedulingRequest{
-		Id:             req.Id,
-		Model:          req.LLMRequest.Model,
-		GatewayId:      localEndpoint.String(),
+		Id:               req.Id,
+		Model:            req.LLMRequest.Model,
+		GatewayId:        localEndpoint.String(),
 		SchedulingMode:   req.SchedulingCtx.SchedulingMode,
 		SchedulingStage:  req.SchedulingCtx.SchedulingStage,
 		SchedulingResult: types.SchedulingResult{*instance},

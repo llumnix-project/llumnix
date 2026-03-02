@@ -3,6 +3,7 @@ package types
 import (
 	"context"
 	"fmt"
+	"llumnix/pkg/consts"
 	"llumnix/pkg/metrics"
 	"net/http"
 	"strings"
@@ -191,8 +192,8 @@ type SchedulingContext struct {
 	// scheduling mode
 	SchedulingMode SchedulingMode
 
-	// inference stage, prefill or decode
-	SchedulingStage SchedulingStage
+	// scheduling stage, prefill or decode
+	SchedulingStage consts.SchedulingStage
 
 	// after the gateway obtains resources from the scheduler, it may return them. However,
 	// due to network partitioning between the gateway and scheduler, the gateway's address
@@ -267,7 +268,7 @@ type RequestStateManagementHooks interface {
 	OnPostPrefill(req *RequestContext)
 
 	// OnPostRequest is called after the entire request completes.
-	// Used for scheduler normal/decode instance request state cleanup.
+	// Used for scheduler neutral/decode instance request state cleanup.
 	OnPostRequest(req *RequestContext)
 
 	// OnPostDecodeFirstStreamResponse is called after first decode stream response.
@@ -289,8 +290,8 @@ func (*noopPDSeparateSchedulingHooks) ScheduleDecode(_ *RequestContext) (Schedul
 // noopRequestStateManagementHooks is a no-op implementation of RequestStateManagementHooks.
 type noopRequestStateManagementHooks struct{}
 
-func (*noopRequestStateManagementHooks) OnPostPrefill(_ *RequestContext)                {}
-func (*noopRequestStateManagementHooks) OnPostRequest(_ *RequestContext)                {}
+func (*noopRequestStateManagementHooks) OnPostPrefill(_ *RequestContext)                   {}
+func (*noopRequestStateManagementHooks) OnPostRequest(_ *RequestContext)                   {}
 func (*noopRequestStateManagementHooks) OnPostDecodeFirstStreamResponse(_ *RequestContext) {}
 func (*noopRequestStateManagementHooks) OnPostDecodeEachStreamResponse(_ *RequestContext)  {}
 
