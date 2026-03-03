@@ -299,7 +299,7 @@ func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext) {
 
 func (lgs *LlmGatewayService) schedulingMode() types.SchedulingMode {
 	if !lgs.config.IsPDDisagg() {
-		return types.SchedulingModeNormal
+		return types.SchedulingModeNeutral
 	}
 	if lgs.config.SeparatePDScheduling {
 		return types.SchedulingModePDStaged

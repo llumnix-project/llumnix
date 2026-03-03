@@ -59,7 +59,6 @@ spec:
                   --async-scheduling \
                   --kv-cache-memory-bytes=${KV_CACHE_MEMORY_BYTES-} \
                   --gpu-memory-utilization 0.7 \
-                  --kv-transfer-config '{"kv_connector":"MooncakeConnector","kv_role":"kv_consumer", "kv_connector_module_path":"mooncake.mooncake_connector_v1"}' \
                   --compilation_config '{"level":"0", "cudagraph_mode":2}' \
                   &
               done
@@ -167,7 +166,7 @@ spec:
               memory: 256Gi
               nvidia.com/gpu: "4"
         - name: discovery
-          image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/discovery:20260226-170427
+          image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/discovery:20260302-203317
           command:
             - /bin/bash
             - -c

@@ -21,9 +21,9 @@ type GatewayConfig struct {
 	WaitQueueThreads int
 
 	ServiceToken string
-	// waiting scheduling timeout if no scheduling result, unit is milliseconds, 0 means that drop request
+	// waiting scheduling timeout if no scheduling result, 0 means that drop request
 	WaitSchedulingTimeout time.Duration
-	// retry interval of waiting scheduling results, unit is milliseconds
+	// retry interval of waiting scheduling results
 	WaitSchedulingRetryInterval time.Duration
 	// whether forward tokens to scheduler
 	ForwardTokens bool
