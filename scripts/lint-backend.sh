@@ -12,7 +12,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-BACKEND_DIR="$PROJECT_ROOT/pkg/service/handler"
+BACKEND_DIR="$PROJECT_ROOT/pkg/gateway/service/handler"
 
 # Patterns to detect violations
 FORBIDDEN_PATTERNS=(

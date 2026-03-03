@@ -13,8 +13,9 @@ import (
 	"k8s.io/klog/v2"
 
 	"llm-gateway/cmd/llm-gateway/app/options"
-	"llm-gateway/pkg/service"
-	"llm-gateway/pkg/tokenizer"
+	gateway_service "llm-gateway/pkg/gateway/service"
+	"llm-gateway/pkg/gateway/tokenizer"
+	schedule_service "llm-gateway/pkg/scheduler/service"
 )
 
 func waitAndClean() {
@@ -58,13 +59,13 @@ func NewCommand() *cobra.Command {
 			}
 
 			if cfg.ScheduleMode {
-				cs := service.NewScheduleService(cfg)
+				cs := schedule_service.NewScheduleService(cfg)
 				klog.Info("llm scheduler start ...")
 				if err := cs.Start(); err != nil {
 					klog.Fatalf("llm scheduler exit: %v", err)
 				}
 			} else if cfg.StandaloneRescheduleMode && cfg.LlumnixConfig.EnableRescheduling {
-				r := service.NewRescheduleService(cfg)
+				r := schedule_service.NewRescheduleService(cfg)
 				klog.Info("llm rescheduler start ...")
 				if err := r.Start(); err != nil {
 					klog.Fatalf("llm rescheduler exit: %v", err)
@@ -72,7 +73,7 @@ func NewCommand() *cobra.Command {
 			} else {
 				// try init tokenizer
 				tokenizer.InitTokenizer(cfg.TokenizerName, cfg.TokenizerPath, cfg.ChatTemplatePath)
-				gw := service.NewGatewayService(cfg)
+				gw := gateway_service.NewGatewayService(cfg)
 				klog.Info("llm gateway start ...")
 				if err := gw.Start(); err != nil {
 					klog.Fatalf("llm gateway exit: %v", err)

@@ -3,7 +3,7 @@ package resolver
 import (
 	"context"
 	"fmt"
-	"llm-gateway/pkg/cms"
+	"llm-gateway/pkg/scheduler/cms"
 	"llm-gateway/pkg/types"
 	"runtime/debug"
 	"strings"
