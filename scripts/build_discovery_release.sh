@@ -14,10 +14,9 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-DEFAULT_REPOSITORY="llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm"
+DEFAULT_REPOSITORY="beijing-pooling-registry.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev"
 TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
-IMAGE_TAG="mooncake-${TIMESTAMP}"
-BASE_IMAGE="vllm/vllm-openai:v0.12.0"
+IMAGE_TAG="discovery-${TIMESTAMP}"
 
 if [ -n "$CUSTOM_REPOSITORY" ]; then
     REPOSITORY="$CUSTOM_REPOSITORY"
@@ -26,10 +25,8 @@ else
 fi
 
 DOCKER_BUILDKIT=1 docker build \
-    --network=host \
-    --build-arg BASE_IMAGE=${BASE_IMAGE} \
     -t ${REPOSITORY}:${IMAGE_TAG} \
-    -f ./container/Dockerfile.vllm_mooncake \
+    -f ./container/Dockerfile.discovery \
     .
 
 echo "Build completed: ${REPOSITORY}:${IMAGE_TAG}"

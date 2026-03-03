@@ -36,7 +36,7 @@ spec:
       terminationGracePeriodSeconds: 300
       containers:
       - name: scheduler
-        image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/scheduler:20260302-200658
+        image: ${REPOSITORY}/scheduler:${SCHEDULER_IMAGE_TAG}
         imagePullPolicy: Always
         command: ["/usr/local/bin/scheduler"]
         args:

@@ -78,7 +78,7 @@ To reduce migration overhead and to support failover-triggered migration
 
 ##  Token forwarding
 
-![image](../image/token_forward.png)
+![token_forward](../image/token_forward.png){width="60%"}
 
 ### API Server Address-Aware 
 

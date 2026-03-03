@@ -44,11 +44,9 @@ Llumnix supports multiple deployment modes and scheduling strategies to meet dif
 - `kubectl` configured with cluster access
 ### Deployment
 
-Configure image registry credentials and deploy:
+Run deploy script:
 
 ```bash
-export ALIYUN_DOCKER_USERNAME=<your-username>
-export ALIYUN_DOCKER_PASSWORD=<your-password>
 bash deploy/group_deploy.sh <group-name> <kustomize-dir>
 #e.g. bash deploy/group_deploy.sh llumnix normal/lite-mode-scheduling/load-balance
 ```
@@ -132,16 +130,16 @@ bash scripts/build_tokenizers.sh
 
 # Step 2: Build Gateway
 bash scripts/build_component_bin.sh gateway
-bash scripts/build_component_release.sh gateway --push
+bash scripts/build_component_release.sh gateway
 
 # Step 3: Build Scheduler
 bash scripts/build_component_bin.sh scheduler
-bash scripts/build_component_release.sh scheduler --push
+bash scripts/build_component_release.sh scheduler
 
 # Step 4: Build Discovery
 bash scripts/build_discovery_whl.sh
-bash scripts/build_component_release.sh discovery --push
+bash scripts/build_component_release.sh discovery
 
 # Step 5: Build LLM Backend (vLLM)
 bash scripts/build_llumnix_whl.sh
-bash scripts/build_vllm_release.sh --push
+bash scripts/build_vllm_release.sh

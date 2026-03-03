@@ -1,4 +1,4 @@
-## Policy framework overview
+# Policy framework overview
 
 llumnix scheduling policies follow a **metrics → filters → selectors** pipeline.
 
@@ -17,7 +17,7 @@ llumnix scheduling policies follow a **metrics → filters → selectors** pipel
   - Key advantage: engine-internal state is visible to the scheduler. For example, when prefix caching is enabled, shared prefix cache reduces actual load within an instance — only the engine can report this; the scheduler cannot infer it from request dispatch.
   - Other advantage: llumlet also enables **live request migration** between instances for load balancing or failover.
 
-```mermaid
+```{mermaid}
 graph LR
     Client -->|request| Gateway
     Gateway <-->|schedule| Scheduler
@@ -30,7 +30,7 @@ graph LR
 - **Lite-mode** requires no vLLM patching and no CMS; it works with official vLLM images. The gateway and scheduler track instance load (request count, token count) via request dispatch and streaming responses, maintained as local real-time state (LRS).
   - Trade-off: load data is less accurate. Features depending on engine-internal state (prefix cache sharing, exact KV cache usage) are unavailable. Inaccurate load data degrades the quality of scheduling, rescheduling, and advanced scheduling features, resulting in suboptimal resource utilization.
 
-```mermaid
+```{mermaid}
 graph LR
     Client -->|request| Gateway
     Gateway <-->|schedule| Scheduler

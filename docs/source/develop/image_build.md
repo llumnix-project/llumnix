@@ -7,13 +7,7 @@ registry deployment), follow the steps below.
 ## Prerequisites
 
 - Docker installed and running
-- Access to the target image registry
-- Configure registry credentials:
-
-```bash
-export ALIYUN_DOCKER_USERNAME=<your-username>
-export ALIYUN_DOCKER_PASSWORD=<your-password>
-```
+- Access to your own image registry
 
 ## Build Steps
 
@@ -32,8 +26,8 @@ bash scripts/build_tokenizers.sh
 # Build gateway binary
 bash scripts/build_component_bin.sh gateway
 
-# Build and push gateway image
-bash scripts/build_component_release.sh gateway --push
+# Build gateway image
+bash scripts/build_component_release.sh gateway
 ```
 
 ### Step 3: Build Scheduler
@@ -42,8 +36,8 @@ bash scripts/build_component_release.sh gateway --push
 # Build scheduler binary
 bash scripts/build_component_bin.sh scheduler
 
-# Build and push scheduler image
-bash scripts/build_component_release.sh scheduler --push
+# Build scheduler image
+bash scripts/build_component_release.sh scheduler
 ```
 
 ### Step 4: Build Discovery
@@ -53,7 +47,7 @@ bash scripts/build_component_release.sh scheduler --push
 bash scripts/build_discovery_whl.sh
 
 # Build and push discovery image
-bash scripts/build_component_release.sh discovery --push
+bash scripts/build_component_release.sh discovery
 ```
 
 ### Step 5: Build LLM Backend (vLLM)
@@ -62,12 +56,44 @@ bash scripts/build_component_release.sh discovery --push
 # Build llumnix python wheel
 bash scripts/build_llumnix_whl.sh
 
-# Build and push vLLM image
-bash scripts/build_vllm_release.sh --push
+# Build vLLM image
+bash scripts/build_vllm_release.sh
 ```
 
-## Notes
+## Push Images to Your Registry
 
-- Remove `--push` flag if you only want to build locally without pushing to registry
-- After building custom images, update the image references in your kustomize configuration 
-  before deploying with `group_deploy.sh`
+After building, you need to push the images to your own registry before deployment. 
+The build scripts do **not** push to the Llumnix registry, as external users do not have write access.
+After building, push the image to your own registry:
+
+```bash
+bash scripts/build_discovery_release.sh --push --repository <your-registry>/<your-repo>
+```
+Replace <your-registry>/<your-repo> with your own registry address, for example:
+
+```bash
+bash scripts/build_discovery_release.sh --push --repository my-registry.example.com/llumnix
+```
+## Deploy with Custom Images
+
+Use group_deploy.sh with the --repository flag and specify each component's image tag:
+
+```bash
+bash deploy/group_deploy.sh <group-name> <kustomize-dir> \
+    --repository <your-registry>/<your-repo> \
+    --gateway-tag <gateway-tag> \
+    --scheduler-tag <scheduler-tag> \
+    --vllm-tag <vllm-tag> \
+    --discovery-tag <discovery-tag>
+```
+Example:
+
+```bash
+bash deploy/group_deploy.sh llumnix deploy/normal/full-mode-scheduling/load-balance \
+    --repository my-registry.example.com/my-repo \
+    --gateway-tag gateway-20260101-120000 \
+    --scheduler-tag scheduler-20260101-130000 \
+    --vllm-tag 20260101-140000 \
+    --discovery-tag discovery-20260101-150000
+```
+
