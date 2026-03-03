@@ -49,6 +49,9 @@ type LLMWorker struct {
 	DPRank int `json:"dp_rank"`
 	// DPSize is the total number of data parallel workers in the group
 	DPSize int `json:"dp_size"`
+
+	// Released indicates whether the worker resource has been released for use
+	Released bool `json:"-"`
 }
 
 type LLMWorkerSlice []LLMWorker

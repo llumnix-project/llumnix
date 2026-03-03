@@ -267,7 +267,7 @@ func (p *DispatchPolicy) Schedule(request *types.ScheduleRequest) error {
 			continue
 		}
 
-		schResults = append(schResults, *instance.GetInstance())
+		schResults = append(schResults, instance.GetInstance())
 		klog.V(4).Infof("Added token from instance: %s", instance.GetInstanceId())
 		logSelectedInstance(instance, request.Id, consts.PrefillInferMode, p.c.LlumnixConfig.EnableFullModeScheduling)
 	}
@@ -277,7 +277,7 @@ func (p *DispatchPolicy) Schedule(request *types.ScheduleRequest) error {
 				continue
 			}
 
-			schResults = append(schResults, *instance.GetInstance())
+			schResults = append(schResults, instance.GetInstance())
 			klog.V(4).Infof("Added token2 from instance: %s", instance.GetInstanceId())
 			logSelectedInstance(instance, request.Id, consts.DecodeInferMode, p.c.LlumnixConfig.EnableFullModeScheduling)
 		}

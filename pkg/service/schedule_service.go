@@ -134,10 +134,12 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 		http.Error(w, "invalid expect token req", http.StatusBadRequest)
 		return
 	}
+	logging.Logf("Received schedule request: %s", schReq.String())
 
 	// TODO(wingo.zwt) Reusing llumnix's configuration, concurrent scheduling is not allowed by default
 	// because the scheduling reference data needs to be updated through LRS after the scheduling is completed again.
 	if !ss.config.LlumnixConfig.AllowConcurrentSchedule {
+		klog.V(3).Infof("concurrent scheduling is not allowed")
 		ss.scheduleMutex.Lock()
 		defer ss.scheduleMutex.Unlock()
 	}
@@ -170,9 +172,7 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 		metrics.IncrLlumnixCounterByOne(metrics.LlumnixMetricScheduleFailedCount, metrics.Labels{{"error_type", err.Error()}})
 		w.WriteHeader(statusCode)
 		w.Write([]byte(err.Error()))
-		if ss.config.EnableAccessLog {
-			logging.Logf("[%s] status_code:%d,response_time:%vms,error:%s", schReq.Id, statusCode, time.Since(tStart).Milliseconds(), err.Error())
-		}
+		logging.Logf("[%s] status_code:%d,response_time:%vms,error:%s", schReq.Id, statusCode, time.Since(tStart).Milliseconds(), err.Error())
 		return
 	}
 
@@ -191,9 +191,7 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 	w.Header().Set("content-type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(retBytes)
-	if ss.config.EnableAccessLog {
-		logging.Logf("[%s] status_code:%d,response_time:%vms,schedule results:%s", schReq.Id, http.StatusOK, time.Since(tStart).Milliseconds(), schReq.String())
-	}
+	logging.Logf("[%s] status_code:%d,response_time:%vms,schedule results:%s", schReq.Id, http.StatusOK, time.Since(tStart).Milliseconds(), schReq.String())
 }
 
 // handleRelease accepts the token returned by the gateway
@@ -225,9 +223,7 @@ func (ss *ScheduleService) handleRelease(w http.ResponseWriter, r *http.Request)
 		ss.lrsClient.ReleaseRequestState(worker.Role.String(), reqState)
 	}
 
-	if ss.config.EnableAccessLog {
-		logging.Logf("%vms| return local resource by %s: %v", time.Since(tStart).Milliseconds(), schReq.GatewayId, string(body))
-	}
+	logging.Logf("%vms| return local resource by %s: %v", time.Since(tStart).Milliseconds(), schReq.GatewayId, string(body))
 	w.WriteHeader(http.StatusOK)
 }
 

@@ -84,7 +84,7 @@ func (rrb *RoundRobinBalancer) Get(reqCtx *types.RequestContext) (types.Schedule
 
 	rrb.currentIndex++
 	index := rrb.currentIndex % uint64(len(availableWorkers))
-	return types.ScheduledResult{availableWorkers[index]}, nil
+	return types.ScheduledResult{&availableWorkers[index]}, nil
 }
 
 // filterExcludedWorkers filters out workers based on the exclude scope.

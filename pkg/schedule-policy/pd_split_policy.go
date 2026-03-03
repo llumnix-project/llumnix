@@ -89,19 +89,24 @@ func (pdsp *PDSplitPolicy) Name() string {
 
 func (pdsp *PDSplitPolicy) Schedule(schReq *types.ScheduleRequest) error {
 	if schReq.ScheduleMode == types.ScheduleModePDBatch {
-		err := pdsp.prefillPolicy.Schedule(schReq)
+		pSchReq := *schReq
+		pSchReq.ScheduleMode = types.ScheduleModePDStaged
+		pSchReq.InferStage = types.InferStagePrefill
+		err := pdsp.prefillPolicy.Schedule(&pSchReq)
 		if err != nil {
 			klog.Errorf("failed to schedule prefill: %v", err)
 			return err
 		}
-		pResults := schReq.ScheduleResult
-		schReq.ScheduleResult = nil
-		err = pdsp.decodePolicy.Schedule(schReq)
+
+		dSchReq := *schReq
+		dSchReq.ScheduleMode = types.ScheduleModePDStaged
+		dSchReq.InferStage = types.InferStageDecode
+		err = pdsp.decodePolicy.Schedule(&dSchReq)
 		if err != nil {
 			klog.Errorf("failed to schedule decode: %v", err)
 			return err
 		}
-		schReq.ScheduleResult = append(schReq.ScheduleResult, pResults...)
+		schReq.ScheduleResult = append(pSchReq.ScheduleResult, dSchReq.ScheduleResult...)
 		return nil
 	} else if schReq.ScheduleMode == types.ScheduleModePDStaged {
 		switch schReq.InferStage {

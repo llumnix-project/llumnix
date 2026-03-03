@@ -397,13 +397,13 @@ func (r *MsgBusResolver) updateInstances(workerSlice types.LLMWorkerSlice) {
 		if len(added) > 0 {
 			for _, w := range added {
 				klog.Infof("[MsgBusResolver] worker_added: infer_role=%s, worker_id=%s, endpoint=%s, dp_rank=%d, dp_size=%d",
-					r.inferRole, w.ID, w.Endpoint.String(), w.DPRank, w.DPSize)
+					r.inferRole, w.Id(), w.Endpoint.String(), w.DPRank, w.DPSize)
 			}
 		}
 		if len(removed) > 0 {
 			for _, w := range removed {
 				klog.Infof("[MsgBusResolver] worker_removed: infer_role=%s, worker_id=%s, endpoint=%s",
-					r.inferRole, w.ID, w.Endpoint.String())
+					r.inferRole, w.Id(), w.Endpoint.String())
 			}
 		}
 

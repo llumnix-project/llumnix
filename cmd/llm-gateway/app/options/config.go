@@ -289,7 +289,7 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.ReasoningParser, "reasoning-parser", "", "reasoning parser type")
 	flags.StringVar(&c.TokenizerMode, "tokenizer-mode", "", "builtin tokenizer mode, support formatter or leave null as vllmv0")
 
-	flags.IntVar(&c.RequestsReporterDuration, "requests-report-duration", 5, "Specify requests reporter duration")
+	flags.IntVar(&c.RequestsReporterDuration, "requests-report-duration", 0, "Specify requests reporter duration")
 	flags.BoolVar(&c.SeparatePDSchedule, "separate-pd-schedule", false, "Specify whether to separate pd schedule")
 
 	// TODO(sunbiao.sun): remove
@@ -431,6 +431,13 @@ func (c *Config) TokenizerEnabled() bool {
 
 func (c *Config) EnableRequestReport() bool {
 	return c.RequestsReporterDuration > 0 && !c.LlumnixConfig.EnableFullModeScheduling
+}
+
+func (c *Config) HasPrefixCachePolicy() bool {
+	return c.SchedulePolicy == consts.SchedulePolicyPrefixCache ||
+		(c.SchedulePolicy == consts.SchedulePolicyPDSplit &&
+			(c.PrefillPolicy == consts.SchedulePolicyPrefixCache ||
+				c.DecodePolicy == consts.SchedulePolicyPrefixCache))
 }
 
 // getPrefixCacheLimit configures the prefix cache size based on available memory.

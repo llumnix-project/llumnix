@@ -320,7 +320,7 @@ func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext,
 		if attempt > 0 {
 			// release previous resources
 			for _, worker := range reqCtx.ScheduleCtx.ScheduleResults {
-				lgs.balancer.Release(reqCtx, &worker)
+				lgs.balancer.Release(reqCtx, worker)
 			}
 			reqCtx.ScheduleCtx.ScheduleResults = nil
 
@@ -525,7 +525,6 @@ func (h *RequestLifecycleHooksImpl) OnPostPrefillStream(req *types.RequestContex
 	pWorker := req.ScheduleCtx.ScheduleResults.GetWorkerByRole(types.InferRolePrefill)
 	if pWorker != nil {
 		h.balancer.Release(req, pWorker)
-		req.ScheduleCtx.ScheduleResults = req.ScheduleCtx.ScheduleResults.RemoveWorker(pWorker)
 	}
 
 	req.ScheduleCtx.InferStage = types.InferStageDecode
@@ -553,11 +552,8 @@ func (h *RequestLifecycleHooksImpl) OnPostRequest(req *types.RequestContext) {
 
 	// Release all workers in the schedule results, to prevent resource leaks in some abnormal situations
 	for _, worker := range req.ScheduleCtx.ScheduleResults {
-		h.balancer.Release(req, &worker)
+		h.balancer.Release(req, worker)
 	}
-
-	// Could not set to nil because it will be used by Logging
-	// req.ScheduleCtx.ScheduleResults = nil
 }
 
 // HandleAPIEntry is the main entry point for handling LLM inference requests

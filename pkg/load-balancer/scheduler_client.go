@@ -67,12 +67,13 @@ func NewSchedulerClient(config *options.Config) *SchedulerClient {
 }
 
 func needPromptTokens(c *options.Config) bool {
-	return c.LlumnixConfig.EnableFullModeScheduling &&
-		(c.LlumnixConfig.EnableCacheAwareScheduling || c.LlumnixConfig.EnableInstanceStatusLocalAccount)
+	return (c.LlumnixConfig.EnableFullModeScheduling &&
+		(c.LlumnixConfig.EnableCacheAwareScheduling || c.LlumnixConfig.EnableInstanceStatusLocalAccount)) ||
+		c.HasPrefixCachePolicy()
 }
 
 func needPromptString(c *options.Config) bool {
-	return c.SchedulePolicy == consts.SchedulePolicyPrefixCache
+	return c.HasPrefixCachePolicy()
 }
 
 func (cb *SchedulerClient) createScheduleRequest(req *types.RequestContext) *types.ScheduleRequest {
@@ -98,7 +99,7 @@ func (cb *SchedulerClient) createScheduleRequest(req *types.RequestContext) *typ
 		}
 	} else if promptText, err := req.EstimatePromptString(); err == nil {
 		req.ScheduleCtx.UseTokenIds = false
-		schRequest.UseTokenIds = true
+		schRequest.UseTokenIds = false
 		schRequest.PromptTextLen = len(promptText)
 		if needPromptString(cb.config) {
 			schRequest.PromptText = promptText
@@ -223,7 +224,7 @@ func (cb *SchedulerClient) createReleaseRequest(req *types.RequestContext, worke
 		GatewayId:      localEndpoint.String(),
 		ScheduleMode:   req.ScheduleCtx.ScheduleMode,
 		InferStage:     req.ScheduleCtx.InferStage,
-		ScheduleResult: types.ScheduledResult{*worker},
+		ScheduleResult: types.ScheduledResult{worker},
 	}
 }
 
@@ -235,13 +236,14 @@ func (cb *SchedulerClient) Release(req *types.RequestContext, worker *types.LLMW
 	// 2. If the scheduler is in a not-ready state, no release is required either, as subsequent new schedulers or connections will refresh these resources.
 	localEndpoint := cb.kac.GetLocalEndpoint().String()
 	ready := cb.kac.IsRemoteReady()
-	if localEndpoint != req.ScheduleCtx.GatewayId || !ready {
+	klog.V(3).Infof("release request %v localEndpoint: %s, ready: %v, worker: %p/%s, released: %v", req.Id, localEndpoint, ready, worker, worker.Id(), worker.Released)
+	if localEndpoint != req.ScheduleCtx.GatewayId || !ready || worker.Released {
 		return
 	}
 
 	go func() {
 		releaseRequest := cb.createReleaseRequest(req, worker)
-		klog.V(3).Infof("release worker resource: %v", releaseRequest.String())
+		klog.V(3).Infof("release request %v worker resource: %v", req.Id, releaseRequest.String())
 		data, err := json.Marshal(releaseRequest)
 		if err != nil {
 			klog.Errorf("marshal release request error: %v", err)
@@ -280,5 +282,6 @@ func (cb *SchedulerClient) Release(req *types.RequestContext, worker *types.LLMW
 			klog.Errorf("release worker for request %s: error: %d, %s", req.Id, resp.StatusCode, string(body))
 			return
 		}
+		worker.Released = true
 	}()
 }

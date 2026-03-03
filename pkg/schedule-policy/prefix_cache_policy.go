@@ -319,7 +319,7 @@ func (pc *PrefixCachePolicy) Schedule(schReq *types.ScheduleRequest) error {
 		return err
 	}
 	selectWorker := pc.trySelectBestOf(schReq.Id, schReq.GetPromptPrefix(), results)
-	schReq.ScheduleResult = append(schReq.ScheduleResult, *selectWorker)
+	schReq.ScheduleResult = append(schReq.ScheduleResult, selectWorker)
 	return nil
 }
 

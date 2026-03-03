@@ -17,7 +17,7 @@ const (
 	InferStageDecode  InferStage = "decode"
 )
 
-type ScheduledResult []LLMWorker
+type ScheduledResult []*LLMWorker
 
 func (sr ScheduledResult) String() string {
 	var str string
@@ -33,7 +33,7 @@ func (sr ScheduledResult) String() string {
 func (sr ScheduledResult) GetWorkerByRole(role InferRole) *LLMWorker {
 	for _, worker := range sr {
 		if worker.Role == role {
-			return &worker
+			return worker
 		}
 	}
 	return nil
@@ -136,12 +136,30 @@ func (req *ScheduleRequest) String() string {
 		str += string(req.InferStage)
 	}
 
-	// Add prompt info (truncated if too long)
-	if len(req.PromptTokenIds) > 0 {
+	// Add prompt info
+	if len(str) > 0 {
+		str += " "
+	}
+	str += fmt.Sprintf("use_token_ids:%v", req.UseTokenIds)
+	if req.PromptNumTokens > 0 {
 		if len(str) > 0 {
 			str += " "
 		}
-		str += fmt.Sprintf("tokens:%d", len(req.PromptTokenIds))
+		str += fmt.Sprintf("prompt_tokens_len:%d/%d", len(req.PromptTokenIds), req.PromptNumTokens)
+	}
+	if req.PromptTextLen > 0 {
+		if len(str) > 0 {
+			str += " "
+		}
+		str += fmt.Sprintf("text_len:%d/%d", len(req.PromptText), req.PromptTextLen)
+	}
+
+	// Add excluded instances for retry scheduling
+	if len(req.ExcludedInstances) > 0 {
+		if len(str) > 0 {
+			str += " "
+		}
+		str += fmt.Sprintf("excluded:%v, exclude_scope:%s", req.ExcludedInstances, req.RetryExcludeScope)
 	}
 
 	// Add schedule result if present

@@ -176,13 +176,13 @@ func (r *redisResolver) refresh() {
 		if len(added) > 0 {
 			for _, w := range added {
 				klog.Infof("[RedisResolver] worker_added: role=%s, worker_id=%s, endpoint=%s, dp_rank=%d, dp_size=%d",
-					r.role, w.ID, w.Endpoint.String(), w.DPRank, w.DPSize)
+					r.role, w.Id(), w.Endpoint.String(), w.DPRank, w.DPSize)
 			}
 		}
 		if len(removed) > 0 {
 			for _, w := range removed {
 				klog.Infof("[RedisResolver] worker_removed: role=%s, worker_id=%s, endpoint=%s",
-					r.role, w.ID, w.Endpoint.String())
+					r.role, w.Id(), w.Endpoint.String())
 			}
 		}
 

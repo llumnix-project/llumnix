@@ -117,9 +117,11 @@ func (h *OpenAIHandler) unmarshalRequest(reqCtx *types.RequestContext) error {
 		}
 		reqCtx.LLMRequest.Protocol = protocol.OpenAIChatCompletion
 		reqCtx.LLMRequest.OriginChatCompletionRequest = chatCompletion.Clone()
-		chatCompletion.StreamOptions = &protocol.StreamOptions{
-			IncludeUsage:         true,
-			ContinuousUsageStats: true,
+		if chatCompletion.Stream {
+			chatCompletion.StreamOptions = &protocol.StreamOptions{
+				IncludeUsage:         true,
+				ContinuousUsageStats: true,
+			}
 		}
 		reqCtx.LLMRequest.ChatCompletionRequest = &chatCompletion
 
@@ -136,9 +138,11 @@ func (h *OpenAIHandler) unmarshalRequest(reqCtx *types.RequestContext) error {
 		}
 		reqCtx.LLMRequest.Protocol = protocol.OpenAICompletion
 		reqCtx.LLMRequest.OriginCompletionRequest = completionRequest.Clone()
-		completionRequest.StreamOptions = &protocol.StreamOptions{
-			IncludeUsage:         true,
-			ContinuousUsageStats: true,
+		if completionRequest.Stream {
+			completionRequest.StreamOptions = &protocol.StreamOptions{
+				IncludeUsage:         true,
+				ContinuousUsageStats: true,
+			}
 		}
 		reqCtx.LLMRequest.CompletionRequest = &completionRequest
 
