@@ -275,19 +275,15 @@ func (req *LLMRequest) inferenceStream() bool {
 	}
 }
 
-func (req *LLMRequest) getTotalTokenLen() uint64 {
+func (req *LLMRequest) getUsageTotalTokens() uint64 {
 	switch req.BackendProtocol {
 	case protocol.OpenAICompletion:
-		if req.InputTokensLen != 0 {
-			return req.InputTokensLen + req.OutputTokensLen
-		} else {
-			if req.CompletionResponse == nil {
-				return 0
-			}
-			usage := req.CompletionResponse.Usage
-			if usage != nil {
-				return usage.TotalTokens
-			}
+		if req.CompletionResponse == nil {
+			return 0
+		}
+		usage := req.CompletionResponse.Usage
+		if usage != nil {
+			return usage.TotalTokens
 		}
 	case protocol.OpenAIChatCompletion:
 		stream := req.inferenceStream()
@@ -315,20 +311,15 @@ func (req *LLMRequest) getTotalTokenLen() uint64 {
 	return 0
 }
 
-func (req *LLMRequest) getInputTokenLen() uint64 {
+func (req *LLMRequest) getUsagePromptTokens() uint64 {
 	switch req.BackendProtocol {
 	case protocol.OpenAICompletion:
-		// TODO(wingo.zwt): InputTokensLen has value means that the tokenizer has been enabled.
-		if req.InputTokensLen != 0 {
-			return req.InputTokensLen
-		} else {
-			if req.CompletionResponse == nil {
-				return 0
-			}
-			usage := req.CompletionResponse.Usage
-			if usage != nil {
-				return usage.PromptTokens
-			}
+		if req.CompletionResponse == nil {
+			return 0
+		}
+		usage := req.CompletionResponse.Usage
+		if usage != nil {
+			return usage.PromptTokens
 		}
 	case protocol.OpenAIChatCompletion:
 		stream := req.inferenceStream()
@@ -396,7 +387,7 @@ func (req *AnthropicRequest) getPromptString() (string, error) {
 	return string(jsonData[0 : len(jsonData)-1]), nil
 }
 
-func (req *AnthropicRequest) getInputTokenLen() uint64 {
+func (req *AnthropicRequest) getUsagePromptTokens() uint64 {
 	stream := req.Request.Stream
 	if stream {
 		if req.OpenAIStreamResponse == nil {
@@ -418,7 +409,7 @@ func (req *AnthropicRequest) getInputTokenLen() uint64 {
 	return 0
 }
 
-func (req *AnthropicRequest) getTotalTokenLen() uint64 {
+func (req *AnthropicRequest) getUsageTotalTokens() uint64 {
 	stream := req.Request.Stream
 	if stream {
 		if req.OpenAIStreamResponse == nil {
@@ -481,6 +472,11 @@ type ScheduleContext struct {
 
 	// ExcludedInstances contains instance IDs that should be excluded during scheduling.
 	ExcludedInstances map[string]struct{}
+
+	// UseTokenIds indicates whether scheduling uses token IDs (true) or prompt text (false).
+	UseTokenIds bool
+	// If not using token IDs, the prompt text information is used for scheduling.
+	PromptTextLen int64
 }
 
 // AddExcludedInstance adds an instance ID to the exclusion list.
@@ -540,6 +536,9 @@ type RequestContext struct {
 	pDSeparateScheduler PDSeparateScheduler
 	// Lifecycle hooks for request events
 	requestHooks RequestLifecycleHooks
+
+	// Whether the request has been tokenized
+	Tokenized bool
 }
 
 func (req *RequestContext) ClientStream() bool {
@@ -678,11 +677,14 @@ func (req *RequestContext) OutputExceedMaxTokens() bool {
 }
 
 func (req *RequestContext) GetInputTokenLen() uint64 {
+	if req.Tokenized {
+		return req.LLMRequest.InputTokensLen
+	}
 	switch req.RequestType {
 	case consts.OpenAIHandlerName:
-		return req.LLMRequest.getInputTokenLen()
+		return req.LLMRequest.getUsagePromptTokens()
 	case consts.AnthropicHandlerName:
-		return req.AnthropicRequest.getInputTokenLen()
+		return req.AnthropicRequest.getUsagePromptTokens()
 	default:
 		klog.Errorf("unsupported request type: %v to get input tokens len", req.RequestType)
 		return 0
@@ -690,11 +692,14 @@ func (req *RequestContext) GetInputTokenLen() uint64 {
 }
 
 func (req *RequestContext) GetTotalTokenLen() uint64 {
+	if req.Tokenized {
+		return req.LLMRequest.InputTokensLen + req.LLMRequest.OutputTokensLen
+	}
 	switch req.RequestType {
 	case consts.OpenAIHandlerName:
-		return req.LLMRequest.getTotalTokenLen()
+		return req.LLMRequest.getUsageTotalTokens()
 	case consts.AnthropicHandlerName:
-		return req.AnthropicRequest.getTotalTokenLen()
+		return req.AnthropicRequest.getUsageTotalTokens()
 	default:
 		klog.Errorf("unsupported request type: %v to get response usage", req.RequestType)
 		return 0
@@ -709,15 +714,25 @@ func (req *RequestContext) GetPromptTokens() ([]uint32, error) {
 	return nil, fmt.Errorf("not support get tokens")
 }
 
-// GetPromptString returns the prompt string of the request.
-func (req *RequestContext) GetPromptString() (string, error) {
+// EstimatePromptString returns the prompt string of the request.
+func (req *RequestContext) EstimatePromptString() (string, error) {
+	var (
+		txt string
+		err error
+	)
 	switch req.RequestType {
 	case consts.OpenAIHandlerName:
-		return req.LLMRequest.getPromptString()
+		txt, err = req.LLMRequest.getPromptString()
 	case consts.AnthropicHandlerName:
-		return req.AnthropicRequest.getPromptString()
+		txt, err = req.AnthropicRequest.getPromptString()
+	default:
+		return "", fmt.Errorf("not support get prompt string")
 	}
-	return "", fmt.Errorf("not support get prompt string")
+
+	if err != nil {
+		req.ScheduleCtx.PromptTextLen = int64(len(txt))
+	}
+	return txt, err
 }
 
 // WriteErrorResponse writes the error response to the response channel.

@@ -75,6 +75,8 @@ func (rt *RequestCompletionConverter) PreProcess(req *types.RequestContext) erro
 				return fmt.Errorf("Tokenize prompt to ids failed")
 			}
 			oaiReq.CompletionRequest.Prompt.SetValue(ids)
+			oaiReq.InputTokensLen = uint64(len(ids))
+			req.Tokenized = true
 			return nil
 		}
 
@@ -88,8 +90,10 @@ func (rt *RequestCompletionConverter) PreProcess(req *types.RequestContext) erro
 					return fmt.Errorf("Tokenize prompt to ids failed")
 				}
 				allIds = append(allIds, ids)
+				oaiReq.InputTokensLen += uint64(len(ids))
 			}
 			oaiReq.CompletionRequest.Prompt.SetValue(allIds)
+			req.Tokenized = true
 			return nil
 		}
 		klog.Warningf("[%s] Unsupported prompt type in completion request: %v", req.Id, oaiReq.CompletionRequest.Prompt)
@@ -120,6 +124,7 @@ func (rt *RequestCompletionConverter) PreProcess(req *types.RequestContext) erro
 		completionsRequest.MaxTokens = &maxTokens
 		completionsRequest.Prompt.SetValue(tokenIds)
 		oaiReq.CompletionRequest = completionsRequest
+		req.Tokenized = true
 		return nil
 	default:
 		klog.Warningf("[%s] Unsupported protocol: %v", req.Id, oaiReq.Protocol)

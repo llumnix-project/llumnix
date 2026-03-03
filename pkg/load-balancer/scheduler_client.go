@@ -90,17 +90,21 @@ func (cb *SchedulerClient) createScheduleRequest(req *types.RequestContext) *typ
 
 	// In the case of tokenizer, prefer to use token ids, otherwise use string length as an alternative.
 	if tokenIds, err := req.GetPromptTokens(); err == nil {
+		req.ScheduleCtx.UseTokenIds = true
+		schRequest.UseTokenIds = true
 		schRequest.PromptNumTokens = len(tokenIds)
 		if needPromptTokens(cb.config) {
 			schRequest.PromptTokenIds = tokenIds
 		}
-	} else if promptText, err := req.GetPromptString(); err == nil {
-		schRequest.PromptNumTokens = len(promptText)
+	} else if promptText, err := req.EstimatePromptString(); err == nil {
+		req.ScheduleCtx.UseTokenIds = false
+		schRequest.UseTokenIds = true
+		schRequest.PromptTextLen = len(promptText)
 		if needPromptString(cb.config) {
 			schRequest.PromptText = promptText
 		}
 	} else {
-		klog.Warningf("schedule request %s prompt string and token ids are empty or not support.", req.Id)
+		klog.Errorf("create sch request for %s exception occurred: failed to get prompt length: %v", req.Id, err)
 	}
 
 	// record the borrow gateway

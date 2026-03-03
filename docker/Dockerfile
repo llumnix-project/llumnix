@@ -4,13 +4,13 @@ FROM registry.cn-shanghai.aliyuncs.com/eas/golang-${ARCH}-cache:1.23.12 AS build
 
 COPY .ssh /root/.ssh
 COPY .gitconfig /root/.gitconfig
-COPY LLM-Gateway /LLM-Gateway
+COPY llm-gateway /llm-gateway
 
-WORKDIR /LLM-Gateway
+WORKDIR /llm-gateway
 
 ARG ARCH
 RUN mkdir -p /output && \
-    OUTPUT=/output GOARCH=${ARCH} sh /LLM-Gateway/docker/build.sh
+    OUTPUT=/output GOARCH=${ARCH} sh /llm-gateway/docker/build.sh
 
 FROM registry.cn-shanghai.aliyuncs.com/eas/debian:${ARCH}-bookworm-slim-base
 

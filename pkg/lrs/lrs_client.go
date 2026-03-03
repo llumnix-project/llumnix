@@ -200,15 +200,26 @@ func (lrsClient *LocalRealtimeStateClient) SubmitMetric() {
 				reqs := iv.NumRequests()
 				waitingReqs := iv.NumWaitingRequests()
 
+				// Note: waitingReqs on the gateway side represents requests that haven't received
+				// the first token yet, including those in prefilling and waiting states.
+				// reqs represents all requests received by the engine, including waiting, prefilling,
+				// and decoding requests. The following adjustments align gateway metrics with engine metrics.
+				if waitingReqs > 0 {
+					waitingReqs = waitingReqs - 1
+					if reqs > waitingReqs {
+						reqs = reqs - waitingReqs
+					}
+				}
+
 				labels := metrics.Labels{
 					{Name: "model", Value: iv.GetInstance().Model},
 					{Name: "address", Value: address.String()},
 					{Name: "infer_role", Value: iv.GetInferMode()},
 					{Name: "dp_rank", Value: strconv.Itoa(iv.worker.DPRank)},
 				}
-				metrics.StatusValue("llm_schedule_tokens", labels).Set(float32(tokens))
-				metrics.StatusValue("llm_schedule_requests", labels).Set(float32(reqs))
-				metrics.StatusValue("llm_schedule_waiting_requests", labels).Set(float32(waitingReqs))
+				metrics.StatusValue("llm_tokens", labels).Set(float32(tokens))
+				metrics.StatusValue("llm_running_requests", labels).Set(float32(reqs))
+				metrics.StatusValue("llm_waiting_requests", labels).Set(float32(waitingReqs))
 			}
 		}
 

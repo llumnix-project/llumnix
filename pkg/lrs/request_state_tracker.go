@@ -69,9 +69,9 @@ func (r *RequestStateTracker) CreateRequestState(req *types.RequestContext) {
 		InferMode:  inferMode,
 		InstanceId: instanceID,
 		GatewayId:  req.ScheduleCtx.GatewayId,
-		NumTokens:  req.GetTotalTokenLen(),
 		CreatedAt:  time.Now(), // Track creation time for stale cleanup
 	}
+	reqState.updateRequestTokenState(req)
 
 	r.mux.Lock()
 	defer r.mux.Unlock()
@@ -123,7 +123,7 @@ func (r *RequestStateTracker) UpdateRequestState(req *types.RequestContext) {
 	defer r.mux.Unlock()
 	id := req.Id
 	if _, ok := r.reqTokenState[id]; ok {
-		r.reqTokenState[id].NumTokens = req.GetTotalTokenLen()
+		r.reqTokenState[id].updateRequestTokenState(req)
 	}
 }
 
@@ -145,14 +145,33 @@ const (
 )
 
 type RequestTokenState struct {
-	Kind       Kind      `json:"kind"`
-	Id         string    `json:"id"`
-	Model      string    `json:"model"`
-	InferMode  string    `json:"infer_mode"`
-	InstanceId string    `json:"instance_id"`
-	GatewayId  string    `json:"gateway_id"`
-	NumTokens  uint64    `json:"num_tokens"`
-	CreatedAt  time.Time `json:"-"` // Used for stale request cleanup, not serialized
+	Kind       Kind   `json:"kind"`
+	Id         string `json:"id"`
+	Model      string `json:"model"`
+	InferMode  string `json:"infer_mode"`
+	InstanceId string `json:"instance_id"`
+	GatewayId  string `json:"gateway_id"`
+
+	UseTokenIds     bool   `json:"use_token_ids"`
+	PromptNumTokens uint64 `json:"prompt_num_tokens"`
+	NumTokens       uint64 `json:"num_tokens"`
+	PromptTextLen   uint64 `json:"prompt_text_len"`
+	TextLen         uint64 `json:"text_len"`
+
+	CreatedAt time.Time `json:"-"` // Used for stale request cleanup, not serialized
+}
+
+func (reqState *RequestTokenState) updateRequestTokenState(reqCtx *types.RequestContext) {
+	useTokenIds := reqCtx.ScheduleCtx.UseTokenIds
+	reqState.UseTokenIds = useTokenIds
+	if useTokenIds {
+		reqState.NumTokens = reqCtx.GetTotalTokenLen()
+		reqState.PromptNumTokens = reqCtx.GetInputTokenLen()
+	} else {
+		// Warning: When using prompt text length for scheduling, generated text length is not considered.
+		reqState.PromptTextLen = uint64(reqCtx.ScheduleCtx.PromptTextLen)
+		reqState.TextLen = reqState.PromptTextLen
+	}
 }
 
 type RequestTokenStateArray = []RequestTokenState

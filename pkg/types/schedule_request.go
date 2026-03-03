@@ -62,20 +62,44 @@ type ScheduleRequest struct {
 	ExcludedInstances []string `json:"excluded_instances,omitempty"`
 	RetryExcludeScope string   `json:"exclude_scope,omitempty"`
 
-	// LLM Prompt
+	// UseTokenIds indicates whether to use token IDs for scheduling.
+	UseTokenIds bool `json:"use_token_ids,omitempty"`
+	// LLM Prompt Tokens
 	PromptNumTokens int      `json:"prompt_num_tokens,omitempty"`
 	PromptTokenIds  []uint32 `json:"prompt_token_ids"`
-	PromptText      string   `json:"prompt_text,omitempty"`
+	// LLM Prompt Text
+	PromptTextLen int    `json:"prompt_text_len,omitempty"`
+	PromptText    string `json:"prompt_text,omitempty"`
 
 	// schedule result
 	ScheduleResult ScheduledResult `json:"schedule_result,omitempty"`
 }
 
-func (req *ScheduleRequest) GetInputTokenLen() int {
-	if req.PromptNumTokens > 0 {
+// GetPromptLen returns the prompt length for scheduling and rate limiting.
+// It returns PromptNumTokens when tokenizer is enabled (>0), otherwise returns PromptTextLen.
+func (req *ScheduleRequest) GetPromptLen() int {
+	if req.UseTokenIds {
 		return req.PromptNumTokens
+	} else {
+		return req.PromptTextLen
 	}
-	return len(req.PromptText)
+}
+
+// GetPromptPrefix returns the prompt string for prefix matching.
+// When PromptNumTokens > 0, it returns the string representation of PromptTokenIds without the last ']'.
+// Otherwise, it returns PromptText directly.
+func (req *ScheduleRequest) GetPromptPrefix() string {
+	if req.UseTokenIds {
+		if req.PromptNumTokens > 0 && len(req.PromptTokenIds) > 0 {
+			// fmt.Sprintf("%v", slice) always outputs "[...]" format, remove the trailing ']'
+			jsonData := fmt.Sprintf("%v", req.PromptTokenIds)
+			return jsonData[:len(jsonData)-1]
+		} else {
+			return ""
+		}
+	} else {
+		return req.PromptText
+	}
 }
 
 func (req *ScheduleRequest) String() string {

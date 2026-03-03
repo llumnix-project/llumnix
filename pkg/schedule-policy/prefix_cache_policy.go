@@ -318,7 +318,7 @@ func (pc *PrefixCachePolicy) Schedule(schReq *types.ScheduleRequest) error {
 	if err != nil {
 		return err
 	}
-	selectWorker := pc.trySelectBestOf(schReq.Id, schReq.PromptText, results)
+	selectWorker := pc.trySelectBestOf(schReq.Id, schReq.GetPromptPrefix(), results)
 	schReq.ScheduleResult = append(schReq.ScheduleResult, *selectWorker)
 	return nil
 }
@@ -364,8 +364,8 @@ func (pc *PrefixCachePolicy) filterCandidatesByLoad(
 	filtered := make(map[string]*lrs.InstanceView)
 	for _, iv := range instanceViews {
 		if iv != nil {
-			// the num of requests is less than threshold
-			if iv.NumWaitingRequests() <= int64(pc.config.PrefixCacheWaitingRequestsThreshold) {
+			// This ensures the number of requests waiting in the engine queue does not exceed the threshold
+			if iv.NumWaitingRequests()-1 < int64(pc.config.PrefixCacheWaitingRequestsThreshold) {
 				filtered[iv.GetInstance().Id()] = iv
 			}
 		}

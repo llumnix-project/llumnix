@@ -798,11 +798,11 @@ const (
 // - RequestsThreshold: 10 - workers with requests >= threshold are filtered out from cache-hit candidates
 func createTestConfig() *options.Config {
 	return &options.Config{
-		PrefixCacheTTL:                 1800,              // 30 minutes
-		PrefixCacheLimit:               100 * 1024 * 1024, // 100MB
-		PrefixCacheLoadTolerance:       0.3,               // threshold = mean * 1.3
-		PrefixCacheMaintenanceInterval: 2,                 // 2 seconds for testing
-		RequestsThreshold:              10,                // filter out workers with >= 10 requests
+		PrefixCacheTTL:                      1800,              // 30 minutes
+		PrefixCacheLimit:                    100 * 1024 * 1024, // 100MB
+		PrefixCacheLoadTolerance:            0.3,               // threshold = mean * 1.3
+		PrefixCacheMaintenanceInterval:      2,                 // 2 seconds for testing
+		PrefixCacheWaitingRequestsThreshold: 10,                // filter out workers with >= 10 requests
 	}
 }
 
@@ -953,7 +953,7 @@ func TestSchedule_LongContextWindow(t *testing.T) {
 
 		if i == 0 {
 			firstWorkerID = req.ScheduleResult[0].ID
-			t.Logf("Long context prompt length: %d chars", len(req.PromptText))
+			t.Logf("Long context prompt length: %d chars", len(req.GetPromptPrefix()))
 		} else {
 			assert.Equal(t, firstWorkerID, req.ScheduleResult[0].ID,
 				"long context requests should share cached prefix")
@@ -1126,7 +1126,7 @@ func TestSchedule_LoadBalancing_CacheHitWithOverload(t *testing.T) {
 // scheduler should fallback to the least-loaded worker globally.
 func TestSchedule_LoadBalancing_RequestsThreshold(t *testing.T) {
 	config := createTestConfig()
-	config.RequestsThreshold = 5 // lower threshold for easier testing
+	config.PrefixCacheWaitingRequestsThreshold = 5 // lower threshold for easier testing
 
 	workers := []*types.LLMWorker{
 		{ID: "worker-a", Version: 1},
@@ -1238,6 +1238,119 @@ func TestSchedule_HighConcurrencyWithLoad(t *testing.T) {
 	assert.Greater(t, distribution["concurrent-w3"]+distribution["concurrent-w1"],
 		distribution["concurrent-w0"],
 		"lighter workers should handle more requests")
+}
+
+// TestSchedule_HitRateThreshold_BelowThreshold verifies that when cache hit rate is below threshold,
+// scheduler falls back to global least-loaded worker instead of using cache-hit candidates.
+// Scenario: cached prefix is short, new prompt is long with minimal match.
+// Expected: scheduler ignores cache hit and selects least-loaded worker globally.
+func TestSchedule_HitRateThreshold_BelowThreshold(t *testing.T) {
+	config := createTestConfig()
+	config.PrefixCacheHitRateThreshold = 0.5 // 50%
+
+	workers := []*types.LLMWorker{
+		{ID: "worker-cached", Version: 1},
+		{ID: "worker-idle", Version: 1},
+	}
+	lrsClient := createTestLRSClient(workers)
+	pc := NewPrefixCachePolicy(config, consts.NormalInferMode, lrsClient)
+
+	// First request: create cache entry with short prefix
+	shortPrefix := "abc" // very short prefix
+	req1 := &types.ScheduleRequest{
+		Id:         "req-1",
+		PromptText: shortPrefix + " short question",
+	}
+	lrsClient.RLock()
+	err := pc.Schedule(req1)
+	lrsClient.RUnlock()
+	assert.NoError(t, err)
+	cachedWorker := req1.ScheduleResult[0].ID
+	t.Logf("First request cached on: %s, prompt length: %d", cachedWorker, len(req1.PromptText))
+
+	// Add load to the cached worker to make the other worker more attractive for fallback
+	otherWorker := "worker-idle"
+	if cachedWorker == "worker-idle" {
+		otherWorker = "worker-cached"
+	}
+	simulateWorkerLoad(lrsClient, cachedWorker, 5, 1000) // 5000 tokens on cached worker
+	// otherWorker has 0 tokens
+
+	// Second request: starts with same short prefix but is very long
+	// matchLen = 3 (abc), promptLen = 500+
+	// hitRate = 3/500 = 0.006 < 0.5 threshold
+	longSuffix := strings.Repeat("x", 500)
+	req2 := &types.ScheduleRequest{
+		Id:         "req-2",
+		PromptText: shortPrefix + longSuffix,
+	}
+	lrsClient.RLock()
+	err = pc.Schedule(req2)
+	lrsClient.RUnlock()
+
+	assert.NoError(t, err)
+	// hitRate = 3 / 503 ≈ 0.006 < 0.5 threshold
+	// Should fallback to otherWorker (least loaded globally), NOT cached worker
+	assert.Equal(t, otherWorker, req2.ScheduleResult[0].ID,
+		"should fallback to least-loaded worker when hit rate below threshold")
+	t.Logf("Second request -> %s (cached worker %s had cache entry but hitRate < threshold)",
+		req2.ScheduleResult[0].ID, cachedWorker)
+}
+
+// TestSchedule_HitRateThreshold_AboveThreshold verifies that when cache hit rate meets threshold,
+// scheduler uses cache-hit candidates for selection.
+// Scenario: cached prefix matches >= 50% of new prompt (meets default threshold).
+// Expected: scheduler selects from cache-hit candidates.
+func TestSchedule_HitRateThreshold_AboveThreshold(t *testing.T) {
+	config := createTestConfig()
+	config.PrefixCacheHitRateThreshold = 0.5 // 50%
+
+	workers := []*types.LLMWorker{
+		{ID: "worker-cache-hit", Version: 1},
+		{ID: "worker-other", Version: 1},
+	}
+	lrsClient := createTestLRSClient(workers)
+	pc := NewPrefixCachePolicy(config, consts.NormalInferMode, lrsClient)
+
+	// First request: create cache entry
+	longPrefix := strings.Repeat("shared prefix content ", 20) // ~440 chars
+	req1 := &types.ScheduleRequest{
+		Id:         "req-1",
+		PromptText: longPrefix + "question one",
+	}
+	lrsClient.RLock()
+	err := pc.Schedule(req1)
+	lrsClient.RUnlock()
+	assert.NoError(t, err)
+	cachedWorker := req1.ScheduleResult[0].ID
+	t.Logf("First request cached on: %s, prompt length: %d", cachedWorker, len(req1.PromptText))
+
+	// Add some load to other worker to ensure it's not selected as least-loaded fallback
+	// But keep cached worker lightly loaded so it's still a good candidate
+	otherWorker := "worker-other"
+	if cachedWorker == "worker-other" {
+		otherWorker = "worker-cache-hit"
+	}
+	simulateWorkerLoad(lrsClient, otherWorker, 3, 1000) // 3000 tokens on other worker
+	// cached worker has 0 tokens (from initial request, already released)
+
+	// Second request: shares most of the prefix (hitRate >= 50%)
+	// Uses ~90% of the original prefix
+	highMatchPrefix := longPrefix[:len(longPrefix)*9/10] // ~400 chars, ~90% match
+	req2 := &types.ScheduleRequest{
+		Id:         "req-2",
+		PromptText: highMatchPrefix + "question two",
+	}
+	lrsClient.RLock()
+	err = pc.Schedule(req2)
+	lrsClient.RUnlock()
+
+	assert.NoError(t, err)
+	// hitRate = 400 / 450 ≈ 0.89 > 0.5 threshold
+	// Should use cached worker (cache hit with acceptable hit rate)
+	assert.Equal(t, cachedWorker, req2.ScheduleResult[0].ID,
+		"should use cache-hit worker when hit rate meets threshold")
+	t.Logf("Second request -> %s (hitRate >= threshold, using cache)", req2.ScheduleResult[0].ID)
 }
 
 func init() {

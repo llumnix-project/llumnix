@@ -830,15 +830,15 @@ func (lgs *LlmGatewayService) LogRequestAccess(req *types.RequestContext) {
 	workSize := int(lgs.numReqs.Load()) - queueSize - schSize // Requests being inferred
 
 	// Log detailed request completion information
-	logging.Logf("Request completed [%s] status_code:%d,method:%s,url:%s;sch_results:%s,%s;input_tokens:%d,total_tokens:%d;queue:%d,sch:%d,work:%d,model:%s",
+	logging.Logf("Request completed [%s] status_code:%d,method:%s,url:%s;%s;input_tokens:%d,total_tokens:%d;sch_results:%s;queue:%d,sch:%d,work:%d,model:%s",
 		req.Id,
 		httpReq.StatusCode,
 		httpReq.Request.Method,
 		httpReq.Request.URL.String(),
-		req.ScheduleCtx.ScheduleResults.String(),
 		stats.String(),
 		req.GetInputTokenLen(),
 		req.GetTotalTokenLen(),
+		req.ScheduleCtx.ScheduleResults.String(),
 		queueSize,
 		schSize,
 		workSize,

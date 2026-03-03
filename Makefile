@@ -62,7 +62,7 @@ llm-gateway-docker-build-%:
 	cp -RP ./docker/* $(TEMP_DIR_LLM_GATEWAY)
 	cp -RP ~/.ssh $(TEMP_DIR_LLM_GATEWAY)/.ssh
 	cp -RP ~/.gitconfig $(TEMP_DIR_LLM_GATEWAY)/.gitconfig
-	rsync -a ./ $(TEMP_DIR_LLM_GATEWAY)/LLM-Gateway --exclude .git --exclude .idea --exclude .vscode --exclude bin
+	rsync -a ./ $(TEMP_DIR_LLM_GATEWAY)/llm-gateway --exclude .git --exclude .idea --exclude .vscode --exclude bin
 	$(DOCKER) build --platform $(GOOS)/$(ARCH) --build-arg ARCH=$(ARCH) --build-arg TAG_LLM_GATEWAY=$(TAG_LLM_GATEWAY) --no-cache -t $(REGISTRY)/eas-llm-gateway-$(ARCH):$(TAG_LLM_GATEWAY) $(TEMP_DIR_LLM_GATEWAY)
 
 .PHONY: llm-gateway-docker-push

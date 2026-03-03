@@ -179,7 +179,7 @@ func (ss *ScheduleService) handleSchedule(w http.ResponseWriter, r *http.Request
 	// record realtime stats for the acquired token
 	if !ss.config.LlumnixConfig.EnableFullModeScheduling {
 		for _, worker := range schReq.ScheduleResult {
-			reqState := lrs.NewRequestState(schReq.Id, int64(schReq.PromptNumTokens), worker.Id(), schReq.GatewayId)
+			reqState := lrs.NewRequestState(schReq.Id, int64(schReq.GetPromptLen()), worker.Id(), schReq.GatewayId)
 			err := ss.lrsClient.AllocateRequestState(worker.Role.String(), reqState)
 			if err != nil {
 				klog.Errorf("[%s] acquire %s resource request failed: %v", schReq.Id, worker.Role, err)
@@ -248,7 +248,13 @@ func (ss *ScheduleService) handleReport(w http.ResponseWriter, r *http.Request) 
 	}
 
 	for _, reqData := range reports {
-		reqState := lrs.NewRequestState(reqData.Id, int64(reqData.NumTokens), reqData.InstanceId, reqData.GatewayId)
+		var numTokens int64
+		if reqData.UseTokenIds {
+			numTokens = int64(reqData.NumTokens)
+		} else {
+			numTokens = int64(reqData.TextLen)
+		}
+		reqState := lrs.NewRequestState(reqData.Id, numTokens, reqData.InstanceId, reqData.GatewayId)
 		var err error
 		switch reqData.Kind {
 		case lrs.KindPrefillDone:

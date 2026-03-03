@@ -41,8 +41,8 @@ func (c *InstanceTokensLimitRule) WithInLimit(schReq *types.ScheduleRequest, ins
 	if maxTokens == 0 {
 		return true
 	}
-	klog.V(3).Infof("InstanceTokensLimitRule: current tokens %d, max tokens %d", instance.NumTokens()+int64(schReq.GetInputTokenLen()), maxTokens)
-	return instance.NumTokens()+int64(schReq.GetInputTokenLen()) <= maxTokens
+	klog.V(3).Infof("InstanceTokensLimitRule: current tokens %d, max tokens %d", instance.NumTokens()+int64(schReq.GetPromptLen()), maxTokens)
+	return instance.NumTokens()+int64(schReq.GetPromptLen()) <= maxTokens
 }
 
 // InstanceWaitingRequestsLimitRule implements the instance level waiting requests limit rule
@@ -69,8 +69,8 @@ func (c *InstanceWaitingTokensLimitRule) WithInLimit(schReq *types.ScheduleReque
 	if maxWaitingTokens == 0 {
 		return true
 	}
-	klog.V(3).Infof("InstanceWaitingTokensLimitRule: current waiting tokens %d, max waiting tokens %d", instance.NumWaitingTokens()+int64(schReq.GetInputTokenLen()), maxWaitingTokens)
-	return instance.NumWaitingTokens()+int64(schReq.GetInputTokenLen()) <= maxWaitingTokens
+	klog.V(3).Infof("InstanceWaitingTokensLimitRule: current waiting tokens %d, max waiting tokens %d", instance.NumWaitingTokens()+int64(schReq.GetPromptLen()), maxWaitingTokens)
+	return instance.NumWaitingTokens()+int64(schReq.GetPromptLen()) <= maxWaitingTokens
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -120,8 +120,8 @@ func (c *ServiceTokensLimitRule) WithInLimit(schReq *types.ScheduleRequest, inst
 	}
 
 	maxTotal := maxPerInstance * int64(len(instances))
-	klog.V(3).Infof("ServiceTokensLimitRule: current total tokens %d, max total tokens %d", totalTokens+int64(schReq.GetInputTokenLen()), maxTotal)
-	return totalTokens+int64(schReq.GetInputTokenLen()) <= maxTotal
+	klog.V(3).Infof("ServiceTokensLimitRule: current total tokens %d, max total tokens %d", totalTokens+int64(schReq.GetPromptLen()), maxTotal)
+	return totalTokens+int64(schReq.GetPromptLen()) <= maxTotal
 }
 
 // ServiceWaitingRequestsLimitRule implements the service level waiting requests limit rule
@@ -162,8 +162,8 @@ func (c *ServiceWaitingTokensLimitRule) WithInLimit(schReq *types.ScheduleReques
 	}
 
 	maxTotal := maxPerInstance * int64(len(instances))
-	klog.V(3).Infof("ServiceWaitingTokensLimitRule: current total waiting tokens %d, max total waiting tokens %d", totalWaitingTokens+int64(schReq.GetInputTokenLen()), maxTotal)
-	return totalWaitingTokens+int64(schReq.GetInputTokenLen()) <= maxTotal
+	klog.V(3).Infof("ServiceWaitingTokensLimitRule: current total waiting tokens %d, max total waiting tokens %d", totalWaitingTokens+int64(schReq.GetPromptLen()), maxTotal)
+	return totalWaitingTokens+int64(schReq.GetPromptLen()) <= maxTotal
 }
 
 ////////////////////////////////////////////////////////////////////////////
