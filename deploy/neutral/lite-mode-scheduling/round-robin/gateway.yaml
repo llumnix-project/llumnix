@@ -64,7 +64,7 @@ spec:
               cpu: "1000m"
       containers:
         - name: gateway
-          image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/gateway:20260226-164420
+          image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/gateway:20260302-200550
           imagePullPolicy: Always
           command: ["/usr/local/bin/gateway"]
           args:

@@ -181,7 +181,7 @@ spec:
               memory: 128Gi
               nvidia.com/gpu: "1"
         - name: discovery
-          image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/discovery:20260226-170427
+          image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/discovery:20260302-203317
           command:
             - /bin/bash
             - -c

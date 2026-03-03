@@ -300,7 +300,7 @@ func (p *DispatchPolicy) schedule(
 		p.policyInternal.calculateMetrics(inferType, request, instanceViews)
 	}
 
-	if request.SchedulingMode == types.SchedulingModeNormal {
+	if request.SchedulingMode == types.SchedulingModeNeutral {
 		if _, exists := clusterView.groupedInstanceViews[consts.InferTypeNeutral]; exists {
 			neutral := p.executeSchedule(consts.InferTypeNeutral, clusterView)
 			if neutral != nil {
@@ -319,8 +319,9 @@ func (p *DispatchPolicy) schedule(
 	}
 
 	if len(clusterView.groupedInstanceViews) == 1 {
-		klog.V(4).Info(
-			"Only one group of instance views but not Neutral type, return empty selected instances")
+		klog.V(4).Infof(
+			"PD mode requires both Prefill and Decode instance groups, but only %d group found: %v. Returning empty selection.",
+			len(clusterView.groupedInstanceViews), maps.Keys(clusterView.groupedInstanceViews))
 		return
 	}
 
