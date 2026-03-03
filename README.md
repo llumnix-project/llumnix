@@ -140,7 +140,7 @@ bash scripts/build_component_release.sh scheduler --push
 
 # Step 4: Build Discovery
 bash scripts/build_discovery_whl.sh
-bash scripts/build_discovery_release.sh --push
+bash scripts/build_component_release.sh discovery --push
 
 # Step 5: Build LLM Backend (vLLM)
 bash scripts/build_llumnix_whl.sh
