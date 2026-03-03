@@ -9,6 +9,7 @@ sys.path.append(os.path.abspath(REPO_ROOT))
 project = 'Llumnix'
 copyright = f'{datetime.datetime.now().year}, AlibabaPAI Team'
 author = 'AlibabaPAI'
+mermaid_output_format = "raw"
 
 extensions = [
     "sphinx.ext.napoleon",    
@@ -17,9 +18,18 @@ extensions = [
     "myst_parser",            
     "sphinx_design",          
     "sphinx_togglebutton",    
+    "sphinxcontrib.mermaid",
 ]
 
-myst_enable_extensions = ["colon_fence", "fieldlist", "html_admonition"]
+myst_enable_extensions = [
+    "colon_fence",
+    "fieldlist",
+    "html_admonition",
+    "attrs_inline",
+    "dollarmath",
+    "amsmath",
+]
+
 myst_heading_anchors = 3
 
 html_title = project

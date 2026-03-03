@@ -60,7 +60,10 @@ fi
 echo "Updating deployment in namespace: $GROUP_NAME"
 echo "Kustomize directory: $KUSTOMIZE_DIR"
 
-kubectl apply -k "$KUSTOMIZE_DIR/" -n "$GROUP_NAME"
+kubectl kustomize "$KUSTOMIZE_DIR/" \
+  | envsubst '${REPOSITORY} ${VLLM_IMAGE_TAG} ${DISCOVERY_IMAGE_TAG} ${GATEWAY_IMAGE_TAG} ${SCHEDULER_IMAGE_TAG} ${MOONCAKE_VLLM_IMAGE_TAG}' \
+  | kubectl apply -f - -n "$GROUP_NAME"
+
 
 # Wait for rollout
 sleep 2

@@ -1,5 +1,6 @@
 sphinx==7.4.7
 sphinx-book-theme
+sphinxcontrib-mermaid
 myst-parser
 sphinx-copybutton
 sphinx-autodoc2

@@ -130,11 +130,7 @@ for details on how test environments are launched and configured.
 If you need to build a custom development image (e.g., modifying base dependencies):
 
 ```bash
-# Build only (without pushing)
 bash scripts/build_image_dev.sh
-
-# Build and push to registry
-bash scripts/build_image_dev.sh --push
 ```
 
 The script builds from `container/Dockerfile.vllm_dev` and automatically tags the image 

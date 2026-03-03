@@ -9,8 +9,7 @@ featuring fully dynamic request scheduling for modern LLM deployments.
 
 New to Llumnix? Start here.
 
-- [Quick Start (Coming Soon)](getting_started/quick_start.md) — Deploy your first Llumnix cluster in minutes
-- [Deployment Modes（Coming Soon）](getting_started/deployment_modes.md) — Choose between Normal, PD, and PD-KVS modes
+- [Quick Start](getting_started/quick_start.md) — Deploy your first Llumnix cluster in minutes
 - [Llumlet Configuration](getting_started/engine_conf.md) — Configure Llumlet
 
 ---
@@ -19,14 +18,17 @@ New to Llumnix? Start here.
 
 Understand how Llumnix works internally.
 
-- [Architecture Overview (Coming Soon)](design/architecture.md) — Full-stack component design and data flow
-- [Scheduling Design (Coming Soon)](design/scheduling.md) — Scheduler and rescheduler design
-- [Predictor-enhanced Scheduling(Coming Soon)](design/predictor_scheduling.md) — Prefill load prediction for smarter routing
-- [KV-aware Scheduling(Coming Soon)](design/kv_scheduling.md) — Scheduling with KV cache state awareness
-- [Rescheduling(Coming Soon)](design/rescheduling.md) — Continuous rebalancing via request migration
-- [Llumlet & Llumlet Proxy](design/Llumlet&Llumlet_proxy.md) — Engine-side agent bridging local engine and global scheduler
-- [Realtime Instance Status Tracking](design/real_time_instance_status_tracking.md) — How Llumnix tracks engine state with minimal overhead
-- [Migration](design/request_migration.md) — Request migration implementation
+- [Architecture Overview](design/architecture.md) — Full-stack component design
+- Scheduler
+	- [Scheduling Policy Framework](design/policy_framework.md) — Scheduler Policy design
+	- [Instant and Accurate Load for Scheduling](design/instant_accurate_load.md) — Load Obervation and Modeling
+	- [KV-aware Scheduling](design/cache_aware_scheduling.md) — Scheduling with KV cache state awareness
+	- [Rescheduling(Coming Soon)](design/rescheduling.md) — Continuous rebalancing via request migration
+- Gateway
+- Llumlet
+	- [Llumlet & Llumlet Proxy](design/Llumlet&Llumlet_proxy.md) — Engine-side agent bridging local engine and global scheduler
+	- [Realtime Instance Status Tracking](design/real_time_instance_status_tracking.md) — How Llumnix tracks engine state with minimal overhead
+	- [Migration](design/request_migration.md) — Request migration implementation
 
 ---
 
@@ -41,9 +43,7 @@ Understand how Llumnix works internally.
 :hidden:
 :caption: Getting Started
 
-getting_started/prerequisites
 getting_started/quick_start
-getting_started/deployment_modes
 getting_started/engine_conf
 :::
 
@@ -52,9 +52,9 @@ getting_started/engine_conf
 :caption: Design Documents
 
 design/architecture
-design/scheduling
-design/predictor_scheduling
-design/kv_scheduling
+design/policy_framework
+design/instant_accurate_load
+design/cache_aware_scheduling
 design/request_migration
 design/Llumlet&Llumlet_proxy
 design/real_time_instance_status_tracking
