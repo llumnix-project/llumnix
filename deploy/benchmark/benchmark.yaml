@@ -1,0 +1,50 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: BENCHMARK_JOB_NAME
+  labels:
+    app: llumnix-benchmark
+spec:
+  ttlSecondsAfterFinished: BENCHMARK_TTL_SECONDS
+  backoffLimit: 0  # Do not retry on failure
+  template:
+    metadata:
+      labels:
+        app: llumnix-benchmark
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: benchmark
+        image: BENCHMARK_IMAGE
+        imagePullPolicy: Always
+        env:
+        - name: VLLM_USE_MODELSCOPE
+          value: "True"
+        command: ["bash", "-c"]
+        args:
+        - |
+          RESULTS_DIR=/tmp/benchmark-result
+          mkdir -p "$RESULTS_DIR"
+          echo "=========================================="
+          echo "Llumnix Benchmark Job"
+          echo "Benchmark Command: BENCHMARK_COMMAND"
+          echo "=========================================="
+          echo ""
+          echo "Starting benchmark..."
+          BENCHMARK_COMMAND 2>&1 | tee "$RESULTS_DIR/benchmark-log.txt"
+          EXIT_CODE=${PIPESTATUS[0]}
+          echo ""
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "Benchmark completed successfully."
+            sleep infinity
+          else
+            echo "Benchmark failed with exit code $EXIT_CODE"
+          fi
+          exit $EXIT_CODE
+        resources:
+          limits:
+            cpu: "8"
+            memory: 16Gi
+          requests:
+            cpu: "4"
+            memory: 8Gi
