@@ -161,8 +161,8 @@ func (cb *SchedulerClient) Get(req *types.RequestContext) (types.SchedulingResul
 			if time.Since(tStart) > cb.config.WaitSchedulingTimeout {
 				return nil, err
 			} else {
-				klog.Infof("[%s] all service endpoints are busy, try next after %dms", req.Id, cb.config.WaitSchedulingRetryInterval)
-				time.Sleep(time.Duration(cb.config.WaitSchedulingRetryInterval) * time.Millisecond)
+				klog.Infof("[%s] all service endpoints are busy, try next after %dms", req.Id, cb.config.WaitSchedulingRetryInterval.Milliseconds())
+				time.Sleep(cb.config.WaitSchedulingRetryInterval)
 				continue
 			}
 		}

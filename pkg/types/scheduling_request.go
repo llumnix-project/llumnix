@@ -9,7 +9,7 @@ import (
 type SchedulingMode string
 
 const (
-	SchedulingModeNormal   SchedulingMode = "normal"
+	SchedulingModeNeutral  SchedulingMode = "neutral"
 	SchedulingModePDBatch  SchedulingMode = "pd_batch"
 	SchedulingModePDStaged SchedulingMode = "pd_staged"
 )

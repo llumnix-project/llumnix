@@ -6,6 +6,7 @@ IMAGE="llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140
 echo "Building tokenizers package..."
 
 docker run --rm \
+  --network host \
   -v "$(pwd):/workspace" \
   -w /workspace \
   "$IMAGE" \
