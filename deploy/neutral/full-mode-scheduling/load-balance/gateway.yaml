@@ -72,6 +72,8 @@ spec:
         - "8089"
         - "-v"
         - "3"
+        - "--discovery-redis-status-ttl-ms"
+        - "60000"
         - "--scheduler-endpoints"
         - "scheduler:8088"
         - "--llm-backend-discovery"

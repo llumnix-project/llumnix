@@ -6,16 +6,16 @@ PUSH_IMAGE=false
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
-        gateway|scheduler) TARGET=$1 ;;
+        gateway|scheduler|discovery) TARGET=$1 ;;
         --push) PUSH_IMAGE=true ;;
-        *) echo "Unknown parameter: $1"; echo "Usage: $0 [gateway|scheduler] [--push]"; exit 1 ;;
+        *) echo "Unknown parameter: $1"; echo "Usage: $0 [gateway|scheduler|discovery] [--push]"; exit 1 ;;
     esac
     shift
 done
 
-REPOSITORY="beijing-pooling-registry.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev"
+REPOSITORY="llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/${TARGET}"
 TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
-IMAGE_TAG="${TARGET}-${TIMESTAMP}"
+IMAGE_TAG="${TIMESTAMP}"
 
 echo "Building ${TARGET} image..."
 

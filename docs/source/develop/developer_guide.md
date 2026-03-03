@@ -9,7 +9,7 @@ This guide covers setting up a development environment on your local machine.
 We provide a pre-built development image with all necessary dependencies pre-installed:
 
 ```
-beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-20260204-140225
+llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225
 ```
 
 If you need to build a custom development image, see [Build Development Image](#build-development-image-optional).
@@ -30,7 +30,7 @@ docker run -it --rm \
   --gpus all \
   -v $(pwd):/workspace \
   -w /workspace \
-  beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-20260204-140225 \
+  llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225 \
   bash
 ```
 
@@ -141,7 +141,7 @@ The script builds from `container/Dockerfile.vllm_dev` and automatically tags th
 with a timestamp:
 
 ```
-beijing-pooling-registry-vpc.cn-beijing.cr.aliyuncs.com/llumnix/llumnix-dev:llumnix-vllm-dev-<YYYYMMDD-HHMMSS>
+llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-<YYYYMMDD-HHMMSS>
 ```
 
 After building, update the image reference in the `docker run` command above to use the 

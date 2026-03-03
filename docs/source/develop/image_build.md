@@ -53,7 +53,7 @@ bash scripts/build_component_release.sh scheduler --push
 bash scripts/build_discovery_whl.sh
 
 # Build and push discovery image
-bash scripts/build_discovery_release.sh --push
+bash scripts/build_component_release.sh discovery --push
 ```
 
 ### Step 5: Build LLM Backend (vLLM)
