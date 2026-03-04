@@ -64,7 +64,7 @@ func newOpenAIHandler(config *options.GatewayConfig) (RequestHandler, error) {
 
 	name := config.PDDisaggProtocol
 	if name == "" {
-		name = consts.ForwarderTypeNormal
+		name = consts.ForwarderTypeNeutral
 	}
 	var schedulingMode types.SchedulingMode
 	if config.SeparatePDScheduling {

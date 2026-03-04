@@ -102,7 +102,7 @@ const (
 
 // forwarder type constants, mapping to config PDDisaggProtocol values
 const (
-	ForwarderTypeNormal         = "normal"
+	ForwarderTypeNeutral        = "neutral"
 	ForwarderTypeVllmKvt        = PDDisaggProtocolVllmKvt
 	ForwarderTypeSglangMooncake = PDDisaggProtocolSGlangMooncake
 	ForwarderTypeVllmMooncake   = PDDisaggProtocolVllmMooncake

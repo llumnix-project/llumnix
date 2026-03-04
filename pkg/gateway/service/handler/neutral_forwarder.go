@@ -12,7 +12,7 @@ import (
 )
 
 func init() {
-	registerForwarder(consts.ForwarderTypeNormal, func(schedulingMode types.SchedulingMode) (Forwarder, error) {
+	registerForwarder(consts.ForwarderTypeNeutral, func(schedulingMode types.SchedulingMode) (Forwarder, error) {
 		return newNeutralForwarder(), nil
 	})
 }

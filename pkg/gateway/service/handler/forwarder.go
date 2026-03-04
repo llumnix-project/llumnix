@@ -39,7 +39,7 @@ var (
 )
 
 // registerForwarder registers a forwarder factory with the specified type key.
-// The key is typically a ForwarderType* constant (e.g., ForwarderTypeNormal, ForwarderTypeVllmKvt).
+// The key is typically a ForwarderType* constant (e.g., ForwarderTypeNeutral, ForwarderTypeVllmKvt).
 func registerForwarder(forwarderType string, factory ForwarderFactory) {
 	registryMu.Lock()
 	defer registryMu.Unlock()
