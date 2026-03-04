@@ -21,6 +21,7 @@ import (
 	"llm-gateway/pkg/metrics"
 	"llm-gateway/pkg/resolver"
 	"llm-gateway/pkg/scheduler/lrs"
+	"llm-gateway/pkg/scheduler/res"
 	schedule_policy "llm-gateway/pkg/scheduler/schedule-policy"
 	"llm-gateway/pkg/types"
 )
@@ -31,9 +32,10 @@ type ScheduleService struct {
 	schedulePolicy   schedule_policy.SchedulePolicy
 	reschedulePolicy schedule_policy.ReschedulePolicy
 
-	resolver  resolver.LLMResolver
-	eventChan <-chan resolver.WorkerEvent
-	lrsClient *lrs.LocalRealtimeStateClient
+	resolver           resolver.LLMResolver
+	eventChan          <-chan resolver.WorkerEvent
+	lrsClient          *lrs.LocalRealtimeStateClient
+	remoteEngineStates *res.RemoteEngineStates
 
 	scheduleMutex     sync.Mutex
 	prometheusHandler *metrics.PrometheusHandler
@@ -63,6 +65,13 @@ func NewScheduleService(c *options.Config) *ScheduleService {
 		return nil
 	}
 	ss.eventChan = eventChan
+	ss.resolver = llmResolver
+
+	// Initialize and start RemoteEngineStates for metrics collection
+	ss.remoteEngineStates = res.NewRemoteEngineStates(c)
+	if err := ss.remoteEngineStates.Start(llmResolver); err != nil {
+		klog.Warningf("failed to start RemoteEngineStates: %v", err)
+	}
 
 	go func() {
 		for event := range ss.eventChan {

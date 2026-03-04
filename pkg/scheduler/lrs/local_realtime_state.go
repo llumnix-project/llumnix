@@ -50,6 +50,9 @@ const (
 //     > Each allocation is bound to a unique version
 //     > Version-mismatched release requests are rejected
 
+// InstanceView represents a view of an inference instance with its current state.
+// It tracks the worker information, version, allocated tokens, and all active request states
+// for the instance. This is used by the scheduler to make load-balancing decisions.
 type InstanceView struct {
 	worker        *types.LLMWorker
 	version       int64
@@ -57,6 +60,9 @@ type InstanceView struct {
 	requestStates map[string]*RequestState
 }
 
+// RequestState represents the state of a single request being processed by an instance.
+// It tracks the request ID, instance assignment, gateway ownership, token allocation,
+// and prefill status. The update time is used for stale state detection.
 type RequestState struct {
 	reqId      string
 	instanceId string
@@ -68,6 +74,8 @@ type RequestState struct {
 	updateTime time.Time
 }
 
+// NewRequestState creates a new RequestState instance with the given parameters.
+// The updateTime is automatically set to the current time.
 func NewRequestState(
 	reqId string, numTokens int64, instanceId string, gatewayId string) *RequestState {
 	return &RequestState{
@@ -79,6 +87,9 @@ func NewRequestState(
 	}
 }
 
+// NewInstanceView creates a new InstanceView for the given worker.
+// The version is initialized from the worker's version, and the request states map
+// is initialized as empty.
 func NewInstanceView(worker *types.LLMWorker) *InstanceView {
 	return &InstanceView{
 		worker:        worker,
@@ -88,26 +99,33 @@ func NewInstanceView(worker *types.LLMWorker) *InstanceView {
 	}
 }
 
+// GetInstance returns the LLMWorker associated with this instance view.
 func (iv *InstanceView) GetInstance() *types.LLMWorker {
 	return iv.worker
 }
 
+// GetInstanceId returns the unique identifier of the instance.
 func (iv *InstanceView) GetInstanceId() string {
 	return iv.worker.Id()
 }
 
+// GetInferMode returns the role/inference mode of the instance as a string.
 func (iv *InstanceView) GetInferMode() string {
 	return iv.worker.Role.String()
 }
 
+// NumTokens returns the total number of tokens currently allocated to this instance.
 func (iv *InstanceView) NumTokens() int64 {
 	return iv.numTokens
 }
 
+// NumRequests returns the total number of requests currently assigned to this instance.
 func (iv *InstanceView) NumRequests() int64 {
 	return int64(len(iv.requestStates))
 }
 
+// NumWaitingRequests returns the count of requests that haven't completed prefill phase.
+// These requests are still in the waiting/prefill stage and not yet in decode phase.
 func (iv *InstanceView) NumWaitingRequests() int64 {
 	cnt := int64(0)
 	for _, reqState := range iv.requestStates {
@@ -118,6 +136,8 @@ func (iv *InstanceView) NumWaitingRequests() int64 {
 	return cnt
 }
 
+// NumWaitingTokens returns the total tokens for requests that haven't completed prefill.
+// This represents the token load that is still in the waiting/prefill stage.
 func (iv *InstanceView) NumWaitingTokens() int64 {
 	cnt := int64(0)
 	for _, reqState := range iv.requestStates {
@@ -128,6 +148,7 @@ func (iv *InstanceView) NumWaitingTokens() int64 {
 	return cnt
 }
 
+// GetRequestIds returns a list of all request IDs currently assigned to this instance.
 func (iv *InstanceView) GetRequestIds() []string {
 	reqIds := make([]string, 0, len(iv.requestStates))
 	for reqId := range iv.requestStates {
@@ -136,6 +157,8 @@ func (iv *InstanceView) GetRequestIds() []string {
 	return reqIds
 }
 
+// AllocateRequestState adds a new request state to this instance.
+// It updates the request states map and increments the total token count.
 func (iv *InstanceView) AllocateRequestState(reqState *RequestState) {
 	iv.requestStates[reqState.reqId] = reqState
 	iv.numTokens += reqState.numTokens
@@ -143,6 +166,8 @@ func (iv *InstanceView) AllocateRequestState(reqState *RequestState) {
 		reqState.instanceId, reqState.reqId, reqState.numTokens, iv.numTokens)
 }
 
+// MarkPrefillComplete marks a request's prefill phase as completed.
+// This is a no-op if the request is not found in the instance.
 func (iv *InstanceView) MarkPrefillComplete(reqState *RequestState) {
 	innerReqState := iv.requestStates[reqState.reqId]
 	if innerReqState == nil {
@@ -152,6 +177,9 @@ func (iv *InstanceView) MarkPrefillComplete(reqState *RequestState) {
 	klog.V(3).Infof("instance %s mark request %s prefill complete", reqState.instanceId, reqState.reqId)
 }
 
+// UpdateRequestState updates an existing request state with new token information.
+// It validates that the gateway ID hasn't changed and updates the token count.
+// If the new token count is lower than before, it logs a warning but still processes the update.
 func (iv *InstanceView) UpdateRequestState(reqState *RequestState) {
 	innerReqState := iv.requestStates[reqState.reqId]
 	if innerReqState == nil {
@@ -176,6 +204,8 @@ func (iv *InstanceView) UpdateRequestState(reqState *RequestState) {
 	}
 }
 
+// ReleaseRequestState removes a request from this instance and decrements the token count.
+// If the token count would go negative, it logs a warning and sets the count to 0.
 func (iv *InstanceView) ReleaseRequestState(reqId string) {
 	reqState := iv.requestStates[reqId]
 	if reqState != nil {
@@ -190,6 +220,8 @@ func (iv *InstanceView) ReleaseRequestState(reqId string) {
 	}
 }
 
+// ClearStates removes all request states and resets the token count to 0.
+// This is typically used when an instance is being removed or reset.
 func (iv *InstanceView) ClearStates() {
 	for s := range iv.requestStates {
 		delete(iv.requestStates, s)
@@ -197,6 +229,7 @@ func (iv *InstanceView) ClearStates() {
 	iv.numTokens = 0
 }
 
+// GetModel returns the model name served by this instance.
 func (iv *InstanceView) GetModel() string {
 	return iv.worker.Model
 }
@@ -224,10 +257,14 @@ type LocalRealtimeState struct {
 	cleanupRunning bool
 }
 
+// NewLocalRealtimeState creates a new LocalRealtimeState with default timeout and cleanup interval.
 func NewLocalRealtimeState() *LocalRealtimeState {
 	return NewLocalRealtimeStateWithConfig(DefaultStateTimeout, DefaultCleanupInterval)
 }
 
+// NewLocalRealtimeStateWithConfig creates a new LocalRealtimeState with custom timeout and cleanup interval.
+// The stateTimeout determines how long before a request state is considered stale.
+// The cleanupInterval determines how often the stale state cleanup runs.
 func NewLocalRealtimeStateWithConfig(stateTimeout, cleanupInterval time.Duration) *LocalRealtimeState {
 	lrs := &LocalRealtimeState{
 		requestStates:     make(map[string]*RequestState),
@@ -324,12 +361,16 @@ func (lrs *LocalRealtimeState) cleanupStaleRequests() {
 	}
 }
 
+// GetInstanceViews returns all instance views currently tracked by the state.
+// The returned map is keyed by instance ID.
 func (lrs *LocalRealtimeState) GetInstanceViews() map[string]*InstanceView {
 	lrs.mu.RLock()
 	defer lrs.mu.RUnlock()
 	return lrs.instanceViews
 }
 
+// GetInstanceViewsByModel returns instance views filtered by model name.
+// Instances with empty model name are included as they can serve any model.
 func (lrs *LocalRealtimeState) GetInstanceViewsByModel(model string) map[string]*InstanceView {
 	lrs.mu.RLock()
 	defer lrs.mu.RUnlock()
@@ -342,6 +383,8 @@ func (lrs *LocalRealtimeState) GetInstanceViewsByModel(model string) map[string]
 	return results
 }
 
+// GetInstanceView returns the instance view for the given instance ID.
+// Returns nil if the instance does not exist.
 func (lrs *LocalRealtimeState) GetInstanceView(instanceId string) *InstanceView {
 	lrs.mu.RLock()
 	defer lrs.mu.RUnlock()
@@ -365,6 +408,10 @@ func (lrs *LocalRealtimeState) removeInstance(instanceId string) {
 	}
 }
 
+// AddInstance adds a new instance to the state tracker or updates an existing one.
+// If an instance with the same ID exists, it checks the version:
+// - If the new version is higher, the old instance is removed and the new one is added
+// - If the version is the same or lower, a warning is logged and no change is made
 func (lrs *LocalRealtimeState) AddInstance(worker *types.LLMWorker) {
 	lrs.mu.Lock()
 	defer lrs.mu.Unlock()
@@ -386,12 +433,16 @@ func (lrs *LocalRealtimeState) AddInstance(worker *types.LLMWorker) {
 	lrs.instanceViews[id] = newInstanceView
 }
 
+// RemoveInstance removes an instance and all its associated request states.
+// This also cleans up the request states from the gateway request sets.
 func (lrs *LocalRealtimeState) RemoveInstance(instanceId string) {
 	lrs.mu.Lock()
 	defer lrs.mu.Unlock()
 	lrs.removeInstance(instanceId)
 }
 
+// AddGateway registers a new gateway in the state tracker.
+// This creates an empty request set for the gateway to track its allocated requests.
 func (lrs *LocalRealtimeState) AddGateway(gatewayId string) {
 	lrs.mu.Lock()
 	defer lrs.mu.Unlock()
@@ -400,6 +451,8 @@ func (lrs *LocalRealtimeState) AddGateway(gatewayId string) {
 	}
 }
 
+// RemoveGateway removes a gateway and releases all its associated request states.
+// This is called when a gateway fails or restarts to clean up orphaned request states.
 func (lrs *LocalRealtimeState) RemoveGateway(gatewayId string) {
 	lrs.mu.Lock()
 	defer lrs.mu.Unlock()
@@ -437,6 +490,8 @@ func (lrs *LocalRealtimeState) gatewayExists(gatewayId string) bool {
 	return ok
 }
 
+// PrintInstanceViews prints a summary of all instance views for debugging.
+// This outputs the worker ID, request count, and token count for each instance.
 func (lrs *LocalRealtimeState) PrintInstanceViews() {
 	lrs.mu.RLock()
 	defer lrs.mu.RUnlock()
@@ -446,6 +501,13 @@ func (lrs *LocalRealtimeState) PrintInstanceViews() {
 	}
 }
 
+// AllocateRequestState allocates a new request state to an instance.
+// This operation is atomic and validates that:
+// - The request doesn't already exist
+// - At least one instance exists
+// - The target instance exists
+// - The gateway exists
+// Returns an error if any validation fails, otherwise nil.
 func (lrs *LocalRealtimeState) AllocateRequestState(reqState *RequestState) error {
 	lrs.mu.Lock()
 	defer lrs.mu.Unlock()
@@ -485,6 +547,12 @@ func (lrs *LocalRealtimeState) AllocateRequestState(reqState *RequestState) erro
 	return nil
 }
 
+// UpdateRequestState updates an existing request state with new information.
+// This operation is atomic and validates that:
+// - The request exists
+// - The instance exists
+// - The gateway exists
+// Returns an error if any validation fails, otherwise nil.
 func (lrs *LocalRealtimeState) UpdateRequestState(reqState *RequestState) error {
 	lrs.mu.Lock()
 	defer lrs.mu.Unlock()
@@ -534,6 +602,13 @@ func (lrs *LocalRealtimeState) MarkPrefillComplete(reqState *RequestState) error
 	return nil
 }
 
+// ReleaseRequestState releases a request state from the system.
+// This removes the request from:
+// - The global request states map
+// - The instance view
+// - The gateway request set
+// If the request doesn't exist, a warning is logged but no error is returned.
+// This is safe to call for idempotent cleanup operations.
 func (lrs *LocalRealtimeState) ReleaseRequestState(reqState *RequestState) {
 	lrs.mu.Lock()
 	defer lrs.mu.Unlock()

@@ -42,6 +42,7 @@ func makeInstanceView(id string, totalReqs int, tokensPerReq int64, completedPre
 func makeScheduleRequest(id string, promptTokens int) *types.ScheduleRequest {
 	return &types.ScheduleRequest{
 		Id:              id,
+		UseTokenIds:     true,
 		PromptNumTokens: promptTokens,
 	}
 }
