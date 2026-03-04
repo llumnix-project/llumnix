@@ -1,0 +1,30 @@
+name: Python discovery Unit Tests
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+env:
+  DEV_IMAGE: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225
+
+jobs:
+  discovery-test:
+    name: Discovery Tests
+    runs-on: [self-hosted, cpu]
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Run discovery tests in dev container
+        run: |
+          docker run --rm \
+            --network host \
+            -v "$(pwd):/workspace" \
+            -w /workspace/python/discovery \
+            ${{ env.DEV_IMAGE }} \
+            bash -c "pip install -r requirements.txt && make proto && make install && make test"

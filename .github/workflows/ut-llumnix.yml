@@ -1,0 +1,53 @@
+name: Python llumnix Unit Tests
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+env:
+  DEV_IMAGE: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225
+
+jobs:
+  # ── cms tests ────────────────────────────────────────────────────────────
+  llumnix-cms-test:
+    name: llumnix CMS Tests
+    runs-on: [self-hosted, cpu]
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Run cms tests in dev container
+        run: |
+          docker run --rm \
+            --network host \
+            -v "$(pwd):/workspace" \
+            -w /workspace/python/llumnix \
+            ${{ env.DEV_IMAGE }} \
+            bash -c "make vllm_install && make cms_test"
+
+  # ── llumlet tests ─────────────────────────────────────────────────────────
+  llumnix-llumlet-test:
+    name: llumnix Llumlet Tests
+    runs-on: [self-hosted, cpu]
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Run llumlet tests in dev container
+        run: |
+          docker run --rm \
+            --network host \
+            -v "$(pwd):/workspace" \
+            -w /workspace/python/llumnix \
+            ${{ env.DEV_IMAGE }} \
+            bash -c "make vllm_install && make llumlet_test"

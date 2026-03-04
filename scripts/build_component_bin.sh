@@ -2,16 +2,19 @@
 set -e
 
 TARGET=""
+CUSTOM_IMAGE=""
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         gateway|scheduler) TARGET=$1 ;;
-        *) echo "Unknown target: $1"; echo "Usage: $0 [gateway|scheduler]"; exit 1 ;;
+        --image) CUSTOM_IMAGE="$2"; shift ;;
+        *) echo "Unknown target: $1"; echo "Usage: $0 [gateway|scheduler] [--image <dev-image>]"; exit 1 ;;
     esac
     shift
 done
 
-IMAGE="llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225"
+DEFAULT_IMAGE="llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225"
+IMAGE="${CUSTOM_IMAGE:-${DEFAULT_IMAGE}}"
 
 echo "Building ${TARGET} binary..."
 

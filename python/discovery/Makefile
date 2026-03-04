@@ -11,3 +11,8 @@ proto:
 .PHONY: install
 install:
 	@pip install -e . --no-build-isolation
+
+.PHONY: test
+test:
+	@pip install pytest --quiet
+	@pytest tests/ -v

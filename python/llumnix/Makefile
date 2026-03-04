@@ -26,15 +26,14 @@ check_pylint_installed:
 
 ###################################### proto begin ######################################
 GRPCIO_TOOLS_MIN_VERSION = 1.59.5
-GRPCIO_TOOLS_MAX_VERSION = 1.62.3
 
 .PHONY: check_proto_installed
 check_proto_installed:
 	@python3 -c "import grpc_tools; from pkg_resources import parse_version; \
 		version = pkg_resources.get_distribution('grpcio-tools').version; \
-		assert parse_version('$(GRPCIO_TOOLS_MIN_VERSION)') <= parse_version(version) <= parse_version('$(GRPCIO_TOOLS_MAX_VERSION)')" 2>/dev/null || { \
-		echo "grpcio-tools is not installed or version not in range $(GRPCIO_TOOLS_MIN_VERSION) to $(GRPCIO_TOOLS_MAX_VERSION). Installing..."; \
-		python3 -m pip install "grpcio-tools>=$(GRPCIO_TOOLS_MIN_VERSION),<=$(GRPCIO_TOOLS_MAX_VERSION)"; }
+		assert parse_version('$(GRPCIO_TOOLS_MIN_VERSION)') <= parse_version(version)" 2>/dev/null || { \
+		echo "grpcio-tools is not installed or version not in range >= $(GRPCIO_TOOLS_MIN_VERSION). Installing..."; \
+		python3 -m pip install "grpcio-tools>=$(GRPCIO_TOOLS_MIN_VERSION)"; }
 
 .PHONY: proto
 proto: check-grpcio-tools

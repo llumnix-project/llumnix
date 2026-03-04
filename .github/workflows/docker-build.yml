@@ -1,0 +1,180 @@
+name: Release Docker Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Image to build (gateway / scheduler / discovery / vllm / all)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - gateway
+          - scheduler
+          - discovery
+          - vllm
+      image_tag:
+        description: 'Custom image tag (leave empty to use git tag / sha)'
+        required: false
+        default: ''
+        type: string
+
+env:
+  REGISTRY: ${{ vars.ACR_REGISTRY }}
+
+jobs:
+  # ── Resolve image tag ─────────────────────────────────────────────────────
+  resolve-tag:
+    name: Resolve Image Tag
+    runs-on: [self-hosted, cpu]
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+
+    steps:
+      - name: Set image tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.image_tag }}" ]; then
+            echo "tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=$(echo ${{ github.sha }} | head -c 8)" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ── Build gateway ─────────────────────────────────────────────────────────
+  build-gateway:
+    name: Build Gateway Image
+    runs-on: [self-hosted, cpu]
+    needs: resolve-tag
+    if: >
+      github.event_name != 'workflow_dispatch' ||
+      inputs.target == 'all' ||
+      inputs.target == 'gateway'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build tokenizers
+        run: bash scripts/build_tokenizers.sh
+
+      - name: Build gateway binary
+        run: bash scripts/build_component_bin.sh gateway
+
+      - name: Log in to ACR (release registry)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ vars.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push gateway image
+        run: bash scripts/build_component_release.sh gateway --push --tag ${{ needs.resolve-tag.outputs.tag }}
+
+  # ── Build scheduler ───────────────────────────────────────────────────────
+  build-scheduler:
+    name: Build Scheduler Image
+    runs-on: [self-hosted, cpu]
+    needs: resolve-tag
+    if: >
+      github.event_name != 'workflow_dispatch' ||
+      inputs.target == 'all' ||
+      inputs.target == 'scheduler'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build tokenizers
+        run: bash scripts/build_tokenizers.sh
+
+      - name: Build scheduler binary
+        run: bash scripts/build_component_bin.sh scheduler
+
+      - name: Log in to ACR (release registry)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ vars.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push scheduler image
+        run: bash scripts/build_component_release.sh scheduler --push --tag ${{ needs.resolve-tag.outputs.tag }}
+
+  # ── Build discovery ───────────────────────────────────────────────────────
+  build-discovery:
+    name: Build Discovery Image
+    runs-on: [self-hosted, cpu]
+    needs: resolve-tag
+    if: >
+      github.event_name != 'workflow_dispatch' ||
+      inputs.target == 'all' ||
+      inputs.target == 'discovery'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build discovery wheel
+        run: bash scripts/build_discovery_whl.sh
+
+      - name: Log in to ACR (release registry)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ vars.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push discovery image
+        run: bash scripts/build_component_release.sh discovery --push --tag ${{ needs.resolve-tag.outputs.tag }}
+
+  # ── Build vllm ────────────────────────────────────────────────────────────
+  build-vllm:
+    name: Build vLLM Image
+    runs-on: [self-hosted, cpu]
+    needs: resolve-tag
+    if: >
+      github.event_name == 'workflow_dispatch' && (
+        inputs.target == 'all' ||
+        inputs.target == 'vllm'
+      ) || startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build llumnix wheel
+        run: bash scripts/build_llumnix_whl.sh
+
+      - name: Log in to ACR (release registry)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ vars.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push vllm image
+        run: bash scripts/build_vllm_release.sh --push --tag ${{ needs.resolve-tag.outputs.tag }}
