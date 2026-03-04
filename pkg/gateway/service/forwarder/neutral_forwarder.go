@@ -1,4 +1,4 @@
-package handler
+package forwarder
 
 import (
 	"encoding/json"
@@ -21,7 +21,6 @@ type NeutralForwarder struct {
 	client *http.Client
 }
 
-// newNeutralForwarder creates a new NeutralForwarder instance.
 func newNeutralForwarder() *NeutralForwarder {
 	return &NeutralForwarder{
 		client: newLlmForwardClient(),
@@ -29,7 +28,6 @@ func newNeutralForwarder() *NeutralForwarder {
 }
 
 // Forward implements Forwarder interface.
-// Forwards the request to the inference engine and streams response chunks.
 func (b *NeutralForwarder) Forward(req *types.RequestContext) (<-chan StreamChunk, error) {
 	chunkChan := make(chan StreamChunk, 100)
 
@@ -44,30 +42,27 @@ func (b *NeutralForwarder) Forward(req *types.RequestContext) (<-chan StreamChun
 		body, err := json.Marshal(req.LLMRequest.CompletionRequest)
 		if err != nil {
 			klog.Errorf("failed to marshal request body: %v", err)
-			chunkChan <- StreamChunk{err: err}
+			chunkChan <- StreamChunk{Err: err}
 			return
 		}
 
-		// Build backend request
 		newReq, err := makeBackendRequest(req, body, instance)
 		if err != nil {
 			klog.Errorf("failed to create backend request: %v", err)
-			chunkChan <- StreamChunk{err: err}
+			chunkChan <- StreamChunk{Err: err}
 			return
 		}
 
-		// Execute request with retry
 		respBody, err := doRequest(newReq, b.client, body)
 		if err != nil {
 			klog.Errorf("failed to do backend request: %v", err)
-			chunkChan <- StreamChunk{err: err}
+			chunkChan <- StreamChunk{Err: err}
 			return
 		}
 		defer respBody.Close()
 
-		// Stream read response
 		if err := streamRead(req, chunkChan, respBody); err != nil {
-			chunkChan <- StreamChunk{err: err}
+			chunkChan <- StreamChunk{Err: err}
 		}
 	}()
 
