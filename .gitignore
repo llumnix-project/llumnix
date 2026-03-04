@@ -209,5 +209,10 @@ version.py
 AGENTS.md
 .qoder
 
+# act local debug
+.secrets
+.vars
+.actrc
+
 # docs requirements file
 !docs/requirements_docs.txt

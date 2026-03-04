@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  go-ut:
+    name: Go Unit Tests
+    uses: ./.github/workflows/ut-gateway-and-scheduler.yml
+    secrets: inherit
+
+  llumnix-ut:
+    name: Python llumnix Unit Tests
+    uses: ./.github/workflows/ut-llumnix.yml
+    secrets: inherit
+
+  discovery-ut:
+    name: Python discovery Unit Tests
+    uses: ./.github/workflows/ut-discovery.yml
+    secrets: inherit
+

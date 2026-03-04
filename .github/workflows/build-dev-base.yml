@@ -1,0 +1,33 @@
+name: Build Dev Base Image
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Tag for the dev image (default: stable)'
+        required: false
+        default: 'stable'
+        type: string
+
+jobs:
+  build-dev-base:
+    name: Build and Push Dev Base Image
+    runs-on: [self-hosted, cpu]
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Log in to ACR (dev registry)
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.ACR_DEV_REGISTRY }}
+          username: ${{ vars.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push dev base image
+        run: bash scripts/build_vllm_dev.sh --push --tag ${{ inputs.image_tag }}

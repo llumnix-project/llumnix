@@ -4,9 +4,9 @@ import unittest
 import asyncio
 from unittest.mock import AsyncMock
 import grpc
-from llumnix.llumlet.rpc_server import AsyncLlumletRPCServer
-from llumnix.llumlet.proto import llumlet_server_pb2
-from llumnix.llumlet.proto import llumlet_server_pb2_grpc
+from llumnix.rpc_server import AsyncLlumletRPCServer
+from llumnix.server.proto import llumlet_server_pb2
+from llumnix.server.proto import llumlet_server_pb2_grpc
 from llumnix.utils import MigrationParams, MigrationType, NotEnoughSlotsError, RequestMigrationPolicy
 
 

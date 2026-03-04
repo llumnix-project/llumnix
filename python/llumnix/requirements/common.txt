@@ -5,9 +5,9 @@ httpx
 requests
 
 # cms
-protobuf<5.0dev
+protobuf>=5.26.0
 grpcio
-grpcio-tools==1.62.3
+grpcio-tools>=1.59.5
 redis
 readerwriterlock
 
