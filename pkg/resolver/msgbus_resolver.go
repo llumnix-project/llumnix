@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"llm-gateway/pkg/types"
+	"llm-gateway/pkg/utils"
 	"net/http"
 	"regexp"
 	"runtime/debug"
@@ -382,7 +383,7 @@ func (r *MsgBusResolver) updateInstances(workerSlice types.LLMWorkerSlice) {
 	r.mu.Unlock()
 
 	// Calculate differences
-	added, removed := DiffSets(oldSlice, workerSlice, func(w types.LLMWorker) string {
+	added, removed := utils.DiffSets(oldSlice, workerSlice, func(w types.LLMWorker) string {
 		return w.Id()
 	})
 	// Notify all observers if there are changes
@@ -431,7 +432,7 @@ func (r *MsgBusResolver) GetLLMWorkers() (types.LLMWorkerSlice, error) {
 // The first value sent on the added channel is the current state (all workers considered as "added").
 // Both channels will be closed when the context is cancelled or the resolver stops.
 // This method is thread-safe and supports multiple concurrent observers.
-func (r *MsgBusResolver) Watch(ctx context.Context) (<-chan types.LLMWorkerSlice, <-chan types.LLMWorkerSlice, error) {
+func (r *MsgBusResolver) Watch(ctx context.Context) (<-chan WorkerEvent, error) {
 	return r.watcher.Watch(ctx, r.GetLLMWorkers)
 }
 

@@ -5,6 +5,7 @@ import (
 	"llm-gateway/pkg/consts"
 	"llm-gateway/pkg/resolver"
 	"llm-gateway/pkg/types"
+	"llm-gateway/pkg/utils"
 	"sync"
 
 	"k8s.io/klog/v2"
@@ -15,8 +16,7 @@ import (
 type RoundRobinBalancer struct {
 	Resolver resolver.LLMResolver
 
-	addChan <-chan types.LLMWorkerSlice
-	delChan <-chan types.LLMWorkerSlice
+	eventChan <-chan resolver.WorkerEvent
 
 	mu           sync.Mutex
 	currentIndex uint64
@@ -31,36 +31,46 @@ func NewRoundRobinBalancer(r resolver.LLMResolver, excludeScope string) *RoundRo
 		excludeScope: excludeScope,
 	}
 
-	addChan, delChan, err := r.Watch(context.Background())
+	eventChan, err := r.Watch(context.Background())
 	if err != nil {
 		klog.Errorf("failed to watch LLM workers: %v", err)
 		return nil
 	}
-	lb.addChan = addChan
-	lb.delChan = delChan
+	lb.eventChan = eventChan
 
 	go func() {
-		for {
-			select {
-			case workers := <-lb.addChan:
+		for event := range lb.eventChan {
+			switch event.Type {
+			case resolver.WorkerEventAdd:
 				lb.mu.Lock()
-				lb.workers = append(lb.workers, workers...)
+				lb.workers = append(lb.workers, event.Workers...)
 				lb.mu.Unlock()
-				for _, w := range workers {
-					klog.Infof("add backend service endpoint: %s/%s", w.Role, w.String())
+				for _, w := range event.Workers {
+					klog.Infof("add backend service worker: %s/%s", w.Role, w.String())
 				}
-			case workers := <-lb.delChan:
+			case resolver.WorkerEventRemove:
 				lb.mu.Lock()
-				for _, w := range workers {
+				for _, w := range event.Workers {
 					for i := 0; i < len(lb.workers); i++ {
 						if lb.workers[i].Id() == w.Id() {
-							klog.Infof("remove backend service endpoint: %s/%s", w.Role, w.String())
+							klog.Infof("remove backend service worker: %s/%s", w.Role, w.String())
 							lb.workers = append(lb.workers[:i], lb.workers[i+1:]...)
 							break
 						}
 					}
 				}
 				lb.mu.Unlock()
+			case resolver.WorkerEventFullSync:
+				lb.mu.Lock()
+				added, removed := utils.DiffSets(lb.workers, event.Workers, func(w types.LLMWorker) string { return w.Id() })
+				lb.workers = event.Workers
+				lb.mu.Unlock()
+				for _, w := range added {
+					klog.Infof("full-sync: add backend service worker: %s/%s", w.Role, w.String())
+				}
+				for _, w := range removed {
+					klog.Infof("full-sync: remove backend service worker: %s/%s", w.Role, w.String())
+				}
 			}
 		}
 	}()

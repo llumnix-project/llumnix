@@ -69,6 +69,53 @@ func (lrsClient *LocalRealtimeStateClient) RemoveInstance(inferMode string, work
 	}
 }
 
+// SyncInstances reconciles the local state with the provided full worker snapshot.
+// Workers present in the snapshot but missing locally are added; workers present
+// locally but absent from the snapshot are removed. This is called on a periodic
+// WorkerEventFullSync to recover from any missed incremental add/remove events.
+func (lrsClient *LocalRealtimeStateClient) SyncInstances(workers types.LLMWorkerSlice) {
+	// Group snapshot workers by infer mode
+	grouped := map[string]map[string]*types.LLMWorker{
+		consts.NormalInferMode:  {},
+		consts.PrefillInferMode: {},
+		consts.DecodeInferMode:  {},
+	}
+	for i := range workers {
+		w := &workers[i]
+		mode := w.Role.String()
+		if _, ok := grouped[mode]; !ok {
+			mode = consts.NormalInferMode
+		}
+		grouped[mode][w.Id()] = w
+	}
+
+	inferModes := []string{consts.NormalInferMode, consts.PrefillInferMode, consts.DecodeInferMode}
+	for _, inferMode := range inferModes {
+		state := lrsClient.getLocalRealtimeState(inferMode)
+		if state == nil {
+			continue
+		}
+		snapshotIDs := grouped[inferMode]
+
+		// Add workers that exist in snapshot but not locally
+		for id, w := range snapshotIDs {
+			if state.GetInstanceView(id) == nil {
+				klog.Infof("full-sync: add missing instance %s (infer_mode=%s)", id, inferMode)
+				lrsClient.AddInstance(w)
+			}
+		}
+
+		// Remove workers that exist locally but are absent from snapshot
+		localViews := state.GetInstanceViews()
+		for id := range localViews {
+			if _, exists := snapshotIDs[id]; !exists {
+				klog.Infof("full-sync: remove stale instance %s (infer_mode=%s)", id, inferMode)
+				state.RemoveInstance(id)
+			}
+		}
+	}
+}
+
 func (lrsClient *LocalRealtimeStateClient) AddGateway(gatewayId string) {
 	lrsClient.normalState.AddGateway(gatewayId)
 	lrsClient.prefillState.AddGateway(gatewayId)

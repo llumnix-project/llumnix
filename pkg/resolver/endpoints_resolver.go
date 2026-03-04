@@ -105,7 +105,7 @@ func (er *EndpointsResolver) GetLLMWorkers() (types.LLMWorkerSlice, error) {
 
 // Watch implements the LLMResolver interface.
 // It returns channels for monitoring added and removed LLM workers.
-func (er *EndpointsResolver) Watch(ctx context.Context) (<-chan types.LLMWorkerSlice, <-chan types.LLMWorkerSlice, error) {
+func (er *EndpointsResolver) Watch(ctx context.Context) (<-chan WorkerEvent, error) {
 	return er.watcher.Watch(ctx, er.GetLLMWorkers)
 }
 

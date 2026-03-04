@@ -160,10 +160,12 @@ type LLMResolver interface {
 	// This provides a snapshot of the worker state at the time of calling.
 	GetLLMWorkers() (types.LLMWorkerSlice, error)
 
-	// Watch returns two channels for monitoring worker changes.
-	// The first channel receives slices of workers that have been added.
-	// The second channel receives slices of workers that have been removed.
-	// Both channels will be closed when the context is cancelled or the resolver stops.
+	// Watch returns a single channel for monitoring worker changes.
+	// Events are ordered and carry a WorkerEventType to distinguish add, remove,
+	// and full-sync (periodic snapshot) events. Using a single channel guarantees
+	// that add and remove events are processed in the exact order they were emitted,
+	// eliminating race conditions between two separate channels.
+	// The channel will be closed when the context is cancelled or the resolver stops.
 	// This method supports multiple concurrent observers.
-	Watch(ctx context.Context) (<-chan types.LLMWorkerSlice, <-chan types.LLMWorkerSlice, error)
+	Watch(ctx context.Context) (<-chan WorkerEvent, error)
 }

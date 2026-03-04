@@ -32,8 +32,7 @@ type ScheduleService struct {
 	reschedulePolicy schedule_policy.ReschedulePolicy
 
 	resolver  resolver.LLMResolver
-	addChan   <-chan types.LLMWorkerSlice
-	delChan   <-chan types.LLMWorkerSlice
+	eventChan <-chan resolver.WorkerEvent
 	lrsClient *lrs.LocalRealtimeStateClient
 
 	scheduleMutex     sync.Mutex
@@ -57,29 +56,29 @@ func NewScheduleService(c *options.Config) *ScheduleService {
 		metrics.EnableLlumnixMetrics()
 	}
 
-	resolver := resolver.CreateBackendServiceResolver(ss.config, types.InferRoleAll)
-	addChan, delChan, err := resolver.Watch(context.Background())
+	llmResolver := resolver.CreateBackendServiceResolver(ss.config, types.InferRoleAll)
+	eventChan, err := llmResolver.Watch(context.Background())
 	if err != nil {
 		klog.Errorf("failed to watch LLM workers: %v", err)
 		return nil
 	}
-	ss.addChan = addChan
-	ss.delChan = delChan
+	ss.eventChan = eventChan
 
 	go func() {
-		for {
-			select {
-			case workers := <-ss.addChan:
-				for _, w := range workers {
-					// create realtime stats for this worker
+		for event := range ss.eventChan {
+			switch event.Type {
+			case resolver.WorkerEventAdd:
+				for _, w := range event.Workers {
 					klog.Infof("add backend service endpoint: %s/%s", w.Role, w.String())
 					ss.lrsClient.AddInstance(&w)
 				}
-			case workers := <-ss.delChan:
-				for _, w := range workers {
+			case resolver.WorkerEventRemove:
+				for _, w := range event.Workers {
 					klog.Infof("remove backend service endpoint: %s/%s", w.Role, w.String())
 					ss.lrsClient.RemoveInstance(w.Role.String(), w.Id())
 				}
+			case resolver.WorkerEventFullSync:
+				ss.lrsClient.SyncInstances(event.Workers)
 			}
 		}
 	}()

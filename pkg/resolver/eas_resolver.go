@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"llm-gateway/pkg/types"
+	"llm-gateway/pkg/utils"
 	"net/http"
 	"os"
 	"runtime/debug"
@@ -435,7 +436,7 @@ func (er *EasResolver) GetLLMWorkers() (types.LLMWorkerSlice, error) {
 // Watch implements the LLMResolver interface.
 // It returns channels for monitoring added and removed LLM workers.
 // The watcher handles observer management and context cancellation.
-func (er *EasResolver) Watch(ctx context.Context) (<-chan types.LLMWorkerSlice, <-chan types.LLMWorkerSlice, error) {
+func (er *EasResolver) Watch(ctx context.Context) (<-chan WorkerEvent, error) {
 	return er.watcher.Watch(ctx, er.GetLLMWorkers)
 }
 
@@ -470,7 +471,7 @@ func (er *EasResolver) update(serviceEndpoints map[string]types.EndpointSlice) {
 
 	er.mu.Lock()
 	defer er.mu.Unlock()
-	added, removed := DiffSets(er.endpoints, newEndpoints, func(ep types.Endpoint) string { return ep.String() })
+	added, removed := utils.DiffSets(er.endpoints, newEndpoints, func(ep types.Endpoint) string { return ep.String() })
 	if len(added) > 0 || len(removed) > 0 {
 		oldCount := len(er.endpoints)
 		er.endpoints = newEndpoints

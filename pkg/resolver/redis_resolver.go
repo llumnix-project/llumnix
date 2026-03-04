@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"llm-gateway/pkg/scheduler/cms"
 	"llm-gateway/pkg/types"
+	"llm-gateway/pkg/utils"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -69,7 +70,7 @@ func (r *redisResolver) GetLLMWorkers() (types.LLMWorkerSlice, error) {
 	return workers, nil
 }
 
-func (r *redisResolver) Watch(ctx context.Context) (<-chan types.LLMWorkerSlice, <-chan types.LLMWorkerSlice, error) {
+func (r *redisResolver) Watch(ctx context.Context) (<-chan WorkerEvent, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.watcher.Watch(ctx, r.GetLLMWorkers)
@@ -160,7 +161,7 @@ func (r *redisResolver) refresh() {
 	}
 
 	r.mu.Lock()
-	added, removed := DiffSets(r.workers, newWorkers, func(w types.LLMWorker) string {
+	added, removed := utils.DiffSets(r.workers, newWorkers, func(w types.LLMWorker) string {
 		return w.Id()
 	})
 	if len(added) > 0 || len(removed) > 0 {

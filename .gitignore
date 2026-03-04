@@ -3,6 +3,7 @@ eas
 .eas
 .idea
 .vscode
+.claude
 .env
 .qoder
 .DS_Store

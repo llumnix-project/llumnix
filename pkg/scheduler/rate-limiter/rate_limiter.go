@@ -194,7 +194,7 @@ func (r *InstanceRateLimiter) Filter(schReq *types.ScheduleRequest, instances []
 	if klog.V(3).Enabled() {
 		klog.Infof("instance filter request %s ", schReq.Id)
 		for _, instance := range instances {
-			klog.Infof("instance id: %s, tokens: %d, reqs: %d, waitingReqs: %d, waitingTokens: %d", instance.GetInstanceId(), instance.NumTokens(), instance.NumRequests(), instance.NumWaitingRequests(), instance.NumWaitingTokens())
+			klog.Infof("instance id: %s, reqs: %d, tokens: %d, waitingReqs: %d, waitingTokens: %d", instance.GetInstanceId(), instance.NumRequests(), instance.NumTokens(), instance.NumWaitingRequests(), instance.NumWaitingTokens())
 		}
 	}
 	for _, c := range r.rules {
@@ -212,7 +212,7 @@ func (r *ServiceRateLimiter) Filter(schReq *types.ScheduleRequest, instances []*
 	if klog.V(3).Enabled() {
 		klog.Infof("service filter request %s ", schReq.Id)
 		for _, instance := range instances {
-			klog.Infof("instance id: %s, tokens: %d, reqs: %d, waitingReqs: %d", instance.GetInstanceId(), instance.NumTokens(), instance.NumRequests(), instance.NumWaitingRequests(), instance.NumWaitingTokens())
+			klog.Infof("instance id: %s, reqs: %d, tokens: %d, waitingReqs: %d, waitingTokens: %d", instance.GetInstanceId(), instance.NumRequests(), instance.NumTokens(), instance.NumWaitingRequests(), instance.NumWaitingTokens())
 		}
 	}
 
