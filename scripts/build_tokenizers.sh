@@ -1,7 +1,18 @@
 #!/bin/bash
 set -e
 
-IMAGE="llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225"
+CUSTOM_IMAGE=""
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --image) CUSTOM_IMAGE="$2"; shift ;;
+        *) echo "Unknown parameter: $1"; echo "Usage: $0 [--image <dev-image>]"; exit 1 ;;
+    esac
+    shift
+done
+
+DEFAULT_IMAGE="llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225"
+IMAGE="${CUSTOM_IMAGE:-${DEFAULT_IMAGE}}"
 
 echo "Building tokenizers package..."
 

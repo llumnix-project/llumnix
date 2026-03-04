@@ -7,8 +7,8 @@ from llumnix.cms.cms_client import (
     LLUMNIX_INSTANCE_METADATA_PREFIX,
     LLUMNIX_INSTANCE_STATUS_PREFIX,
 )
-from llumnix.llumlet.instance_info import InstanceMetaData, InstanceStatus
-from llumnix.llumlet.converters import to_cms_metadata, to_cms_status
+from llumnix.instance_info import InstanceMetaData, InstanceStatus
+from llumnix.converters import to_cms_metadata, to_cms_status
 from tests.mock_redis import  MockRedisClient
 
 class TestCmsClient(unittest.TestCase):

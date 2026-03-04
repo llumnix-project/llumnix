@@ -43,7 +43,7 @@ class MockAsyncRedisClient(AsyncRedisClient):
     def __init__(self):
         self.data = {}
 
-    async def set(self, key, value):
+    async def set(self, key, value, ex=None):
         self.data[key] = value
 
     async def get(self, key):
