@@ -30,6 +30,7 @@ fi
 echo "Building ${TARGET} image..."
 
 DOCKER_BUILDKIT=1 docker build \
+    --network=host \
     -t ${REPOSITORY}:${IMAGE_TAG} \
     -f ./container/Dockerfile.${TARGET} \
     .

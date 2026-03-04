@@ -3,10 +3,21 @@ FROM ${BASE_IMAGE}
 
 WORKDIR /vllm-workspace
 
+ARG INCLUDE_MOONCAKE=false
+
 RUN apt-get update \
     && apt-get install -y git curl wget \
     && apt-get install -y net-tools netcat-openbsd \
-    && apt-get install -y rdma-core ibverbs-utils kmod
+    && apt-get install -y rdma-core ibverbs-utils kmod \
+    && if [ "$INCLUDE_MOONCAKE" = "false" ]; then \
+        apt-get install -y cmake ninja-build \
+        && apt-get install -y libcurl4-openssl-dev libssl-dev python3.12-dev zlib1g-dev; \
+    fi \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN if [ "$INCLUDE_MOONCAKE" = "false" ]; then \
+        ln -s /usr/local/cuda/lib64/libnvrtc.so.12 /usr/local/cuda/lib64/libnvrtc.so; \
+    fi
 
 RUN pip3 config set global.index-url https://mirrors.aliyun.com/pypi/simple/
 
@@ -28,19 +39,57 @@ RUN cd /tmp/llumnix_whl \
     && WHL_FILE=$(ls llumnix-*.whl) \
     && pip install "${WHL_FILE}[vllm]" \
     && rm -rf /tmp/llumnix_whl
-COPY ./patches/vllm/mooncake/mooncake_connector_v1.py /usr/local/lib/python3.12/dist-packages/mooncake/mooncake_connector_v1.py
 
 # Set CUDA environment variables
 ENV CUDA_HOME=/usr/local/cuda \
     CUDA_PATH=/usr/local/cuda \
     LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH \
-    PATH=/usr/local/cuda/bin:$PATH 
+    PATH=/usr/local/cuda/bin:$PATH
 
 # Install blade-kvt
-COPY ./scripts/install/install_barex.sh /tmp/install_barex.sh
-RUN bash /tmp/install_barex.sh
-COPY ./lib/blade_kvt-*.whl /tmp/
-RUN pip install /tmp/blade_kvt-*.whl
+COPY ./scripts /tmp/scripts
+RUN if [ "$INCLUDE_MOONCAKE" = "false" ]; then \
+        bash /tmp/scripts/install/install_blade_kvt.sh; \
+    else \
+        bash /tmp/scripts/install/install_barex.sh \
+        && pip install /tmp/blade_kvt-*.whl; \
+    fi \
+    && rm -rf /tmp/blade_kvt-*.whl
+
+
+RUN if [ "$INCLUDE_MOONCAKE" = "true" ]; then \
+        pip uninstall -y mooncake-transfer-engine \
+        && bash /tmp/scripts/install/install_go.sh; \
+    fi
+
+ENV PATH="/usr/local/go/bin:${PATH}"
+
+RUN if [ "$INCLUDE_MOONCAKE" = "true" ]; then \
+        git clone https://github.com/kvcache-ai/Mooncake.git /tmp/Mooncake/ \
+        && cd /tmp/Mooncake \
+        && bash dependencies.sh \
+        && mkdir build && cd build \
+        && cmake .. \
+            -DPython_EXECUTABLE=/usr/bin/python3.12 \
+            -DPython3_EXECUTABLE=/usr/bin/python3.12 \
+            -DPython_INCLUDE_DIR=/usr/include/python3.12 \
+            -DPython_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.12.so \
+            -DPython3_INCLUDE_DIR=/usr/include/python3.12 \
+            -DPython3_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.12.so \
+        && make -j && make install \
+        && rm -rf /tmp/Mooncake; \
+    fi
+
+
+COPY ./patches/vllm/mooncake/mooncake_connector_v1.py /tmp/mooncake_connector_v1.py
+RUN if [ "$INCLUDE_MOONCAKE" = "true" ]; then \
+        cp /tmp/mooncake_connector_v1.py \
+           /usr/local/lib/python3.12/dist-packages/mooncake/mooncake_connector_v1.py; \
+    fi \
+    && rm -f /tmp/mooncake_connector_v1.py
+	
+
+RUN rm -rf /tmp/scripts
 
 # Install erdma
 RUN apt-get update && apt-get install -y wget \

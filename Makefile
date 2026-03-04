@@ -19,7 +19,7 @@ vllm-install:
 
 .PHONY: llumlet-install
 llumlet-install:
-	cd ./python/llumnix && pythons setup.py bdist_wheel -d ./dist && pip install ./dist/llumlet-*.whl
+	cd ./python/llumnix && python3 setup.py bdist_wheel -d ./dist && pip install ./dist/llumnix-*.whl
 	cd ./python/llumnix && make vllm_install && make proto
 
 .PHONY: mooncake-install

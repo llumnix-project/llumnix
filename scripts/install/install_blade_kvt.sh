@@ -52,13 +52,19 @@ main() {
     
     setup_cuda_env
     
-    cp ./scripts/install/install_barex.sh "$work_dir/tools/install_barex.sh"
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    cp "$script_dir/install_barex.sh" "$work_dir/tools/install_barex.sh"
     cd "$work_dir"
     cd tools && bash ./install_barex.sh
 
     cd "$work_dir"
     python3 setup.py bdist_wheel
     pip install dist/*.whl
+    
+    local project_root="$(cd - && pwd)"
+    mkdir -p "$project_root/lib"
+    cp "$work_dir/dist/blade_kvt-*.whl" "$project_root/lib/"
+    echo "✓ Wheel copied to $project_root/lib/"
 }
 
 main "$@"

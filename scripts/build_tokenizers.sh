@@ -19,6 +19,7 @@ echo "Building tokenizers package..."
 docker run --rm \
   --network host \
   -v "$(pwd):/workspace" \
+  -e PATH="/root/.cargo/bin:$PATH" \
   -w /workspace \
   "$IMAGE" \
   bash -c "cd ./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang && make build"

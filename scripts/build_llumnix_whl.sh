@@ -17,6 +17,7 @@ IMAGE="${CUSTOM_IMAGE:-${DEFAULT_IMAGE}}"
 echo "Building wheel package..."
 
 docker run --rm \
+  --network host \
   -v "$(pwd):/workspace" \
   -w /workspace \
   "$IMAGE" \

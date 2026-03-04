@@ -32,8 +32,8 @@ Examples:
   $0 llumnix pd-kvs/full-mode-scheduling/load-balance
   
   # Deploy with custom image repository and specific image tags
-  $0 llumnix normal/lite-mode-scheduling/load-balance \
-      --repository my-registry.example.com/my-repo \
+  $0 llumnix neutral/lite-mode-scheduling/load-balance \
+      --repository my-registry.example.com \
       --gateway-tag 20260101-120000 \
       --scheduler-tag 20260101-130000 \
       --vllm-tag 20260101-140000  \
@@ -98,6 +98,7 @@ echo "Using repository: $REPOSITORY"
 echo "Gateway tag:      $GATEWAY_IMAGE_TAG"
 echo "Scheduler tag:    $SCHEDULER_IMAGE_TAG"
 echo "vLLM tag:         $VLLM_IMAGE_TAG"
+echo "Discovery tag:    $DISCOVERY_IMAGE_TAG"
 
 # Create namespace
 echo "Creating namespace: $GROUP_NAME"

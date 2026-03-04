@@ -56,9 +56,16 @@ bash scripts/build_component_release.sh discovery
 # Build llumnix python wheel
 bash scripts/build_llumnix_whl.sh
 
-# Build vLLM image
+# Build standard vLLM image (Neutral / PD mode)
+# Image tag: <timestamp>, e.g. 20260101-140000
 bash scripts/build_vllm_release.sh
+
+# Build vLLM image with Mooncake support (required for PD-KVS mode)
+# Image tag: mooncake-<timestamp>, e.g. mooncake-20260101-140000
+bash scripts/build_vllm_release.sh --include_mooncake
 ```
+
+Optional: use `--push` to push after build, `--repository <your-registry>/vllm` for a custom registry, and `--tag <image-tag>` for a fixed tag (e.g. for CI).
 
 ## Push Images to Your Registry
 
@@ -67,33 +74,50 @@ The build scripts do **not** push to the Llumnix registry, as external users do 
 After building, push the image to your own registry:
 
 ```bash
-bash scripts/build_discovery_release.sh --push --repository <your-registry>/<your-repo>
+bash scripts/build_component_release.sh discovery --push --repository <your-registry>/discovery
 ```
-Replace <your-registry>/<your-repo> with your own registry address, for example:
+Replace <your-registry> with your own registry address, for example:
 
 ```bash
-bash scripts/build_discovery_release.sh --push --repository my-registry.example.com/llumnix
+bash scripts/build_component_release.sh discovery --push --repository my-registry.example.com/discovery
 ```
+> Note: To work correctly with group_deploy.sh, ensure your image repository name matches the project convention (e.g. `<registry>/llumnix/<gateway|scheduler|discovery>`). All build scripts support `--tag <image-tag>` for a custom tag. 
+ 
 ## Deploy with Custom Images
 
 Use group_deploy.sh with the --repository flag and specify each component's image tag:
 
 ```bash
 bash deploy/group_deploy.sh <group-name> <kustomize-dir> \
-    --repository <your-registry>/<your-repo> \
+    --repository <your-registry> \
     --gateway-tag <gateway-tag> \
     --scheduler-tag <scheduler-tag> \
     --vllm-tag <vllm-tag> \
-    --discovery-tag <discovery-tag>
+    --discovery-tag <discovery-tag> \
+    [--mooncake-vllm-tag <mooncake-vllm-tag>]   # required for PD-KVS when using custom images
 ```
-Example:
+
+Example (Neutral / PD mode):
 
 ```bash
-bash deploy/group_deploy.sh llumnix deploy/normal/full-mode-scheduling/load-balance \
+bash deploy/group_deploy.sh llumnix deploy/neutral/full-mode-scheduling/load-balance \
     --repository my-registry.example.com/my-repo \
     --gateway-tag gateway-20260101-120000 \
     --scheduler-tag scheduler-20260101-130000 \
     --vllm-tag 20260101-140000 \
+    --discovery-tag discovery-20260101-150000
+```
+
+Example (PD-KVS mode with custom Mooncake vLLM image):
+
+```bash
+# Build Mooncake vLLM image first: bash scripts/build_vllm_release.sh --include_mooncake
+bash deploy/group_deploy.sh llumnix deploy/pd-kvs/full-mode-scheduling/load-balance \
+    --repository my-registry.example.com/my-repo \
+    --gateway-tag gateway-20260101-120000 \
+    --scheduler-tag scheduler-20260101-130000 \
+    --vllm-tag 20260101-140000 \
+    --mooncake-vllm-tag mooncake-20260101-140000 \
     --discovery-tag discovery-20260101-150000
 ```
 

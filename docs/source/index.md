@@ -10,6 +10,7 @@ featuring fully dynamic request scheduling for modern LLM deployments.
 New to Llumnix? Start here.
 
 - [Quick Start](getting_started/quick_start.md) — Deploy your first Llumnix cluster in minutes
+- [Deployment Guide](getting_started/e2e_deploy.md) - Full deployment guide covering all modes: neutral, PD, and PD-KVS
 - [Llumlet Configuration](getting_started/engine_conf.md) — Configure Llumlet
 
 ---
@@ -44,6 +45,7 @@ Understand how Llumnix works internally.
 :caption: Getting Started
 
 getting_started/quick_start
+getting_started/e2e_deploy
 getting_started/engine_conf
 :::
 

@@ -48,7 +48,7 @@ Run deploy script:
 
 ```bash
 bash deploy/group_deploy.sh <group-name> <kustomize-dir>
-#e.g. bash deploy/group_deploy.sh llumnix normal/lite-mode-scheduling/load-balance
+#e.g. bash deploy/group_deploy.sh llumnix neutral/lite-mode-scheduling/load-balance
 ```
 ### Verify & Test
 
@@ -72,10 +72,10 @@ curl http://localhost:8080/v1/completions \
 Llumnix supports the following deployment modes:
 ```bash
 # Deploy Normal mode with lite-mode scheduling
-bash deploy/group_deploy.sh llumnix normal/lite-mode-scheduling/load-balance
+bash deploy/group_deploy.sh llumnix neutral/lite-mode-scheduling/load-balance
 
 # Deploy Normal mode with full-mode scheduling
-bash deploy/group_deploy.sh llumnix normal/full-mode-scheduling/load-balance
+bash deploy/group_deploy.sh llumnix neutral/full-mode-scheduling/load-balance
 
 # Deploy PD mode
 bash deploy/group_deploy.sh llumnix pd/full-mode-scheduling/load-balance
@@ -143,3 +143,5 @@ bash scripts/build_component_release.sh discovery
 # Step 5: Build LLM Backend (vLLM)
 bash scripts/build_llumnix_whl.sh
 bash scripts/build_vllm_release.sh
+# For PD-KVS mode, also build Mooncake-enabled image: bash scripts/build_vllm_release.sh --include_mooncake
+# Optional: --push, --repository <registry>/vllm, --tag <image-tag>
