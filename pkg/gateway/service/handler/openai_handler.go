@@ -12,6 +12,7 @@ import (
 
 	"llumnix/cmd/gateway/app/options"
 	"llumnix/pkg/consts"
+	"llumnix/pkg/gateway/service/forwarder"
 	"llumnix/pkg/gateway/processor"
 	"llumnix/pkg/gateway/protocol"
 	"llumnix/pkg/types"
@@ -39,7 +40,7 @@ type OpenAIHandler struct {
 	postProcessors *processor.PostProcessorChain
 
 	// forwarder handles request forwarding to inference engines
-	forwarder Forwarder
+	forwarder forwarder.Forwarder
 }
 
 // newOpenAIHandler creates a new OpenAIHandler with configured processor chains.
@@ -72,7 +73,7 @@ func newOpenAIHandler(config *options.GatewayConfig) (RequestHandler, error) {
 	} else {
 		schedulingMode = types.SchedulingModePDBatch
 	}
-	forwarder, err := buildForwarder(name, schedulingMode)
+	forwarder, err := forwarder.BuildForwarder(name, schedulingMode)
 	if err != nil {
 		klog.Errorf("build forwarder failed: %v", err)
 		return nil, err
@@ -247,7 +248,7 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 
 	// Process each chunk from the streaming inference
 	for chunk := range chunkChan {
-		klog.V(3).Infof("received stream chunk: %s, err: %v", string(chunk.Data), chunk.err)
+		klog.V(3).Infof("received stream chunk: %s, err: %v", string(chunk.Data), chunk.Err)
 
 		// Record timing metrics for performance monitoring
 		if isFirst {
@@ -272,8 +273,8 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 		}
 
 		// Handle stream errors and end-of-stream conditions
-		if chunk.err != nil {
-			if chunk.err == io.EOF {
+		if chunk.Err != nil {
+			if chunk.Err == io.EOF {
 				// Normal stream end - process any remaining data before completing
 				if len(chunk.Data) > 0 {
 					// Parse and process the final chunk that came with EOF
@@ -292,8 +293,8 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 				break
 			}
 			// Handle unexpected errors during streaming
-			klog.Errorf("error during stream inference: %v", chunk.err)
-			writeErrorResponse(req, chunk.err)
+			klog.Errorf("error during stream inference: %v", chunk.Err)
+			writeErrorResponse(req, chunk.Err)
 			return
 		}
 

@@ -1,16 +1,17 @@
-package handler
+package forwarder
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"llumnix/pkg/consts"
-	"llumnix/pkg/types"
 	"math/rand"
 	"net/http"
 
 	"golang.org/x/sync/errgroup"
 	"k8s.io/klog/v2"
+
+	"llumnix/pkg/consts"
+	"llumnix/pkg/types"
 )
 
 func init() {
@@ -20,7 +21,7 @@ func init() {
 }
 
 type PDDisaggSglMoonCakeForwarder struct {
-	client       *http.Client
+	client         *http.Client
 	schedulingMode types.SchedulingMode
 }
 
@@ -29,7 +30,7 @@ func newPDDisaggSglMoonCakeForwarder(schMode types.SchedulingMode) (Forwarder, e
 		return nil, fmt.Errorf("unsupported scheduling mode: %s", schMode)
 	}
 	return &PDDisaggSglMoonCakeForwarder{
-		client:       newLlmForwardClient(),
+		client:         newLlmForwardClient(),
 		schedulingMode: schMode,
 	}, nil
 }
@@ -68,25 +69,25 @@ func (b *PDDisaggSglMoonCakeForwarder) parallelRequestAndStream(req *types.Reque
 	)
 
 	eg.Go(func() error {
-		body, err := b.requestDecodeResponse(req, body, pInstance)
+		resp, err := b.requestDecodeResponse(req, body, pInstance)
 		if err != nil {
 			return err
 		}
-		prefillResp = body
+		prefillResp = resp
 		return nil
 	})
 
 	eg.Go(func() error {
-		body, err := b.requestDecodeResponse(req, body, dInstance)
+		resp, err := b.requestDecodeResponse(req, body, dInstance)
 		if err != nil {
 			return err
 		}
-		decodeResp = body
+		decodeResp = resp
 		return nil
 	})
 
 	if err := eg.Wait(); err != nil {
-		chunkChan <- StreamChunk{err: err}
+		chunkChan <- StreamChunk{Err: err}
 		return
 	}
 
@@ -100,7 +101,7 @@ func (b *PDDisaggSglMoonCakeForwarder) parallelRequestAndStream(req *types.Reque
 	}()
 
 	if err := streamRead(req, chunkChan, decodeResp); err != nil {
-		chunkChan <- StreamChunk{err: err}
+		chunkChan <- StreamChunk{Err: err}
 		return
 	}
 }
@@ -121,7 +122,7 @@ func (b *PDDisaggSglMoonCakeForwarder) batchSchedulingForward(req *types.Request
 		body, err := b.buildRequestData(req, pInstance, dInstance)
 		if err != nil {
 			klog.Errorf("[%s] failed to build request data: %v", req.Id, err)
-			chunkChan <- StreamChunk{err: err}
+			chunkChan <- StreamChunk{Err: err}
 			return
 		}
 		b.parallelRequestAndStream(req, body, pInstance, dInstance, chunkChan)
