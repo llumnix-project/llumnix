@@ -1,4 +1,4 @@
-package handler
+package forwarder
 
 import (
 	"fmt"
@@ -9,13 +9,21 @@ import (
 	"k8s.io/klog/v2"
 )
 
-// StreamChunk represents a single chunk of data from a streaming inference response
-// It contains either data bytes or an error that occurred during streaming
-type StreamChunk struct {
-	// err holds any error that occurred while processing this chunk
-	err error
+const (
+	// connectRetry defines the maximum number of retry attempts for backend connection failures.
+	connectRetry = 2
 
-	// Data contains the actual response bytes for this chunk
+	// ReadBufferSize specifies the initial buffer size (8KB) for reading streaming responses.
+	ReadBufferSize = 8 * 1024
+)
+
+// StreamChunk represents a single chunk of data from a streaming inference response.
+// It contains either data bytes or an error that occurred during streaming.
+type StreamChunk struct {
+	// Err holds any error that occurred while processing this chunk.
+	Err error
+
+	// Data contains the actual response bytes for this chunk.
 	Data []byte
 }
 
@@ -46,9 +54,9 @@ func registerForwarder(forwarderType string, factory ForwarderFactory) {
 	forwarderRegistry[forwarderType] = factory
 }
 
-// buildForwarder creates a Forwarder instance based on the forwarder type and scheduling mode.
+// BuildForwarder creates a Forwarder instance based on the forwarder type and scheduling mode.
 // Returns an error if the forwarder type is not registered.
-func buildForwarder(forwarderType string, schedulingMode types.SchedulingMode) (Forwarder, error) {
+func BuildForwarder(forwarderType string, schedulingMode types.SchedulingMode) (Forwarder, error) {
 	registryMu.RLock()
 	factory, exists := forwarderRegistry[forwarderType]
 	registryMu.RUnlock()
@@ -61,7 +69,7 @@ func buildForwarder(forwarderType string, schedulingMode types.SchedulingMode) (
 }
 
 // stagedScheduleForward extracts the common staged PD scheduling flow:
-// get prefill instance → doPrefill → ScheduleDecode → get decode instance → doDecode.
+// get prefill instance -> doPrefill -> ScheduleDecode -> get decode instance -> doDecode.
 func stagedScheduleForward(
 	req *types.RequestContext,
 	doPrefill func(req *types.RequestContext, pInstance *types.LLMInstance) error,
@@ -77,21 +85,21 @@ func stagedScheduleForward(
 		defer close(chunkChan)
 
 		if err := doPrefill(req, pInstance); err != nil {
-			chunkChan <- StreamChunk{err: err}
+			chunkChan <- StreamChunk{Err: err}
 			return
 		}
 
 		results, err := req.ScheduleDecode()
 		if err != nil {
 			klog.Errorf("[%s] decode scheduling failed: %v", req.Id, err)
-			chunkChan <- StreamChunk{err: err}
+			chunkChan <- StreamChunk{Err: err}
 			return
 		}
 
 		dInstance := results.GetInstanceByInferType(consts.InferTypeDecode)
 		if dInstance == nil {
 			klog.Errorf("[%s] decode instance not found", req.Id)
-			chunkChan <- StreamChunk{err: fmt.Errorf("decode instance not found")}
+			chunkChan <- StreamChunk{Err: fmt.Errorf("decode instance not found")}
 			return
 		}
 

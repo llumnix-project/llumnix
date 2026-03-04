@@ -1,15 +1,16 @@
-package handler
+package forwarder
 
 import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"llumnix/pkg/consts"
-	"llumnix/pkg/gateway/protocol"
-	"llumnix/pkg/types"
 	"net/http"
 
 	"k8s.io/klog/v2"
+
+	"llumnix/pkg/consts"
+	"llumnix/pkg/gateway/protocol"
+	"llumnix/pkg/types"
 )
 
 func init() {
@@ -19,7 +20,7 @@ func init() {
 }
 
 type PDDisaggVllmMoonCakeForwarder struct {
-	client       *http.Client
+	client         *http.Client
 	schedulingMode types.SchedulingMode
 }
 
@@ -28,7 +29,7 @@ func newPDDisaggVllmMoonCakeForwarder(schMode types.SchedulingMode) (Forwarder, 
 		return nil, fmt.Errorf("unsupported scheduling mode: %s", schMode)
 	}
 	return &PDDisaggVllmMoonCakeForwarder{
-		client:       newLlmForwardClient(),
+		client:         newLlmForwardClient(),
 		schedulingMode: schMode,
 	}, nil
 }
@@ -40,7 +41,6 @@ func (b *PDDisaggVllmMoonCakeForwarder) buildPrefillRequestData(req *types.Reque
 	cmplReq.Stream = false
 	cmplReq.StreamOptions = nil
 
-	// Set kv_transfer_params
 	kvTransferParams := map[string]interface{}{
 		"do_remote_decode":  true,
 		"do_remote_prefill": false,
@@ -54,7 +54,6 @@ func (b *PDDisaggVllmMoonCakeForwarder) buildPrefillRequestData(req *types.Reque
 }
 
 func (b *PDDisaggVllmMoonCakeForwarder) doPrefill(req *types.RequestContext, pInstance *types.LLMInstance) error {
-	// build prefill request
 	data, err := b.buildPrefillRequestData(req)
 	if err != nil {
 		klog.Errorf("[%s] failed to build prefill request data: %v", err, req.Id)
@@ -63,7 +62,7 @@ func (b *PDDisaggVllmMoonCakeForwarder) doPrefill(req *types.RequestContext, pIn
 
 	newReq, err := makeBackendRequest(req, data, pInstance)
 	if err != nil {
-		klog.Errorf("[%s] failed to make backend request: %v", err, req.Id)
+		klog.Errorf("[%s] failed to make backend request: %v", req.Id, err)
 		return err
 	}
 	body, err := doRequest(newReq, b.client, data)
@@ -92,8 +91,8 @@ func (b *PDDisaggVllmMoonCakeForwarder) doPrefill(req *types.RequestContext, pIn
 func (b *PDDisaggVllmMoonCakeForwarder) doDecode(req *types.RequestContext, chunkChan chan StreamChunk, dInstance *types.LLMInstance) {
 	data, err := json.Marshal(req.LLMRequest.CompletionRequest)
 	if err != nil {
-		klog.Errorf("[%s] failed to build decode request data: %v", err, req.Id)
-		chunkChan <- StreamChunk{err: err}
+		klog.Errorf("[%s] failed to build decode request data: %v", req.Id, err)
+		chunkChan <- StreamChunk{Err: err}
 		return
 	}
 	streamBackendResponse(req, b.client, data, dInstance, chunkChan)
@@ -116,14 +115,14 @@ func (b *PDDisaggVllmMoonCakeForwarder) batchSchedulingForward(req *types.Reques
 
 		err := b.doPrefill(req, pInstance)
 		if err != nil {
-			chunkChan <- StreamChunk{err: err}
+			chunkChan <- StreamChunk{Err: err}
 			return
 		}
 		cmplReq := req.LLMRequest.CompletionRequest
 		data, err := json.Marshal(cmplReq)
 		if err != nil {
 			klog.Errorf("[%s] failed to marshal completion request: %v", req.Id, err)
-			chunkChan <- StreamChunk{err: err}
+			chunkChan <- StreamChunk{Err: err}
 			return
 		}
 		streamBackendResponse(req, b.client, data, dInstance, chunkChan)

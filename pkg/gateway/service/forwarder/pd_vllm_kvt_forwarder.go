@@ -1,4 +1,4 @@
-package handler
+package forwarder
 
 import (
 	"encoding/json"
@@ -19,7 +19,7 @@ func init() {
 }
 
 type PDDisaggVllmKvtForwarder struct {
-	client       *http.Client
+	client         *http.Client
 	schedulingMode types.SchedulingMode
 }
 
@@ -28,7 +28,7 @@ func newPDDisaggVllmKvtForwarder(schMode types.SchedulingMode) (Forwarder, error
 		return nil, fmt.Errorf("unsupported scheduling mode: %s", schMode)
 	}
 	return &PDDisaggVllmKvtForwarder{
-		client:       newLlmForwardClient(),
+		client:         newLlmForwardClient(),
 		schedulingMode: schMode,
 	}, nil
 }
@@ -62,11 +62,10 @@ func (b *PDDisaggVllmKvtForwarder) batchSchedulingForward(req *types.RequestCont
 		body, err := json.Marshal(req.LLMRequest.CompletionRequest)
 		if err != nil {
 			klog.Errorf("failed to marshal request body: %v", err)
-			chunkChan <- StreamChunk{err: err}
+			chunkChan <- StreamChunk{Err: err}
 			return
 		}
 
-		// build backend request and stream read
 		streamBackendResponse(req, b.client, body, dInstance, chunkChan)
 	}()
 
@@ -85,7 +84,6 @@ func (b *PDDisaggVllmKvtForwarder) buildPrefillRequestData(req *types.RequestCon
 }
 
 func (b *PDDisaggVllmKvtForwarder) doPrefill(req *types.RequestContext, pInstance *types.LLMInstance) error {
-	// build prefill request
 	data, err := b.buildPrefillRequestData(req)
 	if err != nil {
 		klog.Errorf("[%s] failed to build prefill request data: %v", err, req.Id)
@@ -94,7 +92,7 @@ func (b *PDDisaggVllmKvtForwarder) doPrefill(req *types.RequestContext, pInstanc
 
 	newReq, err := makeBackendRequest(req, data, pInstance)
 	if err != nil {
-		klog.Errorf("[%s] failed to make backend request: %v", err, req.Id)
+		klog.Errorf("[%s] failed to make backend request: %v", req.Id, err)
 		return err
 	}
 	body, err := doRequest(newReq, b.client, data)
@@ -126,11 +124,12 @@ func (b *PDDisaggVllmKvtForwarder) doDecode(
 	req *types.RequestContext,
 	chunkChan chan StreamChunk,
 	pInstance *types.LLMInstance,
-	dInstance *types.LLMInstance) {
+	dInstance *types.LLMInstance,
+) {
 	data, err := b.buildDecodeRequestData(req, pInstance)
 	if err != nil {
-		klog.Errorf("[%s] failed to build decode request data: %v", err, req.Id)
-		chunkChan <- StreamChunk{err: err}
+		klog.Errorf("[%s] failed to build decode request data: %v", req.Id, err)
+		chunkChan <- StreamChunk{Err: err}
 		return
 	}
 	streamBackendResponse(req, b.client, data, dInstance, chunkChan)

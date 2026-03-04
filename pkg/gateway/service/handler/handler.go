@@ -5,18 +5,6 @@ import (
 	"llumnix/cmd/gateway/app/options"
 	"llumnix/pkg/types"
 	"sync"
-	"time"
-)
-
-const (
-	// connectRetry defines the maximum number of retry attempts for backend connection failures
-	connectRetry = 2
-
-	// ReadBufferSize specifies the initial buffer size (8KB) for reading streaming responses
-	ReadBufferSize = 8 * 1024
-
-	// ReadTimeout sets the maximum duration (5 minutes) to wait for reading from backend stream
-	ReadTimeout = 5 * time.Minute
 )
 
 // RequestHandler defines the interface for handling LLM inference requests
