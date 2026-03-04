@@ -83,7 +83,7 @@ Llumnix’s full-mode uses a CMS-backed status path (engine → llumlet → CMS 
 
 2. **Dispatch-time account with reconciliation (fixes dispatch blindness)**  
    The scheduler maintains an account that records a load increment at each dispatch. This account represents load known to exist (because the scheduler created it) but not yet reflected in engine-exported status. When the engine exports a status that includes this load, the scheduler reconciles the account via a combine operation, removing the corresponding entries to avoid double-counting. The account is a temporary compensating ledger: it holds only net increments not yet reflected on the engine side and shrinks back to zero as confirmations arrive.
-   - **Usage**: This feature is enabled by default in full-mode
+   - **Usage**: This feature is enabled by default in full-mode. To enable accurate prompt token counting for load calculation, the gateway must be configured with either `--tokenizer-path` (for local tokenizer files) or `--tokenizer-name` (for built-in tokenizers) to properly tokenize incoming requests.
 
 3. **Status forward-prediction (fixes discrete vs continuous mismatch)**  
    The scheduler uses a predictor that takes the last exported status and the elapsed time since its timestamp as input. It forward-predicts this snapshot to the current query time, estimating how much work has been completed and how much load remains. This converts discrete, step-bound status into a load estimate that is valid at arbitrary scheduling times.
