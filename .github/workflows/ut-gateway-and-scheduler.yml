@@ -30,13 +30,7 @@ jobs:
 
       - name: Build tokenizer library in dev container
         if: steps.cache-tokenizers.outputs.cache-hit != 'true'
-        run: |
-          docker run --rm \
-            --network host \
-            -v "$(pwd):/workspace" \
-            -w /workspace \
-            ${{ env.DEV_IMAGE }} \
-            bash -c ". /root/.cargo/env && make lib-tokenizers-build"
+        run: ./scripts/build_tokenizers.sh --image ${{ env.DEV_IMAGE }}
 
   # ── Go unit tests ────────────────────────────────────────────────────────
   go-unit-test:
