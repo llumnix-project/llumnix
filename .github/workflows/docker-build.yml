@@ -67,7 +67,7 @@ jobs:
           submodules: recursive
 
       - name: Build tokenizers
-        run: bash scripts/build_tokenizers.sh
+        run: bash scripts/build_tokenizers.sh --apply-patch
 
       - name: Build gateway binary
         run: bash scripts/build_component_bin.sh gateway
@@ -101,7 +101,7 @@ jobs:
           submodules: recursive
 
       - name: Build tokenizers
-        run: bash scripts/build_tokenizers.sh
+        run: bash scripts/build_tokenizers.sh --apply-patch
 
       - name: Build scheduler binary
         run: bash scripts/build_component_bin.sh scheduler

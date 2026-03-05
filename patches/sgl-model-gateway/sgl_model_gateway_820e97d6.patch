@@ -1,3 +1,710 @@
+diff --git a/.dockerignore b/.dockerignore
+deleted file mode 120000
+index 3e4e48b0b..000000000
+--- a/.dockerignore
++++ /dev/null
+@@ -1 +0,0 @@
+-.gitignore
+\ No newline at end of file
+diff --git a/.dockerignore b/.dockerignore
+new file mode 100644
+index 000000000..bf3264370
+--- /dev/null
++++ b/.dockerignore
+@@ -0,0 +1,263 @@
++# Byte-compiled / optimized / DLL files
++__pycache__/
++*.py[cod]
++*$py.class
++
++# C extensions
++*.so
++
++# Distribution / packaging
++.Python
++**/build/
++**/develop-eggs/
++**/dist/
++**/downloads/
++**/eggs/
++.eggs/
++**/lib/
++**/lib64/
++**/parts/
++**/sdist/
++**/var/
++**/wheels/
++**/share/python-wheels/
++*.egg-info/
++.installed.cfg
++*.egg
++MANIFEST
++
++# PyInstaller
++#  Usually these files are written by a python script from a template
++#  before PyInstaller builds the exe, so as to inject date/other infos into it.
++*.manifest
++*.spec
++
++# Installer logs
++pip-log.txt
++pip-delete-this-directory.txt
++
++# Unit test / coverage reports
++htmlcov/
++.tox/
++.nox/
++.coverage
++.coverage.*
++.cache
++nosetests.xml
++coverage.xml
++*.cover
++*.py,cover
++.hypothesis/
++
++# Tokenizer cache for tests
++.tokenizer_cache/
++.pytest_cache/
++cover/
++
++# Translations
++*.mo
++*.pot
++
++# Django stuff:
++*.log
++local_settings.py
++db.sqlite3
++db.sqlite3-journal
++
++# Flask stuff:
++instance/
++.webassets-cache
++
++# Scrapy stuff:
++.scrapy
++
++# Sphinx documentation
++docs/_build/
++
++# PyBuilder
++.pybuilder/
++target/
++
++# Jupyter Notebook
++.ipynb_checkpoints
++
++# IPython
++profile_default/
++ipython_config.py
++
++# pyenv
++#   For a library or package, you might want to ignore these files since the code is
++#   intended to run in multiple environments; otherwise, check them in:
++# .python-version
++
++# pipenv
++#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
++#   However, in case of collaboration, if having platform-specific dependencies or dependencies
++#   having no cross-platform support, pipenv may install dependencies that don't work, or not
++#   install all needed dependencies.
++#Pipfile.lock
++
++# poetry
++#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
++#   This is especially recommended for binary packages to ensure reproducibility, and is more
++#   commonly ignored for libraries.
++#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
++#poetry.lock
++
++# pdm
++#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
++#pdm.lock
++#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
++#   in version control.
++#   https://pdm.fming.dev/#use-with-ide
++.pdm.toml
++
++# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
++__pypackages__/
++
++# Celery stuff
++celerybeat-schedule
++celerybeat.pid
++
++# SageMath parsed files
++*.sage.py
++
++# Environments
++.env
++.venv
++env/
++venv/
++ENV/
++env.bak/
++venv.bak/
++
++# Spyder project settings
++.spyderproject
++.spyproject
++
++# Rope project settings
++.ropeproject
++
++# mkdocs documentation
++/site
++
++# mypy
++.mypy_cache/
++.dmypy.json
++dmypy.json
++
++# Pyre type checker
++.pyre/
++
++# pytype static type analyzer
++.pytype/
++
++# Cython debug symbols
++cython_debug/
++
++# PyCharm
++#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
++#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
++#  and can be added to the global gitignore or merged into this file.  For a more nuclear
++#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
++.idea/
++
++# MacOS
++.DS_Store
++
++# Vim
++*.swp
++
++# Documentation
++docs/_build
++
++# SGL
++benchmark/mmlu/data
++benchmark/mmlu/data.tar
++benchmark/llava_bench/images
++benchmark/llava_bench/mme_pack
++*.jsonl
++tmp*.txt
++
++# Torch Compile logs
++tl_out/
++
++# Plots
++*.png
++*.pdf
++
++# personnal
++work_dirs/
++*.csv
++
++!logo.png
++
++# Prerequisites
++*.d
++
++# Compiled Object files
++*.slo
++*.lo
++*.o
++*.obj
++
++# Precompiled Headers
++*.gch
++*.pch
++
++# Compiled Dynamic libraries
++*.so
++*.dylib
++*.dll
++
++# Fortran module files
++*.mod
++*.smod
++
++# Compiled Static libraries
++*.lai
++*.la
++*.a
++*.lib
++
++# Executables
++*.exe
++*.out
++*.app
++
++compile_commands.json
++
++*.iml
++
++# VSCode
++.vscode
++
++1
++
++# Autoenv
++.env.leave
++
++# Rust lib
++Cargo.lock
++
++# Generated vision test fixtures (regenerate with: python scripts/generate_vision_golden.py)
++sgl-model-gateway/tests/fixtures/golden/
++
++lmms-eval
++
++**/.claude/
++**/.serena/
++ctags/
++outputs/
++
++# Eval Cache
++.longbench_cache/
++
++# CUDA kernel develop, profile and debug
++.clangd
++*.nsys-rep
++*.ncu-rep
++*.nvcudmp
++
++# setuptools-scm generated version file
++python/sglang/_version.py
+diff --git a/3rdparty/amd/profiling/client.sh b/3rdparty/amd/profiling/client.sh
+old mode 100755
+new mode 100644
+diff --git a/3rdparty/amd/profiling/loadTracer.sh b/3rdparty/amd/profiling/loadTracer.sh
+old mode 100755
+new mode 100644
+diff --git a/3rdparty/amd/profiling/server.sh b/3rdparty/amd/profiling/server.sh
+old mode 100755
+new mode 100644
+diff --git a/benchmark/boolq/parquet_to_json.sh b/benchmark/boolq/parquet_to_json.sh
+old mode 100755
+new mode 100644
+diff --git a/benchmark/hicache/bench_mix.sh b/benchmark/hicache/bench_mix.sh
+old mode 100755
+new mode 100644
+diff --git a/benchmark/hicache/download.sh b/benchmark/hicache/download.sh
+old mode 100755
+new mode 100644
+diff --git a/benchmark/llava_bench/bench_hf_llava_bench.sh b/benchmark/llava_bench/bench_hf_llava_bench.sh
+old mode 100755
+new mode 100644
+diff --git a/benchmark/llava_bench/bench_hf_mme.sh b/benchmark/llava_bench/bench_hf_mme.sh
+old mode 100755
+new mode 100644
+diff --git a/docker/configs/yank b/docker/configs/yank
+old mode 100755
+new mode 100644
+diff --git a/docker/serve b/docker/serve
+old mode 100755
+new mode 100644
+diff --git a/examples/frontend_language/usage/llava_video/srt_example_llava_v.sh b/examples/frontend_language/usage/llava_video/srt_example_llava_v.sh
+old mode 100755
+new mode 100644
+diff --git a/examples/profiler/nsys_profile_tools/gputrc2graph.py b/examples/profiler/nsys_profile_tools/gputrc2graph.py
+old mode 100755
+new mode 100644
+diff --git a/examples/usage/modelopt_quantize_and_export.py b/examples/usage/modelopt_quantize_and_export.py
+old mode 100755
+new mode 100644
+diff --git a/python/pyproject.toml b/python/pyproject.toml
+old mode 100755
+new mode 100644
+diff --git a/python/pyproject_other.toml b/python/pyproject_other.toml
+old mode 100755
+new mode 100644
+diff --git a/python/sglang/srt/grpc/compile_proto.py b/python/sglang/srt/grpc/compile_proto.py
+old mode 100755
+new mode 100644
+diff --git a/python/sglang/srt/layers/attention/trtllm_mla_backend.py b/python/sglang/srt/layers/attention/trtllm_mla_backend.py
+old mode 100755
+new mode 100644
+diff --git a/python/sglang/srt/layers/moe/cutlass_moe.py b/python/sglang/srt/layers/moe/cutlass_moe.py
+old mode 100755
+new mode 100644
+diff --git a/python/sglang/srt/layers/quantization/modelopt_quant.py b/python/sglang/srt/layers/quantization/modelopt_quant.py
+old mode 100755
+new mode 100644
+diff --git a/python/sglang/srt/mem_cache/cpp_radix_tree/.clang-format b/python/sglang/srt/mem_cache/cpp_radix_tree/.clang-format
+deleted file mode 120000
+index 5a7a8cea7..000000000
+--- a/python/sglang/srt/mem_cache/cpp_radix_tree/.clang-format
++++ /dev/null
+@@ -1 +0,0 @@
+-../../../../../sgl-kernel/.clang-format
+\ No newline at end of file
+diff --git a/python/sglang/srt/mem_cache/cpp_radix_tree/.clang-format b/python/sglang/srt/mem_cache/cpp_radix_tree/.clang-format
+new file mode 100644
+index 000000000..afbd654a7
+--- /dev/null
++++ b/python/sglang/srt/mem_cache/cpp_radix_tree/.clang-format
+@@ -0,0 +1,15 @@
++BasedOnStyle: Google
++IndentWidth: 2
++ColumnLimit: 120
++AllowShortFunctionsOnASingleLine: Empty
++DerivePointerAlignment: false
++PointerAlignment: Left
++NamespaceIndentation: None
++SortIncludes: true
++AllowShortLoopsOnASingleLine: false
++BinPackParameters: false              # Prevents packing parameters in declarations
++BinPackArguments: false               # Prevents packing arguments in function calls
++AlignAfterOpenBracket: AlwaysBreak    # Forces a break after the opening parenthesis
++AlignOperands: Align                  # Aligns arguments vertically
++PenaltyBreakBeforeFirstCallParameter: 1  # Encourages breaking before the first argument
++PenaltyReturnTypeOnItsOwnLine: 100    # Keeps return type with function name
+diff --git a/python/sglang/srt/mem_cache/storage/nixl/test_hicache_nixl_storage.py b/python/sglang/srt/mem_cache/storage/nixl/test_hicache_nixl_storage.py
+old mode 100755
+new mode 100644
+diff --git a/python/sglang/test/attention/test_trtllm_mla_backend.py b/python/sglang/test/attention/test_trtllm_mla_backend.py
+old mode 100755
+new mode 100644
+diff --git a/python/sglang/test/longbench_v2/validate_longbench_v2.py b/python/sglang/test/longbench_v2/validate_longbench_v2.py
+old mode 100755
+new mode 100644
+diff --git a/python/sglang/test/longbench_v2/validate_longbench_v2_standalone.py b/python/sglang/test/longbench_v2/validate_longbench_v2_standalone.py
+old mode 100755
+new mode 100644
+diff --git a/python/sglang/test/test_cutlass_moe.py b/python/sglang/test/test_cutlass_moe.py
+old mode 100755
+new mode 100644
+diff --git a/python/sglang/test/test_kvfp4_quant_dequant.py b/python/sglang/test/test_kvfp4_quant_dequant.py
+old mode 100755
+new mode 100644
+diff --git a/scripts/check_vram_clear.sh b/scripts/check_vram_clear.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/ci/amd_ci_exec.sh b/scripts/ci/amd_ci_exec.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/ci/amd_ci_install_dependency.sh b/scripts/ci/amd_ci_install_dependency.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/ci/amd_ci_start_container.sh b/scripts/ci/amd_ci_start_container.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/ci/amd_ci_warmup_aiter.py b/scripts/ci/amd_ci_warmup_aiter.py
+old mode 100755
+new mode 100644
+diff --git a/scripts/ci/ci_install_deepep.sh b/scripts/ci/ci_install_deepep.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/ci/ci_install_dependency.sh b/scripts/ci/ci_install_dependency.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/ci/ci_install_rust.sh b/scripts/ci/ci_install_rust.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/ci/ci_start_disaggregation_servers.sh b/scripts/ci/ci_start_disaggregation_servers.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/ci/cleanup_hf_cache.py b/scripts/ci/cleanup_hf_cache.py
+old mode 100755
+new mode 100644
+diff --git a/scripts/ci/npu_ci_install_dependency.sh b/scripts/ci/npu_ci_install_dependency.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/ci/npu_log_print.sh b/scripts/ci/npu_log_print.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/ci/prepare_runner.sh b/scripts/ci/prepare_runner.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/ci/test_rccl_multi_gpu.py b/scripts/ci/test_rccl_multi_gpu.py
+old mode 100755
+new mode 100644
+diff --git a/scripts/ci_monitor/ci_analyzer.py b/scripts/ci_monitor/ci_analyzer.py
+old mode 100755
+new mode 100644
+diff --git a/scripts/ci_monitor/ci_analyzer_balance.py b/scripts/ci_monitor/ci_analyzer_balance.py
+old mode 100755
+new mode 100644
+diff --git a/scripts/ci_monitor/ci_analyzer_perf.py b/scripts/ci_monitor/ci_analyzer_perf.py
+old mode 100755
+new mode 100644
+diff --git a/scripts/ci_monitor/post_ci_failures_to_slack.py b/scripts/ci_monitor/post_ci_failures_to_slack.py
+old mode 100755
+new mode 100644
+diff --git a/scripts/code_sync/install_github_cli.sh b/scripts/code_sync/install_github_cli.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/ensure_vram_clear.sh b/scripts/ensure_vram_clear.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/killall_sglang.sh b/scripts/killall_sglang.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/release/bump_kernel_version.py b/scripts/release/bump_kernel_version.py
+old mode 100755
+new mode 100644
+diff --git a/scripts/release/bump_kernel_version_to_sglang.py b/scripts/release/bump_kernel_version_to_sglang.py
+old mode 100755
+new mode 100644
+diff --git a/scripts/release/bump_sglang_version.py b/scripts/release/bump_sglang_version.py
+old mode 100755
+new mode 100644
+diff --git a/scripts/release/check_kernel_version_to_sglang.py b/scripts/release/check_kernel_version_to_sglang.py
+old mode 100755
+new mode 100644
+diff --git a/scripts/release/commit_and_pr.sh b/scripts/release/commit_and_pr.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/release/commit_and_pr_kernel_to_sglang.sh b/scripts/release/commit_and_pr_kernel_to_sglang.sh
+old mode 100755
+new mode 100644
+diff --git a/scripts/release/test_utils.py b/scripts/release/test_utils.py
+old mode 100755
+new mode 100644
+diff --git a/scripts/update_nightly_whl_index.py b/scripts/update_nightly_whl_index.py
+old mode 100755
+new mode 100644
+diff --git a/scripts/update_pr_whl_index.py b/scripts/update_pr_whl_index.py
+old mode 100755
+new mode 100644
+diff --git a/scripts/version_branch_to_tag.sh b/scripts/version_branch_to_tag.sh
+old mode 100755
+new mode 100644
+diff --git a/sgl-kernel/benchmark/bench_fp4_gemm.py b/sgl-kernel/benchmark/bench_fp4_gemm.py
+old mode 100755
+new mode 100644
+diff --git a/sgl-kernel/build.sh b/sgl-kernel/build.sh
+old mode 100755
+new mode 100644
+diff --git a/sgl-kernel/kernel-runner-setup.sh b/sgl-kernel/kernel-runner-setup.sh
+old mode 100755
+new mode 100644
+diff --git a/sgl-kernel/python/sgl_kernel/moe.py b/sgl-kernel/python/sgl_kernel/moe.py
+old mode 100755
+new mode 100644
+diff --git a/sgl-kernel/rename_wheels.sh b/sgl-kernel/rename_wheels.sh
+old mode 100755
+new mode 100644
+diff --git a/sgl-kernel/tests/test_fp8_blockwise_moe.py b/sgl-kernel/tests/test_fp8_blockwise_moe.py
+old mode 100755
+new mode 100644
+diff --git a/sgl-model-gateway/LICENSE b/sgl-model-gateway/LICENSE
+deleted file mode 120000
+index ea5b60640..000000000
+--- a/sgl-model-gateway/LICENSE
++++ /dev/null
+@@ -1 +0,0 @@
+-../LICENSE
+\ No newline at end of file
+diff --git a/sgl-model-gateway/LICENSE b/sgl-model-gateway/LICENSE
+new file mode 100644
+index 000000000..9c422689c
+--- /dev/null
++++ b/sgl-model-gateway/LICENSE
+@@ -0,0 +1,201 @@
++                                 Apache License
++                           Version 2.0, January 2004
++                        http://www.apache.org/licenses/
++
++   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
++
++   1. Definitions.
++
++      "License" shall mean the terms and conditions for use, reproduction,
++      and distribution as defined by Sections 1 through 9 of this document.
++
++      "Licensor" shall mean the copyright owner or entity authorized by
++      the copyright owner that is granting the License.
++
++      "Legal Entity" shall mean the union of the acting entity and all
++      other entities that control, are controlled by, or are under common
++      control with that entity. For the purposes of this definition,
++      "control" means (i) the power, direct or indirect, to cause the
++      direction or management of such entity, whether by contract or
++      otherwise, or (ii) ownership of fifty percent (50%) or more of the
++      outstanding shares, or (iii) beneficial ownership of such entity.
++
++      "You" (or "Your") shall mean an individual or Legal Entity
++      exercising permissions granted by this License.
++
++      "Source" form shall mean the preferred form for making modifications,
++      including but not limited to software source code, documentation
++      source, and configuration files.
++
++      "Object" form shall mean any form resulting from mechanical
++      transformation or translation of a Source form, including but
++      not limited to compiled object code, generated documentation,
++      and conversions to other media types.
++
++      "Work" shall mean the work of authorship, whether in Source or
++      Object form, made available under the License, as indicated by a
++      copyright notice that is included in or attached to the work
++      (an example is provided in the Appendix below).
++
++      "Derivative Works" shall mean any work, whether in Source or Object
++      form, that is based on (or derived from) the Work and for which the
++      editorial revisions, annotations, elaborations, or other modifications
++      represent, as a whole, an original work of authorship. For the purposes
++      of this License, Derivative Works shall not include works that remain
++      separable from, or merely link (or bind by name) to the interfaces of,
++      the Work and Derivative Works thereof.
++
++      "Contribution" shall mean any work of authorship, including
++      the original version of the Work and any modifications or additions
++      to that Work or Derivative Works thereof, that is intentionally
++      submitted to Licensor for inclusion in the Work by the copyright owner
++      or by an individual or Legal Entity authorized to submit on behalf of
++      the copyright owner. For the purposes of this definition, "submitted"
++      means any form of electronic, verbal, or written communication sent
++      to the Licensor or its representatives, including but not limited to
++      communication on electronic mailing lists, source code control systems,
++      and issue tracking systems that are managed by, or on behalf of, the
++      Licensor for the purpose of discussing and improving the Work, but
++      excluding communication that is conspicuously marked or otherwise
++      designated in writing by the copyright owner as "Not a Contribution."
++
++      "Contributor" shall mean Licensor and any individual or Legal Entity
++      on behalf of whom a Contribution has been received by Licensor and
++      subsequently incorporated within the Work.
++
++   2. Grant of Copyright License. Subject to the terms and conditions of
++      this License, each Contributor hereby grants to You a perpetual,
++      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
++      copyright license to reproduce, prepare Derivative Works of,
++      publicly display, publicly perform, sublicense, and distribute the
++      Work and such Derivative Works in Source or Object form.
++
++   3. Grant of Patent License. Subject to the terms and conditions of
++      this License, each Contributor hereby grants to You a perpetual,
++      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
++      (except as stated in this section) patent license to make, have made,
++      use, offer to sell, sell, import, and otherwise transfer the Work,
++      where such license applies only to those patent claims licensable
++      by such Contributor that are necessarily infringed by their
++      Contribution(s) alone or by combination of their Contribution(s)
++      with the Work to which such Contribution(s) was submitted. If You
++      institute patent litigation against any entity (including a
++      cross-claim or counterclaim in a lawsuit) alleging that the Work
++      or a Contribution incorporated within the Work constitutes direct
++      or contributory patent infringement, then any patent licenses
++      granted to You under this License for that Work shall terminate
++      as of the date such litigation is filed.
++
++   4. Redistribution. You may reproduce and distribute copies of the
++      Work or Derivative Works thereof in any medium, with or without
++      modifications, and in Source or Object form, provided that You
++      meet the following conditions:
++
++      (a) You must give any other recipients of the Work or
++          Derivative Works a copy of this License; and
++
++      (b) You must cause any modified files to carry prominent notices
++          stating that You changed the files; and
++
++      (c) You must retain, in the Source form of any Derivative Works
++          that You distribute, all copyright, patent, trademark, and
++          attribution notices from the Source form of the Work,
++          excluding those notices that do not pertain to any part of
++          the Derivative Works; and
++
++      (d) If the Work includes a "NOTICE" text file as part of its
++          distribution, then any Derivative Works that You distribute must
++          include a readable copy of the attribution notices contained
++          within such NOTICE file, excluding those notices that do not
++          pertain to any part of the Derivative Works, in at least one
++          of the following places: within a NOTICE text file distributed
++          as part of the Derivative Works; within the Source form or
++          documentation, if provided along with the Derivative Works; or,
++          within a display generated by the Derivative Works, if and
++          wherever such third-party notices normally appear. The contents
++          of the NOTICE file are for informational purposes only and
++          do not modify the License. You may add Your own attribution
++          notices within Derivative Works that You distribute, alongside
++          or as an addendum to the NOTICE text from the Work, provided
++          that such additional attribution notices cannot be construed
++          as modifying the License.
++
++      You may add Your own copyright statement to Your modifications and
++      may provide additional or different license terms and conditions
++      for use, reproduction, or distribution of Your modifications, or
++      for any such Derivative Works as a whole, provided Your use,
++      reproduction, and distribution of the Work otherwise complies with
++      the conditions stated in this License.
++
++   5. Submission of Contributions. Unless You explicitly state otherwise,
++      any Contribution intentionally submitted for inclusion in the Work
++      by You to the Licensor shall be under the terms and conditions of
++      this License, without any additional terms or conditions.
++      Notwithstanding the above, nothing herein shall supersede or modify
++      the terms of any separate license agreement you may have executed
++      with Licensor regarding such Contributions.
++
++   6. Trademarks. This License does not grant permission to use the trade
++      names, trademarks, service marks, or product names of the Licensor,
++      except as required for reasonable and customary use in describing the
++      origin of the Work and reproducing the content of the NOTICE file.
++
++   7. Disclaimer of Warranty. Unless required by applicable law or
++      agreed to in writing, Licensor provides the Work (and each
++      Contributor provides its Contributions) on an "AS IS" BASIS,
++      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
++      implied, including, without limitation, any warranties or conditions
++      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
++      PARTICULAR PURPOSE. You are solely responsible for determining the
++      appropriateness of using or redistributing the Work and assume any
++      risks associated with Your exercise of permissions under this License.
++
++   8. Limitation of Liability. In no event and under no legal theory,
++      whether in tort (including negligence), contract, or otherwise,
++      unless required by applicable law (such as deliberate and grossly
++      negligent acts) or agreed to in writing, shall any Contributor be
++      liable to You for damages, including any direct, indirect, special,
++      incidental, or consequential damages of any character arising as a
++      result of this License or out of the use or inability to use the
++      Work (including but not limited to damages for loss of goodwill,
++      work stoppage, computer failure or malfunction, or any and all
++      other commercial damages or losses), even if such Contributor
++      has been advised of the possibility of such damages.
++
++   9. Accepting Warranty or Additional Liability. While redistributing
++      the Work or Derivative Works thereof, You may choose to offer,
++      and charge a fee for, acceptance of support, warranty, indemnity,
++      or other liability obligations and/or rights consistent with this
++      License. However, in accepting such obligations, You may act only
++      on Your own behalf and on Your sole responsibility, not on behalf
++      of any other Contributor, and only if You agree to indemnify,
++      defend, and hold each Contributor harmless for any liability
++      incurred by, or claims asserted against, such Contributor by reason
++      of your accepting any such warranty or additional liability.
++
++   END OF TERMS AND CONDITIONS
++
++   APPENDIX: How to apply the Apache License to your work.
++
++      To apply the Apache License to your work, attach the following
++      boilerplate notice, with the fields enclosed by brackets "[]"
++      replaced with your own identifying information. (Don't include
++      the brackets!)  The text should be enclosed in the appropriate
++      comment syntax for the file format. We also recommend that a
++      file or class name and description of purpose be included on the
++      same "printed page" as the copyright notice for easier
++      identification within third-party archives.
++
++   Copyright 2023-2024 SGLang Team
++
++   Licensed under the Apache License, Version 2.0 (the "License");
++   you may not use this file except in compliance with the License.
++   You may obtain a copy of the License at
++
++       http://www.apache.org/licenses/LICENSE-2.0
++
++   Unless required by applicable law or agreed to in writing, software
++   distributed under the License is distributed on an "AS IS" BASIS,
++   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++   See the License for the specific language governing permissions and
++   limitations under the License.
 diff --git a/sgl-model-gateway/bindings/golang/Cargo.toml b/sgl-model-gateway/bindings/golang/Cargo.toml
 index 76a448b7c..0b3d346dc 100644
 --- a/sgl-model-gateway/bindings/golang/Cargo.toml
@@ -11,6 +718,30 @@ index 76a448b7c..0b3d346dc 100644
  
  [dependencies]
  tokio = { version = "1.42.0", features = ["full"] }
+diff --git a/sgl-model-gateway/bindings/golang/examples/oai_server/run.sh b/sgl-model-gateway/bindings/golang/examples/oai_server/run.sh
+old mode 100755
+new mode 100644
+diff --git a/sgl-model-gateway/bindings/golang/examples/oai_server/scripts/analyze_tpot.sh b/sgl-model-gateway/bindings/golang/examples/oai_server/scripts/analyze_tpot.sh
+old mode 100755
+new mode 100644
+diff --git a/sgl-model-gateway/bindings/golang/examples/oai_server/scripts/pprof_analysis.sh b/sgl-model-gateway/bindings/golang/examples/oai_server/scripts/pprof_analysis.sh
+old mode 100755
+new mode 100644
+diff --git a/sgl-model-gateway/bindings/golang/examples/oai_server/scripts/pprof_quick.sh b/sgl-model-gateway/bindings/golang/examples/oai_server/scripts/pprof_quick.sh
+old mode 100755
+new mode 100644
+diff --git a/sgl-model-gateway/bindings/golang/examples/oai_server/scripts/pprof_test.sh b/sgl-model-gateway/bindings/golang/examples/oai_server/scripts/pprof_test.sh
+old mode 100755
+new mode 100644
+diff --git a/sgl-model-gateway/bindings/golang/examples/oai_server/scripts/profile_tpot.sh b/sgl-model-gateway/bindings/golang/examples/oai_server/scripts/profile_tpot.sh
+old mode 100755
+new mode 100644
+diff --git a/sgl-model-gateway/bindings/golang/examples/simple/run.sh b/sgl-model-gateway/bindings/golang/examples/simple/run.sh
+old mode 100755
+new mode 100644
+diff --git a/sgl-model-gateway/bindings/golang/examples/streaming/run.sh b/sgl-model-gateway/bindings/golang/examples/streaming/run.sh
+old mode 100755
+new mode 100644
 diff --git a/sgl-model-gateway/bindings/golang/go.mod b/sgl-model-gateway/bindings/golang/go.mod
 index bb6823c34..4e46c489d 100644
 --- a/sgl-model-gateway/bindings/golang/go.mod
@@ -126,40 +857,16 @@ index 38125d3ae..b15da65a2 100644
  // CreateTokenizerHandle creates a tokenizer handle (exported for caching)
  func CreateTokenizerHandle(tokenizerPath string) (*TokenizerHandle, error) {
  	tokenizerPathC := C.CString(tokenizerPath)
-diff --git a/sgl-model-gateway/bindings/golang/internal/ffi/preprocessor.go b/sgl-model-gateway/bindings/golang/internal/ffi/preprocessor.go
-index 90c051739..db575e83e 100644
---- a/sgl-model-gateway/bindings/golang/internal/ffi/preprocessor.go
-+++ b/sgl-model-gateway/bindings/golang/internal/ffi/preprocessor.go
-@@ -124,7 +124,8 @@ func PreprocessChatRequest(requestJSON, tokenizerPath string) (*PreprocessedRequ
- 
- 	// Copy token IDs
- 	if tokenIDsOut != nil && tokenIDsLenOut > 0 {
--		tokenIDsSlice := (*[1 << 30]C.uint32_t)(unsafe.Pointer(tokenIDsOut))[:tokenIDsLenOut:tokenIDsLenOut]
-+		// tokenIDsSlice := (*[1 << 30]C.uint32_t)(unsafe.Pointer(tokenIDsOut))[:tokenIDsLenOut:tokenIDsLenOut]
-+		tokenIDsSlice := unsafe.Slice(tokenIDsOut, tokenIDsLenOut)
- 		for i := range result.TokenIDs {
- 			result.TokenIDs[i] = uint32(tokenIDsSlice[i])
- 		}
-@@ -195,7 +196,8 @@ func PreprocessChatRequestWithTokenizer(requestJSON string, tokenizerHandle *Tok
- 
- 	// Copy token IDs
- 	if tokenIDsOut != nil && tokenIDsLenOut > 0 {
--		tokenIDsSlice := (*[1 << 30]C.uint32_t)(unsafe.Pointer(tokenIDsOut))[:tokenIDsLenOut:tokenIDsLenOut]
-+		// tokenIDsSlice := (*[1 << 30]C.uint32_t)(unsafe.Pointer(tokenIDsOut))[:tokenIDsLenOut:tokenIDsLenOut]
-+		tokenIDsSlice := unsafe.Slice(tokenIDsOut, tokenIDsLenOut)
- 		for i := range result.TokenIDs {
- 			result.TokenIDs[i] = uint32(tokenIDsSlice[i])
- 		}
 diff --git a/sgl-model-gateway/bindings/golang/processor.go b/sgl-model-gateway/bindings/golang/processor.go
 new file mode 100644
-index 000000000..232d7705c
+index 000000000..cb834ce41
 --- /dev/null
 +++ b/sgl-model-gateway/bindings/golang/processor.go
 @@ -0,0 +1,250 @@
 +package sglang
 +
 +/*
-+#cgo LDFLAGS: -lsgl_model_gateway_go -ldl
++#cgo LDFLAGS: -lsgl_model_gateway_go -lm -ldl
 +#include <stdlib.h>
 +#include <stdint.h>
 +
@@ -191,153 +898,153 @@ index 000000000..232d7705c
 +import "C"
 +
 +import (
-+	"fmt"
-+	"unsafe"
++    "fmt"
++    "unsafe"
 +
-+	"github.com/sglang/sglang-go-grpc-sdk/internal/ffi"
++    "github.com/sglang/sglang-go-grpc-sdk/internal/ffi"
 +)
 +
 +type Tokenizer struct {
-+	handle *C.TokenizerHandle
++    handle *C.TokenizerHandle
 +}
 +
 +func CreateTokenizerFromFile(path string) (*Tokenizer, error) {
-+	cPath := C.CString(path)
-+	defer C.free(unsafe.Pointer(cPath))
++    cPath := C.CString(path)
++    defer C.free(unsafe.Pointer(cPath))
 +
-+	var errorPtr *C.char
-+	handle := C.sgl_tokenizer_create_from_file(cPath, &errorPtr)
-+	if handle == nil {
-+		errorMsg := ""
-+		if errorPtr != nil {
-+			errorMsg = C.GoString(errorPtr)
-+			C.sgl_free_string(errorPtr)
-+		}
-+		if errorMsg == "" {
-+			errorMsg = "failed to create tokenizer from file"
-+		}
-+		return nil, fmt.Errorf("%s", errorMsg)
-+	}
-+	return &Tokenizer{handle: handle}, nil
++    var errorPtr *C.char
++    handle := C.sgl_tokenizer_create_from_file(cPath, &errorPtr)
++    if handle == nil {
++        errorMsg := ""
++        if errorPtr != nil {
++            errorMsg = C.GoString(errorPtr)
++            C.sgl_free_string(errorPtr)
++        }
++        if errorMsg == "" {
++            errorMsg = "failed to create tokenizer from file"
++        }
++        return nil, fmt.Errorf("%s", errorMsg)
++    }
++    return &Tokenizer{handle: handle}, nil
 +}
 +
 +func CreateTokenizerFromFileWithChatTemplate(path, chatTemplatePath string) (*Tokenizer, error) {
-+	cPath := C.CString(path)
-+	defer C.free(unsafe.Pointer(cPath))
-+	cChatTemplatePath := C.CString(chatTemplatePath)
-+	defer C.free(unsafe.Pointer(cChatTemplatePath))
++    cPath := C.CString(path)
++    defer C.free(unsafe.Pointer(cPath))
++    cChatTemplatePath := C.CString(chatTemplatePath)
++    defer C.free(unsafe.Pointer(cChatTemplatePath))
 +
-+	var errorPtr *C.char
-+	handle := C.sgl_tokenizer_create_from_file_with_chat_template(cPath, cChatTemplatePath, &errorPtr)
-+	if handle == nil {
-+		errorMsg := ""
-+		if errorPtr != nil {
-+			errorMsg = C.GoString(errorPtr)
-+			C.sgl_free_string(errorPtr)
-+		}
-+		if errorMsg == "" {
-+			errorMsg = "failed to create tokenizer from file"
-+		}
-+		return nil, fmt.Errorf("%s", errorMsg)
-+	}
-+	return &Tokenizer{handle: handle}, nil
++    var errorPtr *C.char
++    handle := C.sgl_tokenizer_create_from_file_with_chat_template(cPath, cChatTemplatePath, &errorPtr)
++    if handle == nil {
++        errorMsg := ""
++        if errorPtr != nil {
++            errorMsg = C.GoString(errorPtr)
++            C.sgl_free_string(errorPtr)
++        }
++        if errorMsg == "" {
++            errorMsg = "failed to create tokenizer from file"
++        }
++        return nil, fmt.Errorf("%s", errorMsg)
++    }
++    return &Tokenizer{handle: handle}, nil
 +}
 +
 +func (t *Tokenizer) Free() {
-+	if t.handle != nil {
-+		C.sgl_tokenizer_free(t.handle)
-+		t.handle = nil
-+	}
++    if t.handle != nil {
++        C.sgl_tokenizer_free(t.handle)
++        t.handle = nil
++    }
 +}
 +
 +func (t *Tokenizer) Encode(text string, addSpecialToken bool) ([]uint32, error) {
-+	cText := C.CString(text)
-+	defer C.free(unsafe.Pointer(cText))
++    cText := C.CString(text)
++    defer C.free(unsafe.Pointer(cText))
 +
-+	var cAddSpecialTokens C.int
-+	if addSpecialToken {
-+		cAddSpecialTokens = 1
-+	} else {
-+		cAddSpecialTokens = 0
-+	}
++    var cAddSpecialTokens C.int
++    if addSpecialToken {
++        cAddSpecialTokens = 1
++    } else {
++        cAddSpecialTokens = 0
++    }
 +
-+	var tokenIdsPtr *C.uint32_t
-+	var tokenCount C.size_t
-+	var errorPtr *C.char
-+	errCode := C.sgl_tokenizer_encode(t.handle, cText, cAddSpecialTokens, &tokenIdsPtr, &tokenCount, &errorPtr)
-+	if errCode != C.SGL_ERROR_SUCCESS {
-+		errorMsg := ""
-+		if errorPtr != nil {
-+			errorMsg = C.GoString(errorPtr)
-+			C.sgl_free_string(errorPtr)
-+		}
-+		if errorMsg == "" {
-+			errorMsg = "tokenization error"
-+		}
-+		return nil, fmt.Errorf("%s", errorMsg)
-+	}
++    var tokenIdsPtr *C.uint32_t
++    var tokenCount C.size_t
++    var errorPtr *C.char
++    errCode := C.sgl_tokenizer_encode(t.handle, cText, cAddSpecialTokens, &tokenIdsPtr, &tokenCount, &errorPtr)
++    if errCode != C.SGL_ERROR_SUCCESS {
++        errorMsg := ""
++        if errorPtr != nil {
++            errorMsg = C.GoString(errorPtr)
++            C.sgl_free_string(errorPtr)
++        }
++        if errorMsg == "" {
++            errorMsg = "tokenization error"
++        }
++        return nil, fmt.Errorf("%s", errorMsg)
++    }
 +
-+	// defer C.free(unsafe.Pointer(tokenIdsPtr))
-+	defer C.sgl_free_token_ids(tokenIdsPtr, tokenCount)
++    // defer C.free(unsafe.Pointer(tokenIdsPtr))
++    defer C.sgl_free_token_ids(tokenIdsPtr, tokenCount)
 +
-+	tokenCountGo := int(tokenCount)
-+	tokenIds := make([]uint32, tokenCountGo)
-+	// slice := (*[1 << 30]C.uint32_t)(unsafe.Pointer(tokenIdsPtr))[:tokenCountGo:tokenCountGo]
-+	slice := unsafe.Slice(tokenIdsPtr, tokenCountGo) //  unsafe.Slice requires Go 1.17+
-+	for i := 0; i < tokenCountGo; i++ {
-+		tokenIds[i] = uint32(slice[i])
-+	}
++    tokenCountGo := int(tokenCount)
++    tokenIds := make([]uint32, tokenCountGo)
++    // slice := (*[1 << 30]C.uint32_t)(unsafe.Pointer(tokenIdsPtr))[:tokenCountGo:tokenCountGo]
++    slice := unsafe.Slice(tokenIdsPtr, tokenCountGo) //  unsafe.Slice requires Go 1.17+
++    for i := 0; i < tokenCountGo; i++ {
++        tokenIds[i] = uint32(slice[i])
++    }
 +
-+	return tokenIds, nil
++    return tokenIds, nil
 +
 +}
 +
 +func (t *Tokenizer) ApplyChatTemplate(messagesJson string) (string, error) {
-+	cMessagesJson := C.CString(messagesJson)
-+	defer C.free(unsafe.Pointer(cMessagesJson))
++    cMessagesJson := C.CString(messagesJson)
++    defer C.free(unsafe.Pointer(cMessagesJson))
 +
-+	var resultPtr *C.char
-+	var errorPtr *C.char
-+	errCode := C.sgl_tokenizer_apply_chat_template(t.handle, cMessagesJson, &resultPtr, &errorPtr)
-+	if errCode != C.SGL_ERROR_SUCCESS {
-+		errorMsg := ""
-+		if errorPtr != nil {
-+			errorMsg = C.GoString(errorPtr)
-+			C.sgl_free_string(errorPtr)
-+		}
-+		if errorMsg == "" {
-+			errorMsg = "error applying chat template"
-+		}
-+		return "", fmt.Errorf("%s", errorMsg)
-+	}
-+	defer C.sgl_free_string(resultPtr)
++    var resultPtr *C.char
++    var errorPtr *C.char
++    errCode := C.sgl_tokenizer_apply_chat_template(t.handle, cMessagesJson, &resultPtr, &errorPtr)
++    if errCode != C.SGL_ERROR_SUCCESS {
++        errorMsg := ""
++        if errorPtr != nil {
++            errorMsg = C.GoString(errorPtr)
++            C.sgl_free_string(errorPtr)
++        }
++        if errorMsg == "" {
++            errorMsg = "error applying chat template"
++        }
++        return "", fmt.Errorf("%s", errorMsg)
++    }
++    defer C.sgl_free_string(resultPtr)
 +
-+	result := C.GoString(resultPtr)
-+	return result, nil
++    result := C.GoString(resultPtr)
++    return result, nil
 +}
 +
 +func (t *Tokenizer) ApplyChatTemplateWithTools(messagesJson, toolsJson string) (string, error) {
 +
-+	cMessagesJson := C.CString(messagesJson)
-+	defer C.free(unsafe.Pointer(cMessagesJson))
-+	cToolsJson := C.CString(toolsJson)
-+	defer C.free(unsafe.Pointer(cToolsJson))
++    cMessagesJson := C.CString(messagesJson)
++    defer C.free(unsafe.Pointer(cMessagesJson))
++    cToolsJson := C.CString(toolsJson)
++    defer C.free(unsafe.Pointer(cToolsJson))
 +
-+	var resultPtr *C.char
-+	var errorPtr *C.char
-+	errCode := C.sgl_tokenizer_apply_chat_template_with_tools(t.handle, cMessagesJson, cToolsJson, &resultPtr, &errorPtr)
-+	if errCode != C.SGL_ERROR_SUCCESS {
-+		errorMsg := ""
-+		if errorPtr != nil {
-+			errorMsg = C.GoString(errorPtr)
-+			C.sgl_free_string(errorPtr)
++    var resultPtr *C.char
++    var errorPtr *C.char
++    errCode := C.sgl_tokenizer_apply_chat_template_with_tools(t.handle, cMessagesJson, cToolsJson, &resultPtr, &errorPtr)
++    if errCode != C.SGL_ERROR_SUCCESS {
++        errorMsg := ""
++        if errorPtr != nil {
++            errorMsg = C.GoString(errorPtr)
++            C.sgl_free_string(errorPtr)
 +
-+			return "", fmt.Errorf("%s", errorMsg)
-+		}
-+	}
-+	defer C.sgl_free_string(resultPtr)
-+	result := C.GoString(resultPtr)
-+	return result, nil
++            return "", fmt.Errorf("%s", errorMsg)
++        }
++    }
++    defer C.sgl_free_string(resultPtr)
++    result := C.GoString(resultPtr)
++    return result, nil
 +}
 +
 +// func (t *Tokenizer) ApplyChatTemplateWithToolsAndParams(messagesJson, toolsJson, paramsJson string) (string, error) {
@@ -369,95 +1076,42 @@ index 000000000..232d7705c
 +// }
 +
 +func (t *Tokenizer) Decode(tokenIds []uint32, skipSpecialTokens bool) (string, error) {
-+	cTokenCount := C.size_t(len(tokenIds))
-+	var cSkipSpecialTokens C.int
-+	if skipSpecialTokens {
-+		cSkipSpecialTokens = 1
-+	} else {
-+		cSkipSpecialTokens = 0
-+	}
++    cTokenCount := C.size_t(len(tokenIds))
++    var cSkipSpecialTokens C.int
++    if skipSpecialTokens {
++        cSkipSpecialTokens = 1
++    } else {
++        cSkipSpecialTokens = 0
++    }
 +
-+	cTokenIds := (*C.uint32_t)(unsafe.Pointer(&tokenIds[0]))
-+	var resultPtr *C.char
-+	var errorPtr *C.char
-+	errCode := C.sgl_tokenizer_decode(t.handle, cTokenIds, cTokenCount, cSkipSpecialTokens, &resultPtr, &errorPtr)
-+	if errCode != C.SGL_ERROR_SUCCESS {
-+		errorMsg := ""
-+		if errorPtr != nil {
-+			errorMsg = C.GoString(errorPtr)
-+			C.sgl_free_string(errorPtr)
-+		}
-+		if errorMsg == "" {
-+			errorMsg = "decoding error"
-+		}
-+		return "", fmt.Errorf("%s", errorMsg)
-+	}
-+	defer C.sgl_free_string(resultPtr)
++    cTokenIds := (*C.uint32_t)(unsafe.Pointer(&tokenIds[0]))
++    var resultPtr *C.char
++    var errorPtr *C.char
++    errCode := C.sgl_tokenizer_decode(t.handle, cTokenIds, cTokenCount, cSkipSpecialTokens, &resultPtr, &errorPtr)
++    if errCode != C.SGL_ERROR_SUCCESS {
++        errorMsg := ""
++        if errorPtr != nil {
++            errorMsg = C.GoString(errorPtr)
++            C.sgl_free_string(errorPtr)
++        }
++        if errorMsg == "" {
++            errorMsg = "decoding error"
++        }
++        return "", fmt.Errorf("%s", errorMsg)
++    }
++    defer C.sgl_free_string(resultPtr)
 +
-+	result := C.GoString(resultPtr)
-+	return result, nil
++    result := C.GoString(resultPtr)
++    return result, nil
 +}
 +
 +type PreprocessedRequest = ffi.PreprocessedRequest
 +
 +func (t *Tokenizer) toFFITokenizerHandle() *ffi.TokenizerHandle {
-+	return ffi.CopyTokenizerHandle(unsafe.Pointer(t.handle))
++    return ffi.CopyTokenizerHandle(unsafe.Pointer(t.handle))
 +}
 +func (t *Tokenizer) PreProcessChatRequest(requestJson string) (*PreprocessedRequest, error) {
-+	return ffi.PreprocessChatRequestWithTokenizer(requestJson, t.toFFITokenizerHandle())
-+}
-diff --git a/sgl-model-gateway/bindings/golang/processor_test.go b/sgl-model-gateway/bindings/golang/processor_test.go
-new file mode 100644
-index 000000000..f138daeee
---- /dev/null
-+++ b/sgl-model-gateway/bindings/golang/processor_test.go
-@@ -0,0 +1,47 @@
-+package sglang
-+
-+import (
-+	"fmt"
-+	"testing"
-+)
-+
-+func TestTokenizerQwen3Omni(t *testing.T) {
-+	tokenizer, err := CreateTokenizerFromFile("/Users/weilai/work/minidash_go/tests/Qwen3-Omni-30B-A3B-Instruct")
-+	if err != nil {
-+		t.Fatalf("Failed to create tokenizer: %v", err)
-+	}
-+	defer tokenizer.Free()
-+	res, err := tokenizer.ApplyChatTemplate(`[
-+    {
-+        "role": "system",
-+        "content": [
-+            {"type": "text", "text": "You are Qwen-Omni."}
-+        ]
-+    },
-+    {
-+        "role": "user",
-+        "content": "Who are you?"
-+    }
-+]`)
-+	if err != nil {
-+		fmt.Printf("err: %v", err)
-+		t.Fatalf("Failed to apply chat template: %v", err)
-+	}
-+	t.Logf("Result: %s", res)
-+
-+	res, err = tokenizer.ApplyChatTemplate(`[
-+    {
-+        "role": "user",
-+        "content": [
-+            {"type": "image", "image": "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen3-Omni/demo/cars.jpg"},
-+            {"type": "audio", "audio": "https://qianwen-res.oss-cn-beijing.aliyuncs.com/Qwen3-Omni/demo/cough.wav"},
-+            {"type": "text", "text": "What can you see and hear? Answer in one sentence."}
-+        ]
-+    }
-+]`)
-+	if err != nil {
-+		fmt.Printf("err: %v", err)
-+		t.Fatalf("Failed to apply chat template: %v", err)
-+	}
-+	t.Logf("Result: %s", res)
++    return ffi.PreprocessChatRequestWithTokenizer(requestJson, t.toFFITokenizerHandle())
 +}
 diff --git a/sgl-model-gateway/bindings/golang/src/lib.rs b/sgl-model-gateway/bindings/golang/src/lib.rs
 index c4671a5a2..4b6054b0b 100644
@@ -820,6 +1474,30 @@ index 000000000..67da55587
 +		p.handle = nil
 +	}
 +}
+diff --git a/sgl-model-gateway/bindings/python/src/sglang_router/cli.py b/sgl-model-gateway/bindings/python/src/sglang_router/cli.py
+old mode 100755
+new mode 100644
+diff --git a/sgl-model-gateway/examples/wasm/wasm-guest-auth/build.sh b/sgl-model-gateway/examples/wasm/wasm-guest-auth/build.sh
+old mode 100755
+new mode 100644
+diff --git a/sgl-model-gateway/examples/wasm/wasm-guest-logging/build.sh b/sgl-model-gateway/examples/wasm/wasm-guest-logging/build.sh
+old mode 100755
+new mode 100644
+diff --git a/sgl-model-gateway/examples/wasm/wasm-guest-ratelimit/build.sh b/sgl-model-gateway/examples/wasm/wasm-guest-ratelimit/build.sh
+old mode 100755
+new mode 100644
+diff --git a/sgl-model-gateway/scripts/generate_gateway_release_notes.sh b/sgl-model-gateway/scripts/generate_gateway_release_notes.sh
+old mode 100755
+new mode 100644
+diff --git a/sgl-model-gateway/scripts/generate_vision_golden.py b/sgl-model-gateway/scripts/generate_vision_golden.py
+old mode 100755
+new mode 100644
+diff --git a/sgl-model-gateway/scripts/run_benchmarks.py b/sgl-model-gateway/scripts/run_benchmarks.py
+old mode 100755
+new mode 100644
+diff --git a/sgl-model-gateway/scripts/setup-sccache.sh b/sgl-model-gateway/scripts/setup-sccache.sh
+old mode 100755
+new mode 100644
 diff --git a/sgl-model-gateway/src/routers/grpc/mod.rs b/sgl-model-gateway/src/routers/grpc/mod.rs
 index bba0ea8ff..a271706a8 100644
 --- a/sgl-model-gateway/src/routers/grpc/mod.rs
@@ -869,168 +1547,6 @@ index 08cbec032..dd626d9fc 100644
      tokenizer: &Arc<dyn Tokenizer>,
      stop: Option<&StringOrArray>,
      stop_token_ids: Option<&Vec<u32>>,
-diff --git a/sgl-model-gateway/src/tokenizer/factory.rs b/sgl-model-gateway/src/tokenizer/factory.rs
-index 13aaed75e..29675d731 100644
---- a/sgl-model-gateway/src/tokenizer/factory.rs
-+++ b/sgl-model-gateway/src/tokenizer/factory.rs
-@@ -44,6 +44,8 @@ pub fn create_tokenizer_with_chat_template(
-     // If path is a directory, search for tokenizer files
-     if path.is_dir() {
-         let tokenizer_json = path.join("tokenizer.json");
-+        let vocab_json = path.join("vocab.json");
-+        let merges_txt = path.join("merges.txt");
-         if tokenizer_json.exists() {
-             // Resolve chat template: provided path takes precedence over auto-discovery
-             let final_chat_template =
-@@ -58,6 +60,14 @@ pub fn create_tokenizer_with_chat_template(
-                 tokenizer_path_str,
-                 final_chat_template.as_deref(),
-             );
-+        } else if vocab_json.exists() && merges_txt.exists() {
-+            
-+            // Resolve chat template: provided path takes precedence over auto-discovery
-+            let final_chat_template =
-+                resolve_and_log_chat_template(chat_template_path, path, file_path);
-+            let tokenizer = HuggingFaceTokenizer::from_vocab_with_template(file_path, vocab_json.to_str().unwrap_or(""), merges_txt.to_str().unwrap_or(""), final_chat_template.as_deref())?;
-+
-+            return Ok(Arc::new(tokenizer) as Arc<dyn traits::Tokenizer>);
-         }
- 
-         return Err(Error::msg(format!(
-diff --git a/sgl-model-gateway/src/tokenizer/huggingface.rs b/sgl-model-gateway/src/tokenizer/huggingface.rs
-index 93188b25d..6ff8758c8 100644
---- a/sgl-model-gateway/src/tokenizer/huggingface.rs
-+++ b/sgl-model-gateway/src/tokenizer/huggingface.rs
-@@ -1,9 +1,24 @@
- use std::collections::HashMap;
- 
- use anyhow::{Error, Result};
--use tokenizers::{processors::template::TemplateProcessing, tokenizer::Tokenizer as HfTokenizer};
-+use tokenizers::{
-+    decoders::byte_level::ByteLevel,
-+    models::bpe::BPE,
-+    normalizer::SplitDelimiterBehavior,
-+    normalizers::NFC,
-+    pre_tokenizers::{
-+        sequence::Sequence,
-+        split::{Split, SplitPattern},
-+        PreTokenizerWrapper,
-+    },
-+    processors::template::TemplateProcessing,
-+    tokenizer::Tokenizer as HfTokenizer,
-+    TokenizerBuilder,
-+};
- use tracing::debug;
- 
-+const PRETOKENIZE_REGEX: &str = r"(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\r\n\p{L}\p{N}]?\p{L}+|\p{N}| ?[^\s\p{L}\p{N}]+[\r\n]*|\s*[\r\n]+|\s+(?!\S)|\s+";
-+
- use super::{
-     chat_template::{
-         detect_chat_template_content_format, ChatTemplateContentFormat, ChatTemplateParams,
-@@ -34,6 +49,103 @@ impl HuggingFaceTokenizer {
-         Self::from_file_with_chat_template(file_path, chat_template_path.as_deref())
-     }
- 
-+    // for qwen3_omni temp implementation
-+    pub fn from_vocab_with_template(
-+        path: &str,
-+        vocab: &str,
-+        merges: &str,
-+        chat_template_path: Option<&str>,
-+    ) -> Result<Self> {
-+        let bpe = BPE::from_file(vocab, merges).build().unwrap();
-+
-+        let split = Split::new(
-+            SplitPattern::Regex(PRETOKENIZE_REGEX.into()),
-+            SplitDelimiterBehavior::Isolated,
-+            false,
-+        )
-+        .unwrap();
-+
-+        let byte_level = ByteLevel::default()
-+            .add_prefix_space(false)
-+            .use_regex(false);
-+
-+        let pre_tokenizer = Sequence::new(vec![
-+            PreTokenizerWrapper::Split(split),
-+            PreTokenizerWrapper::ByteLevel(byte_level),
-+        ]);
-+
-+        let tokenizer_impl = TokenizerBuilder::default()
-+            .with_model(bpe)
-+            .with_decoder(Some(ByteLevel::default()))
-+            .with_normalizer(Some(NFC::default()))
-+            .with_pre_tokenizer(Some(pre_tokenizer))
-+            .with_post_processor(Some(ByteLevel::default()))
-+            .build()
-+            .unwrap();
-+
-+        let mut tokenizer = HfTokenizer::from(tokenizer_impl);
-+        let special_tokens = Self::extract_special_tokens(&tokenizer);
-+
-+        // Build vocab mappings (include special tokens to get added_tokens like <|im_start|>)
-+        let vocab = tokenizer.get_vocab(true); // true = include special tokens and added_tokens
-+        let reverse_vocab: HashMap<TokenIdType, String> = vocab
-+            .iter()
-+            .map(|(token, &id)| (id, token.clone()))
-+            .collect();
-+
-+        // Load chat template and tokenizer config
-+        let (chat_template, add_bos_token, add_eos_token) =
-+            if let Some(template_path) = chat_template_path {
-+                // Load from specified .jinja file
-+                (
-+                    Self::load_chat_template_from_file(template_path)?,
-+                    None,
-+                    None,
-+                )
-+            } else {
-+                // Try to load from tokenizer_config.json
-+                // Self::load_chat_template_and_config(file_path)
-+                (None, Some(false), Some(false))
-+            };
-+
-+        // Detect content format once at initialization
-+        let content_format = if let Some(ref template) = chat_template {
-+            detect_chat_template_content_format(template)
-+        } else {
-+            ChatTemplateContentFormat::String // Default if no template
-+        };
-+
-+        let (_, add_bos_token, add_eos_token) = Self::load_chat_template_and_config(path);
-+
-+        // Configure post_processor based on tokenizer_config.json (matches Python transformers)
-+        // Only modify when at least one setting is explicitly true
-+        let needs_eos = add_eos_token == Some(true);
-+        let needs_bos = match add_bos_token {
-+            Some(true) => true,
-+            Some(false) => false,
-+            // Not set: preserve existing behavior from tokenizer.json
-+            None => needs_eos && Self::tokenizer_adds_special_tokens(&tokenizer),
-+        };
-+
-+        if needs_bos || needs_eos {
-+            if let Some(post_processor) =
-+                Self::build_post_processor(needs_bos, needs_eos, &special_tokens, &vocab)
-+            {
-+                debug!(needs_bos, needs_eos, "Configured post_processor");
-+                tokenizer.with_post_processor(Some(post_processor));
-+            }
-+        }
-+
-+        Ok(HuggingFaceTokenizer {
-+            tokenizer,
-+            special_tokens,
-+            vocab,
-+            reverse_vocab,
-+            chat_template,
-+            content_format,
-+        })
-+    }
-+
-     /// Create a tokenizer from a HuggingFace tokenizer JSON file with an optional chat template
-     pub fn from_file_with_chat_template(
-         file_path: &str,
 diff --git a/sgl-model-gateway/src/tokenizer/mod.rs b/sgl-model-gateway/src/tokenizer/mod.rs
 index 3e03562a0..c6dfe14d9 100644
 --- a/sgl-model-gateway/src/tokenizer/mod.rs
@@ -1044,3 +1560,15 @@ index 3e03562a0..c6dfe14d9 100644
  // Re-export types used outside this module
  pub use huggingface::HuggingFaceTokenizer;
  pub use registry::TokenizerRegistry;
+diff --git a/sgl-model-gateway/tests/common/mock_worker.rs b/sgl-model-gateway/tests/common/mock_worker.rs
+old mode 100755
+new mode 100644
+diff --git a/test/manual/ep/test_eplb.py b/test/manual/ep/test_eplb.py
+old mode 100755
+new mode 100644
+diff --git a/test/manual/kv_transfer/test_mooncake_transfer_engine.py b/test/manual/kv_transfer/test_mooncake_transfer_engine.py
+old mode 100755
+new mode 100644
+diff --git a/test/manual/test_expert_distribution.py b/test/manual/test_expert_distribution.py
+old mode 100755
+new mode 100644
