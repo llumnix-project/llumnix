@@ -9,15 +9,11 @@ RUN apt-get update \
     && apt-get install -y git curl wget \
     && apt-get install -y net-tools netcat-openbsd \
     && apt-get install -y rdma-core ibverbs-utils kmod \
-    && if [ "$INCLUDE_MOONCAKE" = "false" ]; then \
-        apt-get install -y cmake ninja-build \
-        && apt-get install -y libcurl4-openssl-dev libssl-dev python3.12-dev zlib1g-dev; \
-    fi \
+    && apt-get install -y cmake ninja-build \
+    && apt-get install -y libcurl4-openssl-dev libssl-dev python3.12-dev zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN if [ "$INCLUDE_MOONCAKE" = "false" ]; then \
-        ln -s /usr/local/cuda/lib64/libnvrtc.so.12 /usr/local/cuda/lib64/libnvrtc.so; \
-    fi
+RUN ln -s /usr/local/cuda/lib64/libnvrtc.so.12 /usr/local/cuda/lib64/libnvrtc.so
 
 RUN pip3 config set global.index-url https://mirrors.aliyun.com/pypi/simple/
 
@@ -48,13 +44,7 @@ ENV CUDA_HOME=/usr/local/cuda \
 
 # Install blade-kvt
 COPY ./scripts /tmp/scripts
-RUN if [ "$INCLUDE_MOONCAKE" = "false" ]; then \
-        bash /tmp/scripts/install/install_blade_kvt.sh; \
-    else \
-        bash /tmp/scripts/install/install_barex.sh \
-        && pip install /tmp/blade_kvt-*.whl; \
-    fi \
-    && rm -rf /tmp/blade_kvt-*.whl
+RUN  bash /tmp/scripts/install/install_blade_kvt.sh
 
 
 RUN if [ "$INCLUDE_MOONCAKE" = "true" ]; then \
