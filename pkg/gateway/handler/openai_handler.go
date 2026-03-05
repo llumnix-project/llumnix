@@ -12,7 +12,7 @@ import (
 
 	"llumnix/cmd/gateway/app/options"
 	"llumnix/pkg/consts"
-	"llumnix/pkg/gateway/service/forwarder"
+	"llumnix/pkg/gateway/forwarder"
 	"llumnix/pkg/gateway/processor"
 	"llumnix/pkg/gateway/protocol"
 	"llumnix/pkg/types"

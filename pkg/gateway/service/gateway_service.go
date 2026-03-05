@@ -23,10 +23,10 @@ import (
 	"llumnix/pkg/gateway/batch"
 	balancer "llumnix/pkg/gateway/load-balancer"
 	"llumnix/pkg/gateway/logging"
-	"llumnix/pkg/gateway/service/handler"
-	"llumnix/pkg/gateway/service/mirror"
-	"llumnix/pkg/gateway/service/queue"
-	"llumnix/pkg/gateway/service/router"
+	"llumnix/pkg/gateway/handler"
+	"llumnix/pkg/gateway/mirror"
+	"llumnix/pkg/gateway/queue"
+	"llumnix/pkg/gateway/router"
 	"llumnix/pkg/types"
 )
 
