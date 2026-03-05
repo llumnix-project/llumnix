@@ -1,0 +1,186 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 570" width="960" height="570" font-family="'Segoe UI', 'PingFang SC', 'Helvetica Neue', Arial, sans-serif">
+  <!-- Background -->
+  <rect width="960" height="570" fill="#f8fafc" rx="8"/>
+
+  <!-- Title -->
+  <text x="480" y="28" text-anchor="middle" fill="#1e293b" font-size="18" font-weight="bold">LLM Gateway Architecture</text>
+
+  <!-- ===== Client ===== -->
+  <rect x="20" y="120" width="80" height="45" rx="8" fill="#64748b" stroke="#475569" stroke-width="1.5"/>
+  <text x="60" y="147" text-anchor="middle" fill="white" font-size="12" font-weight="bold">Client</text>
+
+  <!-- Arrow: Client → Gateway -->
+  <line x1="100" y1="135" x2="140" y2="135" stroke="#ef4444" stroke-width="1.5" marker-end="url(#arr-red)"/>
+  <text x="120" y="126" text-anchor="middle" fill="#ef4444" font-size="8">①</text>
+
+  <!-- ===== Gateway Layer (Multi-Instance) ===== -->
+  <rect x="140" y="45" width="450" height="195" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
+  <text x="365" y="68" text-anchor="middle" fill="#1e40af" font-size="14" font-weight="bold">LLM Gateway (Multi-Instance)</text>
+
+  <!-- Request Processing Pipeline -->
+  <rect x="155" y="85" width="420" height="65" rx="6" fill="#eff6ff" stroke="#93c5fd" stroke-width="1" stroke-dasharray="4,2"/>
+  <text x="365" y="100" text-anchor="middle" fill="#1e40af" font-size="10" font-weight="bold">Request Processing Pipeline</text>
+  
+  <!-- HTTP Router -->
+  <rect x="165" y="108" width="70" height="35" rx="4" fill="#ffffff" stroke="#60a5fa" stroke-width="1.2"/>
+  <text x="200" y="130" text-anchor="middle" fill="#1e40af" font-size="9" font-weight="bold">HTTP Router</text>
+  
+  <!-- Request Queue -->
+  <rect x="245" y="108" width="75" height="35" rx="4" fill="#ffffff" stroke="#60a5fa" stroke-width="1.2"/>
+  <text x="282" y="123" text-anchor="middle" fill="#1e40af" font-size="8" font-weight="bold">Request</text>
+  <text x="282" y="135" text-anchor="middle" fill="#1e40af" font-size="8" font-weight="bold">Buffer Queue</text>
+  
+  <!-- Load Balancer -->
+  <rect x="330" y="108" width="75" height="35" rx="4" fill="#ffffff" stroke="#60a5fa" stroke-width="1.2"/>
+  <text x="367" y="123" text-anchor="middle" fill="#1e40af" font-size="8" font-weight="bold">Load</text>
+  <text x="367" y="135" text-anchor="middle" fill="#1e40af" font-size="8" font-weight="bold">Balancer</text>
+  
+  <!-- Handler -->
+  <rect x="415" y="108" width="65" height="35" rx="4" fill="#ffffff" stroke="#60a5fa" stroke-width="1.2"/>
+  <text x="447" y="123" text-anchor="middle" fill="#1e40af" font-size="9" font-weight="bold">Handler</text>
+  <text x="447" y="136" text-anchor="middle" fill="#60a5fa" font-size="7">Pre → Post</text>
+
+  <!-- Inference Backend -->
+  <rect x="490" y="108" width="75" height="35" rx="4" fill="#ffffff" stroke="#60a5fa" stroke-width="1.2"/>
+  <text x="527" y="123" text-anchor="middle" fill="#1e40af" font-size="8" font-weight="bold">Inference</text>
+  <text x="527" y="135" text-anchor="middle" fill="#1e40af" font-size="8" font-weight="bold">Backend</text>
+
+  <!-- Arrows between modules -->
+  <path d="M235 125 L245 125" fill="none" stroke="#94a3b8" stroke-width="1" marker-end="url(#arr-gray)"/>
+  <path d="M320 125 L330 125" fill="none" stroke="#94a3b8" stroke-width="1" marker-end="url(#arr-gray)"/>
+  <path d="M405 125 L415 125" fill="none" stroke="#94a3b8" stroke-width="1" marker-end="url(#arr-gray)"/>
+  <path d="M480 125 L490 125" fill="none" stroke="#94a3b8" stroke-width="1" marker-end="url(#arr-gray)"/>
+
+  <!-- Auxiliary modules (evenly distributed, aligned with pipeline x=155 to x=575) -->
+  <!-- Service Router -->
+  <rect x="155" y="168" width="60" height="35" rx="4" fill="#ffffff" stroke="#60a5fa" stroke-width="1.2"/>
+  <text x="185" y="190" text-anchor="middle" fill="#1e40af" font-size="7" font-weight="bold">Service Router</text>
+
+  <!-- Rate Limiter -->
+  <rect x="227" y="168" width="60" height="35" rx="4" fill="#ffffff" stroke="#60a5fa" stroke-width="1.2"/>
+  <text x="257" y="190" text-anchor="middle" fill="#1e40af" font-size="7" font-weight="bold">Rate Limiter</text>
+
+  <!-- Traffic Mirror -->
+  <rect x="299" y="168" width="60" height="35" rx="4" fill="#ffffff" stroke="#60a5fa" stroke-width="1.2"/>
+  <text x="329" y="190" text-anchor="middle" fill="#1e40af" font-size="7" font-weight="bold">Traffic Mirror</text>
+
+  <!-- Batch -->
+  <rect x="371" y="168" width="60" height="35" rx="4" fill="#ffffff" stroke="#60a5fa" stroke-width="1.2"/>
+  <text x="401" y="190" text-anchor="middle" fill="#1e40af" font-size="7" font-weight="bold">Batch</text>
+
+  <!-- Tokenizer -->
+  <rect x="443" y="168" width="60" height="35" rx="4" fill="#ffffff" stroke="#60a5fa" stroke-width="1.2"/>
+  <text x="473" y="190" text-anchor="middle" fill="#1e40af" font-size="7" font-weight="bold">Tokenizer</text>
+
+  <!-- Fault Tolerance -->
+  <rect x="515" y="168" width="60" height="35" rx="4" fill="#ffffff" stroke="#60a5fa" stroke-width="1.2"/>
+  <text x="545" y="183" text-anchor="middle" fill="#1e40af" font-size="7" font-weight="bold">Fault Tolerance</text>
+  <text x="545" y="195" text-anchor="middle" fill="#60a5fa" font-size="6">Retry / Fallback</text>
+
+  <!-- ===== Scheduler (Singleton) ===== -->
+  <rect x="660" y="45" width="270" height="195" rx="10" fill="#ede9fe" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="795" y="68" text-anchor="middle" fill="#6d28d9" font-size="14" font-weight="bold">LLM Scheduler (Singleton)</text>
+
+  <!-- Schedule Policy -->
+  <rect x="675" y="85" width="240" height="50" rx="6" fill="#ffffff" stroke="#a78bfa" stroke-width="1.2"/>
+  <text x="795" y="105" text-anchor="middle" fill="#6d28d9" font-size="11" font-weight="bold">Schedule Policy</text>
+  <text x="795" y="122" text-anchor="middle" fill="#7c3aed" font-size="8">round-robin · least-token · least-request · prefix-cache</text>
+
+  <!-- LRS -->
+  <rect x="675" y="145" width="240" height="65" rx="6" fill="#f3e8ff" stroke="#a855f7" stroke-width="1.5"/>
+  <text x="795" y="172" text-anchor="middle" fill="#7e22ce" font-size="12" font-weight="bold">Local Realtime State (LRS)</text>
+  <text x="795" y="195" text-anchor="middle" fill="#9333ea" font-size="9">Realtime Load · Resource Management</text>
+
+  <!-- ===== Workers (Multi-Instance) ===== -->
+  <rect x="140" y="310" width="790" height="160" rx="10" fill="#dcfce7" stroke="#22c55e" stroke-width="2"/>
+  <text x="535" y="335" text-anchor="middle" fill="#166534" font-size="14" font-weight="bold">Inference Workers (Multi-Instance)</text>
+
+  <!-- Normal Workers Row -->
+  <text x="185" y="360" fill="#166534" font-size="10" font-weight="bold">Normal:</text>
+  <rect x="235" y="345" width="100" height="40" rx="6" fill="#ffffff" stroke="#4ade80" stroke-width="1.2"/>
+  <text x="285" y="363" text-anchor="middle" fill="#166534" font-size="9" font-weight="bold">Worker #1</text>
+  <text x="285" y="376" text-anchor="middle" fill="#22c55e" font-size="8">vLLM / SGLang</text>
+
+  <rect x="355" y="345" width="100" height="40" rx="6" fill="#ffffff" stroke="#4ade80" stroke-width="1.2"/>
+  <text x="405" y="363" text-anchor="middle" fill="#166534" font-size="9" font-weight="bold">Worker #2</text>
+  <text x="405" y="376" text-anchor="middle" fill="#22c55e" font-size="8">vLLM / SGLang</text>
+
+  <text x="480" y="368" fill="#64748b" font-size="12">...</text>
+
+  <!-- PD Split Workers Row -->
+  <text x="185" y="420" fill="#166534" font-size="10" font-weight="bold">PD Split:</text>
+  
+  <!-- Prefill -->
+  <rect x="235" y="400" width="100" height="40" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.2"/>
+  <text x="285" y="418" text-anchor="middle" fill="#b45309" font-size="9" font-weight="bold">Prefill #1</text>
+  <text x="285" y="431" text-anchor="middle" fill="#d97706" font-size="8">vLLM / SGLang</text>
+
+  <rect x="355" y="400" width="100" height="40" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.2"/>
+  <text x="405" y="418" text-anchor="middle" fill="#b45309" font-size="9" font-weight="bold">Prefill #N</text>
+  <text x="405" y="431" text-anchor="middle" fill="#d97706" font-size="8">vLLM / SGLang</text>
+
+  <!-- Cooperation Arrow -->
+  <text x="490" y="423" fill="#8b5cf6" font-size="14">⇄</text>
+
+  <!-- Decode -->
+  <rect x="525" y="400" width="100" height="40" rx="6" fill="#cffafe" stroke="#06b6d4" stroke-width="1.2"/>
+  <text x="575" y="418" text-anchor="middle" fill="#0e7490" font-size="9" font-weight="bold">Decode #1</text>
+  <text x="575" y="431" text-anchor="middle" fill="#0891b2" font-size="8">vLLM / SGLang</text>
+
+  <rect x="645" y="400" width="100" height="40" rx="6" fill="#cffafe" stroke="#06b6d4" stroke-width="1.2"/>
+  <text x="695" y="418" text-anchor="middle" fill="#0e7490" font-size="9" font-weight="bold">Decode #N</text>
+  <text x="695" y="431" text-anchor="middle" fill="#0891b2" font-size="8">vLLM / SGLang</text>
+
+  <text x="770" y="423" fill="#64748b" font-size="9" font-style="italic">(Cooperate)</text>
+
+  <!-- ===== Arrows ===== -->
+
+  <!-- Gateway ↔ Scheduler (Schedule Path) -->
+  <path d="M590 120 Q620 120 650 120 L660 120" fill="none" stroke="#8b5cf6" stroke-width="1.5" marker-end="url(#arr-purple)"/>
+  <path d="M660 140 Q630 140 600 140 L590 140" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arr-purple)"/>
+  <text x="625" y="112" text-anchor="middle" fill="#8b5cf6" font-size="8">②</text>
+  <text x="625" y="155" text-anchor="middle" fill="#8b5cf6" font-size="8">③</text>
+  
+  <!-- Keepalive -->
+  <path d="M590 180 L660 180" fill="none" stroke="#10b981" stroke-width="1" stroke-dasharray="3,2"/>
+  <path d="M660 190 L590 190" fill="none" stroke="#10b981" stroke-width="1" stroke-dasharray="3,2"/>
+  <text x="625" y="205" text-anchor="middle" fill="#10b981" font-size="7">keepalive</text>
+
+  <!-- Gateway → Workers (Request Data Path) -->
+  <path d="M365 240 Q365 275 365 310" fill="none" stroke="#ef4444" stroke-width="1.5" marker-end="url(#arr-red)"/>
+  <text x="378" y="278" fill="#ef4444" font-size="8">④</text>
+
+  <!-- Workers → Gateway (Response) -->
+  <path d="M280 310 Q260 275 240 240" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arr-red)"/>
+  <text x="248" y="278" fill="#ef4444" font-size="8">⑤</text>
+
+  <!-- Gateway → Client (Response) -->
+  <path d="M140 150 L100 150" fill="none" stroke="#ef4444" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arr-red)"/>
+  <text x="120" y="163" text-anchor="middle" fill="#ef4444" font-size="8">⑥</text>
+
+  <!-- ===== Legend ===== -->
+  <rect x="20" y="490" width="920" height="50" rx="6" fill="#f1f5f9" stroke="#cbd5e1" stroke-width="1"/>
+  <text x="45" y="520" fill="#475569" font-size="11" font-weight="bold">Legend:</text>
+  
+  <line x1="120" y1="517" x2="160" y2="517" stroke="#ef4444" stroke-width="2.5"/>
+  <text x="170" y="521" fill="#64748b" font-size="10">Request Data Path (①④⑤⑥)</text>
+  
+  <line x1="400" y1="517" x2="440" y2="517" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="450" y="521" fill="#64748b" font-size="10">Schedule Path (②③)</text>
+  
+  <line x1="620" y1="517" x2="660" y2="517" stroke="#10b981" stroke-width="1.5" stroke-dasharray="3,2"/>
+  <text x="670" y="521" fill="#64748b" font-size="10">Keepalive (Gateway ↔ Scheduler)</text>
+
+  <!-- Arrow markers -->
+  <defs>
+    <marker id="arr-red" markerWidth="5" markerHeight="5" refX="4" refY="2" orient="auto">
+      <path d="M0,0 L0,4 L5,2 z" fill="#ef4444"/>
+    </marker>
+    <marker id="arr-purple" markerWidth="5" markerHeight="5" refX="4" refY="2" orient="auto">
+      <path d="M0,0 L0,4 L5,2 z" fill="#8b5cf6"/>
+    </marker>
+    <marker id="arr-gray" markerWidth="4" markerHeight="4" refX="3" refY="2" orient="auto">
+      <path d="M0,0 L0,4 L4,2 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+</svg>
