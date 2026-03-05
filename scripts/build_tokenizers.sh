@@ -32,7 +32,7 @@ docker run --rm \
   -v "$REPO_ROOT:/workspace" \
   -w /workspace \
   "$IMAGE" \
-  bash -c "cd ./lib/sglang/sgl-model-gateway/bindings/golang && make build"
+  bash -c ". /root/.cargo/env && cd ./lib/sglang/sgl-model-gateway/bindings/golang && make build"
 
 echo "✓ Build completed"
 echo "Generated tokenizers package: $(ls -1 "$REPO_ROOT/lib/sglang/sgl-model-gateway/bindings/golang/target/release/"*.a)"
