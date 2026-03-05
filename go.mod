@@ -62,6 +62,6 @@ require (
 	gopkg.in/ini.v1 v1.67.0 // indirect
 )
 
-replace github.com/sglang/sglang-go-grpc-sdk => ./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang
+replace github.com/sglang/sglang-go-grpc-sdk => ./lib/sglang/sgl-model-gateway/bindings/golang
 
 go 1.23.7

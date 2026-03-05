@@ -25,8 +25,8 @@ jobs:
         id: cache-tokenizers
         uses: actions/cache@v4
         with:
-          path: lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release
-          key: tokenizers-${{ runner.os }}-${{ hashFiles('lib/sgl-model-gateway/sgl-model-gateway/**') }}
+          path: lib/sglang/sgl-model-gateway/bindings/golang/target/release
+          key: tokenizers-${{ runner.os }}-${{ hashFiles('lib/sglang/sgl-model-gateway/**') }}
 
       - name: Build tokenizer library in dev container
         if: steps.cache-tokenizers.outputs.cache-hit != 'true'
@@ -55,8 +55,8 @@ jobs:
       - name: Restore tokenizer build artifact
         uses: actions/cache@v4
         with:
-          path: lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release
-          key: tokenizers-${{ runner.os }}-${{ hashFiles('lib/sgl-model-gateway/sgl-model-gateway/**') }}
+          path: lib/sglang/sgl-model-gateway/bindings/golang/target/release
+          key: tokenizers-${{ runner.os }}-${{ hashFiles('lib/sglang/sgl-model-gateway/**') }}
 
       - name: Run Go unit tests in dev container
         run: |
