@@ -5,6 +5,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 
 COPY ./bin/scheduler /usr/local/bin/scheduler
 
-COPY ./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release/*.a /usr/lib
+COPY ./lib/sglang/sgl-model-gateway/bindings/golang/target/release/*.a /usr/lib
 
 WORKDIR /scheduler

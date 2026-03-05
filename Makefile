@@ -44,7 +44,7 @@ mooncake-install:
 
 .PHONY: lib-tokenizers-build
 lib-tokenizers-build:
-	cd ./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang && make build
+	cd ./lib/sglang/sgl-model-gateway/bindings/golang && make build
 
 .PHONY: gateway-proto-build
 gateway-proto-build:
@@ -71,13 +71,13 @@ scheduler-proto-build: gateway-proto-build
 .PHONY: gateway-build
 gateway-build: gateway-proto-build
 	@echo "Building gateway..."
-	@CGO_ENABLED=1 go build -buildvcs=false -ldflags="-extldflags '-L./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release/'" -o bin/gateway ./cmd/gateway
+	@CGO_ENABLED=1 go build -buildvcs=false -ldflags="-extldflags '-L./lib/sglang/sgl-model-gateway/bindings/golang/target/release/'" -o bin/gateway ./cmd/gateway
 	@echo "Building gateway, done"
 
 @PHONY: scheduler-build
 scheduler-build: scheduler-proto-build
 	@echo "Building scheduler..."
-	@CGO_ENABLED=1 go build -buildvcs=false -ldflags="-extldflags '-L./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release/'" -o bin/scheduler ./cmd/scheduler
+	@CGO_ENABLED=1 go build -buildvcs=false -ldflags="-extldflags '-L./lib/sglang/sgl-model-gateway/bindings/golang/target/release/'" -o bin/scheduler ./cmd/scheduler
 	@echo "Building scheduler, done"
 
 .PHONY: discovery-proto-build
@@ -118,7 +118,7 @@ e2e-test: llumlet-proto-build discovery-proto-build gateway-build scheduler-buil
 TEST_DIRS := $(shell go list ./pkg/... | grep -v "/kvs/v6d" | grep -v "/kvs/mooncake")
 
 .PHONY: unit-test
-unit-test: discovery-proto-build gateway-build scheduler-build
+unit-test: gateway-build scheduler-build
 	CGO_ENABLED=1 \
-	CGO_LDFLAGS="-L./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release" \
+	CGO_LDFLAGS="-L./lib/sglang/sgl-model-gateway/bindings/golang/target/release" \
 	go test -v -failfast $(TEST_DIRS) 2>&1 | grep -v "no test files"

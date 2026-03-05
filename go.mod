@@ -6,7 +6,7 @@ require (
 	github.com/aliyun/aliyun-oss-go-sdk v3.0.2+incompatible
 	github.com/aliyun/credentials-go v1.4.5
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
-	github.com/go-logr/logr v1.4.2 // indirect
+	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/mux v1.8.0
@@ -19,12 +19,12 @@ require (
 	github.com/sglang/sglang-go-grpc-sdk v0.0.0-00010101000000-000000000000
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.10.0
-	golang.org/x/net v0.34.0 // indirect
-	golang.org/x/sys v0.31.0 // indirect
-	golang.org/x/text v0.21.0 // indirect
+	github.com/stretchr/testify v1.11.1
+	golang.org/x/net v0.46.1-0.20251013234738-63d1a5100f82 // indirect
+	golang.org/x/sys v0.37.0 // indirect
+	golang.org/x/text v0.30.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
-	google.golang.org/protobuf v1.36.5
+	google.golang.org/protobuf v1.36.10
 	gotest.tools v2.2.0+incompatible
 	k8s.io/apimachinery v0.31.0
 	k8s.io/klog/v2 v2.130.1
@@ -41,9 +41,9 @@ require (
 	github.com/fxamacker/cbor/v2 v2.7.0
 	github.com/go-redis/redismock/v9 v9.2.0
 	github.com/tmaxmax/go-sse v0.11.0
-	golang.org/x/sync v0.10.0
-	gonum.org/v1/gonum v0.13.0
-	google.golang.org/grpc v1.69.2
+	golang.org/x/sync v0.17.0
+	gonum.org/v1/gonum v0.16.0
+	google.golang.org/grpc v1.77.0
 )
 
 require (
@@ -55,13 +55,15 @@ require (
 	github.com/rogpeppe/go-internal v1.13.1 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	go.opentelemetry.io/otel v1.35.0 // indirect
-	go.opentelemetry.io/otel/sdk v1.35.0 // indirect
+	go.opentelemetry.io/otel v1.38.0 // indirect
+	go.opentelemetry.io/otel/sdk v1.38.0 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 )
 
-replace github.com/sglang/sglang-go-grpc-sdk => ./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang
+replace github.com/sglang/sglang-go-grpc-sdk => ./lib/sglang/sgl-model-gateway/bindings/golang
 
-go 1.23.7
+go 1.24.0
+
+toolchain go1.24.10

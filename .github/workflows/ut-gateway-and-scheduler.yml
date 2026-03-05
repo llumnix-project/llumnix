@@ -8,9 +8,8 @@ env:
   DEV_IMAGE: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225
 
 jobs:
-  # ── Build tokenizer library (cached) ────────────────────────────────────
-  build-tokenizers:
-    name: Build Tokenizer Library
+  go-unit-test:
+    name: Go Unit Tests
     runs-on: [self-hosted, cpu]
     permissions:
       contents: read
@@ -20,43 +19,18 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
+          clean: true
 
       - name: Cache tokenizer build artifact
         id: cache-tokenizers
         uses: actions/cache@v4
         with:
-          path: lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release
-          key: tokenizers-${{ runner.os }}-${{ hashFiles('lib/sgl-model-gateway/sgl-model-gateway/**') }}
+          path: lib/sglang/sgl-model-gateway/bindings/golang/target/release
+          key: tokenizers-${{ runner.os }}-${{ hashFiles('lib/sglang/sgl-model-gateway/**', 'patches/sgl-model-gateway/**') }}
 
       - name: Build tokenizer library in dev container
         if: steps.cache-tokenizers.outputs.cache-hit != 'true'
-        run: |
-          docker run --rm \
-            --network host \
-            -v "$(pwd):/workspace" \
-            -w /workspace \
-            ${{ env.DEV_IMAGE }} \
-            bash -c ". /root/.cargo/env && make lib-tokenizers-build"
-
-  # ── Go unit tests ────────────────────────────────────────────────────────
-  go-unit-test:
-    name: Go Unit Tests
-    runs-on: [self-hosted, cpu]
-    needs: build-tokenizers
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Restore tokenizer build artifact
-        uses: actions/cache@v4
-        with:
-          path: lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release
-          key: tokenizers-${{ runner.os }}-${{ hashFiles('lib/sgl-model-gateway/sgl-model-gateway/**') }}
+        run: ./scripts/build_tokenizers.sh --apply-patch --image ${{ env.DEV_IMAGE }}
 
       - name: Run Go unit tests in dev container
         run: |
