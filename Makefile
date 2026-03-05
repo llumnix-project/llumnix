@@ -118,7 +118,7 @@ e2e-test: llumlet-proto-build discovery-proto-build gateway-build scheduler-buil
 TEST_DIRS := $(shell go list ./pkg/... | grep -v "/kvs/v6d" | grep -v "/kvs/mooncake")
 
 .PHONY: unit-test
-unit-test: discovery-proto-build gateway-build scheduler-build
+unit-test: gateway-build scheduler-build
 	CGO_ENABLED=1 \
 	CGO_LDFLAGS="-L./lib/sgl-model-gateway/sgl-model-gateway/bindings/golang/target/release" \
 	go test -v -failfast $(TEST_DIRS) 2>&1 | grep -v "no test files"
