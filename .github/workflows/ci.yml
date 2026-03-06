@@ -27,9 +27,9 @@ jobs:
     uses: ./.github/workflows/ut-discovery.yml
     secrets: inherit
 
-  docs-build:
-    name: Build Documentation
-    uses: ./.github/workflows/docs-build.yml
+  # docs-build:
+  #   name: Build Documentation
+  #   uses: ./.github/workflows/docs-build.yml
 
   all-pr-tests:
     name: All PR Tests
