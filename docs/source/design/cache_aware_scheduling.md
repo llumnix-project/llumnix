@@ -41,7 +41,7 @@ Two cache-aware metrics use these fields:
 - `kvCacheHitLen` (`metrics.go`): reads `prefixHitTokens` directly; higher is better, so the selector prefers the instance with the longest cached prefix.
 - `CacheAwareAllPrefillsTokensNum` (`metrics.go`): computes `prefixMissTokens + allPrefillsTokensNum` (the existing all-waiting-prefill load); lower is better. This metric balances cache affinity and load in a single interpretable value without normalized weighting: `prefixMissTokens` captures cache locality, while `allPrefillsTokensNum` captures existing prefill load, and both terms share the same unit (token count) so they are directly additive.
 
-When cache-aware scheduling is enabled, the cache locality metric (default `cache_aware_all_prefills_tokens_num`) is prepended to the selector's metric list for both prefill and normal infer modes. The selector compares instances metric-by-metric in order, selecting on the first differentiating metric and falling through to the next on ties. This makes cache-aware metric the primary dispatch criterion and load balance metric the tiebreaker.
+When cache-aware scheduling is enabled, the cache locality metric (default `cache_aware_all_prefills_tokens_num`) is prepended to the selector's metric list for both prefill and neutral infer types. The selector compares instances metric-by-metric in order, selecting on the first differentiating metric and falling through to the next on ties. This makes cache-aware metric the primary dispatch criterion and load balance metric the tiebreaker.
 
 ### Cache-aware prefill load modelling
 

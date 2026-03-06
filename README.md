@@ -71,10 +71,10 @@ curl http://localhost:8080/v1/completions \
 
 Llumnix supports the following deployment modes:
 ```bash
-# Deploy Normal mode with lite-mode scheduling
+# Deploy Neutral mode with lite-mode scheduling
 bash deploy/group_deploy.sh llumnix neutral/lite-mode-scheduling/load-balance
 
-# Deploy Normal mode with full-mode scheduling
+# Deploy Neutral mode with full-mode scheduling
 bash deploy/group_deploy.sh llumnix neutral/full-mode-scheduling/load-balance
 
 # Deploy PD mode

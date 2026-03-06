@@ -55,7 +55,7 @@ func NewCompositeBalancer(config *options.GatewayConfig) *CompositeBalancer {
 	if config.IsPDDisagg() {
 		bp.setupPDDisaggBalancer(config)
 	} else {
-		bp.setupNormalBalancer(config)
+		bp.setupNeutralBalancer(config)
 	}
 	return bp
 }
@@ -76,9 +76,9 @@ func (bp *CompositeBalancer) setupPDDisaggBalancer(config *options.GatewayConfig
 	}
 }
 
-// setupNormalBalancer initializes balancers for normal (non-split) mode.
+// setupNeutralBalancer initializes balancers for neutral (non-split) mode.
 // It creates a local balancer and optionally a remote scheduler balancer.
-func (bp *CompositeBalancer) setupNormalBalancer(config *options.GatewayConfig) {
+func (bp *CompositeBalancer) setupNeutralBalancer(config *options.GatewayConfig) {
 	bp.balanceMode = LocalBalancer
 	r := resolver.CreateBackendServiceResolver(&config.DiscoveryConfig, consts.InferTypeNeutral)
 	bp.localBalancer = NewRoundRobinBalancer(r)
