@@ -32,8 +32,6 @@ fi
 docker run --rm \
   --network host \
   -v "$REPO_ROOT:/workspace" \
-  -e PATH="/root/.cargo/bin:$PATH" \
-  -v "$REPO_ROOT:/workspace" \
   -w /workspace \
   "$IMAGE" \
   bash -c ". /root/.cargo/env && cd ./lib/sglang/sgl-model-gateway/bindings/golang && make build"

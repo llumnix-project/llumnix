@@ -21,6 +21,7 @@ If you need to build a custom development image, see [Build Development Image](#
 ```bash
 git clone https://github.com/your-org/llumnix.git
 cd llumnix
+git submodule update --init --recursive
 ```
 
 ## Step 2: Start the Development Container
@@ -58,6 +59,9 @@ make llumlet-install
 
 # Install Discovery package
 make discovery-install
+
+# Apply sgl-model-gateway patch (only needed once)
+git -C lib/sglang apply patches/sgl-model-gateway/sgl_model_gateway_820e97d6.patch
 
 # Build lib-tokenizers (required for Gateway)
 make lib-tokenizers-build
