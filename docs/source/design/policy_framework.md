@@ -2,8 +2,8 @@
 
 llumnix scheduling policies follow a **metrics → filters → selectors** pipeline.
 
-- **Per-infer-mode composition**: each policy defines separate metrics, filters, and selector for `prefill`, `decode`, and `normal` infer modes.
-- **Execution flow**: the dispatcher (`DispatchPolicy.Schedule`) builds a cluster view — a snapshot of all instance states and metadata grouped by infer mode, sourced from CMS (Cluster Metadata Store, enabled in full-mode) or LRS (Local Realtime State, enabled in lite-mode) — then for each infer mode:
+- **Per-infer-mode composition**: each policy defines separate metrics, filters, and selector for `prefill`, `decode`, and `neutral` infer types.
+- **Execution flow**: the dispatcher (`DispatchPolicy.Schedule`) builds a cluster view — a snapshot of all instance states and metadata grouped by infer type, sourced from CMS (Cluster Metadata Store, enabled in full-mode) or LRS (Local Realtime State, enabled in lite-mode) — then for each infer type:
   1. **Metric computation**: computes configured metrics for every candidate instance.
   2. **Filtering**: removes unsuitable candidate instances (with a fallback pass if necessary).
   3. **Selection**: picks the target instance based on metric comparison.
@@ -107,9 +107,9 @@ Key filters:
 - **`metricBasedFilter` (single-instance)**
   - **Function**: block instances whose load metric exceeds a configured threshold.
   - **Implementation**: reads a metric and compares it with a threshold; optionally skipped in fallback passes via `notSkipWhenFallback`.
-- **`inferModeFilter` (single-instance)**
-  - **Function**: block instances whose infer mode does not match the current scheduling stage.
-  - **Implementation**: compares instance infer mode against the target infer mode.
+- **`inferTypeFilter` (single-instance)**
+  - **Function**: block instances whose infer type does not match the current scheduling stage.
+  - **Implementation**: compares instance infer type against the target infer type.
 - **`failoverFilter` (global)**
   - **Function**: block all instances within the failure domain of unhealthy instances.
   - **Implementation**: reads `needsFailover` marks from single-instance filters and blocks instances according to `FailoverScope` (instance / node / instance-unit / node-unit).
@@ -145,7 +145,7 @@ The load-balance policy routes requests to the instance with the lowest load.
   - **Metrics** (typical defaults):
     - `prefill`: `DispatchPrefillLoadMetric`, by default `all_prefills_tokens_num`.
     - `decode`: `DispatchDecodeLoadMetric`, by default `kv_cache_usage_ratio_projected`.
-    - `normal`: `DispatchNeutralLoadMetric`, by default `all_prefills_tokens_num`.
+    - `neutral`: `DispatchNeutralLoadMetric`, by default `all_prefills_tokens_num`.
   - **Selector**: `metricBasedSelector(topK = DispatchTopK)`, ranking by the load metric.
 
 - **Lite-mode (`EnableFullModeScheduling = false`)**
@@ -203,7 +203,7 @@ These features require **full-mode scheduling** (`--enable-full-mode-scheduling`
   - Advanced scheduling features require full-mode.
 
 - **Extending with new policies**
-  - Reuse existing metrics, filters, and selectors; rewire combinations per infer mode.
+  - Reuse existing metrics, filters, and selectors; rewire combinations per infer type.
   - For new signals: implement `instanceSchedulingMetric` in `metrics.go`, register in `getSchedulingMetric`, configure in `schedule_policy_registry.go`.
 
 ---
