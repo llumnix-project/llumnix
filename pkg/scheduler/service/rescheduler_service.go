@@ -2,11 +2,11 @@ package service
 
 import (
 	"llumnix/cmd/scheduler/app/options"
-	policy "llumnix/pkg/scheduler/scheduling-policy"
+	"llumnix/pkg/scheduler/policy"
 )
 
 type ReschedulerService struct {
-	config           *options.SchedulerConfig
+	config             *options.SchedulerConfig
 	reschedulingPolicy policy.ReschedulingInterface
 }
 

@@ -1,4 +1,4 @@
-package scheduling_policy
+package policy
 
 import (
 	"context"
@@ -101,7 +101,7 @@ func newDispatchPolicy(t *testing.T, config *options.SchedulerConfig, inferType 
 		getRedisClient(t), config.CmsPullStatusIntervalMs, config.CmsPullMetadataIntervalMs,
 		false, config.EnableInstanceStatusLocalAccount, config.EnableCacheAwareScheduling,
 		config.RequestLocalAccountStalenessSeconds, -1, false,
-		config.NumPredictorWarmupSamples)
+		config.NumPredictorWarmupSamples, false)
 
 	var kvsClient kvs.KVSClientInterface
 	var tokenHasher *hasher.TokenHasher

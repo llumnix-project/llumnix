@@ -17,7 +17,7 @@ func TestCMSReadClient(t *testing.T) {
 
 	redisClient := getRedisClient(t)
 	cmsWriteClient, _ := NewCMSWriteClient(redisClient)
-	cmsReadClient, _ := NewCMSReadClient(redisClient, 100, 100, false, false, false, 0, -1, false, -1)
+	cmsReadClient, _ := NewCMSReadClient(redisClient, 100, 100, false, false, false, 0, -1, false, -1, false)
 
 	// Give some time for the read client to initialize
 	time.Sleep(WaitingTimeS)
@@ -277,7 +277,7 @@ func TestRefreshLoopPerformance(t *testing.T) {
 		}
 	}
 
-	cmsReadClient, err := NewCMSReadClient(redisClient, 0, 0, false, false, false, 0, -1, false, -1)
+	cmsReadClient, err := NewCMSReadClient(redisClient, 0, 0, false, false, false, 0, -1, false, -1, false)
 	if err != nil {
 		t.Fatalf("Failed to create CMSReadClient: %v", err)
 	}
@@ -322,7 +322,7 @@ func TestRefreshLoopPerformance(t *testing.T) {
 func TestCMSReadClientIPMapping(t *testing.T) {
 	redisClient := getRedisClient(t)
 	cmsWriteClient, _ := NewCMSWriteClient(redisClient)
-	cmsReadClient, _ := NewCMSReadClient(redisClient, 100, 100, false, false, false, 0, -1, false, -1)
+	cmsReadClient, _ := NewCMSReadClient(redisClient, 100, 100, false, false, false, 0, -1, false, -1, false)
 
 	const WaitingTimeS = 1 * time.Second
 	time.Sleep(WaitingTimeS)

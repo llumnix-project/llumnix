@@ -19,6 +19,8 @@ type GatewayConfig struct {
 	MaxRequestBufferQueueSize int
 	// number of coroutines which read the requests from queue
 	WaitQueueThreads int
+	// retry interval of waiting request queue
+	WaitQueueInterval time.Duration
 
 	ServiceToken string
 	// waiting scheduling timeout if no scheduling result, 0 means that drop request
@@ -63,9 +65,10 @@ func (c *GatewayConfig) AddConfigFlags(flags *pflag.FlagSet) {
 
 	flags.IntVar(&c.MaxRequestBufferQueueSize, "max-queue-size", 512, "max buffer queue size")
 	flags.IntVar(&c.WaitQueueThreads, "wait-queue-threads", 5, "number of coroutines which read the requests from queue")
+	flags.DurationVar(&c.WaitQueueInterval, "wait-queue-interval", 1000*time.Millisecond, "wait request queue interval")
 
 	flags.StringVar(&c.ServiceToken, "service-token", "", "service token")
-	flags.DurationVar(&c.WaitSchedulingTimeout, "wait-scheduling-timeout", 10000*time.Millisecond, "waiting timeout if no free token")
+	flags.DurationVar(&c.WaitSchedulingTimeout, "wait-scheduling-timeout", 5000*time.Millisecond, "waiting timeout if no free token")
 	flags.DurationVar(&c.WaitSchedulingRetryInterval, "wait-scheduling-retry-interval", 1000*time.Millisecond, "retry interval while waiting free tokens")
 	flags.BoolVar(&c.ForwardTokens, "forward-tokens", true, "whether forward tokens to scheduler")
 

@@ -40,6 +40,7 @@ def generate_e2e_config():
             tmp_config['separate_pd_scheduling'] = separate_pd_scheduling
             update_configs.append(tmp_config)
     base_configs = update_configs
+
     return base_configs
 
 @pytest.mark.parametrize("test_config", generate_e2e_config(), indirect=True)

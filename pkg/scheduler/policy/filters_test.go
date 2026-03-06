@@ -1,4 +1,4 @@
-package scheduling_policy
+package policy
 
 import (
 	"llumnix/pkg/cms"
@@ -11,6 +11,83 @@ import (
 	"llumnix/pkg/consts"
 	"llumnix/pkg/types"
 )
+
+func TestInstanceAttributeFilter_ReserveState(t *testing.T) {
+	tests := []struct {
+		name          string
+		attrKey       string
+		rejectedValue interface{}
+		reserveState  consts.InferType
+		wantFiltered  bool
+	}{
+		{
+			name:          "filter out matching ReservedInferType",
+			attrKey:       "ReservedInferType",
+			rejectedValue: consts.InferTypePrefill,
+			reserveState:  consts.InferTypePrefill,
+			wantFiltered:  true,
+		},
+		{
+			name:          "not filter out non-matching ReservedInferType",
+			attrKey:       "ReservedInferType",
+			rejectedValue: consts.InferTypePrefill,
+			reserveState:  consts.InferTypeDecode,
+			wantFiltered:  false,
+		},
+		{
+			name:          "not filter out empty ReservedInferType",
+			attrKey:       "ReservedInferType",
+			rejectedValue: "",
+			reserveState:  consts.InferTypePrefill,
+			wantFiltered:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create filter
+			filter := &instanceAttributeFilter{
+				attrKey:       tt.attrKey,
+				rejectedValue: tt.rejectedValue,
+			}
+
+			// Create instance with cmsView
+			instance := &instanceViewScheduling{
+				cmsView: &cms.InstanceView{
+					ReservedInferType: tt.reserveState,
+					Metadata: &cms.InstanceMetadata{
+						InstanceId: "instance-1",
+					},
+				},
+			}
+
+			// Test filtering
+			result := filter.instanceFilteredOut(instance)
+			assert.Equal(t, tt.wantFiltered, result,
+				"instanceFilteredOut() = %v, want %v", result, tt.wantFiltered)
+		})
+	}
+}
+
+func TestInstanceAttributeFilter_InvalidFieldName(t *testing.T) {
+	filter := &instanceAttributeFilter{
+		attrKey:       "NonExistentField",
+		rejectedValue: "someValue",
+	}
+
+	instance := &instanceViewScheduling{
+		cmsView: &cms.InstanceView{
+			ReservedInferType: "reserved",
+			Metadata: &cms.InstanceMetadata{
+				InstanceId: "instance-1",
+			},
+		},
+	}
+
+	// Should return false when field not found
+	result := filter.instanceFilteredOut(instance)
+	assert.False(t, result, "Should not filter out when field doesn't exist")
+}
 
 func TestSchedulabilityFilter(t *testing.T) {
 	filter := &schedulabilityFilter{}
@@ -325,7 +402,7 @@ func TestInferTypeFilter(t *testing.T) {
 	instances := []*instanceViewScheduling{
 		createInstance("0", consts.InferTypePrefill), // prefill instance
 		createInstance("1", consts.InferTypeDecode),  // decode instance
-		createInstance("2", consts.InferTypeNeutral),  // neutral instance
+		createInstance("2", consts.InferTypeNeutral), // neutral instance
 	}
 
 	for _, test := range tests {

@@ -348,11 +348,21 @@ func (lgs *LlmGatewayService) HandleOpenAIRequest(w http.ResponseWriter, r *http
 
 	// Enter buffer queue, then perform preprocessing and scheduling
 	reqCtx.RequestStats.EnQueueTime = time.Now()
-	lgs.bufferQueue.Dispatch(func() {
+
+	taskFunc := func() {
 		reqCtx.RequestStats.DeQueueTime = time.Now()
 		lgs.dispatchRequest(reqCtx)
 		reqCtx.RequestStats.BalanceTime = time.Now()
-	}, false)
+	}
+	for {
+		if lgs.bufferQueue.Dispatch(taskFunc, false) {
+			break
+		} else {
+			// Buffer queue is full, wait for a while and try again
+			klog.Warningf("buffer queue is full, waiting for a while and try again: request id %s", reqCtx.Id)
+			time.Sleep(lgs.config.WaitQueueInterval)
+		}
+	}
 
 	// Wait for and write responses (supports both streaming and non-streaming)
 	lgs.writeResponseUntilDone(reqCtx)

@@ -123,13 +123,8 @@ def vllm_servers(test_config: Dict[str, Any]) -> Generator[List[subprocess.Popen
 def setup_environment():
     """Prepare test environment by cleaning up old files and directories."""
     shutil.rmtree(NAMING_DIR, ignore_errors=True)
-    if LOG_DIR.exists():
-        for log_file in LOG_DIR.glob('vllm_*.log'):
-            try:
-                log_file.unlink()
-                print(f"Deleted log file: {log_file}")
-            except OSError as e:
-                print(f"Error deleting file {log_file}: {e}")
+    shutil.rmtree(LOG_DIR, ignore_errors=True)
+    os.makedirs(LOG_DIR, exist_ok=True)
     os.makedirs(NAMING_DIR, exist_ok=True)
     yield
 

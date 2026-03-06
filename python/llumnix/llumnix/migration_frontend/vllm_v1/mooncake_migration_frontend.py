@@ -146,6 +146,8 @@ class MooncakeMigrationFrontend(BaseMigrationFrontend):
             return True
         if is_in_waiting and self._is_not_ready_waiting(req):
             return True
+        if not is_in_waiting and req.num_output_tokens < 1:
+            return True
         return False
 
     def _get_running_requests(self) -> List[Request]:

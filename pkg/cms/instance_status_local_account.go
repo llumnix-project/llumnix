@@ -213,15 +213,23 @@ func trimRequestIDsToList(rawRequestIDs []string) []string {
 func trimRequestID(requestID string) string {
 	// Trim the potential prefix and suffix to get the exact request ID.
 	if strings.HasPrefix(requestID, "cmpl-") {
-		return trimPlusSuffix(strings.TrimPrefix(requestID, "cmpl-"))
+		return trimSuffix(strings.TrimPrefix(requestID, "cmpl-"))
 	} else if strings.HasPrefix(requestID, "chatcmpl-") {
-		return trimPlusSuffix(strings.TrimPrefix(requestID, "chatcmpl-"))
+		return trimSuffix(strings.TrimPrefix(requestID, "chatcmpl-"))
 	} else {
-		return trimPlusSuffix(requestID)
+		return trimSuffix(requestID)
 	}
 }
 
-func trimPlusSuffix(requestID string) string {
-	parts := strings.Split(requestID, "+")
-	return parts[0]
+func trimSuffix(requestID string) string {
+	if strings.Contains(requestID, "+") {
+		parts := strings.Split(requestID, "+")
+		return parts[0]
+	}
+
+	if idx := strings.LastIndex(requestID, "-"); idx != -1 {
+		return requestID[:idx]
+	}
+
+	return requestID
 }

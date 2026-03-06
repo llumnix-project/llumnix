@@ -1,4 +1,4 @@
-package scheduling_policy
+package policy
 
 import (
 	"context"
@@ -24,14 +24,14 @@ type ReschedulingInterface interface {
 }
 
 type ReschedulingPolicy struct {
-	c                    *options.SchedulerConfig
-	cmsClient            *cms.CMSReadClient
-	llumletClientManager *llumlet.ClientManager
-	policies             []reschedulingPolicyInternal
-	clusterView          clusterView
+	c                      *options.SchedulerConfig
+	cmsClient              *cms.CMSReadClient
+	llumletClientManager   *llumlet.ClientManager
+	policies               []reschedulingPolicyInternal
+	clusterView            clusterView
 	reschedulingIntervalMs int32
-	grpcTimeoutSeconds   int
-	stopChan             chan bool
+	grpcTimeoutSeconds     int
+	stopChan               chan bool
 }
 
 func NewReschedulingPolicy(config *options.SchedulerConfig) ReschedulingInterface {
@@ -54,7 +54,8 @@ func newReschedulingPolicy(c *options.SchedulerConfig) *ReschedulingPolicy {
 		c.RequestLocalAccountStalenessSeconds,
 		c.CmsRecordMetricsInterval,
 		c.EnablePredictorEnhancedScheduling,
-		c.NumPredictorWarmupSamples)
+		c.NumPredictorWarmupSamples,
+		c.EnableAdaptivePD)
 	if err != nil {
 		panic(err)
 	}
@@ -71,14 +72,11 @@ func newReschedulingPolicy(c *options.SchedulerConfig) *ReschedulingPolicy {
 		clusterView: clusterView{
 			groupedInstanceViews: nil,
 		},
-		grpcTimeoutSeconds:    llumletGrpcTimeoutSeconds,
+		grpcTimeoutSeconds:     llumletGrpcTimeoutSeconds,
 		reschedulingIntervalMs: c.ReschedulingIntervalMs,
-		stopChan:              make(chan bool),
+		stopChan:               make(chan bool),
 	}
 	polices := strings.Split(c.ReschedulingPolicies, ",")
-	if c.EnableAdaptivePD {
-		panic("AdaptivePD is not supported yet")
-	}
 	for _, policy := range polices {
 		rp.policies = append(rp.policies, newReschedulingPolicyInternal(c, policy))
 	}
@@ -133,6 +131,9 @@ func (p *ReschedulingPolicy) getMigrationPairs(
 		selectedPairs := policy.selectPairs(srcInstanceViews, dstInstanceViews)
 		reqSelectPolicy := policy.getMigrationReqSelectPolicy()
 		reschedulingPairs = p.validateAndAppendPairs(selectedPairs, reqSelectPolicy, reschedulingPairs)
+		if len(reschedulingPairs) > 0 {
+			klog.V(4).Infof("Generate reschedule pairs for policy %T, pairs: %v", policy, reschedulingPairs)
+		}
 	}
 	return
 }
@@ -164,8 +165,8 @@ func (p *ReschedulingPolicy) validateAndAppendPairs(
 
 type migrationResult struct {
 	reschedulingPair *reschedulingPair
-	migrateResponse *llumlet.MigrateResponse
-	err             error
+	migrateResponse  *llumlet.MigrateResponse
+	err              error
 }
 
 type migrationReqSelectPolicy struct {
@@ -331,4 +332,8 @@ func (rp *reschedulingPair) equal(rp2 *reschedulingPair) bool {
 func (rp *reschedulingPair) conflict(rp2 *reschedulingPair) bool {
 	return rp.srcView.GetInstanceId() == rp2.dstView.GetInstanceId() &&
 		rp.dstView.GetInstanceId() == rp2.srcView.GetInstanceId()
+}
+
+func (rp *reschedulingPair) String() string {
+	return fmt.Sprintf("reschedulePair src: %s, dst: %s", rp.srcView.GetInstanceId(), rp.dstView.GetInstanceId())
 }

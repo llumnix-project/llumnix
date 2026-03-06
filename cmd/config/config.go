@@ -58,7 +58,7 @@ func (c *RedisDiscoveryConfig) AddRedisDiscoveryConfigFlags(flags *pflag.FlagSet
 	flags.StringVar(&c.DiscoveryRedisPassword, "discovery-redis-password", "", "Redis discovery password")
 	flags.Float64Var(&c.DiscoveryRedisSocketTimeout, "discovery-redis-socket-timeout", 1.0, "Redis discovery socket timeout")
 	flags.IntVar(&c.DiscoveryRedisRetryTimes, "discovery-redis-retry-times", 1, "Redis discovery retry times")
-	flags.IntVar(&c.DiscoveryRedisStatusTTLMs, "discovery-redis-status-ttl-ms", 10000, "Redis discovery status TTL milliseconds")
+	flags.IntVar(&c.DiscoveryRedisStatusTTLMs, "discovery-redis-status-ttl-ms", 60000, "Redis discovery status TTL milliseconds")
 	flags.IntVar(&c.DiscoveryRedisRefreshIntervalMs, "discovery-redis-refresh-interval-ms", 1000, "Redis discovery refresh interval milliseconds")
 }
 

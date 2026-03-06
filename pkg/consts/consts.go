@@ -83,9 +83,8 @@ const (
 	ReschedulingPolicyDecodeFailover  = "decode_failover"
 	ReschedulingPolicyNeutralFailover = "neutral_failover"
 
-	ReschedulingPolicyCleanUpDecodeRequestsOnPrefill   = "clean_up_decode_requests_on_prefill"
-	ReschedulingPolicyAggregateDecodeRequestsOnPrefill = "aggregate_decode_requests_on_prefill"
-	ReschedulingPolicyEaseBusyDecodeWithFreePrefill    = "ease_busy_decode_with_free_prefill"
+	ReschedulingPolicyBinPackingMitigation    = "binpacking_mitigation"
+	ReschedulingPolicyBinPackingConsolidation = "binpacking_consolidation"
 )
 
 const (
@@ -180,15 +179,15 @@ const (
 	DefaultMaxNumBatchedTokens                 = 65536
 	DefaultNumPredictorWarmupSamples           = 20
 
-	DefaultTtftSlo                     = 20000
-	DefaultTpotSlo                     = 125
+	DefaultTtftSlo                     = 6000
+	DefaultTpotSlo                     = 50
 	DefaultTtftSloDispatchThreshold    = 0.85
 	DefaultTpotSloDispatchThreshold    = 0.85
 	DefaultTpotMigrateOutCeilThreshold = 0.95
 
 	// Adaptive PD defaults
 	DefaultEnableAdaptivePD             = false
-	DefaultTpotMigrateOutFloorThreshold = 0.50
+	DefaultTpotMigrateOutFloorThreshold = 0.60
 
 	// Filter defaults
 	DefaultFailoverScope            = FailoverScopeInstanceUnit

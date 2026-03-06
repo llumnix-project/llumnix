@@ -80,8 +80,21 @@ func (rt *RequestCompletionConverter) PreProcess(req *types.RequestContext) erro
 			req.LLMRequest.CompletionRequest.Prompt.SetValue(allIds)
 			return nil
 		}
-		klog.Warningf("[%s] Unsupported prompt type in completion request: %v", req.Id, req.LLMRequest.CompletionRequest.Prompt)
+
 		// nothing todo when request with prompt as []int or [][]int
+
+		tokens, arrayOfTokens := req.LLMRequest.CompletionRequest.Prompt.GetUint32Slice()
+		if arrayOfTokens {
+			req.RequestStats.InputTokensLen = uint64(len(tokens))
+			return nil
+		}
+
+		_, arrayOfTokenArrays := req.LLMRequest.CompletionRequest.Prompt.GetUint32Matrix()
+
+		if !arrayOfTokenArrays {
+			klog.Warningf("[%s] Unsupported prompt type in completion request: %v", req.Id, req.LLMRequest.CompletionRequest.Prompt)
+		}
+
 		return nil
 	case protocol.OpenAIChatCompletion:
 		req.LLMRequest.ClientStream = req.LLMRequest.ChatCompletionRequest.Stream
@@ -100,7 +113,7 @@ func (rt *RequestCompletionConverter) PreProcess(req *types.RequestContext) erro
 			Stop:             chatCompletions.Stop,
 			Seed:             chatCompletions.Seed,
 			Stream:           true,
-			StreamOptions:    &protocol.StreamOptions{IncludeUsage: true, IncludeContinuousUsage: true},
+			StreamOptions:    &protocol.StreamOptions{IncludeUsage: true, ContinuousUsageStats: true},
 			Temperature:      chatCompletions.Temperature,
 			TopP:             chatCompletions.TopP,
 			User:             chatCompletions.User,

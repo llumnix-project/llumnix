@@ -33,6 +33,8 @@ type InstanceView struct {
 	Status   *InstanceStatus
 	Metadata *InstanceMetadata
 	InstanceStatusLocalAccount
+
+	ReservedInferType consts.InferType
 }
 
 func (iv *InstanceView) GetInstance() *types.LLMInstance {
@@ -116,6 +118,11 @@ type CMSReadClient struct {
 
 	enablePredictorEnhancedScheduling bool
 	TTFTPredictor                     *predictor.QuadraticPredictor
+
+	// Adaptive pd Related
+	enableAdaptivePD        bool
+	reservedPrefillInstance string
+	reservedDecodeInstance  string
 }
 
 func (c *CMSReadClient) IsAlive() bool {
@@ -137,7 +144,8 @@ func CreateOrGetClient(
 	requestLocalAccountStalenessSeconds int32,
 	recordMetricsInterval int32,
 	enablePredictorEnhancedScheduling bool,
-	numPredictorWarmupSamples int) (*CMSReadClient, error) {
+	numPredictorWarmupSamples int,
+	enableAdaptivePD bool) (*CMSReadClient, error) {
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -153,7 +161,7 @@ func CreateOrGetClient(
 	client, err = NewCMSReadClient(
 		redisClient, pullStatusIntervalMs, pullMetadataIntervalMs, allowConcurrentSchedule, enableInstanceStatusLocalAccount,
 		enableCacheAwareScheduling, requestLocalAccountStalenessSeconds, recordMetricsInterval,
-		enablePredictorEnhancedScheduling, numPredictorWarmupSamples)
+		enablePredictorEnhancedScheduling, numPredictorWarmupSamples, enableAdaptivePD)
 
 	return client, err
 }
@@ -168,7 +176,8 @@ func NewCMSReadClient(
 	requestLocalAccountStalenessSeconds int32,
 	recordMetricsInterval int32,
 	enablePredictorEnhancedScheduling bool,
-	numPredictorWarmupSamples int) (*CMSReadClient, error) {
+	numPredictorWarmupSamples int,
+	enableAdaptivePD bool) (*CMSReadClient, error) {
 
 	if redisClient == nil {
 		return nil, fmt.Errorf("CMS redis client cannot be nil")
@@ -193,6 +202,7 @@ func NewCMSReadClient(
 		enableInstanceStatusLocalAccount:  enableInstanceStatusLocalAccount,
 		recordMetricsInterval:             recordMetricsInterval,
 		enablePredictorEnhancedScheduling: enablePredictorEnhancedScheduling,
+		enableAdaptivePD:                  enableAdaptivePD,
 	}
 
 	if enableInstanceStatusLocalAccount {
@@ -470,6 +480,14 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 					delete(c.groupedInstanceViews, inferType)
 				}
 			}
+
+			if c.reservedPrefillInstance == instanceID {
+				c.reservedPrefillInstance = ""
+			}
+
+			if c.reservedDecodeInstance == instanceID {
+				c.reservedDecodeInstance = ""
+			}
 		}
 	}
 	// update status
@@ -506,8 +524,8 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 					AuxIp:     c.instanceMetadatas[instanceID].IpKvt,
 					AuxPort:   int(c.instanceMetadatas[instanceID].KvtPort),
 					InferType: inferType,
-					DPRank:  int(c.instanceMetadatas[instanceID].DpRank),
-					DPSize:  int(c.instanceMetadatas[instanceID].DataParallelSize),
+					DPRank:    int(c.instanceMetadatas[instanceID].DpRank),
+					DPSize:    int(c.instanceMetadatas[instanceID].DataParallelSize),
 					// NOTE(zhaohanyu.zhy): use v6d parser format by default
 					ID: fmt.Sprintf("%s_instance%d_%d",
 						c.instanceMetadatas[instanceID].Ip,
@@ -582,8 +600,74 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 		}
 	}
 
+	if c.enableAdaptivePD {
+		c.setReservedInstance()
+	}
+
 	if c.enablePredictorEnhancedScheduling && !c.TTFTPredictor.Fitted() {
 		c.fitTTFTPredictor()
+	}
+}
+
+// setReservedInstance Keeps one dedicated instance for prefill and one for decode, while the
+// remaining instances can be dynamically adjusted.
+func (c *CMSReadClient) setReservedInstance() {
+	if c.reservedPrefillInstance != "" && c.reservedDecodeInstance != "" {
+		return
+	}
+
+	leastDecodeBatchSize := int32(math.MaxInt32)
+	leastPrefillTokensNum := int32(math.MaxInt32)
+	leastBusyDecodeInstanceId := ""
+	leastBusyPrefillInstanceId := ""
+
+	for instanceId, status := range c.instanceStatuses {
+		decodeBatchSize := status.HybridSchedulerWaitingToDecodeRequestsNum +
+			status.NumLoadingRequests + status.SchedulerWaitingToDecodeRequestsNum +
+			status.SchedulerRunningToDecodeRequestsNum
+
+		prefillTokensNum := status.NumUncomputedTokensAllWaitingPrefills +
+			status.NumUncomputedTokensSchedulerRunningPrefills
+
+		if decodeBatchSize >= 0 && prefillTokensNum == 0 && c.reservedDecodeInstance == "" {
+			c.reservedDecodeInstance = instanceId
+			c.instanceViews[instanceId].ReservedInferType = consts.InferTypeDecode
+			klog.Infof("[setReservedInstance] Set reserve decode instance, instanceID=%s", instanceId)
+		}
+
+		if prefillTokensNum >= 0 && decodeBatchSize == 0 &&
+			c.reservedPrefillInstance == "" && instanceId != c.reservedDecodeInstance {
+			c.reservedPrefillInstance = instanceId
+			c.instanceViews[instanceId].ReservedInferType = consts.InferTypePrefill
+			klog.Infof("[setReservedInstance] Set reserve prefill instance, instanceID=%s", instanceId)
+		}
+
+		if c.reservedPrefillInstance != "" && c.reservedDecodeInstance != "" {
+			return
+		}
+
+		if decodeBatchSize < leastDecodeBatchSize {
+			leastDecodeBatchSize = decodeBatchSize
+			leastBusyDecodeInstanceId = instanceId
+		}
+
+		if prefillTokensNum < leastPrefillTokensNum && instanceId != c.reservedDecodeInstance {
+			leastPrefillTokensNum = prefillTokensNum
+			leastBusyPrefillInstanceId = instanceId
+		}
+	}
+
+	// fallback
+	if c.reservedDecodeInstance == "" && leastBusyDecodeInstanceId != "" {
+		c.reservedDecodeInstance = leastBusyDecodeInstanceId
+		c.instanceViews[leastBusyDecodeInstanceId].ReservedInferType = consts.InferTypeDecode
+		klog.Infof("[setReservedInstance] Set reserve decode instance, instanceID=%s", leastBusyDecodeInstanceId)
+	}
+
+	if c.reservedPrefillInstance == "" && leastBusyPrefillInstanceId != "" {
+		c.reservedPrefillInstance = leastBusyPrefillInstanceId
+		c.instanceViews[leastBusyPrefillInstanceId].ReservedInferType = consts.InferTypePrefill
+		klog.Infof("[setReservedInstance] Set reserve prefill instance, instanceID=%s", leastBusyPrefillInstanceId)
 	}
 }
 

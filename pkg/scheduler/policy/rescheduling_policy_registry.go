@@ -1,4 +1,4 @@
-package scheduling_policy
+package policy
 
 import (
 	"fmt"
@@ -21,6 +21,10 @@ func newReschedulingPolicyInternal(p *options.SchedulerConfig, policy string) re
 		return newFailoverRescheduling(p, consts.InferTypeDecode)
 	case consts.ReschedulingPolicyNeutralFailover:
 		return newFailoverRescheduling(p, consts.InferTypeNeutral)
+	case consts.ReschedulingPolicyBinPackingMitigation:
+		return newTpotBinPackingOverloadRescheduling(p)
+	case consts.ReschedulingPolicyBinPackingConsolidation:
+		return newTpotBinPackingUnderloadRescheduling(p)
 	default:
 		panic(fmt.Sprintf("unsupported rescheduling policy: %s", p.ReschedulingPolicies))
 	}
@@ -233,5 +237,173 @@ func newFailoverRescheduling(p *options.SchedulerConfig, inferType consts.InferT
 			selector: &roundRobinSelector{},
 		},
 		inferType: inferType,
+	}
+}
+
+type tpotBinPackingOverloadRescheduling struct {
+	baseReschedulingPolicy
+}
+
+/*
+tpotBinPackingOverloadRescheduling migrates requests from overloaded instances to
+underutilized ones to maintain TPOT (Time Per Output Token) SLO compliance. As the
+bin-packing scheduler for decode phase consolidates requests, ITL (Inter-Token Latency)
+may increase with growing output tokens and exceed TPOT SLO limits. This strategy
+proactively redistributes workload from instances violating TPOT SLO to those operating
+within acceptable latency bounds.
+
+Instance Type:
+  - Source: Any (excluding prefill-reserved instances)
+  - Destination: Same to Source
+
+Filters:
+  - Source: A schedulable, healthy instance with predicted TPOT exceeding the migrate-out
+    ceiling threshold and non-expired instance information, excluding prefill-reserved instances.
+  - Destination: A schedulable, healthy instance with predicted TPOT below the SLO dispatch
+    threshold and non-expired instance information, excluding prefill-reserved instances.
+
+Selector:
+  - Uses bin-packing strategy to select optimal source-destination pairs based on overload
+    conditions, consolidating workload efficiently while maintaining TPOT SLO compliance.
+*/
+func newTpotBinPackingOverloadRescheduling(p *options.SchedulerConfig) *tpotBinPackingOverloadRescheduling {
+	return &tpotBinPackingOverloadRescheduling{
+		baseReschedulingPolicy{
+			metrics: map[string]func() instanceSchedulingMetric{
+				consts.SchedulingMetricPredictedTpot: getSchedulingMetric(p, consts.SchedulingMetricPredictedTpot),
+			},
+			srcSingleInstanceFilters: []singleInstanceFilter{
+				&instanceAttributeFilter{
+					attrKey:       "ReservedInferType",
+					rejectedValue: consts.InferTypePrefill,
+				},
+				&schedulabilityFilter{},
+				&stalenessFilter{
+					instanceStalenessSeconds: p.InstanceStalenessSeconds,
+				},
+				&invertedSingleInstanceFilterWrapper{
+					innerFilter: &metricBasedFilter{
+						metricName: consts.SchedulingMetricPredictedTpot,
+						threshold:  p.TpotSlo * p.TpotMigrateOutCeilThreshold,
+					},
+				},
+			},
+			dstSingleInstanceFilters: []singleInstanceFilter{
+				&instanceAttributeFilter{
+					attrKey:       "ReservedInferType",
+					rejectedValue: consts.InferTypePrefill,
+				},
+				&schedulabilityFilter{},
+				&stalenessFilter{
+					instanceStalenessSeconds: p.InstanceStalenessSeconds,
+				},
+				&metricBasedFilter{
+					metricName: consts.SchedulingMetricPredictedTpot,
+					threshold:  p.TpotSlo * p.TpotSloDispatchThreshold,
+				},
+			},
+			srcGlobalFilters: []globalFilter{
+				&failoverFilter{
+					failoverScope: p.FailoverScope,
+				},
+			},
+			dstGlobalFilters: []globalFilter{
+				&failoverFilter{
+					failoverScope: p.FailoverScope,
+				},
+			},
+			selector: &tpotBinPackingOverloadSelector{},
+		},
+	}
+}
+
+type tpotBinPackingUnderloadRescheduling struct {
+	baseReschedulingPolicy
+}
+
+/*
+tpotBinPackingUnderloadRescheduling consolidates requests from underutilized instances
+to more loaded ones based on predicted TPOT metrics, improving resource utilization
+by packing workload more densely when instances are underloaded.
+
+Instance Type:
+  - Source: Any (excluding prefill-reserved instances)
+  - Destination: Same to Source
+
+Filters:
+  - Source: A schedulable, healthy instance with predicted TPOT below the migrate-out
+    floor threshold, non-zero decode batch size, and non-expired instance information,
+    excluding prefill-reserved instances.
+  - Destination: A schedulable, healthy instance with predicted TPOT below the SLO dispatch
+    threshold, non-zero decode batch size, and non-expired instance information, excluding
+    prefill-reserved instances.
+
+Selector:
+  - Uses bin-packing strategy to select optimal source-destination pairs based on underload
+    conditions, consolidating sparse workload to fewer instances.
+*/
+func newTpotBinPackingUnderloadRescheduling(p *options.SchedulerConfig) *tpotBinPackingUnderloadRescheduling {
+	return &tpotBinPackingUnderloadRescheduling{
+		baseReschedulingPolicy{
+			metrics: map[string]func() instanceSchedulingMetric{
+				consts.SchedulingMetricPredictedTpot:   getSchedulingMetric(p, consts.SchedulingMetricPredictedTpot),
+				consts.SchedulingMetricDecodeBatchSize: getSchedulingMetric(p, consts.SchedulingMetricDecodeBatchSize),
+			},
+			srcSingleInstanceFilters: []singleInstanceFilter{
+				&instanceAttributeFilter{
+					attrKey:       "ReservedInferType",
+					rejectedValue: consts.InferTypePrefill,
+				},
+				&instanceAttributeFilter{
+					attrKey:       "ReservedInferType",
+					rejectedValue: consts.InferTypeDecode,
+				},
+				&schedulabilityFilter{},
+				&stalenessFilter{
+					instanceStalenessSeconds: p.InstanceStalenessSeconds,
+				},
+				&metricBasedFilter{
+					metricName: consts.SchedulingMetricPredictedTpot,
+					threshold:  p.TpotSlo * p.TpotMigrateOutFloorThreshold,
+				},
+				&invertedSingleInstanceFilterWrapper{
+					innerFilter: &metricBasedFilter{
+						metricName: consts.SchedulingMetricDecodeBatchSize,
+						threshold:  0.1,
+					},
+				},
+			},
+			dstSingleInstanceFilters: []singleInstanceFilter{
+				&instanceAttributeFilter{
+					attrKey:       "ReservedInferType",
+					rejectedValue: consts.InferTypePrefill,
+				},
+				&schedulabilityFilter{},
+				&stalenessFilter{
+					instanceStalenessSeconds: p.InstanceStalenessSeconds,
+				},
+				&metricBasedFilter{
+					metricName: consts.SchedulingMetricPredictedTpot,
+					threshold:  p.TpotSlo * p.TpotSloDispatchThreshold,
+				},
+				&invertedSingleInstanceFilterWrapper{
+					innerFilter: &metricBasedFilter{
+						metricName: consts.SchedulingMetricDecodeBatchSize,
+						threshold:  0.1,
+					},
+				},
+			},
+			srcGlobalFilters: []globalFilter{
+				&failoverFilter{
+					failoverScope: p.FailoverScope,
+				},
+			},
+			dstGlobalFilters: []globalFilter{
+				&failoverFilter{
+					failoverScope: p.FailoverScope,
+				},
+			},
+			selector: &tpotBinPackingUnderloadSelector{},
+		},
 	}
 }
