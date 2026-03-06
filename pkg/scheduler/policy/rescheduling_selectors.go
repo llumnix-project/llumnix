@@ -229,16 +229,16 @@ func (rrs *roundRobinSelector) selectPairs(
 }
 
 /*
-tpotBinPackingOverloadSelector implements a selector for overload rescheduling that
+binPackingMitigationSelector implements a selector for overload rescheduling that
 pairs the most overloaded source instance with the most loaded (but still available)
 destination instance. This strategy attempts to relieve the highest pressure first
 while utilizing destination capacity efficiently. Keep in mind that a slice containing
 at most one reschedule pair (highest load source to highest load destination).
 */
-type tpotBinPackingOverloadSelector struct {
+type binPackingMitigationSelector struct {
 }
 
-func (bpos *tpotBinPackingOverloadSelector) selectPairs(
+func (bpms *binPackingMitigationSelector) selectPairs(
 	srcCandidates, dstCandidates map[string]*instanceViewScheduling) []*reschedulingPair {
 
 	var maxLoadSrcInstance *instanceViewScheduling
@@ -280,17 +280,17 @@ func (bpos *tpotBinPackingOverloadSelector) selectPairs(
 }
 
 /*
-tpotBinPackingUnderloadSelector implements a selector for underload rescheduling that
+binPackingConsolidationSelector implements a selector for underload rescheduling that
 pairs the least loaded source instance with the most loaded destination instance. This
 strategy consolidates workload by emptying the lightest instances first and packing
 requests into fuller instances, improving overall resource utilization. Keep in mind that
 a slice containing at most one reschedule pair (lowest load source to highest load
 destination) will be returned.
 */
-type tpotBinPackingUnderloadSelector struct {
+type binPackingConsolidationSelector struct {
 }
 
-func (bpos *tpotBinPackingUnderloadSelector) selectPairs(
+func (bpcs *binPackingConsolidationSelector) selectPairs(
 	srcCandidates, dstCandidates map[string]*instanceViewScheduling) []*reschedulingPair {
 
 	var resultPairs []*reschedulingPair

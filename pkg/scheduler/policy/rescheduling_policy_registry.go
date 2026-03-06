@@ -22,9 +22,9 @@ func newReschedulingPolicyInternal(p *options.SchedulerConfig, policy string) re
 	case consts.ReschedulingPolicyNeutralFailover:
 		return newFailoverRescheduling(p, consts.InferTypeNeutral)
 	case consts.ReschedulingPolicyBinPackingMitigation:
-		return newTpotBinPackingOverloadRescheduling(p)
+		return newBinPackingMitigationRescheduling(p)
 	case consts.ReschedulingPolicyBinPackingConsolidation:
-		return newTpotBinPackingUnderloadRescheduling(p)
+		return newBinPackingConsolidationRescheduling(p)
 	default:
 		panic(fmt.Sprintf("unsupported rescheduling policy: %s", p.ReschedulingPolicies))
 	}
@@ -240,12 +240,12 @@ func newFailoverRescheduling(p *options.SchedulerConfig, inferType consts.InferT
 	}
 }
 
-type tpotBinPackingOverloadRescheduling struct {
+type binPackingMitigationRescheduling struct {
 	baseReschedulingPolicy
 }
 
 /*
-tpotBinPackingOverloadRescheduling migrates requests from overloaded instances to
+binPackingMitigationRescheduling migrates requests from overloaded instances to
 underutilized ones to maintain TPOT (Time Per Output Token) SLO compliance. As the
 bin-packing scheduler for decode phase consolidates requests, ITL (Inter-Token Latency)
 may increase with growing output tokens and exceed TPOT SLO limits. This strategy
@@ -266,8 +266,8 @@ Selector:
   - Uses bin-packing strategy to select optimal source-destination pairs based on overload
     conditions, consolidating workload efficiently while maintaining TPOT SLO compliance.
 */
-func newTpotBinPackingOverloadRescheduling(p *options.SchedulerConfig) *tpotBinPackingOverloadRescheduling {
-	return &tpotBinPackingOverloadRescheduling{
+func newBinPackingMitigationRescheduling(p *options.SchedulerConfig) *binPackingMitigationRescheduling {
+	return &binPackingMitigationRescheduling{
 		baseReschedulingPolicy{
 			metrics: map[string]func() instanceSchedulingMetric{
 				consts.SchedulingMetricPredictedTpot: getSchedulingMetric(p, consts.SchedulingMetricPredictedTpot),
@@ -312,17 +312,17 @@ func newTpotBinPackingOverloadRescheduling(p *options.SchedulerConfig) *tpotBinP
 					failoverScope: p.FailoverScope,
 				},
 			},
-			selector: &tpotBinPackingOverloadSelector{},
+			selector: &binPackingMitigationSelector{},
 		},
 	}
 }
 
-type tpotBinPackingUnderloadRescheduling struct {
+type binPackingConsolidationRescheduling struct {
 	baseReschedulingPolicy
 }
 
 /*
-tpotBinPackingUnderloadRescheduling consolidates requests from underutilized instances
+binPackingConsolidationRescheduling consolidates requests from underutilized instances
 to more loaded ones based on predicted TPOT metrics, improving resource utilization
 by packing workload more densely when instances are underloaded.
 
@@ -342,8 +342,8 @@ Selector:
   - Uses bin-packing strategy to select optimal source-destination pairs based on underload
     conditions, consolidating sparse workload to fewer instances.
 */
-func newTpotBinPackingUnderloadRescheduling(p *options.SchedulerConfig) *tpotBinPackingUnderloadRescheduling {
-	return &tpotBinPackingUnderloadRescheduling{
+func newBinPackingConsolidationRescheduling(p *options.SchedulerConfig) *binPackingConsolidationRescheduling {
+	return &binPackingConsolidationRescheduling{
 		baseReschedulingPolicy{
 			metrics: map[string]func() instanceSchedulingMetric{
 				consts.SchedulingMetricPredictedTpot:   getSchedulingMetric(p, consts.SchedulingMetricPredictedTpot),
@@ -403,7 +403,7 @@ func newTpotBinPackingUnderloadRescheduling(p *options.SchedulerConfig) *tpotBin
 					failoverScope: p.FailoverScope,
 				},
 			},
-			selector: &tpotBinPackingUnderloadSelector{},
+			selector: &binPackingConsolidationSelector{},
 		},
 	}
 }
