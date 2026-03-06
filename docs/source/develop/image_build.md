@@ -8,6 +8,12 @@ registry deployment), follow the steps below.
 
 - Docker installed and running
 - Access to your own image registry
+- Repository cloned with submodules initialized:
+  ```bash
+  git clone https://github.com/your-org/llumnix.git
+  cd llumnix
+  git submodule update --init --recursive
+  ```
 
 ## Build Steps
 
@@ -16,9 +22,13 @@ The only strict requirement is that **lib-tokenizers must be built before Gatewa
 depends on it for tokenization. All other components can be built independently in any order.
 ### Step 1: Build lib-tokenizers
 
+This step applies the sgl-model-gateway patch to the `lib/sglang` submodule and compiles the Rust tokenizer library inside a Docker container.
+
 ```bash
-bash scripts/build_tokenizers.sh
+bash scripts/build_tokenizers.sh --apply-patch
 ```
+
+> **Note**: The `--apply-patch` flag applies the `patches/sgl-model-gateway/` patch to the submodule before building. This is required to include Llumnix-specific modifications. The patch only needs to be applied once; subsequent builds can omit this flag.
 
 ### Step 2: Build Gateway
 
