@@ -83,7 +83,7 @@ For adaptive PD related rescheduling, only decode requests will be migrated and 
 
 ## Performance
 
-Setup: Qwen3-32B, evaluated on the Azure LLM Inference Trace (Conversational) dataset, deployed on 8 vLLM instances.
+Setup: Qwen3-32B, TP=1, evaluated on the Azure LLM Inference Trace (Conversational) dataset, deployed on 8 vLLM instances.
 
 SLO targets: TPOT ≤ 50 ms, TTFT ≤ 6000 ms.
 
