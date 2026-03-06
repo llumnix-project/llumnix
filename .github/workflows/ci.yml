@@ -31,3 +31,15 @@ jobs:
     name: Build Documentation
     uses: ./.github/workflows/docs-build.yml
 
+  all-pr-tests:
+    name: All PR Tests
+    runs-on: [self-hosted, cpu]
+    needs:
+      - go-ut
+      - llumnix-ut
+      - discovery-ut
+      - docs-build
+    steps:
+      - name: All tests passed
+        run: echo "All tests passed!"
+
