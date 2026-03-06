@@ -1,0 +1,226 @@
+name: E2E Test
+
+on:
+  workflow_call:
+    inputs:
+      image_tag:
+        description: 'Image tag to use for deployment'
+        required: true
+        type: string
+      test_namespace:
+        description: 'Kubernetes namespace for testing'
+        required: false
+        type: string
+        default: 'llumnix-e2e-test'
+      kustomize_dir:
+        description: 'Kustomize directory for deployment configuration'
+        required: false
+        type: string
+        default: 'neutral/full-mode-scheduling/load-balance'
+      benchmark_command:
+        description: 'Benchmark command to run inside the pod'
+        required: false
+        type: string
+        default: 'vllm bench serve --base-url http://gateway:8089 --model Qwen/Qwen2.5-7B --num-prompts 100 --ready-check-timeout-sec 0 --request-rate 5 --save-result --save-detailed --result-dir /tmp/benchmark-result'
+      benchmark_timeout:
+        description: 'Benchmark timeout in seconds'
+        required: false
+        type: number
+        default: 600
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to use for deployment'
+        required: true
+        type: string
+      test_namespace:
+        description: 'Kubernetes namespace for testing'
+        required: false
+        type: string
+        default: 'llumnix-e2e-test'
+      kustomize_dir:
+        description: 'Kustomize directory for deployment configuration'
+        required: false
+        type: string
+        default: 'neutral/full-mode-scheduling/load-balance'
+      benchmark_command:
+        description: 'Benchmark command to run inside the pod'
+        required: false
+        type: string
+        default: 'vllm bench serve --base-url http://gateway:8089 --model Qwen/Qwen2.5-7B --num-prompts 100 --ready-check-timeout-sec 0 --request-rate 5 --save-result --save-detailed --result-dir /tmp/benchmark-result'
+      benchmark_timeout:
+        description: 'Benchmark timeout in seconds'
+        required: false
+        type: number
+        default: 600
+
+jobs:
+  e2e-test:
+    name: Deploy and Run E2E Test
+    runs-on: [self-hosted, cpu, kubectl]
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          clean: true
+
+      - name: Setup Kubectl
+        run: |
+          kubectl cluster-info
+
+      - name: Cleanup existing test namespace
+        working-directory: ./deploy
+        timeout-minutes: 10
+        run: |
+          echo "Cleaning up existing namespace: ${{ inputs.test_namespace }}"
+          if ! ./group_delete.sh ${{ inputs.test_namespace }} <<< "yes"; then
+            echo "WARNING: group_delete.sh failed, attempting force delete..."
+          fi
+          
+          echo "Waiting for namespace to be fully deleted (max 10 minutes)..."
+          for i in $(seq 1 120); do
+            if ! kubectl get namespace ${{ inputs.test_namespace }} &>/dev/null; then
+              echo "Namespace deleted successfully"
+              exit 0
+            fi
+            echo "Waiting... ($i/120)"
+            sleep 5
+          done
+          
+          echo "ERROR: Failed to delete namespace ${{ inputs.test_namespace }} within timeout"
+          kubectl get namespace ${{ inputs.test_namespace }} -o yaml || true
+          kubectl get all -n ${{ inputs.test_namespace }} || true
+          exit 1
+
+      - name: Deploy Llumnix
+        working-directory: ./deploy
+        run: |
+          ./group_deploy.sh ${{ inputs.test_namespace }} ${{ inputs.kustomize_dir }} \
+            --gateway-tag ${{ inputs.image_tag }} \
+            --scheduler-tag ${{ inputs.image_tag }} \
+            --vllm-tag ${{ inputs.image_tag }} \
+            --discovery-tag ${{ inputs.image_tag }}
+
+      - name: Wait for deployment ready
+        timeout-minutes: 15
+        run: |
+          echo "Waiting for all pods to be ready..."
+          
+          # Check for permanently failed pods (terminal state, won't recover)
+          check_failed_pods() {
+            local namespace=$1
+            # Only check for pods in terminal Failed phase (not restartable)
+            FAILED=$(kubectl get pods -n "$namespace" --field-selector=status.phase=Failed --no-headers 2>/dev/null || true)
+            if [ -n "$FAILED" ]; then
+              echo "ERROR: Detected permanently failed pods:"
+              kubectl get pods -n "$namespace"
+              return 1
+            fi
+            return 0
+          }
+          
+          for i in $(seq 1 90); do
+            check_failed_pods "${{ inputs.test_namespace }}" || exit 1
+            
+            TOTAL=$(kubectl get pods -n ${{ inputs.test_namespace }} --no-headers 2>/dev/null | wc -l)
+            READY=$(kubectl get pods -n ${{ inputs.test_namespace }} --no-headers 2>/dev/null | grep -c '^\S\+\s\+[0-9]\+/[0-9]\+\s\+Running' || true)
+            NOT_READY=$(kubectl get pods -n ${{ inputs.test_namespace }} --no-headers 2>/dev/null | grep -cv '^\S\+\s\+[0-9]\+/[0-9]\+\s\+Running' || true)
+            
+            echo "[$i/90] Pods ready: $READY/$TOTAL"
+            
+            if [ "$TOTAL" -gt 0 ] && [ "$NOT_READY" -eq 0 ]; then
+              echo "All pods are ready!"
+              kubectl get pods -n ${{ inputs.test_namespace }}
+              exit 0
+            fi
+            sleep 10
+          done
+          
+          echo "ERROR: Timed out waiting for pods to be ready"
+          kubectl get pods -n ${{ inputs.test_namespace }}
+          exit 1
+
+      - name: Run Benchmark
+        id: benchmark
+        working-directory: ./benchmarks
+        run: |
+          ./run_benchmark.sh -n ${{ inputs.test_namespace }} \
+            --job-name e2e-benchmark \
+            --command "${{ inputs.benchmark_command }}"
+
+      - name: Wait for benchmark completion
+        run: |
+          echo "Waiting for benchmark to complete..."
+          for i in $(seq 1 ${{ inputs.benchmark_timeout }}); do
+            # Check if job failed
+            JOB_STATUS=$(kubectl get job e2e-benchmark -n ${{ inputs.test_namespace }} -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null || true)
+            if [ "$JOB_STATUS" == "True" ]; then
+              echo "ERROR: Benchmark job failed!"
+              kubectl logs job/e2e-benchmark -n ${{ inputs.test_namespace }} | tail -50
+              exit 1
+            fi
+            
+            # Check if benchmark completed successfully via log
+            LOGS=$(kubectl logs job/e2e-benchmark -n ${{ inputs.test_namespace }} 2>/dev/null || true)
+            if echo "$LOGS" | grep -q "Benchmark completed successfully."; then
+              echo "Benchmark completed successfully!"
+              exit 0
+            fi
+            
+            sleep 1
+          done
+          
+          echo "ERROR: Benchmark timed out after ${{ inputs.benchmark_timeout }}s"
+          kubectl logs job/e2e-benchmark -n ${{ inputs.test_namespace }} | tail -50
+          exit 1
+
+      - name: Check benchmark results
+        run: |
+          # Get benchmark pod name
+          POD_NAME=$(kubectl get pods -n ${{ inputs.test_namespace }} -l job-name=e2e-benchmark -o jsonpath='{.items[0].metadata.name}')
+          
+          # Copy results
+          mkdir -p benchmark-results
+          kubectl cp ${{ inputs.test_namespace }}/${POD_NAME}:/tmp/benchmark-result ./benchmark-results/ || true
+          
+          # Check benchmark log for success indicators
+          echo "=== Benchmark Log ==="
+          kubectl logs job/e2e-benchmark -n ${{ inputs.test_namespace }} | tail -100
+          
+          # Parse results and check success rate
+          echo "=== Checking Success Rate ==="
+          if [ -f "benchmark-results/benchmark-log.txt" ]; then
+            # Look for success rate in the output
+            SUCCESS_RATE=$(grep -oP 'Success rate: \K[0-9.]+' benchmark-results/benchmark-log.txt || echo "0")
+            echo "Success rate: ${SUCCESS_RATE}%"
+            
+            # Check if success rate is 100%
+            if (( $(echo "${SUCCESS_RATE} < 100" | bc -l) )); then
+              echo "ERROR: Benchmark success rate is ${SUCCESS_RATE}%, expected 100%"
+              exit 1
+            fi
+            echo "✓ Benchmark success rate is 100%"
+          else
+            echo "WARNING: Could not find benchmark log, checking job status..."
+            kubectl describe job e2e-benchmark -n ${{ inputs.test_namespace }}
+          fi
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.run_id }}
+          path: benchmark-results/
+          retention-days: 7
+
+      - name: Cleanup
+        if: always()
+        working-directory: ./deploy
+        run: |
+          echo "Cleaning up test namespace..."
+          ./group_delete.sh ${{ inputs.test_namespace }} <<< "yes" || true
+          kubectl delete job e2e-benchmark -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
+          echo "Cleanup completed"

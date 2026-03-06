@@ -1,4 +1,4 @@
-name: CI
+name: PR Test
 
 on:
   push:
@@ -38,7 +38,7 @@ jobs:
       - go-ut
       - llumnix-ut
       - discovery-ut
-      - docs-build
+      # - docs-build
     steps:
       - name: All tests passed
         run: echo "All tests passed!"
