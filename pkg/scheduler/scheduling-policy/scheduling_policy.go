@@ -188,7 +188,7 @@ func (p *DispatchPolicy) Schedule(request *types.SchedulingRequest) error {
 	defer func() {
 		elapsed := time.Since(tStart).Milliseconds()
 		klog.V(3).Infof("Llumnix GetToken took %dms, request id: %v, promptTokenIds len: %v",
-			elapsed, request.Id, len(request.PromptTokenIds))
+			elapsed, request.Id, request.PromptNumTokens)
 	}()
 
 	if p.c.EnableFullModeScheduling {
@@ -198,7 +198,7 @@ func (p *DispatchPolicy) Schedule(request *types.SchedulingRequest) error {
 		}
 	}
 
-	klog.V(4).Infof("GetToken request received, promptTokenIds length: %d", len(request.PromptTokenIds))
+	klog.V(4).Infof("GetToken request received, promptTokenIds length: %d", request.PromptNumTokens)
 
 	startTime := time.Now()
 
@@ -262,7 +262,7 @@ func (p *DispatchPolicy) schedule(
 	requestId := request.Id
 	promptTokenIds := Uint32ToInt64(request.PromptTokenIds)
 	selectedInstances = [][]*instanceViewScheduling{}
-	if p.c.EnableCacheAwareScheduling && p.tokenHasher != nil && len(promptTokenIds) >= p.c.CacheAwareSchedulingMinTokens {
+	if p.c.EnableCacheAwareScheduling && p.tokenHasher != nil && request.PromptNumTokens >= p.c.CacheAwareSchedulingMinTokens {
 		// NOTE(sunbiao.sun): Calculating instance prompt cache hit len has ms-level latency, but it does not r/w
 		// the raw instance view, so we unlock and re-lock here to improve scheduling throughput
 		// when not allowing concurrent scheduling.
@@ -278,7 +278,7 @@ func (p *DispatchPolicy) schedule(
 			// Write prefixHitTokens in scheduling ctx of instance view.
 			getInstancesPrefixCacheHitLen(
 				p.kvsClient, p.cmsClient, prefixHashes, p.c.KvsChunkSize,
-				len(promptTokenIds), clusterView.instanceViews)
+				request.PromptNumTokens, clusterView.instanceViews)
 		}
 		if !p.c.AllowConcurrentScheduling {
 			p.cmsClient.Lock()
@@ -287,7 +287,7 @@ func (p *DispatchPolicy) schedule(
 
 	numTokens := int32(0)
 	if p.c.EnableInstanceStatusLocalAccount {
-		numTokens = int32(len(promptTokenIds))
+		numTokens = int32(request.PromptNumTokens)
 	}
 
 	if p.c.EnablePredictorEnhancedScheduling {

@@ -87,11 +87,11 @@ func (req *SchedulingRequest) String() string {
 	}
 
 	// Add prompt info (truncated if too long)
-	if len(req.PromptTokenIds) > 0 {
+	if req.PromptNumTokens > 0 {
 		if len(str) > 0 {
 			str += " "
 		}
-		str += fmt.Sprintf("tokens:%d", len(req.PromptTokenIds))
+		str += fmt.Sprintf("tokens:%d", req.PromptNumTokens)
 	}
 
 	// Add scheduling result if present
