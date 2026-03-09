@@ -22,6 +22,13 @@ jobs:
           submodules: recursive
           clean: true
 
+      - name: Apply sgl-model-gateway patch
+        run: |
+          SGLANG_DIR="lib/sglang"
+          git -C "$SGLANG_DIR" checkout -- .
+          git -C "$SGLANG_DIR" clean -fd sgl-model-gateway/bindings/golang/
+          git -C "$SGLANG_DIR" apply "$(pwd)/patches/sgl-model-gateway/sgl_model_gateway_820e97d6.patch"
+
       - name: Compute cache key
         id: cache-key
         run: |
@@ -37,7 +44,7 @@ jobs:
 
       - name: Build tokenizer library in dev container
         if: steps.cache-tokenizers.outputs.cache-hit != 'true'
-        run: ./scripts/build_tokenizers.sh --apply-patch --image ${{ env.DEV_IMAGE }}
+        run: ./scripts/build_tokenizers.sh --image ${{ env.DEV_IMAGE }}
 
       - name: Run Go unit tests in dev container
         run: |
