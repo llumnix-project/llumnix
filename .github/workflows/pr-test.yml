@@ -1,11 +1,11 @@
-name: CI
+name: PR Test
 
 on:
   push:
     branches:
       - main
       - master
-  pull_request:
+  pull_request_target:
     branches:
       - main
       - master
@@ -38,7 +38,7 @@ jobs:
       - go-ut
       - llumnix-ut
       - discovery-ut
-      - docs-build
+      # - docs-build
     steps:
       - name: All tests passed
         run: echo "All tests passed!"

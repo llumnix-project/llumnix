@@ -18,15 +18,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           submodules: recursive
           clean: true
+
+      - name: Compute cache key
+        id: cache-key
+        run: |
+          KEY="tokenizers-${{ runner.os }}-$(git submodule status lib/sglang | awk '{print $1}' | tr -d '+-')-$(find patches/sgl-model-gateway -type f | sort | xargs sha256sum | sha256sum | awk '{print $1}')"
+          echo "key=${KEY}" >> $GITHUB_OUTPUT
 
       - name: Cache tokenizer build artifact
         id: cache-tokenizers
         uses: actions/cache@v4
         with:
           path: lib/sglang/sgl-model-gateway/bindings/golang/target/release
-          key: tokenizers-${{ runner.os }}-${{ hashFiles('lib/sglang/sgl-model-gateway/**', 'patches/sgl-model-gateway/**') }}
+          key: ${{ steps.cache-key.outputs.key }}
 
       - name: Build tokenizer library in dev container
         if: steps.cache-tokenizers.outputs.cache-hit != 'true'
@@ -40,3 +47,7 @@ jobs:
             -w /workspace \
             ${{ env.DEV_IMAGE }} \
             bash -c "go mod tidy && make unit-test"
+
+      - name: Fix file ownership
+        if: always()
+        run: sudo chown -R $(id -u):$(id -g) .

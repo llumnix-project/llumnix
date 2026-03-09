@@ -1,0 +1,42 @@
+name: Nightly E2E Test
+
+on:
+  schedule:
+    # 每天凌晨 3 点运行 (UTC 时间 19:00，对应北京时间 3:00)
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+
+jobs:
+  generate-tag:
+    name: Generate Nightly Tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.set-tag.outputs.tag }}
+    steps:
+      - name: Set nightly tag
+        id: set-tag
+        run: |
+          DATE=$(date +%Y%m%d)
+          RANDOM_SUFFIX=$(printf "%04d" $((RANDOM % 10000)))
+          TAG="nightly-${DATE}-${RANDOM_SUFFIX}"
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          echo "Using nightly tag: ${TAG}"
+
+  build-images:
+    name: Build Images
+    uses: ./.github/workflows/docker-build.yml
+    needs: generate-tag
+    with:
+      target: all
+      image_tag: ${{ needs.generate-tag.outputs.tag }}
+    secrets: inherit
+
+  e2e-test:
+    name: Run E2E Test
+    uses: ./.github/workflows/e2e-test.yml
+    needs: [generate-tag, build-images]
+    with:
+      image_tag: ${{ needs.generate-tag.outputs.tag }}
+      test_namespace: 'llumnix-daily-test'
+      kustomize_dir: 'neutral/full-mode-scheduling/load-balance'
+    secrets: inherit
