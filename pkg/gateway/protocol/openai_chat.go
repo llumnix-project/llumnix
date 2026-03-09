@@ -764,3 +764,7 @@ func (r *ChatCompletionRequest) SetMaxTokens(maxTokens int) {
 func (r *ChatCompletionRequest) SetStream(stream bool) {
 	r.Stream = stream
 }
+
+func (r *ChatCompletionRequest) SetModel(model string) {
+	r.Model = model
+}

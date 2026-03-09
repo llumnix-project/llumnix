@@ -10,6 +10,7 @@ import (
 	"llm-gateway/pkg/gateway/processor"
 	"llm-gateway/pkg/gateway/protocol"
 	"llm-gateway/pkg/gateway/protocol/anthropic"
+	"llm-gateway/pkg/gateway/service/backend"
 	"llm-gateway/pkg/types"
 	"net/http"
 
@@ -37,9 +38,6 @@ type AnthropicHandler struct {
 	// postProcessors chain for response postprocessing
 	postProcessors *processor.PostProcessorChain
 
-	// backend handles the actual inference execution
-	backend InferenceBackend
-
 	// streamProcessor encapsulates the generic streaming mechanism
 	streamProcessor *StreamProcessor
 }
@@ -64,18 +62,10 @@ func NewAnthropicHandler(config *options.Config) (RequestHandler, error) {
 	}
 	postProcessor.Register(respConverter)
 
-	// Create the inference backend based on the configuration
-	backend, err := BuildBackend(config)
-	if err != nil {
-		klog.Errorf("build inference backend failed: %v", err)
-		return nil, err
-	}
-
 	handler := &AnthropicHandler{
 		config:         config,
 		preProcessors:  preProcessors,
 		postProcessors: postProcessor,
-		backend:        backend,
 	}
 	// Inject protocol-specific strategies into the generic streaming processor
 	handler.streamProcessor = NewStreamProcessor(handler, handler)
@@ -162,9 +152,9 @@ func (h *AnthropicHandler) ParseChunk(reqCtx *types.RequestContext, data []byte)
 // It delegates to the generic StreamProcessor which encapsulates the streaming mechanism,
 // while this handler provides Anthropic-specific parsing and writing strategies.
 // Timing metrics like TTFT and ITL are tracked by the StreamProcessor.
-func (h *AnthropicHandler) handleStream(req *types.RequestContext) error {
+func (h *AnthropicHandler) handleStream(req *types.RequestContext, b backend.InferenceBackend) error {
 	// Initiate streaming inference from the backend
-	chunkChan, err := h.backend.StreamInference(req)
+	chunkChan, err := b.StreamInference(req)
 	if err != nil {
 		klog.Errorf("failed to stream inference: %v", err)
 		return err
@@ -175,8 +165,8 @@ func (h *AnthropicHandler) handleStream(req *types.RequestContext) error {
 	return nil
 }
 
-func (h *AnthropicHandler) handleMessage(req *types.RequestContext) error {
-	data, err := h.backend.Inference(req)
+func (h *AnthropicHandler) handleMessage(req *types.RequestContext, b backend.InferenceBackend) error {
+	data, err := b.Inference(req)
 	if err != nil {
 		return err
 	}
@@ -204,19 +194,17 @@ func (h *AnthropicHandler) handleMessage(req *types.RequestContext) error {
 	return nil
 }
 
-func (h *AnthropicHandler) Handle(req *types.RequestContext) error {
+// Handle processes the LLM inference request and sends the response back to the client.
+// It uses the provided backend for inference.
+func (h *AnthropicHandler) Handle(req *types.RequestContext, b backend.InferenceBackend) error {
 	if req.InferenceStream() {
-		return h.handleStream(req)
+		return h.handleStream(req, b)
 	} else {
-		return h.handleMessage(req)
+		return h.handleMessage(req, b)
 	}
 }
 
 // ProcessAndWriteChunk implements ChunkWriter interface for Anthropic protocol.
-// It processes a response chunk through post-processors and writes it to the client.
-// Handles both intermediate chunks and the final chunk (marked by done=true).
-// The processing duration is accumulated in request statistics.
-// Returns an error if post-processing, marshaling, or writing fails.
 func (h *AnthropicHandler) ProcessAndWriteChunk(req *types.RequestContext, done bool) error {
 	// Execute post-processing chain and measure duration
 	err := h.postProcessors.ProcessStream(req, done)

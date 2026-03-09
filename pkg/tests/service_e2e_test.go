@@ -1,4 +1,4 @@
-package service
+package tests
 
 import (
 	"bufio"
@@ -22,6 +22,8 @@ import (
 	"llm-gateway/pkg/consts"
 	"llm-gateway/pkg/gateway/protocol"
 	"llm-gateway/pkg/gateway/protocol/anthropic"
+	gateway_service "llm-gateway/pkg/gateway/service"
+	schedule_service "llm-gateway/pkg/scheduler/service"
 )
 
 // ============================================================
@@ -538,7 +540,7 @@ func TestGatewayService_OpenAI_NonStreaming(t *testing.T) {
 
 	// Create and start gateway service
 	config := createTestGatewayConfig(serverAddr)
-	gateway := NewGatewayService(config)
+	gateway := gateway_service.NewGatewayService(config)
 	require.NotNil(t, gateway)
 
 	// Create a router for the gateway
@@ -597,7 +599,7 @@ func TestGatewayService_OpenAI_Streaming(t *testing.T) {
 
 	// Create and start gateway service
 	config := createTestGatewayConfig(serverAddr)
-	gateway := NewGatewayService(config)
+	gateway := gateway_service.NewGatewayService(config)
 	require.NotNil(t, gateway)
 
 	// Create a router for the gateway
@@ -725,7 +727,7 @@ func TestGatewayService_Anthropic_NonStreaming(t *testing.T) {
 
 	// Create and start gateway service
 	config := createTestGatewayConfig(serverAddr)
-	gateway := NewGatewayService(config)
+	gateway := gateway_service.NewGatewayService(config)
 	require.NotNil(t, gateway)
 
 	// Create a router for the gateway
@@ -791,7 +793,7 @@ func TestGatewayService_ErrorHandling(t *testing.T) {
 
 	// Create and start gateway service
 	config := createTestGatewayConfig(serverAddr)
-	gateway := NewGatewayService(config)
+	gateway := gateway_service.NewGatewayService(config)
 	require.NotNil(t, gateway)
 
 	// Create a router for the gateway
@@ -842,7 +844,7 @@ func TestGatewayService_Retry(t *testing.T) {
 	config := createTestGatewayConfig(serverAddr2 + "," + serverAddr1)
 	config.RetryCount = 2
 	config.RetryExcludeScope = consts.RetryExcludeScopeInstance
-	gateway := NewGatewayService(config)
+	gateway := gateway_service.NewGatewayService(config)
 	require.NotNil(t, gateway)
 
 	// Create a router for the gateway
@@ -897,7 +899,7 @@ func TestGatewayService_Retry_HostScope(t *testing.T) {
 	config := createTestGatewayConfig(serverAddr2 + "," + serverAddr1)
 	config.RetryCount = 2
 	config.RetryExcludeScope = consts.RetryExcludeScopeHost
-	gateway := NewGatewayService(config)
+	gateway := gateway_service.NewGatewayService(config)
 	require.NotNil(t, gateway)
 
 	// Create a router for the gateway
@@ -939,12 +941,12 @@ func TestGatewayService_HealthCheck(t *testing.T) {
 	serverAddr := strings.TrimPrefix(mockServer.URL(), "http://")
 
 	config := createTestGatewayConfig(serverAddr)
-	gateway := NewGatewayService(config)
+	gateway := gateway_service.NewGatewayService(config)
 	require.NotNil(t, gateway)
 
 	// Create a router for the gateway
 	router := http.NewServeMux()
-	router.HandleFunc("/healthz", gateway.healthz)
+	router.HandleFunc("/healthz", gateway.Healthz)
 
 	gatewayServer := httptest.NewServer(router)
 	defer gatewayServer.Close()
@@ -967,7 +969,7 @@ func TestGatewayService_ConcurrentRequests(t *testing.T) {
 	config := createTestGatewayConfig(serverAddr)
 	config.MaxQueueSize = 50
 	config.WaitQueueThreads = 10
-	gateway := NewGatewayService(config)
+	gateway := gateway_service.NewGatewayService(config)
 	require.NotNil(t, gateway)
 
 	// Create a router for the gateway
@@ -1026,7 +1028,7 @@ func TestGatewayWithScheduler_Integration(t *testing.T) {
 	// Create and start scheduler service
 	schedulerConfig := createTestSchedulerConfig(serverAddr)
 	schedulerConfig.Port = 0 // Use random port
-	scheduler := NewScheduleService(schedulerConfig)
+	scheduler := schedule_service.NewScheduleService(schedulerConfig)
 	require.NotNil(t, scheduler)
 
 	// Start scheduler server
@@ -1039,7 +1041,7 @@ func TestGatewayWithScheduler_Integration(t *testing.T) {
 	// IMPORTANT: Use createTestGatewayConfigWithScheduler to trigger CompositeBalancer with SchedulerClient.
 	// This ensures GetPromptTokens() is called during scheduling.
 	gatewayConfig := createTestGatewayConfigWithScheduler(serverAddr, schedulerAddr)
-	gateway := NewGatewayService(gatewayConfig)
+	gateway := gateway_service.NewGatewayService(gatewayConfig)
 	require.NotNil(t, gateway)
 
 	// Create a router for the gateway
@@ -1088,7 +1090,7 @@ func TestGatewayService_Anthropic_Complete(t *testing.T) {
 
 	// Create and start gateway service
 	config := createTestGatewayConfig(serverAddr)
-	gateway := NewGatewayService(config)
+	gateway := gateway_service.NewGatewayService(config)
 	require.NotNil(t, gateway)
 
 	// Create a router for the gateway
@@ -1152,7 +1154,7 @@ func TestGatewayService_StreamingWithChunks(t *testing.T) {
 
 	// Create and start gateway service
 	config := createTestGatewayConfig(serverAddr)
-	gateway := NewGatewayService(config)
+	gateway := gateway_service.NewGatewayService(config)
 	require.NotNil(t, gateway)
 
 	// Create a router for the gateway

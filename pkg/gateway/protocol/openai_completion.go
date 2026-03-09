@@ -377,3 +377,7 @@ func (r *CompletionRequest) SetMaxTokens(maxTokens int) {
 func (r *CompletionRequest) SetStream(stream bool) {
 	r.Stream = stream
 }
+
+func (r *CompletionRequest) SetModel(model string) {
+	r.Model = model
+}

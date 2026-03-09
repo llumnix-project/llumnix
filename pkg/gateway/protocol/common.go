@@ -54,6 +54,7 @@ type FieldSetter interface {
 	SetBootStrapRoom(room int)
 	SetMaxTokens(maxTokens int)
 	SetStream(stream bool)
+	SetModel(model string)
 }
 
 // ApplyRequestArgs applies key-value arguments to any request type that implements FieldSetter.
@@ -77,6 +78,7 @@ func ApplyRequestArgs[T FieldSetter](req T, args map[string]interface{}) {
 		"bootstrap_room":     func(r T, v interface{}) { r.SetBootStrapRoom(v.(int)) },
 		"max_tokens":         func(r T, v interface{}) { r.SetMaxTokens(v.(int)) },
 		"stream":             func(r T, v interface{}) { r.SetStream(v.(bool)) },
+		"model":              func(r T, v interface{}) { r.SetModel(v.(string)) },
 	}
 
 	for key, value := range args {

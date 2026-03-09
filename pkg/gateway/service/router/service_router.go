@@ -21,6 +21,17 @@ var (
 
 type RouteType int
 
+func (rt RouteType) String() string {
+	switch rt {
+	case RouteInternal:
+		return "Internal"
+	case RouteExternal:
+		return "External"
+	default:
+		return "Unknown"
+	}
+}
+
 const (
 	RouteUnknown RouteType = iota
 	RouteInternal
@@ -34,15 +45,6 @@ type RouteEndpoint struct {
 }
 
 func (re *RouteEndpoint) String() string { return fmt.Sprintf("%s", re.URL) }
-
-func (re *RouteEndpoint) JoinURL(path string) string {
-	re.URL = strings.TrimSuffix(re.URL, "/")
-	hasBaseVersion := baseVersionRegex.MatchString(re.URL)
-	if hasBaseVersion && strings.HasPrefix(path, "/v") {
-		path = pathVersionRegex.ReplaceAllString(path, "")
-	}
-	return fmt.Sprintf("%s%s", re.URL, path)
-}
 
 type RouteResult struct {
 	Endpoint  RouteEndpoint
@@ -96,6 +98,16 @@ var (
 	gRouteInstance *ServiceRouter
 	gRouterConfig  *ServiceRouterConfig
 )
+
+func GetServiceRouterConfig() *ServiceRouterConfig {
+	gMutex.Lock()
+	defer gMutex.Unlock()
+
+	if gRouterConfig == nil {
+		gRouterConfig = NewServiceRouterConfig()
+	}
+	return gRouterConfig
+}
 
 func GetServiceRouter() *ServiceRouter {
 	gMutex.Lock()
@@ -193,7 +205,6 @@ func (sr *ServiceRouter) Route(req *types.RequestContext) (*RouteEndpoint, Route
 	var selectedConfig *RouteConfig
 	var rType RouteType
 
-	klog.V(3).Infof("get next tokens with routing policy: %s", sr.routingPolicy)
 	// select routing config based on policy
 	switch sr.routingPolicy {
 	case consts.RoutePolicyWeight:
@@ -203,6 +214,8 @@ func (sr *ServiceRouter) Route(req *types.RequestContext) (*RouteEndpoint, Route
 	default:
 		panic("not support this routing policy.")
 	}
+
+	klog.V(3).Infof("route with policy: %s, route type: %s, selected route: %s/%v", sr.routingPolicy, rType, selectedConfig.Model, selectedConfig.URL)
 
 	if rType == RouteExternal {
 		return &RouteEndpoint{
@@ -237,6 +250,6 @@ func (sr *ServiceRouter) Fallback(req *types.RequestContext) (*RouteEndpoint, er
 		Model:  fallbackConfig.Model,
 	}
 
-	klog.V(3).Infof("get fallback tokens with external endpoint: %s", externalEndpoint.String())
+	klog.V(3).Infof("get fallback route: %s/%s", fallbackConfig.Model, fallbackConfig.URL)
 	return externalEndpoint, nil
 }

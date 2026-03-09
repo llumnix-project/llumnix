@@ -3,20 +3,9 @@ package handler
 import (
 	"fmt"
 	"llm-gateway/cmd/llm-gateway/app/options"
+	"llm-gateway/pkg/gateway/service/backend"
 	"llm-gateway/pkg/types"
 	"sync"
-	"time"
-)
-
-const (
-	// connectRetry defines the maximum number of retry attempts for backend connection failures
-	connectRetry = 2
-
-	// ReadBufferSize specifies the initial buffer size (8KB) for reading streaming responses
-	ReadBufferSize = 8 * 1024
-
-	// ReadTimeout sets the maximum duration (5 minutes) to wait for reading from backend stream
-	ReadTimeout = 5 * time.Minute
 )
 
 // RequestHandler defines the interface for handling LLM inference requests
@@ -29,7 +18,7 @@ type RequestHandler interface {
 	ParseRequest(req *types.RequestContext) error
 
 	// Handle processes the request and sends the response back to the client
-	Handle(req *types.RequestContext) error
+	Handle(req *types.RequestContext, backend backend.InferenceBackend) error
 }
 
 // HandlerFactory is a factory function that creates a RequestHandler instance

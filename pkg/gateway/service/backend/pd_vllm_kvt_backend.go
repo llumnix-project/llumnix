@@ -1,4 +1,4 @@
-package handler
+package backend
 
 import (
 	"fmt"
@@ -49,9 +49,13 @@ func (b *PdSplitVllmKvtBackend) BatchScheduleStreamInference(req *types.RequestC
 	}
 
 	kvTransferParams := b.buildTransferParams(req, pWorker, dWorker)
-	body, err := req.MarshalRequestWithArgs(map[string]interface{}{
+	args := map[string]interface{}{
 		"kv_transfer_params": kvTransferParams,
-	})
+	}
+	if dWorker.Model != "" {
+		args["model"] = dWorker.Model
+	}
+	body, err := req.MarshalRequestWithArgs(args)
 	if err != nil {
 		klog.Errorf("failed to marshal request body: %v", err)
 		return nil, err
@@ -74,17 +78,21 @@ func (b *PdSplitVllmKvtBackend) BatchScheduleStreamInference(req *types.RequestC
 	return StartStreamRead(req, respBody), nil
 }
 
-func (b *PdSplitVllmKvtBackend) buildPrefillRequestData(req *types.RequestContext) ([]byte, error) {
+func (b *PdSplitVllmKvtBackend) buildPrefillRequestData(req *types.RequestContext, pWorker *types.LLMWorker) ([]byte, error) {
 	kvTransferParams := map[string]interface{}{"do_remote_decode": true}
-	return req.MarshalRequestWithArgs(map[string]interface{}{
+	args := map[string]interface{}{
 		"kv_transfer_params": kvTransferParams,
 		"max_tokens":         1,
-	})
+	}
+	if pWorker.Model != "" {
+		args["model"] = pWorker.Model
+	}
+	return req.MarshalRequestWithArgs(args)
 }
 
 func (b *PdSplitVllmKvtBackend) doPrefill(req *types.RequestContext, pWorker *types.LLMWorker) error {
 	// build prefill request
-	data, err := b.buildPrefillRequestData(req)
+	data, err := b.buildPrefillRequestData(req, pWorker)
 	if err != nil {
 		klog.Errorf("[%s] failed to build prefill request data: %v", err, req.Id)
 		return err
@@ -116,9 +124,13 @@ func (b *PdSplitVllmKvtBackend) buildDecodeRequestData(req *types.RequestContext
 		"remote_port":       worker.AuxPort,
 		"do_remote_prefill": true,
 	}
-	return req.MarshalRequestWithArgs(map[string]interface{}{
+	args := map[string]interface{}{
 		"kv_transfer_params": kvTransferParams,
-	})
+	}
+	if worker.Model != "" {
+		args["model"] = worker.Model
+	}
+	return req.MarshalRequestWithArgs(args)
 }
 
 func (b *PdSplitVllmKvtBackend) StagedScheduleStreamInference(req *types.RequestContext) (<-chan StreamChunk, error) {
@@ -181,9 +193,13 @@ func (b *PdSplitVllmKvtBackend) BatchScheduleInference(req *types.RequestContext
 	}
 
 	kvTransferParams := b.buildTransferParams(req, pWorker, dWorker)
-	body, err := req.MarshalRequestWithArgs(map[string]interface{}{
+	args := map[string]interface{}{
 		"kv_transfer_params": kvTransferParams,
-	})
+	}
+	if dWorker.Model != "" {
+		args["model"] = dWorker.Model
+	}
+	body, err := req.MarshalRequestWithArgs(args)
 	if err != nil {
 		klog.Errorf("failed to marshal request body: %v", err)
 		return nil, err
@@ -226,4 +242,8 @@ func (b *PdSplitVllmKvtBackend) Inference(req *types.RequestContext) ([]byte, er
 	default:
 		return nil, fmt.Errorf("[%s] unsupported schedule mode: %s", req.Id, b.scheduleMode)
 	}
+}
+
+func (b *PdSplitVllmKvtBackend) Name() string {
+	return consts.SplitModeVllmKvt
 }

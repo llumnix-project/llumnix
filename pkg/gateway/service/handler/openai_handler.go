@@ -9,6 +9,7 @@ import (
 	"llm-gateway/pkg/consts"
 	"llm-gateway/pkg/gateway/processor"
 	"llm-gateway/pkg/gateway/protocol"
+	"llm-gateway/pkg/gateway/service/backend"
 	"llm-gateway/pkg/types"
 	"net/http"
 	"time"
@@ -36,9 +37,6 @@ type OpenAIHandler struct {
 	preProcessors *processor.PreProcessorChain
 	// postProcessors chain for response postprocessing
 	postProcessors *processor.PostProcessorChain
-
-	// backend handles the actual inference execution
-	backend InferenceBackend
 
 	// streamProcessor encapsulates the generic streaming mechanism
 	streamProcessor *StreamProcessor
@@ -69,18 +67,10 @@ func NewOpenAIHandler(config *options.Config) (RequestHandler, error) {
 		postProcessor.Register(chunkProcessor)
 	}
 
-	// Create the inference backend based on the configuration
-	backend, err := BuildBackend(config)
-	if err != nil {
-		klog.Errorf("build inference backend failed: %v", err)
-		return nil, err
-	}
-
 	handler := &OpenAIHandler{
 		config:         config,
 		preProcessors:  preProcessors,
 		postProcessors: postProcessor,
-		backend:        backend,
 	}
 	// Inject protocol-specific strategies into the generic streaming processor
 	handler.streamProcessor = NewStreamProcessor(handler, handler)
@@ -169,6 +159,11 @@ func (h *OpenAIHandler) ParseRequest(reqCtx *types.RequestContext) error {
 	err := h.unmarshalRequest(reqCtx)
 	if err != nil {
 		return err
+	}
+
+	// Skip pre-processing if the flag is set (e.g., for external route requests)
+	if reqCtx.SkipProcessors {
+		return nil
 	}
 
 	// Execute pre-processing chain and measure duration
@@ -286,13 +281,10 @@ func (h *OpenAIHandler) marshalResponse(reqCtx *types.RequestContext) ([]byte, e
 	}
 }
 
-// Handle processes the LLM inference request and streams the response back to the client.
-// It delegates to the generic StreamProcessor which encapsulates the streaming mechanism,
-// while this handler provides OpenAI-specific parsing and writing strategies.
-// Timing metrics like TTFT and ITL are tracked by the StreamProcessor.
-func (h *OpenAIHandler) handleStream(req *types.RequestContext) error {
+// handleStream handles streaming inference using the provided backend.
+func (h *OpenAIHandler) handleStream(req *types.RequestContext, backend backend.InferenceBackend) error {
 	// Initiate streaming inference from the backend
-	chunkChan, err := h.backend.StreamInference(req)
+	chunkChan, err := backend.StreamInference(req)
 	if err != nil {
 		klog.Errorf("failed to stream inference: %v", err)
 		return err
@@ -303,15 +295,25 @@ func (h *OpenAIHandler) handleStream(req *types.RequestContext) error {
 	return nil
 }
 
-func (h *OpenAIHandler) handleMessage(req *types.RequestContext) error {
-	data, err := h.backend.Inference(req)
+// handleMessage handles non-streaming inference using the provided backend.
+func (h *OpenAIHandler) handleMessage(req *types.RequestContext, backend backend.InferenceBackend) error {
+	data, err := backend.Inference(req)
 	if err != nil {
 		return err
 	}
 
+	// SkipProcessors cannot skip this execution because some subsequent usages
+	// need to obtain it through this operation.
 	err = h.unMarshalResponse(req, data)
 	if err != nil {
 		return err
+	}
+
+	// Skip response parsing and post-processing if the flag is set
+	if req.SkipProcessors {
+		klog.V(3).Infof("skip processors, writing response message: %s", string(data))
+		req.WriteResponse(data)
+		return nil
 	}
 
 	err = h.postProcessors.Process(req)
@@ -325,19 +327,23 @@ func (h *OpenAIHandler) handleMessage(req *types.RequestContext) error {
 		return err
 	}
 
-	// Write response chunk if there's data to send
+	// Write response if there's data to send
 	if len(data) > 0 {
-		klog.V(3).Infof("writing response chunk: %s", string(data))
+		klog.V(3).Infof("writing response message: %s", string(data))
 		req.WriteResponse(data)
 	}
 	return nil
 }
 
-func (h *OpenAIHandler) Handle(req *types.RequestContext) error {
+// Handle processes the LLM inference request and streams the response back to the client.
+// It uses the provided backend for inference and delegates to the generic StreamProcessor
+// for streaming, while this handler provides OpenAI-specific parsing and writing strategies.
+// Timing metrics like TTFT and ITL are tracked by the StreamProcessor.
+func (h *OpenAIHandler) Handle(req *types.RequestContext, backend backend.InferenceBackend) error {
 	if req.InferenceStream() {
-		return h.handleStream(req)
+		return h.handleStream(req, backend)
 	} else {
-		return h.handleMessage(req)
+		return h.handleMessage(req, backend)
 	}
 }
 
@@ -347,10 +353,13 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) error {
 // The processing duration is accumulated in request statistics.
 // Returns an error if post-processing, marshaling, or writing fails.
 func (h *OpenAIHandler) ProcessAndWriteChunk(req *types.RequestContext, done bool) error {
-	// Execute post-processing chain and measure duration
-	err := h.postProcessors.ProcessStream(req, done)
-	if err != nil {
-		return fmt.Errorf("post-processor failed: %w", err)
+	// Skip post-processing if the flag is set (e.g., for external route requests)
+	if !req.SkipProcessors {
+		// Execute post-processing chain and measure duration
+		err := h.postProcessors.ProcessStream(req, done)
+		if err != nil {
+			return fmt.Errorf("post-processor failed: %w", err)
+		}
 	}
 
 	// Marshal the response structure to JSON
@@ -360,10 +369,8 @@ func (h *OpenAIHandler) ProcessAndWriteChunk(req *types.RequestContext, done boo
 	}
 
 	// Write response chunk if there's data to send
-	if len(data) > 0 {
-		klog.V(3).Infof("writing response chunk: %s", string(data))
-		req.WriteResponse(data)
-	}
+	klog.V(3).Infof("writing response chunk: %s", string(data))
+	req.WriteResponse(data)
 
 	// Send the stream completion marker if this is the final chunk
 	if done {

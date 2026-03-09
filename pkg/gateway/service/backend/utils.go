@@ -1,4 +1,4 @@
-package handler
+package backend
 
 import (
 	"bytes"
@@ -16,6 +16,16 @@ import (
 )
 
 const (
+	// connectRetry defines the maximum number of retry attempts for backend connection failures
+	connectRetry = 2
+
+	// ReadBufferSize specifies the initial buffer size (8KB) for reading streaming responses
+	ReadBufferSize = 8 * 1024
+
+	// ReadTimeout sets the maximum duration (5 minutes) to wait for reading from backend stream
+	ReadTimeout = 5 * time.Minute
+
+	// Http Client settings
 	maxIdleConns          = 1000
 	idleConnTimeout       = 5 * time.Minute
 	maxConnsPerHost       = 0 // no limit
@@ -52,7 +62,11 @@ func MakeNewBackendRequest(req *types.RequestContext, body []byte, worker *types
 	if worker == nil {
 		return nil, errors.New("failed to get worker")
 	}
-	url := fmt.Sprintf("http://%s%s", worker.Endpoint.String(), req.GetBackendURLPath())
+	url, err := worker.BuildRequestURL(req.GetBackendURLPath())
+	if err != nil {
+		klog.Errorf("failed to build request URL: %v", err)
+		return nil, err
+	}
 	klog.V(3).Infof("Forwarding request to %s body: %s", url, string(body))
 
 	// Create a new request to forward to the backend
@@ -67,6 +81,12 @@ func MakeNewBackendRequest(req *types.RequestContext, body []byte, worker *types
 			proxyReq.Header.Add(key, value)
 		}
 	}
+
+	apiKey := worker.APIKey
+	if apiKey != "" {
+		proxyReq.Header.Add("Authorization", "Bearer "+apiKey)
+	}
+
 	return proxyReq, nil
 }
 
@@ -162,7 +182,7 @@ func StreamReadFromBackend(req *types.RequestContext, client *http.Client, body 
 	newReq, err := MakeNewBackendRequest(req, body, worker)
 	if err != nil {
 		klog.Errorf("failed to create new backend request: %v", err)
-		chunkChan <- StreamChunk{err: err}
+		chunkChan <- StreamChunk{Err: err}
 		return
 	}
 
@@ -170,14 +190,14 @@ func StreamReadFromBackend(req *types.RequestContext, client *http.Client, body 
 	respBody, err := DoRequest(newReq, client, body, worker)
 	if err != nil {
 		klog.Errorf("failed to do backend request: %v", err)
-		chunkChan <- StreamChunk{err: err}
+		chunkChan <- StreamChunk{Err: err}
 		return
 	}
 	defer respBody.Close()
 
 	// Stream read response
 	if err := StreamRead(req, chunkChan, respBody); err != nil {
-		chunkChan <- StreamChunk{err: err}
+		chunkChan <- StreamChunk{Err: err}
 	}
 }
 
@@ -220,7 +240,7 @@ func StartStreamRead(req *types.RequestContext, respBody io.ReadCloser) <-chan S
 		defer respBody.Close()
 
 		if err := StreamRead(req, chunkChan, respBody); err != nil {
-			chunkChan <- StreamChunk{err: err}
+			chunkChan <- StreamChunk{Err: err}
 		}
 	}()
 	return chunkChan

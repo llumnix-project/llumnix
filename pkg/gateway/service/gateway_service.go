@@ -20,6 +20,7 @@ import (
 	"llm-gateway/pkg/gateway/batch"
 	balancer "llm-gateway/pkg/gateway/load-balancer"
 	"llm-gateway/pkg/gateway/protocol/anthropic"
+	"llm-gateway/pkg/gateway/service/backend"
 	"llm-gateway/pkg/gateway/service/handler"
 	"llm-gateway/pkg/gateway/service/mirror"
 	"llm-gateway/pkg/gateway/service/queue"
@@ -39,9 +40,16 @@ type LlmGatewayService struct {
 
 	// Request buffer queue for traffic control
 	bufferQueue *queue.QueueWorkerPool
+	// fallbackRateLimitRetryQueue handles retries when a fallback endpoint returns 429
+	fallbackRateLimitRetryQueue *queue.RateLimitRetryQueue
 	// Request handler for parsing and processing requests
 	openaiHandler    handler.RequestHandler
 	anthropicHandler handler.RequestHandler
+
+	// externalBackend is a SimpleBackend instance used for external route handling.
+	externalBackend backend.InferenceBackend
+	// inferenceBackend is the primary inference backend used for processing requests.
+	inferenceBackend backend.InferenceBackend
 
 	// Request state tracker for tracking request states
 	reqStateTracker *lrs.RequestStateTracker
@@ -93,8 +101,30 @@ func NewGatewayService(c *options.Config) *LlmGatewayService {
 	lgs.bufferQueue = queue.NewQueueWorkerPool(c.MaxQueueSize, c.WaitQueueThreads)
 	lgs.bufferQueue.Start()
 
+	// Create fallback 429 rate limit retry queue if enabled
+	if c.FallbackRetryQueueEnabled {
+		lgs.fallbackRateLimitRetryQueue = queue.NewRateLimitRetryQueue(
+			c.FallbackRetryQueueSize,
+			c.FallbackRetryWorkerSize,
+			c.FallbackRetryMaxCount,
+			time.Duration(c.FallbackRetryInitDelayMs)*time.Millisecond,
+			time.Duration(c.FallbackRetryMaxDelayMs)*time.Millisecond,
+		)
+		// Inject a checker that recognises upstream 429 errors.
+		lgs.fallbackRateLimitRetryQueue.SetRateLimitChecker(func(err error) bool {
+			var upstreamErr *consts.UpstreamError
+			return errors.As(err, &upstreamErr) && upstreamErr.StatusCode == http.StatusTooManyRequests
+		})
+		lgs.fallbackRateLimitRetryQueue.Start()
+		klog.Infof("Fallback 429 retry queue enabled: size=%d, maxRetries=%d, initDelay=%dms, maxDelay=%dms",
+			c.FallbackRetryQueueSize, c.FallbackRetryMaxCount, c.FallbackRetryInitDelayMs, c.FallbackRetryMaxDelayMs)
+	}
+
 	// Create request handler for parsing different format requests
 	lgs.BuildHandler()
+
+	// Create inference backend
+	lgs.BuildBackend()
 
 	// Create load balancer
 	var lb balancer.Balancer
@@ -145,8 +175,28 @@ func (lgs *LlmGatewayService) BuildHandler() {
 	lgs.anthropicHandler = h
 }
 
-// healthz is the health check endpoint for K8s liveness/readiness probes
-func (lgs *LlmGatewayService) healthz(w http.ResponseWriter, r *http.Request) {
+func (lgs *LlmGatewayService) BuildBackend() {
+	bType, scheduleMode := lgs.config.GetBackendParams()
+	inferenceBackend, err := backend.BuildBackend(bType, scheduleMode)
+	if err != nil {
+		klog.Fatalf("build backend failed: %v", err)
+	}
+	lgs.inferenceBackend = inferenceBackend
+
+	if inferenceBackend.Name() == backend.BackendTypeSimple {
+		lgs.externalBackend = inferenceBackend
+	} else {
+		// inferenceBackend is not simple backend, need to create a new simple backend
+		simpleBackend, err := backend.BuildBackend(backend.BackendTypeSimple, scheduleMode)
+		if err != nil {
+			klog.Fatalf("build simple backend failed: %v", err)
+		}
+		lgs.externalBackend = simpleBackend
+	}
+}
+
+// Healthz is the health check endpoint for K8s liveness/readiness probes
+func (lgs *LlmGatewayService) Healthz(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
@@ -281,32 +331,45 @@ func (lgs *LlmGatewayService) writeResponseUntilDone(reqCtx *types.RequestContex
 
 // externalRouteRequest handles fallback routing with retry mechanism
 // It tries the given fallback endpoint first, then tries other available fallback configurations
-func (lgs *LlmGatewayService) externalRouteRequest(reqCtx *types.RequestContext, firstDst *router.RouteEndpoint) error {
-	defer close(reqCtx.ResponseChan)
+func (lgs *LlmGatewayService) externalRouteRequest(reqCtx *types.RequestContext, handler handler.RequestHandler) {
+	defer func() {
+		klog.V(3).Infof("request [%s] externalRouteRequest end", reqCtx.Id)
+		close(reqCtx.ResponseChan)
+		defer reqCtx.TriggerPostRequest()
+	}()
+	reqCtx.TriggerPreRequest()
 
-	// Try do external request
-	originURL := reqCtx.HttpRequest.Request.URL.String()
-	url := firstDst.JoinURL(originURL)
-	if err := TrySimpleHTTPProxy(lgs.simpleClient, url, reqCtx); err == nil {
-		return nil
+	// Delegate the request handling to the provided handler using externalBackend (SimpleBackend)
+	err := handler.Handle(reqCtx, lgs.externalBackend)
+	if err != nil {
+		klog.V(3).Infof("request [%s] externalRouteRequest failed: %v", reqCtx.Id, err)
+		err := lgs.tryFallback(reqCtx, handler)
+		if err != nil {
+			reqCtx.WriteErrorResponse(err)
+		}
 	}
-
-	// External request failed, then try fall back
-	lgs.tryFallback(reqCtx)
-	return nil
 }
 
 // unknownRouteRequest handles requests with unknown route by trying fallback
-func (lgs *LlmGatewayService) unknownRouteRequest(reqCtx *types.RequestContext) error {
-	defer close(reqCtx.ResponseChan)
-	return lgs.tryFallback(reqCtx)
+func (lgs *LlmGatewayService) unknownRouteRequest(reqCtx *types.RequestContext, handler handler.RequestHandler) {
+	defer func() {
+		klog.V(3).Infof("request [%s] unknownRouteRequest end", reqCtx.Id)
+		close(reqCtx.ResponseChan)
+		defer reqCtx.TriggerPostRequest()
+	}()
+	reqCtx.TriggerPreRequest()
+
+	err := lgs.tryFallback(reqCtx, handler)
+	if err != nil {
+		reqCtx.WriteErrorResponse(err)
+	}
 }
 
 // internalRouteRequest handles internal routing with retry mechanism.
 // It executes the handler and retries on retryable errors (5xx, network errors)
 // by rescheduling to different workers up to config.RetryCount times.
 // When all retries are exhausted, it triggers router fallback if available.
-func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext, h handler.RequestHandler) {
+func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext, handler handler.RequestHandler) {
 	defer func() {
 		klog.V(3).Infof("request [%s] internalRouteRequest end", reqCtx.Id)
 		close(reqCtx.ResponseChan)
@@ -332,7 +395,7 @@ func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext,
 					reqCtx.WriteErrorResponse(originErr)
 					return
 				}
-				if e := lgs.tryFallback(reqCtx); e != nil {
+				if e := lgs.tryFallback(reqCtx, handler); e != nil {
 					reqCtx.WriteErrorResponse(e)
 				}
 				return
@@ -342,9 +405,9 @@ func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext,
 		}
 
 		// Execute the handler
-		originErr = h.Handle(reqCtx)
+		originErr = handler.Handle(reqCtx, lgs.inferenceBackend)
 		if originErr == nil {
-			break
+			return
 		}
 
 		// Check if error is retryable and get failed instance info
@@ -358,7 +421,7 @@ func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext,
 		// Check if this is the last attempt
 		if attempt == maxRetries {
 			klog.Warningf("request [%s] all %d retries exhausted, last error: %v", reqCtx.Id, maxRetries, originErr)
-			lgs.tryFallback(reqCtx)
+			lgs.tryFallback(reqCtx, handler)
 			return
 		}
 
@@ -382,35 +445,65 @@ func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext,
 }
 
 // tryFallback attempts router fallback first, sends error if fallback fails or unavailable.
-func (lgs *LlmGatewayService) tryFallback(reqCtx *types.RequestContext) error {
+func (lgs *LlmGatewayService) tryFallback(reqCtx *types.RequestContext, handler handler.RequestHandler) error {
 	var err error
 	tryCnt := 0
 	serviceRouter := router.GetServiceRouter()
 	// Try all available fallback configurations
 	for serviceRouter.CanFallback(reqCtx) {
-		fdst, err := serviceRouter.Fallback(reqCtx)
-		if err != nil {
-			klog.Warningf("request [%s] fallback failed: %v, no more fallback endpoints", reqCtx.Id, err)
-			return fmt.Errorf("all fallback attempts failed for request %s", reqCtx.Id)
-		}
-		originURL := reqCtx.HttpRequest.Request.URL.String()
-		url := fdst.JoinURL(originURL)
-		klog.Infof("request [%s] falling back to url: %s", reqCtx.Id, url)
-
 		if reqCtx.HttpRequest.HeaderResponded {
-			klog.Errorf("request [%s] HTTP headers already sent, cannot proxy to %s", reqCtx.Id, url)
+			klog.Errorf("request [%s] HTTP headers already sent, cannot proxy.", reqCtx.Id)
 			return nil
 		}
 
-		// Try to proxy the request
-		err = TrySimpleHTTPProxy(lgs.simpleClient, url, reqCtx)
+		fdst, ferr := serviceRouter.Fallback(reqCtx)
+		if ferr != nil {
+			klog.Warningf("request [%s] fallback failed: %v, no more fallback endpoints", reqCtx.Id, ferr)
+			return fmt.Errorf("all fallback attempts failed for request %s", reqCtx.Id)
+		}
+		klog.Infof("request [%s] will fallback to: %s", reqCtx.Id, fdst.URL)
+
+		PopulateExternalWorker(reqCtx, fdst)
+		err = handler.Handle(reqCtx, lgs.externalBackend)
 		if err == nil {
 			return nil
 		}
 		tryCnt += 1
 
-		// Fallback failed, try next one if available
-		klog.Warningf("request [%s] fallback to %s failed", reqCtx.Id, url)
+		// Fallback failed, check if it is a 429 rate limit error that can be retried via queue.
+		var upstreamErr *consts.UpstreamError
+		if errors.As(err, &upstreamErr) && upstreamErr.StatusCode == http.StatusTooManyRequests {
+			if lgs.fallbackRateLimitRetryQueue != nil {
+				klog.Infof("request [%s] fallback to %s got 429 (too many requests), enqueuing for rate-limit retry", reqCtx.Id, fdst.URL)
+
+				retryResultCh, enqueued := lgs.fallbackRateLimitRetryQueue.Enqueue(
+					reqCtx.Context,
+					func() error {
+						return handler.Handle(reqCtx, lgs.externalBackend)
+					},
+				)
+				if enqueued {
+					// Block until retry succeeds, permanently fails, or the client disconnects.
+					select {
+					case result := <-retryResultCh:
+						if result.Err == nil {
+							return nil
+						}
+						klog.Warningf("request [%s] rate-limit retry for fallback %s ultimately failed: %v", reqCtx.Id, fdst.URL, result.Err)
+						err = result.Err
+					case <-reqCtx.Context.Done():
+						klog.Warningf("request [%s] context cancelled while waiting for rate-limit retry", reqCtx.Id)
+						return context.Canceled
+					}
+					// Retry exhausted; fall through to try next fallback or return error.
+				} else {
+					klog.Warningf("request [%s] rate-limit retry queue full, skipping queue for fallback %s", reqCtx.Id, fdst.URL)
+				}
+			}
+		}
+
+		// Fallback failed (non-429 or retry exhausted), try next one if available.
+		klog.Warningf("request [%s] fallback to %s failed: %v", reqCtx.Id, fdst.URL, err)
 
 		// Add small delay before trying next fallback (exponential backoff based on attempt count)
 		attempt := reqCtx.RequestStats.FallbackAttempt - 1 // Current attempt count
@@ -421,7 +514,7 @@ func (lgs *LlmGatewayService) tryFallback(reqCtx *types.RequestContext) error {
 		time.Sleep(backoff)
 	}
 	klog.Warningf("request [%s] all %d fallback attempts failed: %v", reqCtx.Id, tryCnt, err)
-	return fmt.Errorf("request %s all fallback attempts failed: %v", reqCtx.Id, err)
+	return fmt.Errorf("request %s all fallback attempts failed: %w", reqCtx.Id, err)
 }
 
 // dispatchRequest routes the request and dispatches it to appropriate handler
@@ -442,7 +535,7 @@ func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext, hand
 		if err != nil {
 			klog.V(3).Infof("request [%s] scheduling failed: %v", reqCtx.Id, err)
 			if serviceRouter.CanFallback(reqCtx) {
-				if e := lgs.tryFallback(reqCtx); e != nil {
+				if e := lgs.tryFallback(reqCtx, handler); e != nil {
 					reqCtx.WriteErrorResponse(e)
 				}
 			} else {
@@ -455,10 +548,11 @@ func (lgs *LlmGatewayService) dispatchRequest(reqCtx *types.RequestContext, hand
 		go lgs.internalRouteRequest(reqCtx, handler)
 	case router.RouteExternal:
 		// Match external route
-		go lgs.externalRouteRequest(reqCtx, dst)
+		PopulateExternalWorker(reqCtx, dst)
+		go lgs.externalRouteRequest(reqCtx, handler)
 	case router.RouteUnknown:
 		// Match unknown route, try fallback
-		go lgs.unknownRouteRequest(reqCtx)
+		go lgs.unknownRouteRequest(reqCtx, handler)
 	}
 }
 
@@ -726,7 +820,7 @@ func (lgs *LlmGatewayService) Run() {
 	router := mux.NewRouter()
 
 	// Register health check route
-	router.HandleFunc("/healthz", lgs.healthz)
+	router.HandleFunc("/healthz", lgs.Healthz)
 	// Register Prometheus metrics endpoint
 	prometheusHandler := metrics.NewPrometheusHandler()
 	router.Handle("/metrics", prometheusHandler)

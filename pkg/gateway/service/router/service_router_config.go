@@ -45,6 +45,35 @@ func NewServiceRouterConfig() *ServiceRouterConfig {
 	return rc
 }
 
+// SetRouteConfig sets the route policy and config from static configuration.
+// This should be called during application initialization (e.g., in Config.Complete)
+// to override default empty values with command-line flag values.
+func (rc *ServiceRouterConfig) SetRouteConfig(routePolicy, routeConfigRaw string) {
+	if routePolicy == "" && routeConfigRaw == "" {
+		return
+	}
+
+	oldSnapshot := rc.getSnapshot()
+	newSnapshot := &configSnapshot{
+		routePolicy:    routePolicy,
+		routeConfigRaw: routeConfigRaw,
+	}
+
+	// Log changes
+	if oldSnapshot.routePolicy != newSnapshot.routePolicy ||
+		oldSnapshot.routeConfigRaw != newSnapshot.routeConfigRaw {
+		klog.Infof("[ServiceRouter] config set from static config:")
+		klog.Infof("  - route_policy: %s", newSnapshot.routePolicy)
+		klog.Infof("  - route_config: %s", newSnapshot.routeConfigRaw)
+	}
+
+	// Atomically swap in new snapshot
+	rc.currentSnapshot.Store(newSnapshot)
+
+	// Signal that router needs rebuilding
+	rc.needRebuild.Store(true)
+}
+
 // readFromDyConfig reads all config values directly from DynamicConfigManager.
 // This is the ONLY method that accesses dyConfigMgr; all getters read from the local snapshot.
 func (rc *ServiceRouterConfig) readFromDyConfig() *configSnapshot {

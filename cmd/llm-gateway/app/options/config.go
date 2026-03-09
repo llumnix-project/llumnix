@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"llm-gateway/pkg/gateway/service/router"
+	"llm-gateway/pkg/types"
 	"llm-gateway/pkg/utils"
 
 	"github.com/spf13/pflag"
@@ -141,6 +143,14 @@ type Config struct {
 	BatchLinesPerShard     int
 	BatchRequestTimeout    time.Duration
 	BatchRequestRetryTimes int
+
+	// Fallback 429 rate limit retry queue configuration
+	FallbackRetryQueueEnabled bool // enable 429 rate limit retry queue for fallback
+	FallbackRetryQueueSize    int  // max size of the fallback 429 retry queue
+	FallbackRetryWorkerSize   int  // number of worker goroutines in the retry queue's worker pool
+	FallbackRetryMaxCount     int  // max retry count for fallback 429, -1 means unlimited
+	FallbackRetryInitDelayMs  int  // initial retry delay in milliseconds for fallback 429
+	FallbackRetryMaxDelayMs   int  // max retry delay in milliseconds for fallback 429
 
 	// TODO(sunbiao.sun): remove
 	PrefillPolicy string
@@ -387,6 +397,13 @@ func (c *Config) AddConfigFlags(flags *pflag.FlagSet) {
 	flags.DurationVar(&c.BatchRequestTimeout, "batch-request-timeout", 3*time.Minute, "HTTP request timeout duration")
 	flags.IntVar(&c.BatchRequestRetryTimes, "batch-request-retry-times", 3, "HTTP retry times")
 
+	flags.BoolVar(&c.FallbackRetryQueueEnabled, "enable-fallback-retry", false, "enable 429 rate limit retry queue for fallback")
+	flags.IntVar(&c.FallbackRetryQueueSize, "fallback-retry-queue-size", 128, "max size of the fallback 429 retry queue")
+	flags.IntVar(&c.FallbackRetryWorkerSize, "fallback-retry-worker-size", 1, "number of worker goroutines in the fallback 429 retry queue")
+	flags.IntVar(&c.FallbackRetryMaxCount, "fallback-retry-max-count", 10, "max retry count for fallback 429, -1 means unlimited")
+	flags.IntVar(&c.FallbackRetryInitDelayMs, "fallback-retry-init-delay-ms", 50, "initial retry delay in milliseconds for fallback 429")
+	flags.IntVar(&c.FallbackRetryMaxDelayMs, "fallback-retry-max-delay-ms", 5000, "max retry delay in milliseconds for fallback 429")
+
 	// TODO(sunbiao.sun): remove
 	flags.StringVar(&c.LlumnixConfig.DispatchPolicy, "llumnix-dispatch-policy", consts.DefaultLlumnixDispatchPolicy, "Llumnix dispatch policy")
 }
@@ -438,6 +455,21 @@ func (c *Config) HasPrefixCachePolicy() bool {
 		(c.SchedulePolicy == consts.SchedulePolicyPDSplit &&
 			(c.PrefillPolicy == consts.SchedulePolicyPrefixCache ||
 				c.DecodePolicy == consts.SchedulePolicyPrefixCache))
+}
+
+// GetBackendParams returns the backend type and schedule mode based on the configuration.
+func (c *Config) GetBackendParams() (string, types.ScheduleMode) {
+	bType := "simple"
+	if c.IsPDSplitMode() {
+		bType = c.PDSplitMode
+	}
+	var scheduleMode types.ScheduleMode
+	if c.SeparatePDSchedule {
+		scheduleMode = types.ScheduleModePDStaged
+	} else {
+		scheduleMode = types.ScheduleModePDBatch
+	}
+	return bType, scheduleMode
 }
 
 // getPrefixCacheLimit configures the prefix cache size based on available memory.
@@ -552,10 +584,22 @@ func (c *Config) Complete(flags *pflag.FlagSet) error {
 	// Validate schedule policy configuration
 	c.validateSchedulePolicyConfig()
 
+	// Set route configuration from command line flags to ServiceRouterConfig
+	c.setupRouteConfig()
+
 	// Print comprehensive configuration summary for debugging and auditing
 	c.printConfigSummary()
 
 	return nil
+}
+
+// setupRouteConfig sets the route configuration from command line flags to the global ServiceRouterConfig.
+func (c *Config) setupRouteConfig() {
+	if c.RoutePolicy != "" || c.RouteConfigRaw != "" {
+		// Import router package here to avoid circular dependency
+		// This is called after flag parsing, so RoutePolicy and RouteConfigRaw are populated
+		router.GetServiceRouterConfig().SetRouteConfig(c.RoutePolicy, c.RouteConfigRaw)
+	}
 }
 
 // printConfigSummary logs all configuration values for debugging and auditing purposes.

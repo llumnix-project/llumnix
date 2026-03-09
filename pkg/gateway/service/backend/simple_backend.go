@@ -1,4 +1,4 @@
-package handler
+package backend
 
 import (
 	"fmt"
@@ -37,7 +37,11 @@ func (b *SimpleBackend) StreamInference(req *types.RequestContext) (<-chan Strea
 		return nil, fmt.Errorf("%s no available worker for role: %s", req.Id, types.InferRoleNormal)
 	}
 
-	body, err := req.MarshalRequestWithArgs(nil)
+	var args map[string]interface{}
+	if worker.Model != "" {
+		args = map[string]interface{}{"model": worker.Model}
+	}
+	body, err := req.MarshalRequestWithArgs(args)
 	if err != nil {
 		return nil, err
 	}
@@ -63,11 +67,19 @@ func (b *SimpleBackend) Inference(req *types.RequestContext) ([]byte, error) {
 		return nil, fmt.Errorf("%s no available worker for role: %s", req.Id, types.InferRoleNormal)
 	}
 
-	body, err := req.MarshalRequestWithArgs(nil)
+	var args map[string]interface{}
+	if worker.Model != "" {
+		args = map[string]interface{}{"model": worker.Model}
+	}
+	body, err := req.MarshalRequestWithArgs(args)
 	if err != nil {
 		klog.Errorf("failed to marshal request body: %v", err)
 		return nil, err
 	}
 
 	return ReadFromBackend(req, b.client, body, worker)
+}
+
+func (b *SimpleBackend) Name() string {
+	return BackendTypeSimple
 }

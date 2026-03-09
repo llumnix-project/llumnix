@@ -1,4 +1,4 @@
-package service
+package tests
 
 import (
 	"net/http"

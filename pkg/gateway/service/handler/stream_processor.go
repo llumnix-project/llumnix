@@ -2,6 +2,7 @@ package handler
 
 import (
 	"io"
+	"llm-gateway/pkg/gateway/service/backend"
 	"llm-gateway/pkg/types"
 
 	"k8s.io/klog/v2"
@@ -57,10 +58,10 @@ func NewStreamProcessor(parser ChunkParser, writer ChunkWriter) *StreamProcessor
 // 6. Context cancellation detection to prevent goroutine leak
 //
 // The actual parsing and writing logic is delegated to the injected strategy implementations.
-func (sp *StreamProcessor) ProcessStream(req *types.RequestContext, chunkChan <-chan StreamChunk) {
+func (sp *StreamProcessor) ProcessStream(req *types.RequestContext, chunkChan <-chan backend.StreamChunk) {
 
-	processFunc := func(isFirst bool, chunk StreamChunk) bool {
-		klog.V(3).Infof("received stream chunk: %s, err: %v", string(chunk.Data), chunk.err)
+	processFunc := func(isFirst bool, chunk backend.StreamChunk) bool {
+		klog.V(3).Infof("received stream chunk: %s, err: %v", string(chunk.Data), chunk.Err)
 
 		defer func() {
 			// Track timing metrics: first chunk triggers prefill completion, subsequent chunks trigger decode
@@ -72,14 +73,14 @@ func (sp *StreamProcessor) ProcessStream(req *types.RequestContext, chunkChan <-
 		}()
 
 		// Handle unexpected streaming errors (early return for exception path)
-		if chunk.err != nil && chunk.err != io.EOF {
-			klog.Errorf("request %s error during stream inference: %v", req.Id, chunk.err)
-			req.WriteErrorResponse(chunk.err)
+		if chunk.Err != nil && chunk.Err != io.EOF {
+			klog.Errorf("request %s error during stream inference: %v", req.Id, chunk.Err)
+			req.WriteErrorResponse(chunk.Err)
 			return true
 		}
 
 		// Handle normal stream end - process any remaining data before completing
-		if chunk.err == io.EOF {
+		if chunk.Err == io.EOF {
 			if len(chunk.Data) == 0 {
 				return true
 			}

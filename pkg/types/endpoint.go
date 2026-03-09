@@ -36,5 +36,8 @@ func NewEndpoint(str string) (ep Endpoint, err error) {
 
 // String returns the string in format "host:port".
 func (ep Endpoint) String() string {
+	if ep.Host == "" || ep.Port == 0 {
+		return ""
+	}
 	return fmt.Sprintf("%s:%d", ep.Host, ep.Port)
 }

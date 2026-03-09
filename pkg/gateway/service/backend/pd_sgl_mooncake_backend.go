@@ -1,4 +1,4 @@
-package handler
+package backend
 
 import (
 	"fmt"
@@ -38,11 +38,15 @@ func (b *PdSplitSglMoonCakeBackend) buildRequestData(req *types.RequestContext, 
 	bootstrapRoom := rand.Intn(1<<63 - 1)
 	bootstrapRoom = bootstrapRoom/dpSize*dpSize + dpRank
 
-	return req.MarshalRequestWithArgs(map[string]interface{}{
+	args := map[string]interface{}{
 		"rid":            req.Id,
 		"bootstrap_host": pWorker.Endpoint.Host,
 		"bootstrap_room": bootstrapRoom,
-	})
+	}
+	if dWorker.Model != "" {
+		args["model"] = dWorker.Model
+	}
+	return req.MarshalRequestWithArgs(args)
 }
 
 func (b *PdSplitSglMoonCakeBackend) doRequest(req *types.RequestContext, data []byte, worker *types.LLMWorker) (io.ReadCloser, error) {
@@ -98,7 +102,7 @@ func (b *PdSplitSglMoonCakeBackend) parallelDoRequests(req *types.RequestContext
 func (b *PdSplitSglMoonCakeBackend) parallelRequestAndStream(req *types.RequestContext, body []byte, pWorker, dWorker *types.LLMWorker, chunkChan chan StreamChunk) {
 	prefillResp, decodeResp, err := b.parallelDoRequests(req, body, pWorker, dWorker)
 	if err != nil {
-		chunkChan <- StreamChunk{err: err}
+		chunkChan <- StreamChunk{Err: err}
 		return
 	}
 	defer func() {
@@ -107,7 +111,7 @@ func (b *PdSplitSglMoonCakeBackend) parallelRequestAndStream(req *types.RequestC
 	}()
 
 	if err := StreamRead(req, chunkChan, decodeResp); err != nil {
-		chunkChan <- StreamChunk{err: err}
+		chunkChan <- StreamChunk{Err: err}
 		return
 	}
 }
@@ -147,7 +151,7 @@ func (b *PdSplitSglMoonCakeBackend) BatchScheduleStreamInference(req *types.Requ
 		}()
 
 		if err := StreamRead(req, chunkChan, decodeResp); err != nil {
-			chunkChan <- StreamChunk{err: err}
+			chunkChan <- StreamChunk{Err: err}
 			return
 		}
 	}()
@@ -190,4 +194,8 @@ func (b *PdSplitSglMoonCakeBackend) Inference(req *types.RequestContext) ([]byte
 	default:
 		return nil, fmt.Errorf("[%s] unsupported schedule mode: %s", req.Id, b.scheduleMode)
 	}
+}
+
+func (b *PdSplitSglMoonCakeBackend) Name() string {
+	return consts.SplitModeSGlangMooncake
 }

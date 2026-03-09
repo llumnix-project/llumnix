@@ -1,72 +1,15 @@
 package service
 
 import (
-	"bytes"
-	"fmt"
 	"io"
+	"llm-gateway/pkg/consts"
+	"llm-gateway/pkg/gateway/service/router"
 	"llm-gateway/pkg/types"
 	"net/http"
 
 	"github.com/valyala/fastjson"
 	"k8s.io/klog/v2"
 )
-
-// TrySimpleHTTPProxy attempts to proxy a request to the given URL
-// Returns true if successful, false if failed
-func TrySimpleHTTPProxy(client *http.Client, url string, reqCtx *types.RequestContext) error {
-	r := reqCtx.HttpRequest.Request
-	w := reqCtx.HttpRequest.Writer
-
-	// Check if headers have already been sent
-	if reqCtx.HttpRequest.HeaderResponded {
-		klog.Errorf("request [%s] headers already sent, cannot proxy to %s", reqCtx.Id, url)
-		return fmt.Errorf("headers already sent")
-	}
-
-	// Create a new request to forward to the backend
-	body := reqCtx.GetRequestRawData()
-	proxyReq, err := http.NewRequestWithContext(reqCtx.Context, r.Method, url, bytes.NewBuffer(body))
-	if err != nil {
-		klog.Errorf("request [%s] failed to create proxy request to %s: %v", reqCtx.Id, url, err)
-		return fmt.Errorf("failed to create proxy request")
-	}
-
-	// Copy headers from original request
-	for key, values := range r.Header {
-		for _, value := range values {
-			proxyReq.Header.Add(key, value)
-		}
-	}
-
-	// Send the request to the backend using shared HTTP client
-	resp, err := client.Do(proxyReq)
-	if err != nil {
-		klog.Errorf("request [%s] failed to forward request to %s: %v", reqCtx.Id, url, err)
-		return fmt.Errorf("failed to forward request: %v", err)
-	}
-	defer resp.Body.Close()
-
-	// Copy response headers to client
-	for key, values := range resp.Header {
-		for _, value := range values {
-			w.Header().Add(key, value)
-		}
-	}
-
-	// Write response status code
-	w.WriteHeader(resp.StatusCode)
-	reqCtx.HttpRequest.HeaderResponded = true
-
-	// Copy response body to client
-	_, err = io.Copy(w, resp.Body)
-	if err != nil {
-		klog.Errorf("request [%s] failed to copy response body from %s: %v", reqCtx.Id, url, err)
-		// Headers already sent, can't recover
-		return fmt.Errorf("failed to copy response body: %v", err)
-	}
-
-	return nil
-}
 
 // SimpleHTTPProxy forwards the request to a backend endpoint and returns the response to the client
 // Parameters:
@@ -173,4 +116,24 @@ func EstimateTokens(data []byte) int {
 		estimatedTokens = 1
 	}
 	return estimatedTokens
+}
+
+// PopulateExternalWorker populates the request context with the external worker information
+func PopulateExternalWorker(reqCtx *types.RequestContext, dst *router.RouteEndpoint) {
+	worker := &types.LLMWorker{
+		Role:     consts.NormalInferMode,
+		Model:    dst.Model,
+		BaseURL:  dst.URL,
+		APIKey:   dst.APIKey,
+		Released: true,
+	}
+
+	// No scheduling needed for external routes: the target worker is already determined
+	// by the router, so populate ScheduleResults directly to satisfy downstream processors
+	// that expect a selected worker (e.g. access logging, metrics).
+	reqCtx.ScheduleCtx.ScheduleResults = []*types.LLMWorker{worker}
+
+	// External route requests should bypass pre-processors and post-processors
+	// as they are forwarded directly to external endpoints without transformation
+	reqCtx.SkipProcessors = true
 }

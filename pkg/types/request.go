@@ -539,6 +539,14 @@ type RequestContext struct {
 
 	// Whether the request has been tokenized
 	Tokenized bool
+
+	// SkipProcessors indicates whether to skip pre-processors and post-processors.
+	// This is used for external route requests that should be passed through directly
+	// without any transformation or processing.
+	// Note: Currently only supported for OpenAIHandler. AnthropicHandler does not
+	// yet implement this optimization and will still execute processors even when
+	// this flag is set to true.
+	SkipProcessors bool
 }
 
 func (req *RequestContext) ClientStream() bool {

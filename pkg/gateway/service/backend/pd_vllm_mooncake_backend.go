@@ -1,4 +1,4 @@
-package handler
+package backend
 
 import (
 	"encoding/json"
@@ -32,7 +32,7 @@ func NewPdSplitVllmMoonCakeBackend(schMode types.ScheduleMode) (InferenceBackend
 	}, nil
 }
 
-func (b *PdSplitVllmMoonCakeBackend) buildPrefillRequestData(req *types.RequestContext) ([]byte, error) {
+func (b *PdSplitVllmMoonCakeBackend) buildPrefillRequestData(req *types.RequestContext, pWorker *types.LLMWorker) ([]byte, error) {
 	// Set kv_transfer_params
 	kvTransferParams := map[string]interface{}{
 		"do_remote_decode":  true,
@@ -42,16 +42,20 @@ func (b *PdSplitVllmMoonCakeBackend) buildPrefillRequestData(req *types.RequestC
 		"remote_host":       nil,
 		"remote_port":       nil,
 	}
-	return req.MarshalRequestWithArgs(map[string]interface{}{
+	args := map[string]interface{}{
 		"kv_transfer_params": kvTransferParams,
 		"max_tokens":         1,
 		"stream":             false,
-	})
+	}
+	if pWorker.Model != "" {
+		args["model"] = pWorker.Model
+	}
+	return req.MarshalRequestWithArgs(args)
 }
 
 func (b *PdSplitVllmMoonCakeBackend) doPrefill(req *types.RequestContext, pWorker *types.LLMWorker) error {
 	// build prefill request
-	data, err := b.buildPrefillRequestData(req)
+	data, err := b.buildPrefillRequestData(req, pWorker)
 	if err != nil {
 		klog.Errorf("[%s] failed to build prefill request data: %v", err, req.Id)
 		return err
@@ -98,7 +102,11 @@ func (b *PdSplitVllmMoonCakeBackend) BatchScheduleStreamInference(req *types.Req
 	if err != nil {
 		return nil, err
 	}
-	body, err := req.MarshalRequestWithArgs(nil)
+	var args map[string]interface{}
+	if dWorker.Model != "" {
+		args = map[string]interface{}{"model": dWorker.Model}
+	}
+	body, err := req.MarshalRequestWithArgs(args)
 	if err != nil {
 		klog.Errorf("[%s] failed to marshal completion request: %v", req.Id, err)
 		return nil, err
@@ -136,7 +144,11 @@ func (b *PdSplitVllmMoonCakeBackend) StagedScheduleStreamInference(req *types.Re
 		return nil, err
 	}
 
-	body, err := req.MarshalRequestWithArgs(nil)
+	var args map[string]interface{}
+	if dWorker.Model != "" {
+		args = map[string]interface{}{"model": dWorker.Model}
+	}
+	body, err := req.MarshalRequestWithArgs(args)
 	if err != nil {
 		klog.Errorf("[%s] failed to build decode request data: %v", err, req.Id)
 		return nil, err
@@ -182,7 +194,11 @@ func (b *PdSplitVllmMoonCakeBackend) BatchScheduleInference(req *types.RequestCo
 	if err != nil {
 		return nil, err
 	}
-	data, err := req.MarshalRequestWithArgs(nil)
+	var args map[string]interface{}
+	if dWorker.Model != "" {
+		args = map[string]interface{}{"model": dWorker.Model}
+	}
+	data, err := req.MarshalRequestWithArgs(args)
 	if err != nil {
 		klog.Errorf("[%s] failed to marshal completion request: %v", req.Id, err)
 		return nil, err
@@ -204,7 +220,11 @@ func (b *PdSplitVllmMoonCakeBackend) StagedScheduleInference(req *types.RequestC
 	if err != nil {
 		return nil, err
 	}
-	data, err := req.MarshalRequestWithArgs(nil)
+	var args map[string]interface{}
+	if dWorker.Model != "" {
+		args = map[string]interface{}{"model": dWorker.Model}
+	}
+	data, err := req.MarshalRequestWithArgs(args)
 	if err != nil {
 		klog.Errorf("[%s] failed to build decode request data: %v", err, req.Id)
 		return nil, err
@@ -221,4 +241,8 @@ func (b *PdSplitVllmMoonCakeBackend) Inference(req *types.RequestContext) ([]byt
 	default:
 		return nil, fmt.Errorf("[%s] unsupported schedule mode: %s", req.Id, b.scheduleMode)
 	}
+}
+
+func (b *PdSplitVllmMoonCakeBackend) Name() string {
+	return consts.SplitModeVllmMooncake
 }

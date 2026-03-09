@@ -1,8 +1,7 @@
-package handler
+package backend
 
 import (
 	"fmt"
-	"llm-gateway/cmd/llm-gateway/app/options"
 	"llm-gateway/pkg/types"
 	"sync"
 )
@@ -10,11 +9,11 @@ import (
 // IMPORTANT: Backend implementations MUST NOT be coupled with handlers.
 // Do NOT reference handler-specific types (e.g., LLMRequest, AnthropicRequest) from RequestContext within backend code.
 
-// StreamChunk represents a single chunk of data from a streaming inference response
-// It contains either data bytes or an error that occurred during streaming
+// StreamChunk represents a single chunk of data from a streaming inference response.
+// It contains either data bytes or an error that occurred during streaming.
 type StreamChunk struct {
-	// err holds any error that occurred while processing this chunk
-	err error
+	// Err holds any error that occurred while processing this chunk
+	Err error
 
 	// Data contains the actual response bytes for this chunk
 	Data []byte
@@ -24,6 +23,9 @@ type StreamChunk struct {
 // It handles both regular inference and PD-separated inference modes
 // The backend itself does not perform inference, but communicates with actual inference engines
 type InferenceBackend interface {
+	// Name returns the name of the backend type
+	Name() string
+
 	// StreamInference sends the request to backend inference engine and returns a channel
 	// that streams response chunks back to the caller
 	StreamInference(req *types.RequestContext) (<-chan StreamChunk, error)
@@ -53,25 +55,12 @@ func RegisterBackend(backendType string, factory BackendFactory) {
 
 // BuildBackend creates an InferenceBackend instance based on the backend type and schedule mode
 // Returns an error if the backend type is not registered
-func BuildBackend(config *options.Config) (InferenceBackend, error) {
-	name := "simple"
-	if config.IsPDSplitMode() {
-		name = config.PDSplitMode
-	}
-	var scheduleMode types.ScheduleMode
-	if config.SeparatePDSchedule {
-		scheduleMode = types.ScheduleModePDStaged
-	} else {
-		scheduleMode = types.ScheduleModePDBatch
-	}
-
+func BuildBackend(bType string, scheduleMode types.ScheduleMode) (InferenceBackend, error) {
 	registryMu.RLock()
-	factory, exists := backendRegistry[name]
+	factory, exists := backendRegistry[bType]
 	registryMu.RUnlock()
-
 	if !exists {
-		return nil, fmt.Errorf("unknown backend type: %s", name)
+		return nil, fmt.Errorf("unknown backend type: %s", bType)
 	}
-
 	return factory(scheduleMode)
 }
