@@ -632,14 +632,14 @@ func (c *CMSReadClient) setReservedInstance() {
 		if decodeBatchSize >= 0 && prefillTokensNum == 0 && c.reservedDecodeInstance == "" {
 			c.reservedDecodeInstance = instanceId
 			c.instanceViews[instanceId].ReservedInferType = consts.InferTypeDecode
-			klog.Infof("[setReservedInstance] Set reserve decode instance, instanceID=%s", instanceId)
+			klog.Infof("[setReservedInstance] Set reserved decode instance, instanceID=%s", instanceId)
 		}
 
 		if prefillTokensNum >= 0 && decodeBatchSize == 0 &&
 			c.reservedPrefillInstance == "" && instanceId != c.reservedDecodeInstance {
 			c.reservedPrefillInstance = instanceId
 			c.instanceViews[instanceId].ReservedInferType = consts.InferTypePrefill
-			klog.Infof("[setReservedInstance] Set reserve prefill instance, instanceID=%s", instanceId)
+			klog.Infof("[setReservedInstance] Set reserved prefill instance, instanceID=%s", instanceId)
 		}
 
 		if c.reservedPrefillInstance != "" && c.reservedDecodeInstance != "" {
@@ -661,13 +661,13 @@ func (c *CMSReadClient) setReservedInstance() {
 	if c.reservedDecodeInstance == "" && leastBusyDecodeInstanceId != "" {
 		c.reservedDecodeInstance = leastBusyDecodeInstanceId
 		c.instanceViews[leastBusyDecodeInstanceId].ReservedInferType = consts.InferTypeDecode
-		klog.Infof("[setReservedInstance] Set reserve decode instance, instanceID=%s", leastBusyDecodeInstanceId)
+		klog.Infof("[setReservedInstance] Set reserved decode instance, instanceID=%s", leastBusyDecodeInstanceId)
 	}
 
 	if c.reservedPrefillInstance == "" && leastBusyPrefillInstanceId != "" {
 		c.reservedPrefillInstance = leastBusyPrefillInstanceId
 		c.instanceViews[leastBusyPrefillInstanceId].ReservedInferType = consts.InferTypePrefill
-		klog.Infof("[setReservedInstance] Set reserve prefill instance, instanceID=%s", leastBusyPrefillInstanceId)
+		klog.Infof("[setReservedInstance] Set reserved prefill instance, instanceID=%s", leastBusyPrefillInstanceId)
 	}
 }
 

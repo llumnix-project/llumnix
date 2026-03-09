@@ -8,6 +8,8 @@ In PD (Prefill-Decode) disaggregated serving, instances are statically partition
 
 ## Prerequisites
 
+Adaptive PD scheduling imposes the following requirements on the underlying infrastructure. These conditions must be satisfied before enabling the feature:
+
 - All instances must be capable of serving both prefill and decode requests.
 - Prefill and decode operations can be distributed across any two instances, or co-located on a single instance.
 
@@ -45,7 +47,7 @@ Prefill Instance Selection
 The scheduler selects the instance with the lowest predicted TTFT among instances with no active decode workload. Because one instance is always reserved for prefill, there is always at least one eligible candidate.
 
 Integration with SLO Scheduling Policy
-Adaptive PD integrates with the SLO scheduling policy. Unlike the standard SLO policy — which rejects requests that cannot meet SLO targets — Adaptive PD always returns an instance. It dynamically reassigns instance roles to satisfy SLOs whenever possible, and degrades gracefully when SLOs cannot be met.
+Adaptive PD integrates with the SLO scheduling policy. Unlike the standard SLO policy — which rejects requests that cannot meet SLO targets — Adaptive PD always returns an instance. It dynamically reassigns instance roles to satisfy SLOs whenever possible, and degrades gracefully when SLOs cannot be met. When SLO attainment deviates from the expected value for an extended period, external infrastructure is responsible for scaling out or scaling in accordingly.
 
 ---
 
@@ -59,7 +61,7 @@ For adaptive PD related rescheduling, only decode requests will be migrated and 
 
 `binpacking_mitigation` migrates requests from overloaded instances to underutilized ones based on predicted TPOT, aiming to restore TPOT compliance through bin-packing consolidation. It pairs the most overloaded source instance with the most loaded destination instance whose predicted TPOT is below the TPOT SLO. This strategy prioritizes relieving the highest-pressure instance while efficiently utilizing spare capacity on destination instances.
 
-`binpacking_consolidation` migrates requests from underutilized instances to more heavily loaded ones, improving resource utilization by packing workloads more densely. It pairs the least loaded source instance with the most loaded destination instance. This strategy empties the lightest instances, progressively freeing them for reassignment to prefill.
+`binpacking_consolidation` migrates requests from underutilized instances to more heavily loaded ones, improving resource utilization by packing workloads more densely. It pairs the least loaded source instance with the most loaded destination instance. This strategy empties the lightest instances, progressively freeing them for reassignment to prefill. In additon, the reserved decode instance would not be chosen as a migration source.
 
 ---
 
@@ -87,13 +89,11 @@ Setup: Qwen3-32B, TP=1, evaluated on the Azure LLM Inference Trace (Conversation
 
 SLO targets: TPOT ≤ 50 ms, TTFT ≤ 6000 ms.
 
-Adaptive PD is compared against a load balancing scheduling policy based on the number of prefill and decode tokens.
-
 ![adaptive_pd_slo_attainment](../image/adaptive_pd_slo_attainment.png)
 
 ![adaptive_pd_instance_status_distribution](../image/adaptive_pd_instance_status_distribution.png)
 
-With a static assignment of 3D / 5P, the decode side is adequately handled, but the prefill instances are severely overloaded. Changing to 2D / 6P alleviates prefill pressure, but causes a significant drop in TPOT SLO attainment.
+Adaptive PD is compared against a load balancing scheduling policy based on the number of prefill and decode tokens. Specifically, the comparison targets two static deployment configurations: 3D/5P and 2D/6P. With a static assignment of 3D / 5P, the decode side is adequately handled, but the prefill instances are severely overloaded. Changing to 2D / 6P alleviates prefill pressure, but causes a significant drop in TPOT SLO attainment.
 
 Adaptive PD overcomes this rigidity by continuously adjusting the effective number of P and D instances in response to real-time workload dynamics, as illustrated in the instance status distribution figure above. This enables a substantially high degree of SLO attainment across both TTFT and TPOT dimensions simultaneously — a level of balance that no static P/D assignment can consistently achieve.
 

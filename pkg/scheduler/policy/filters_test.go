@@ -12,34 +12,34 @@ import (
 	"llumnix/pkg/types"
 )
 
-func TestInstanceAttributeFilter_ReserveState(t *testing.T) {
+func TestInstanceAttributeFilter_ReservedInferType(t *testing.T) {
 	tests := []struct {
-		name          string
-		attrKey       string
-		rejectedValue interface{}
-		reserveState  consts.InferType
-		wantFiltered  bool
+		name              string
+		attrKey           string
+		rejectedValue     interface{}
+		ReservedInferType consts.InferType
+		wantFiltered      bool
 	}{
 		{
-			name:          "filter out matching ReservedInferType",
-			attrKey:       "ReservedInferType",
-			rejectedValue: consts.InferTypePrefill,
-			reserveState:  consts.InferTypePrefill,
-			wantFiltered:  true,
+			name:              "filter out matching ReservedInferType",
+			attrKey:           "ReservedInferType",
+			rejectedValue:     consts.InferTypePrefill,
+			ReservedInferType: consts.InferTypePrefill,
+			wantFiltered:      true,
 		},
 		{
-			name:          "not filter out non-matching ReservedInferType",
-			attrKey:       "ReservedInferType",
-			rejectedValue: consts.InferTypePrefill,
-			reserveState:  consts.InferTypeDecode,
-			wantFiltered:  false,
+			name:              "not filter out non-matching ReservedInferType",
+			attrKey:           "ReservedInferType",
+			rejectedValue:     consts.InferTypePrefill,
+			ReservedInferType: consts.InferTypeDecode,
+			wantFiltered:      false,
 		},
 		{
-			name:          "not filter out empty ReservedInferType",
-			attrKey:       "ReservedInferType",
-			rejectedValue: "",
-			reserveState:  consts.InferTypePrefill,
-			wantFiltered:  false,
+			name:              "not filter out empty ReservedInferType",
+			attrKey:           "ReservedInferType",
+			rejectedValue:     "",
+			ReservedInferType: consts.InferTypePrefill,
+			wantFiltered:      false,
 		},
 	}
 
@@ -54,7 +54,7 @@ func TestInstanceAttributeFilter_ReserveState(t *testing.T) {
 			// Create instance with cmsView
 			instance := &instanceViewScheduling{
 				cmsView: &cms.InstanceView{
-					ReservedInferType: tt.reserveState,
+					ReservedInferType: tt.ReservedInferType,
 					Metadata: &cms.InstanceMetadata{
 						InstanceId: "instance-1",
 					},
