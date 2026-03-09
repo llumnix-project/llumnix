@@ -19,6 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           submodules: recursive
 
       - name: Run cms tests in dev container
@@ -29,6 +30,10 @@ jobs:
             -w /workspace/python/llumnix \
             ${{ env.DEV_IMAGE }} \
             bash -c "make vllm_install && make cms_test"
+
+      - name: Fix file ownership
+        if: always()
+        run: sudo chown -R $(id -u):$(id -g) .
 
   # ── llumlet tests ─────────────────────────────────────────────────────────
   llumnix-llumlet-test:
@@ -41,6 +46,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           submodules: recursive
 
       - name: Run llumlet tests in dev container
@@ -51,3 +57,7 @@ jobs:
             -w /workspace/python/llumnix \
             ${{ env.DEV_IMAGE }} \
             bash -c "make vllm_install && make llumlet_test"
+
+      - name: Fix file ownership
+        if: always()
+        run: sudo chown -R $(id -u):$(id -g) .
