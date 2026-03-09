@@ -4,7 +4,7 @@
 
 Modern LLM workloads, especially agentic workflows, generate highly heterogeneous request lengths and heavy KV cache reuse, so both step duration and per-step load fluctuate significantly. In this regime, temporal gaps between observed and actual load, and accuracy gaps between approximate scheduling metrics and true engine compute, can significantly degrade scheduling quality.
 
-**Goal**: provide a **r**eal**t**ime and **a**ccurate **l**oad basis (**Ial**) for LLM scheduling, covering both (i) how instance load status is observed and (ii) how prefill and decode compute load are modeled for decisions.
+**Goal**: provide a **i**nstant and **a**ccurate **l**oad basis (**Ial**) for LLM scheduling, covering both (i) how instance load status is observed and (ii) how prefill and decode compute load are modeled for decisions.
 
 We say the scheduler has **Ial** when its view of load is both:
 - **Instant**: reflects load status updates with minimal delay along the observation path, so each scheduling decision uses the freshest available information instead of stale snapshots.
