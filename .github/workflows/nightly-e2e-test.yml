@@ -35,8 +35,9 @@ jobs:
     name: Run E2E Test
     uses: ./.github/workflows/e2e-test.yml
     needs: [generate-tag, build-images]
+    if: always()
     with:
-      image_tag: ${{ needs.generate-tag.outputs.tag }}
+      image_tag: ${{ needs.build-images.result == 'success' && needs.generate-tag.outputs.tag || 'latest' }}
       test_namespace: 'llumnix-daily-test'
       kustomize_dir: 'neutral/full-mode-scheduling/load-balance'
     secrets: inherit

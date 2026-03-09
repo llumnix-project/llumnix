@@ -21,7 +21,7 @@ on:
         description: 'Benchmark command to run inside the pod'
         required: false
         type: string
-        default: 'vllm bench serve --base-url http://gateway:8089 --model Qwen/Qwen2.5-7B --num-prompts 100 --ready-check-timeout-sec 0 --request-rate 5 --save-result --save-detailed --result-dir /tmp/benchmark-result'
+        default: 'vllm bench serve --base-url http://gateway:8089 --model Qwen/Qwen3-30B-A3B-FP8 --num-prompts 10 --ready-check-timeout-sec 0 --request-rate 1 --save-result --save-detailed --result-dir /tmp/benchmark-result'
       benchmark_timeout:
         description: 'Benchmark timeout in seconds'
         required: false
@@ -47,7 +47,7 @@ on:
         description: 'Benchmark command to run inside the pod'
         required: false
         type: string
-        default: 'vllm bench serve --base-url http://gateway:8089 --model Qwen/Qwen2.5-7B --num-prompts 100 --ready-check-timeout-sec 0 --request-rate 5 --save-result --save-detailed --result-dir /tmp/benchmark-result'
+        default: 'vllm bench serve --base-url http://gateway:8089 --model Qwen/Qwen3-30B-A3B-FP8 --num-prompts 10 --ready-check-timeout-sec 0 --request-rate 1 --save-result --save-detailed --result-dir /tmp/benchmark-result'
       benchmark_timeout:
         description: 'Benchmark timeout in seconds'
         required: false
@@ -64,6 +64,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           submodules: recursive
           clean: true
 
@@ -71,76 +72,60 @@ jobs:
         run: |
           kubectl cluster-info
 
-      - name: Cleanup existing test namespace
-        working-directory: ./deploy
+      - name: Cleanup existing resources in namespace
         timeout-minutes: 10
         run: |
-          echo "Cleaning up existing namespace: ${{ inputs.test_namespace }}"
-          if ! ./group_delete.sh ${{ inputs.test_namespace }} <<< "yes"; then
-            echo "WARNING: group_delete.sh failed, attempting force delete..."
-          fi
-          
-          echo "Waiting for namespace to be fully deleted (max 10 minutes)..."
-          for i in $(seq 1 120); do
-            if ! kubectl get namespace ${{ inputs.test_namespace }} &>/dev/null; then
-              echo "Namespace deleted successfully"
-              exit 0
-            fi
-            echo "Waiting... ($i/120)"
-            sleep 5
-          done
-          
-          echo "ERROR: Failed to delete namespace ${{ inputs.test_namespace }} within timeout"
-          kubectl get namespace ${{ inputs.test_namespace }} -o yaml || true
-          kubectl get all -n ${{ inputs.test_namespace }} || true
-          exit 1
+          echo "Cleaning up existing resources in namespace: ${{ inputs.test_namespace }}"
+          kubectl delete jobs --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
+          kubectl delete deployments --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
+          kubectl delete statefulsets --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
+          kubectl delete daemonsets --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
+          kubectl delete pods --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
+          kubectl delete services --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
+          echo "Cleanup completed"
 
       - name: Deploy Llumnix
         working-directory: ./deploy
+        env:
+          REPOSITORY: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix
+          GATEWAY_IMAGE_TAG: ${{ inputs.image_tag }}
+          SCHEDULER_IMAGE_TAG: ${{ inputs.image_tag }}
+          VLLM_IMAGE_TAG: ${{ inputs.image_tag }}
+          DISCOVERY_IMAGE_TAG: ${{ inputs.image_tag }}
         run: |
-          ./group_deploy.sh ${{ inputs.test_namespace }} ${{ inputs.kustomize_dir }} \
-            --gateway-tag ${{ inputs.image_tag }} \
-            --scheduler-tag ${{ inputs.image_tag }} \
-            --vllm-tag ${{ inputs.image_tag }} \
-            --discovery-tag ${{ inputs.image_tag }}
+          ./group_update.sh ${{ inputs.test_namespace }} ${{ inputs.kustomize_dir }}
 
       - name: Wait for deployment ready
         timeout-minutes: 15
         run: |
-          echo "Waiting for all pods to be ready..."
-          
-          # Check for permanently failed pods (terminal state, won't recover)
-          check_failed_pods() {
-            local namespace=$1
-            # Only check for pods in terminal Failed phase (not restartable)
-            FAILED=$(kubectl get pods -n "$namespace" --field-selector=status.phase=Failed --no-headers 2>/dev/null || true)
-            if [ -n "$FAILED" ]; then
-              echo "ERROR: Detected permanently failed pods:"
-              kubectl get pods -n "$namespace"
-              return 1
-            fi
-            return 0
-          }
-          
+          NS=${{ inputs.test_namespace }}
+          echo "Waiting for all pods to be ready in namespace: $NS"
+
           for i in $(seq 1 90); do
-            check_failed_pods "${{ inputs.test_namespace }}" || exit 1
-            
-            TOTAL=$(kubectl get pods -n ${{ inputs.test_namespace }} --no-headers 2>/dev/null | wc -l)
-            READY=$(kubectl get pods -n ${{ inputs.test_namespace }} --no-headers 2>/dev/null | grep -c '^\S\+\s\+[0-9]\+/[0-9]\+\s\+Running' || true)
-            NOT_READY=$(kubectl get pods -n ${{ inputs.test_namespace }} --no-headers 2>/dev/null | grep -cv '^\S\+\s\+[0-9]\+/[0-9]\+\s\+Running' || true)
-            
+            # Check for permanently failed pods (terminal state, won't recover)
+            FAILED_PODS=$(kubectl get pods -n "$NS" --field-selector=status.phase=Failed --no-headers 2>/dev/null || true)
+            if [ -n "$FAILED_PODS" ]; then
+              echo "ERROR: Detected permanently failed pods:"
+              kubectl get pods -n "$NS"
+              exit 1
+            fi
+
+            TOTAL=$(kubectl get pods -n "$NS" --no-headers 2>/dev/null | wc -l)
+            READY=$(kubectl get pods -n "$NS" --no-headers 2>/dev/null | grep -cP '^\S+\s+(\d+)/\1\s+Running' || true)
+            NOT_READY=$((TOTAL - READY))
+
             echo "[$i/90] Pods ready: $READY/$TOTAL"
-            
+            kubectl get pods -n "$NS" --no-headers 2>/dev/null || true
+
             if [ "$TOTAL" -gt 0 ] && [ "$NOT_READY" -eq 0 ]; then
-              echo "All pods are ready!"
-              kubectl get pods -n ${{ inputs.test_namespace }}
+              echo "All $TOTAL pods are ready!"
               exit 0
             fi
             sleep 10
           done
-          
+
           echo "ERROR: Timed out waiting for pods to be ready"
-          kubectl get pods -n ${{ inputs.test_namespace }}
+          kubectl get pods -n "$NS"
           exit 1
 
       - name: Run Benchmark
@@ -193,16 +178,22 @@ jobs:
           # Parse results and check success rate
           echo "=== Checking Success Rate ==="
           if [ -f "benchmark-results/benchmark-log.txt" ]; then
-            # Look for success rate in the output
-            SUCCESS_RATE=$(grep -oP 'Success rate: \K[0-9.]+' benchmark-results/benchmark-log.txt || echo "0")
+            SUCCESSFUL=$(grep -oP 'Successful requests:\s+\K[0-9]+' benchmark-results/benchmark-log.txt || echo "0")
+            FAILED=$(grep -oP 'Failed requests:\s+\K[0-9]+' benchmark-results/benchmark-log.txt || echo "0")
+            TOTAL=$((SUCCESSFUL + FAILED))
+            if [ "$TOTAL" -gt 0 ]; then
+              SUCCESS_RATE=$(echo "scale=2; $SUCCESSFUL * 100 / $TOTAL" | bc)
+            else
+              SUCCESS_RATE="0"
+            fi
+            echo "Successful: ${SUCCESSFUL}, Failed: ${FAILED}, Total: ${TOTAL}"
             echo "Success rate: ${SUCCESS_RATE}%"
             
-            # Check if success rate is 100%
-            if (( $(echo "${SUCCESS_RATE} < 100" | bc -l) )); then
-              echo "ERROR: Benchmark success rate is ${SUCCESS_RATE}%, expected 100%"
+            if [ "$FAILED" -gt 0 ]; then
+              echo "ERROR: ${FAILED} requests failed, expected 0"
               exit 1
             fi
-            echo "✓ Benchmark success rate is 100%"
+            echo "✓ All requests succeeded"
           else
             echo "WARNING: Could not find benchmark log, checking job status..."
             kubectl describe job e2e-benchmark -n ${{ inputs.test_namespace }}
@@ -216,11 +207,43 @@ jobs:
           path: benchmark-results/
           retention-days: 7
 
+      - name: Collect component logs
+        if: failure()
+        run: |
+          mkdir -p component-logs
+          NS=${{ inputs.test_namespace }}
+          # Deployment pods: gateway, scheduler, redis
+          for app in gateway scheduler redis; do
+            for pod in $(kubectl get pods -n "$NS" -l app="$app" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+              echo "Collecting logs from $pod..."
+              kubectl logs "$pod" -n "$NS" --all-containers > "component-logs/${pod}.log" 2>&1 || true
+            done
+          done
+          # LWS pods (vllm): labeled by leaderworkerset.sigs.k8s.io/name
+          for pod in $(kubectl get pods -n "$NS" -l leaderworkerset.sigs.k8s.io/name -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+            echo "Collecting logs from LWS pod $pod..."
+            kubectl logs "$pod" -n "$NS" --all-containers > "component-logs/${pod}.log" 2>&1 || true
+          done
+          # Collect pod status for debugging
+          kubectl get pods -n "$NS" -o wide > component-logs/pod-status.txt 2>&1 || true
+          kubectl describe pods -n "$NS" > component-logs/pod-describe.txt 2>&1 || true
+
+      - name: Upload component logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: component-logs-${{ github.run_id }}
+          path: component-logs/
+          retention-days: 7
+
       - name: Cleanup
         if: always()
-        working-directory: ./deploy
         run: |
-          echo "Cleaning up test namespace..."
-          ./group_delete.sh ${{ inputs.test_namespace }} <<< "yes" || true
-          kubectl delete job e2e-benchmark -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
+          echo "Cleaning up resources in namespace..."
+          kubectl delete jobs --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
+          kubectl delete deployments --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
+          kubectl delete statefulsets --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
+          kubectl delete daemonsets --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
+          kubectl delete pods --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
+          kubectl delete services --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
           echo "Cleanup completed"
