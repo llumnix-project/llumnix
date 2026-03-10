@@ -130,6 +130,7 @@ WRAPT_VERSION=2.1.2
 .PHONY: lint-install
 lint-install:
 	pip3 install wrapt==$(WRAPT_VERSION) pylint==$(PYLINT_VERSION)
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell go env GOPATH)/bin v1.64.5
 
 .PHONY: lint-pylint
 lint-pylint:
