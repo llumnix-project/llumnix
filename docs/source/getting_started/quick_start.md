@@ -123,4 +123,4 @@ cd benchmarks/
 ./run_benchmark.sh -n llumnix
 ```
 
-The script prints the `kubectl cp` command to retrieve results once the benchmark completes. For full usage and options, see [Benchmark Guide](source/getting_started/benchmark.md).
+The script prints the `kubectl cp` command to retrieve results once the benchmark completes. For full usage and options, see [Benchmark Guide](./benchmark.md).

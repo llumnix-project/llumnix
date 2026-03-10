@@ -1,11 +1,6 @@
 name: Docs Build
 
 on:
-  push:
-    branches:
-      - main
-      - master
-  workflow_call:
   workflow_dispatch:
 
 permissions:
