@@ -1,4 +1,4 @@
-package scheduling_policy
+package policy
 
 import (
 	"context"
@@ -74,7 +74,7 @@ func startMockServer(port int, canMigrate bool) (*grpc.Server, string, error) {
 }
 
 var (
-	basePort             = 50052
+	basePort             = 50055
 	sharedServers        []*grpc.Server
 	sharedConns          []*grpc.ClientConn
 	llumletClientManager *llumlet.ClientManager

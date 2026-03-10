@@ -1,4 +1,4 @@
-package scheduling_policy
+package policy
 
 import (
 	"fmt"
@@ -7,9 +7,9 @@ import (
 
 	"k8s.io/klog/v2"
 
-	"llumnix/pkg/types"
 	"llumnix/cmd/scheduler/app/options"
 	"llumnix/pkg/consts"
+	"llumnix/pkg/types"
 )
 
 func calculateMetrics(
@@ -35,6 +35,7 @@ type instanceSchedulingMetric interface {
 	Calculate(request *types.SchedulingRequest, instanceView *instanceViewScheduling)
 	Less(metric instanceSchedulingMetric) bool
 	ValueLess(value float32) bool
+	Equal(metric instanceSchedulingMetric) bool
 }
 
 func getSchedulingMetric(p *options.SchedulerConfig, metricName string) func() instanceSchedulingMetric {
@@ -119,7 +120,7 @@ func getSchedulingMetric(p *options.SchedulerConfig, metricName string) func() i
 			}
 		}
 	case consts.SchedulingMetricPredictedTtft:
-		klog.V(3).Infof("Creating TtftLatency metric factory")
+		klog.V(3).Infof("Creating ttft metric factory")
 		return func() instanceSchedulingMetric {
 			return &PredictedTtft{
 				baseMetric: baseMetric{
@@ -129,7 +130,7 @@ func getSchedulingMetric(p *options.SchedulerConfig, metricName string) func() i
 			}
 		}
 	case consts.SchedulingMetricPredictedTpot:
-		klog.V(3).Infof("Creating Itlatency metric factory")
+		klog.V(3).Infof("Creating tpot metric factory")
 		return func() instanceSchedulingMetric {
 			return &PredictedTpot{
 				baseMetric: baseMetric{
@@ -167,8 +168,23 @@ func (m *baseMetric) GetValue() float32 {
 	return m.value
 }
 
+func (m *baseMetric) Calculate(request *types.SchedulingRequest, instanceView *instanceViewScheduling) {
+}
+
 func (m *baseMetric) String() string {
-	return m.name + ":" + fmt.Sprintf("%.3f", m.value)
+	return m.name + ":" + fmt.Sprintf("%.3f", m.GetValue())
+}
+
+func (m *baseMetric) Less(metric instanceSchedulingMetric) bool {
+	return m.ValueLess(metric.GetValue())
+}
+
+func (m *baseMetric) ValueLess(value float32) bool {
+	return m.GetValue() < value
+}
+
+func (m *baseMetric) Equal(metric instanceSchedulingMetric) bool {
+	return !m.Less(metric) && !metric.Less(m)
 }
 
 type kvCacheUsageRatioProjected struct {
@@ -208,14 +224,6 @@ func (br *kvCacheUsageRatioProjected) Calculate(
 	}
 }
 
-func (br *kvCacheUsageRatioProjected) ValueLess(value float32) bool {
-	return br.value < value
-}
-
-func (br *kvCacheUsageRatioProjected) Less(metric instanceSchedulingMetric) bool {
-	return br.value < metric.GetValue()
-}
-
 type decodeBatchSize struct {
 	baseMetric
 }
@@ -240,14 +248,6 @@ func (dbs *decodeBatchSize) Calculate(
 		dbs.value)
 }
 
-func (dbs *decodeBatchSize) ValueLess(value float32) bool {
-	return dbs.value < value
-}
-
-func (dbs *decodeBatchSize) Less(metric instanceSchedulingMetric) bool {
-	return dbs.value < metric.GetValue()
-}
-
 type numWaitingRequests struct {
 	baseMetric
 }
@@ -263,14 +263,6 @@ func (nr *numWaitingRequests) Calculate(
 		instanceView.cmsView.Status.NumWaitingRequests,
 		instanceView.cmsView.NumInflightDispatchRequests,
 		nr.value)
-}
-
-func (nr *numWaitingRequests) ValueLess(value float32) bool {
-	return nr.value < value
-}
-
-func (nr *numWaitingRequests) Less(metric instanceSchedulingMetric) bool {
-	return nr.value < metric.GetValue()
 }
 
 type allPrefillsTokensNum struct {
@@ -295,14 +287,6 @@ func (pb *allPrefillsTokensNum) Calculate(
 		instanceView.cmsView.NumUncomputedTokensInflightDispatchPrefillRequests,
 		instanceView.schedulingCtx.numComputedPrefillTokensPredicted,
 		pb.value)
-}
-
-func (pb *allPrefillsTokensNum) ValueLess(value float32) bool {
-	return pb.value < value
-}
-
-func (pb *allPrefillsTokensNum) Less(metric instanceSchedulingMetric) bool {
-	return pb.value < metric.GetValue()
 }
 
 type numRequests struct {
@@ -336,14 +320,6 @@ func (nr *numRequests) Calculate(
 	}
 }
 
-func (nr *numRequests) ValueLess(value float32) bool {
-	return nr.value < value
-}
-
-func (nr *numRequests) Less(metric instanceSchedulingMetric) bool {
-	return nr.value < metric.GetValue()
-}
-
 type kvCacheHitLen struct {
 	baseMetric
 }
@@ -365,7 +341,11 @@ func (hl *kvCacheHitLen) ValueLess(value float32) bool {
 }
 
 func (hl *kvCacheHitLen) Less(metric instanceSchedulingMetric) bool {
-	return hl.value > metric.GetValue()
+	return hl.ValueLess(metric.GetValue())
+}
+
+func (hl *kvCacheHitLen) Equal(metric instanceSchedulingMetric) bool {
+	return !hl.Less(metric) && !metric.Less(hl)
 }
 
 type CacheAwareAllPrefillsTokensNum struct {
@@ -392,7 +372,7 @@ func (cpb *CacheAwareAllPrefillsTokensNum) ValueLess(value float32) bool {
 }
 
 func (cpb *CacheAwareAllPrefillsTokensNum) Less(metric instanceSchedulingMetric) bool {
-	return cpb.value < metric.GetValue()
+	return cpb.ValueLess(metric.GetValue())
 }
 
 type allDecodesTokensNum struct {
@@ -418,14 +398,6 @@ func (adb *allDecodesTokensNum) Calculate(
 		instanceView.cmsView.Status.NumTokensLoadingRequests,
 		instanceView.cmsView.NumTokensInflightDispatchDecodeRequests,
 		adb.value)
-}
-
-func (br *allDecodesTokensNum) ValueLess(value float32) bool {
-	return br.value < value
-}
-
-func (br *allDecodesTokensNum) Less(metric instanceSchedulingMetric) bool {
-	return br.value < metric.GetValue()
 }
 
 type PredictedTtft struct {
@@ -462,9 +434,9 @@ func (tl *PredictedTtft) Calculate(
 	now := time.Now().UnixMilli()
 	elapsedTimeMs := now - instanceView.cmsView.Status.TimestampMs
 
-	requestTokens := 0
+	requestTokensNum := 0
 	if request != nil {
-		requestTokens = request.PromptNumTokens
+		requestTokensNum = request.PromptNumTokens
 	}
 
 	if elapsedTimeMs > int64(existingTokensTtft) {
@@ -472,13 +444,13 @@ func (tl *PredictedTtft) Calculate(
 		// In this case, use inflight + current req's tokens to estimate ttft.
 		inflightPrefillTokens := instanceView.cmsView.NumUncomputedTokensInflightDispatchPrefillRequests
 		tl.latency, err = tl.latencyPredictor.predictTtftLatencyByChunkPrefill(
-			inflightPrefillTokens+int32(requestTokens),
+			inflightPrefillTokens+int32(requestTokensNum),
 			int32(tl.decodeBatchSize.GetValue()),
 			int32(tl.allDecodesTokensNum.GetValue()),
 			float64(instanceView.cmsView.Metadata.MaxNumBatchedTokens))
 	} else {
 		tl.latency, err = tl.latencyPredictor.predictTtftLatencyByChunkPrefill(
-			int32(tl.allPrefillsTokensNum.GetValue())+int32(requestTokens),
+			int32(tl.allPrefillsTokensNum.GetValue())+int32(requestTokensNum),
 			int32(tl.decodeBatchSize.GetValue()),
 			int32(tl.allDecodesTokensNum.GetValue()),
 			float64(instanceView.cmsView.Metadata.MaxNumBatchedTokens))
@@ -493,11 +465,12 @@ func (tl *PredictedTtft) Calculate(
 
 	klog.V(3).Infof(
 		"Instance %s PredictedTtft calculated: "+
-			"(allPrefillsTokens:%f + decodeBatchSize:%f + allDecodesTokens:%f) = %f",
+			"(allPrefillsTokens:%f + decodeBatchSize:%f + allDecodesTokens:%f + requestTokensNum: %d) = %f",
 		instanceView.GetInstanceId(),
 		tl.allPrefillsTokensNum.GetValue(),
 		tl.decodeBatchSize.GetValue(),
 		tl.allDecodesTokensNum.GetValue(),
+		requestTokensNum,
 		tl.latency)
 }
 
@@ -506,11 +479,15 @@ func (tl *PredictedTtft) ValueLess(value float32) bool {
 }
 
 func (tl *PredictedTtft) Less(metric instanceSchedulingMetric) bool {
-	return tl.GetValue() < metric.GetValue()
+	return tl.ValueLess(metric.GetValue())
 }
 
 func (tl *PredictedTtft) GetValue() float32 {
 	return float32(tl.latency)
+}
+
+func (tl *PredictedTtft) Equal(metric instanceSchedulingMetric) bool {
+	return !tl.Less(metric) && !metric.Less(tl)
 }
 
 type PredictedTpot struct {
@@ -527,10 +504,15 @@ func (il *PredictedTpot) Calculate(
 	il.allDecodesTokensNum.Calculate(request, instanceView)
 	il.decodeBatchSize.Calculate(request, instanceView)
 
+	requestTokensNum := 0
+	if request != nil {
+		requestTokensNum = request.PromptNumTokens
+	}
+
 	var err error
 	il.latency, err = il.latencyPredictor.predictTpotLatency(
 		int32(il.decodeBatchSize.GetValue()+1),
-		int32(il.allDecodesTokensNum.GetValue())+int32(request.PromptNumTokens))
+		int32(il.allDecodesTokensNum.GetValue())+int32(requestTokensNum))
 
 	if err != nil {
 		klog.Warningf("Failed to predict ITL latency: %v", err)
@@ -538,10 +520,11 @@ func (il *PredictedTpot) Calculate(
 	}
 
 	klog.V(3).Infof(
-		"Instance %s PredictedTpot calculated: (decodeBatchSize:%f + allDecodesTokens:%f) = %f",
+		"Instance %s PredictedTpot calculated: (decodeBatchSize:%f + allDecodesTokens:%f + requestTokensNum: %d) = %f",
 		instanceView.GetInstanceId(),
 		il.decodeBatchSize.GetValue(),
 		il.allDecodesTokensNum.GetValue(),
+		requestTokensNum,
 		il.latency)
 }
 
@@ -550,11 +533,15 @@ func (il *PredictedTpot) ValueLess(value float32) bool {
 }
 
 func (il *PredictedTpot) Less(metric instanceSchedulingMetric) bool {
-	return il.GetValue() < metric.GetValue()
+	return il.ValueLess(metric.GetValue())
 }
 
 func (il *PredictedTpot) GetValue() float32 {
 	return float32(il.latency)
+}
+
+func (il *PredictedTpot) Equal(metric instanceSchedulingMetric) bool {
+	return !il.Less(metric) && !metric.Less(il)
 }
 
 type numTokens struct {
@@ -566,12 +553,4 @@ func (nt *numTokens) Calculate(
 	nt.value = float32(instanceView.lrsView.NumTokens())
 	klog.V(3).Infof("Instance %s NumTokens calculated: (numTokens:%d) = %f",
 		instanceView.GetInstanceId(), instanceView.lrsView.NumTokens(), nt.value)
-}
-
-func (nt *numTokens) ValueLess(value float32) bool {
-	return nt.value < value
-}
-
-func (nt *numTokens) Less(metric instanceSchedulingMetric) bool {
-	return nt.value < metric.GetValue()
 }

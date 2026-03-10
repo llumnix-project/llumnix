@@ -1,4 +1,4 @@
-package scheduling_policy
+package policy
 
 import (
 	"testing"
@@ -15,6 +15,57 @@ func TestBaseMetric(t *testing.T) {
 	}
 	assert.Equal(t, "test", metric.GetName())
 	assert.Equal(t, float32(37.0), metric.GetValue())
+}
+func TestInstanceSchedulingMetric_Equal(t *testing.T) {
+	tests := []struct {
+		name     string
+		metric1  instanceSchedulingMetric
+		metric2  instanceSchedulingMetric
+		expected bool
+	}{
+		{
+			name:     "baseMetric - equal metrics with same value",
+			metric1:  &baseMetric{name: "cpu", value: 0.5},
+			metric2:  &baseMetric{name: "cpu", value: 0.5},
+			expected: true,
+		},
+		{
+			name:     "baseMetric - not equal positive vs negative",
+			metric1:  &baseMetric{name: "cpu", value: 1.5},
+			metric2:  &baseMetric{name: "cpu", value: -1.5},
+			expected: false,
+		},
+		{
+			name: "kvCacheUsageRatioProjected - equal metrics with same value",
+			metric1: &kvCacheUsageRatioProjected{
+				baseMetric: baseMetric{name: "kvCache", value: 0.5},
+			},
+			metric2: &kvCacheUsageRatioProjected{
+				baseMetric: baseMetric{name: "kvCache", value: 0.5},
+			},
+			expected: true,
+		},
+		{
+			name: "kvCacheUsageRatioProjected - not equal different values",
+			metric1: &kvCacheUsageRatioProjected{
+				baseMetric: baseMetric{name: "kvCache", value: 0.3},
+			},
+			metric2: &kvCacheUsageRatioProjected{
+				baseMetric: baseMetric{name: "kvCache", value: 0.7},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.metric1.Equal(tt.metric2)
+			if result != tt.expected {
+				t.Errorf("Equal() = %v, expected %v (metric1: %v, metric2: %v)",
+					result, tt.expected, tt.metric1.GetValue(), tt.metric2.GetValue())
+			}
+		})
+	}
 }
 
 func TestKVCacheUsageRatioProjectedCalculate(t *testing.T) {

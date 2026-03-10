@@ -1,4 +1,4 @@
-package scheduling_policy
+package policy
 
 import (
 	"llumnix/pkg/cms"
@@ -176,7 +176,7 @@ func TestFixedPreferenceSelectorSelectInstance(t *testing.T) {
 		}
 		t.Run(tt.name, func(t *testing.T) {
 			selector := &fixedPreferenceSelector{lastSelectedInstanceId: tt.lastSelectedInstance}
-			result := selector.selectInstance(tt.instances)
+			result := selector.selectInstance(tt.instances, false)
 
 			if tt.expectedInstance == "" {
 				assert.Nil(t, result)

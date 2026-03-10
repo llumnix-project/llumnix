@@ -1,4 +1,4 @@
-package scheduling_policy
+package policy
 
 import (
 	"llumnix/pkg/consts"
@@ -226,4 +226,120 @@ func (rrs *roundRobinSelector) selectPairs(
 	}
 
 	return pairs
+}
+
+/*
+binPackingMitigationSelector implements a selector for overload rescheduling that
+pairs the most overloaded source instance with the most loaded (but still available)
+destination instance. This strategy attempts to relieve the highest pressure first
+while utilizing destination capacity efficiently. Keep in mind that a slice containing
+at most one reschedule pair (highest load source to highest load destination).
+*/
+type binPackingMitigationSelector struct {
+}
+
+func (bpms *binPackingMitigationSelector) selectPairs(
+	srcCandidates, dstCandidates map[string]*instanceViewScheduling) []*reschedulingPair {
+
+	var maxLoadSrcInstance *instanceViewScheduling
+	for _, instanceView := range srcCandidates {
+		if maxLoadSrcInstance == nil {
+			maxLoadSrcInstance = instanceView
+			continue
+		}
+
+		if maxLoadSrcInstance.schedulingCtx.metrics[consts.SchedulingMetricPredictedTpot].Less(
+			instanceView.schedulingCtx.metrics[consts.SchedulingMetricPredictedTpot]) {
+			maxLoadSrcInstance = instanceView
+		}
+	}
+
+	var maxLoadDstInstance *instanceViewScheduling
+	for _, instanceView := range dstCandidates {
+		if maxLoadDstInstance == nil {
+			maxLoadDstInstance = instanceView
+			continue
+		}
+
+		if maxLoadDstInstance.schedulingCtx.metrics[consts.SchedulingMetricPredictedTpot].Less(
+			instanceView.schedulingCtx.metrics[consts.SchedulingMetricPredictedTpot]) {
+			maxLoadDstInstance = instanceView
+		}
+	}
+
+	var resultPairs []*reschedulingPair
+
+	if maxLoadSrcInstance != nil && maxLoadDstInstance != nil {
+		resultPairs = append(resultPairs, &reschedulingPair{
+			srcView: maxLoadSrcInstance,
+			dstView: maxLoadDstInstance,
+		})
+	}
+
+	return resultPairs
+}
+
+/*
+binPackingConsolidationSelector implements a selector for underload rescheduling that
+pairs the least loaded source instance with the most loaded destination instance. This
+strategy consolidates workload by emptying the lightest instances first and packing
+requests into fuller instances, improving overall resource utilization. Keep in mind that
+a slice containing at most one reschedule pair (lowest load source to highest load
+destination) will be returned.
+*/
+type binPackingConsolidationSelector struct {
+}
+
+func (bpcs *binPackingConsolidationSelector) selectPairs(
+	srcCandidates, dstCandidates map[string]*instanceViewScheduling) []*reschedulingPair {
+
+	var resultPairs []*reschedulingPair
+
+	var maxLoadDstInstance *instanceViewScheduling
+	for _, instanceView := range dstCandidates {
+		if maxLoadDstInstance == nil {
+			maxLoadDstInstance = instanceView
+			continue
+		}
+
+		if instanceView.cmsView.ReservedInferType == consts.InferTypeDecode {
+			maxLoadDstInstance = instanceView
+			break
+		}
+
+		if !instanceView.schedulingCtx.metrics[consts.SchedulingMetricPredictedTpot].Less(
+			maxLoadDstInstance.schedulingCtx.metrics[consts.SchedulingMetricPredictedTpot]) {
+			maxLoadDstInstance = instanceView
+		}
+	}
+
+	if maxLoadDstInstance == nil {
+		return resultPairs
+	}
+
+	var lowestLoadSrcInstance *instanceViewScheduling
+	for _, instanceView := range srcCandidates {
+		if instanceView.GetInstanceId() == maxLoadDstInstance.GetInstanceId() {
+			continue
+		}
+
+		if lowestLoadSrcInstance == nil {
+			lowestLoadSrcInstance = instanceView
+			continue
+		}
+
+		if instanceView.schedulingCtx.metrics[consts.SchedulingMetricPredictedTpot].Less(
+			lowestLoadSrcInstance.schedulingCtx.metrics[consts.SchedulingMetricPredictedTpot]) {
+			lowestLoadSrcInstance = instanceView
+		}
+	}
+
+	if lowestLoadSrcInstance != nil {
+		resultPairs = append(resultPairs, &reschedulingPair{
+			srcView: lowestLoadSrcInstance,
+			dstView: maxLoadDstInstance,
+		})
+	}
+
+	return resultPairs
 }
