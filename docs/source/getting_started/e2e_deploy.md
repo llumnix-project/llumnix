@@ -8,7 +8,7 @@
 | Mode | Prefill/Decode | KV Transfer | Scheduler | Best For |
 |------|---------------|-------------|-----------|---------|
 | **Neutral** | Combined | N/A | Optional | Getting started, simple deployments |
-| **PD** | PD disaggregation | MooncakeConnector | Required | Production, large models |
+| **PD** | PD disaggregation | HybridConnector | Required | Production, PD disaggregation |
 | **PD-KVS** | PD disaggregation  | HybridConnector  | Required | Production, prefix caching, cache-aware scheduling |
 
 ### 1.2 Scheduling Variants
@@ -73,7 +73,7 @@ Resource requirements differ by mode and configuration:
 | Mode | Component | GPU | CPU | Memory |
 |------|-----------|-----|-----|--------|
 | **Neutral** | neutral Pod | 4 | 32 | 256 G |
-| **PD** | prefill Pod | 8 | 64 | 512 G |
+| **PD** | prefill Pod | 4 | 32 | 256 G |
 | **PD** | decode Pod | 4 | 32 | 256 G | 
 | **PD-KVS** | prefill Pod | 1 | 16 | 128 G |
 | **PD-KVS** | decode Pod | 1 | 16 | 128 G |
@@ -169,14 +169,14 @@ neutral-0           0/2     Running   gpu-node
 
 ## 5. PD Mode
 
-In PD mode, Prefill and Decode run in separate Pods. KV Cache is transferred between them using **MooncakeConnector**.
+In PD mode, Prefill and Decode run in separate Pods. In the provided example (`deploy/pd/full-mode-scheduling/load-balance/`), KV Cache is transferred using **HybridConnector** with the **kvt** backend.
 
 ### 5.1 Default Resource Requirements
 
 | Component | GPU | CPU | Memory |
 |-----------|-----|-----|--------|
-| Prefill Pod | 8 (`TP_SIZE=8`) | 64 | 512 G |
-| Decode Pod | 4(`DP_SIZE_LOCAL=4`) | 32 | 256 G |
+| Prefill Pod | 4 (`TP_SIZE=4`) | 32 | 256 G |
+| Decode Pod | 4 (`TP_SIZE=4`) | 32 | 256 G |
 
 ### 5.2 Deploy
 
@@ -190,9 +190,9 @@ cd deploy
 | Component | Description |
 |-----------|-------------|
 | Redis | Service discovery + CMS state |
-| Prefill Pod | vLLM with `kv_role: kv_producer` (MooncakeConnector) |
-| Decode Pod | vLLM with `kv_role: kv_consumer` (MooncakeConnector) |
-| Gateway | PD disagg protocol: `vllm-mooncake` |
+| Prefill Pod | vLLM with `HybridConnector`, role `kv_producer` (kvt backend) |
+| Decode Pod | vLLM with `HybridConnector`, role `kv_consumer` (kvt backend) |
+| Gateway | PD disagg protocol: `vllm-kvt` |
 | Scheduler | Full-mode scheduling with CMS Redis |
 
 ### 5.4 Expected Output
@@ -366,7 +366,7 @@ After modifying any yaml files, apply changes using:
 export REPOSITORY="llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix"
 export GATEWAY_IMAGE_TAG="20260302-200550"
 export SCHEDULER_IMAGE_TAG="20260302-200658"
-export VLLM_IMAGE_TAG="20260130-105854"
+export VLLM_IMAGE_TAG="20260306-165123"
 export DISCOVERY_IMAGE_TAG="20260302-203317"
 
 ./group_update.sh llumnix neutral/full-mode-scheduling/load-balance

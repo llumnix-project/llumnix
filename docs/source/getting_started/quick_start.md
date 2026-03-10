@@ -37,7 +37,7 @@ cd deploy/
 ./group_deploy.sh <group-name> <kustomize-dir>
 
 # Examples:
-./group_update.sh llumnix neutral/full-mode-scheduling/load-balance
+./group_deploy.sh llumnix neutral/full-mode-scheduling/load-balance
 ```
 
 ### Update
@@ -50,6 +50,15 @@ cd deploy/
 
 # Example:
 ./group_update.sh llumnix neutral/full-mode-scheduling/load-balance
+
+# Example with custom image repository / tags:
+./group_update.sh llumnix neutral/full-mode-scheduling/load-balance \
+  --repository my-registry.example.com/my-namespace \
+  --gateway-tag 20260101-120000 \
+  --scheduler-tag 20260101-130000 \
+  --vllm-tag 20260101-140000 \
+  --discovery-tag 20260101-150000 \
+  --mooncake-vllm-tag mooncake-20260101-160000
 ```
 
 ### Cleanup

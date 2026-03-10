@@ -52,6 +52,19 @@ cd deploy/
 bash group_deploy.sh <group-name> <kustomize-dir>
 # e.g. bash group_deploy.sh llumnix neutral/lite-mode-scheduling/load-balance
 ```
+
+Update an existing deployment (namespace must already exist):
+
+```bash
+cd deploy/
+bash group_update.sh <group-name> <kustomize-dir> \
+  [--repository <registry>/<namespace>] \
+  [--gateway-tag <tag>] \
+  [--scheduler-tag <tag>] \
+  [--vllm-tag <tag>] \
+  [--discovery-tag <tag>] \
+  [--mooncake-vllm-tag <tag>]
+```
 ### Verify & Test
 
 ```bash

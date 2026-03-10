@@ -164,7 +164,7 @@ spec:
               memory: 256Gi
               nvidia.com/gpu: "4"
             requests:
-              cpu: "64"
+              cpu: "32"
               ephemeral-storage: 256Gi
               memory: 256Gi
               nvidia.com/gpu: "4"
