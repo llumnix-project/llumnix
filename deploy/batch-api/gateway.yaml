@@ -89,6 +89,22 @@ spec:
         - "--max-model-len"
         - "40960"
         - "--enable-full-mode-scheduling=false"
+        - "--enable-log-input"
+        - "--batch-oss-path"
+        - "" # required
+        - "--batch-oss-endpoint"
+        - "" # required
+        - "--batch-redis-addrs"
+        - "" # required
+        - "--batch-redis-username"
+        - "" # required
+        - "--batch-redis-password" # required
+        - ""
+        env:
+        - name: "OSS_ACCESS_KEY_ID"
+          value: "" # required
+        - name: "OSS_ACCESS_KEY_SECRET"
+          value: "" # required
         ports:
         - containerPort: 8089
           name: http

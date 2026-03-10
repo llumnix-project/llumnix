@@ -32,7 +32,7 @@ spec:
     spec:
       containers:
       - name: redis
-        image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/redis:7-alpine
+        image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/redis:latest
         ports:
         - containerPort: 6379
           name: redis
