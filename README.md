@@ -24,8 +24,12 @@ Note that with this new repository, we are re-architecting Llummix to a more mod
 
 # Architecture
 Llumnix is more than a "router". It has a full-stack design to support advanced scheduling features.
-![image](docs/source/image/architecture.png)
-## Components:
+
+<div align="center">
+  <img src="docs/source/image/architecture.png" width="70%" />
+</div>
+
+Components:
 1. LlumSched: scheduler for initial scheduling and rescheduler for continuous rescheduling
 2. Llumlet: an engine-side process that bridges global components and the inference engine
 3. Cluster meta store: tracking realtime instance status
@@ -34,133 +38,12 @@ Llumnix is more than a "router". It has a full-stack design to support advanced 
 6. Hybrid Connector: unified KV cache control plane, using blade-kvt for KV transfer and external KV storage for offloading
 
 # Getting Started
-Llumnix supports multiple deployment modes and scheduling strategies to meet different inference requirements. 
+View our [documentation](https://github.com/llumnix-project/llumnix/tree/docs/docs/source) to learn more (the official documentation website is coming soon!).
 
-### Prerequisites
-- Kubernetes >= 1.20 with GPU nodes (NVIDIA GPU Operator installed)
-- [LeaderWorkerSet Operator](https://github.com/kubernetes-sigs/lws) installed
-- `kubectl` configured with cluster access
-### Deployment
+- [Quick start](docs/source/getting_started/quick_start.md)
+- [Deployment guide](docs/source/getting_started/e2e_deploy.md)
+- [Development guide](docs/source/develop/developer_guide.md)
 
-Run deploy script:
-
-```bash
-cd deploy/
-
-bash group_deploy.sh <group-name> <kustomize-dir>
-# e.g. bash group_deploy.sh llumnix neutral/lite-mode-scheduling/load-balance
-```
-
-Update an existing deployment (namespace must already exist):
-
-```bash
-cd deploy/
-bash group_update.sh <group-name> <kustomize-dir> \
-  [--repository <registry>/<namespace>] \
-  [--gateway-tag <tag>] \
-  [--scheduler-tag <tag>] \
-  [--vllm-tag <tag>] \
-  [--discovery-tag <tag>] \
-  [--mooncake-vllm-tag <tag>]
-```
-### Verify & Test
-
-```bash
-# Check pod status
-kubectl get pods -n <group-name> -o wide
-
-# Get gateway service port
-kubectl get svc -n <group-name> | grep gateway
-
-# Forward gateway port to local (replace <gateway_port> with the port from above command)
-kubectl port-forward -n <group-name> svc/gateway 8080:<gateway-port>
-```
-Test inference API ,open a new terminal and run:
-```bash
-curl http://localhost:8080/v1/completions \
-  -H "Content-Type: application/json" \
-  -d '{"prompt": "Hello!", "max_tokens": 50}'
-```
-
-Llumnix supports the following deployment modes:
-```bash
-cd deploy/
-
-# Deploy Neutral mode with lite-mode scheduling
-bash group_deploy.sh llumnix neutral/lite-mode-scheduling/load-balance
-
-# Deploy Neutral mode with full-mode scheduling
-bash group_deploy.sh llumnix neutral/full-mode-scheduling/load-balance
-
-# Deploy PD mode
-bash group_deploy.sh llumnix pd/full-mode-scheduling/load-balance
-
-# Deploy PD-KVS mode
-bash group_deploy.sh llumnix pd-kvs/full-mode-scheduling/load-balance
-```
-
-Run `bash group_delete.sh $<group-name>` to delete group.
-
-# Development Guide
-
-`llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225` is recommended for development. Then, you should run the following commands to set up the environment:
-
-```bash
-go mod tidy
-
-# install patched vllm
-make vllm-install
-
-# install llumlet package
-make llumlet-install
-
-# install discovery package
-make discovery-install
-
-# build lib-tokenizers
-make lib-tokenizers-build
-
-# build blade-kvt
-make blade-kvt-install
-
-# build mooncake
-make mooncake-install
-```
-
-Run `make gateway-build` to build the gateway binary and `make scheduler-build` to build the scheduler binary. And `make e2e-test` is used to run all end-to-end tests. Please refer to [tests/local/utils.py](tests/local/utils.py) for the details of launching commands. `make unit-test` is used to run all go unit tests.
-
-## Build Images (Optional)
-
-We provide pre-built images for all components. If you need to build images manually (e.g., for custom modifications), follow the steps below.
-
-### Prerequisites
-- Docker installed and running
-- Access to the target image registry
-
-### Build Steps
-
-```bash
-# Step 1: Build lib-tokenizers (only required once)
-bash scripts/build_tokenizers.sh
-
-# Step 2: Build Gateway
-bash scripts/build_component_bin.sh gateway
-bash scripts/build_component_release.sh gateway
-
-# Step 3: Build Scheduler
-bash scripts/build_component_bin.sh scheduler
-bash scripts/build_component_release.sh scheduler
-
-# Step 4: Build Discovery
-bash scripts/build_discovery_whl.sh
-bash scripts/build_component_release.sh discovery
-
-# Step 5: Build LLM Backend (vLLM)
-bash scripts/build_llumnix_whl.sh
-bash scripts/build_vllm_release.sh
-# For PD-KVS mode, also build Mooncake-enabled image: bash scripts/build_vllm_release.sh --include_mooncake
-# Optional: --push, --repository <registry>/vllm, --tag <image-tag>
-```
 
 # License
 
