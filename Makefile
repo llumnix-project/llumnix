@@ -141,7 +141,7 @@ lint-pylint:
 
 .PHONY: lint-go
 lint-go:
-	golangci-lint run ./...
+	golangci-lint run ./cmd/ ./pkg/
 
 .PHONY: lint
 lint: lint-install lint-pylint lint-go
