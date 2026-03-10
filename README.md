@@ -47,8 +47,10 @@ Llumnix supports multiple deployment modes and scheduling strategies to meet dif
 Run deploy script:
 
 ```bash
-bash deploy/group_deploy.sh <group-name> <kustomize-dir>
-#e.g. bash deploy/group_deploy.sh llumnix neutral/lite-mode-scheduling/load-balance
+cd deploy/
+
+bash group_deploy.sh <group-name> <kustomize-dir>
+# e.g. bash group_deploy.sh llumnix neutral/lite-mode-scheduling/load-balance
 ```
 ### Verify & Test
 
@@ -71,17 +73,19 @@ curl http://localhost:8080/v1/completions \
 
 Llumnix supports the following deployment modes:
 ```bash
+cd deploy/
+
 # Deploy Neutral mode with lite-mode scheduling
-bash deploy/group_deploy.sh llumnix neutral/lite-mode-scheduling/load-balance
+bash group_deploy.sh llumnix neutral/lite-mode-scheduling/load-balance
 
 # Deploy Neutral mode with full-mode scheduling
-bash deploy/group_deploy.sh llumnix neutral/full-mode-scheduling/load-balance
+bash group_deploy.sh llumnix neutral/full-mode-scheduling/load-balance
 
 # Deploy PD mode
-bash deploy/group_deploy.sh llumnix pd/full-mode-scheduling/load-balance
+bash group_deploy.sh llumnix pd/full-mode-scheduling/load-balance
 
 # Deploy PD-KVS mode
-bash deploy/group_deploy.sh llumnix pd-kvs/full-mode-scheduling/load-balance
+bash group_deploy.sh llumnix pd-kvs/full-mode-scheduling/load-balance
 ```
 
 Run `bash group_delete.sh $<group-name>` to delete group.

@@ -69,6 +69,11 @@ type ProcessorConfig struct {
 	// self defined tokenizer path, will overwrite the builtin tokenizer name when not empty
 	TokenizerPath    string
 	ChatTemplatePath string
+	// Override model max length; 0 means use the value from tokenizer_config.json.
+	// The engine derives max_model_len from config.json, while the gateway reads model_max_length
+	// from tokenizer_config.json. These two values can differ, causing the gateway to generate a max_tokens
+	// that exceeds the engine's actual limit. This flag allows explicitly aligning the two.
+	MaxModelLen uint64
 
 	ToolCallParser  string
 	ReasoningParser string
@@ -78,6 +83,7 @@ func (c *ProcessorConfig) AddProcessorConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.TokenizerName, "tokenizer-name", "", "builtin tokenizer name")
 	flags.StringVar(&c.TokenizerPath, "tokenizer-path", "", "builtin tokenizer path")
 	flags.StringVar(&c.ChatTemplatePath, "chat-template", "", "chat template path")
+	flags.Uint64Var(&c.MaxModelLen, "max-model-len", 0, "override the model_max_length from tokenizer_config.json; 0 means use the value from tokenizer_config.json")
 	flags.StringVar(&c.ToolCallParser, "tool-call-parser", "", "tool call parser type")
 	flags.StringVar(&c.ReasoningParser, "reasoning-parser", "", "reasoning parser type")
 }
@@ -189,7 +195,7 @@ type FullModeSchedulingConfig struct {
 	KvsMetadataServiceRedisClusterPassword string
 	KvsMetadataServiceHttpServerHost       string
 	KvsMetadataServiceHttpServerPort       string
-	KvsHashAlgo             string
+	KvsHashAlgo                            string
 
 	// schedule
 	DispatchTopK                        int
@@ -202,7 +208,7 @@ type FullModeSchedulingConfig struct {
 	DispatchPrefillCacheLocalityMetric  string
 	EnableInstanceStatusLocalAccount    bool
 	RequestLocalAccountStalenessSeconds int32
-	AllowConcurrentScheduling             bool
+	AllowConcurrentScheduling           bool
 	EnablePredictorEnhancedScheduling   bool
 	MaxNumBatchedTokens                 int
 	NumPredictorWarmupSamples           int

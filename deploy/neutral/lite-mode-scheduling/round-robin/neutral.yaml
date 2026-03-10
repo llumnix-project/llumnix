@@ -23,7 +23,6 @@ spec:
           command:
             - /bin/bash
             - -c
-          # deepseek-r1 pd+ep
           args:
             - |-
               # Clear /dev/shm on start to prevent running out of space when crashes occur
@@ -46,7 +45,7 @@ spec:
                 PORT=$((8000 + i))
                 
                 CUDA_VISIBLE_DEVICES=$i vllm serve \
-                  deepseek-ai/deepseek-moe-16b-base \
+                  Qwen/Qwen3-30B-A3B-FP8 \
                   --port $PORT \
                   --trust-remote-code \
                   --data-parallel-external-lb \

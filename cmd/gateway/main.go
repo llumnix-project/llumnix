@@ -57,7 +57,7 @@ func NewCommand() *cobra.Command {
 			config.ParseLlumnixExtraArgs(cmd.Flags(), cfg.ExtraArgs)
 			klog.Infof("gateway config: %+v", cfg)
 
-			tokenizer.InitTokenizer(cfg.TokenizerName, cfg.TokenizerPath, cfg.ChatTemplatePath)
+			tokenizer.InitTokenizer(cfg.TokenizerName, cfg.TokenizerPath, cfg.ChatTemplatePath, cfg.MaxModelLen)
 
 			gw := service.NewGatewayService(cfg)
 			klog.Info("llm gateway start ...")

@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: scheduler
+  labels:
+    app: scheduler
+    role: scheduler
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8088
+      targetPort: 8088
+      protocol: TCP
+      name: http
+  selector:
+    app: scheduler
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scheduler
+  labels:
+    app: scheduler
+    role: scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scheduler
+  template:
+    metadata:
+      labels:
+        app: scheduler
+        role: scheduler
+    spec:
+      terminationGracePeriodSeconds: 300
+      containers:
+      - name: scheduler
+        image: ${REPOSITORY}/scheduler:${SCHEDULER_IMAGE_TAG}
+        imagePullPolicy: Always
+        command: ["/usr/local/bin/scheduler"]
+        args:
+        - "--port"
+        - "8088"
+        - "-v"
+        - "4"
+        - "--host"
+        - "0.0.0.0"
+        - "--llm-backend-discovery"
+        - "redis"
+        - "--discovery-redis-host"
+        - "redis"
+        - "--discovery-redis-port"
+        - "6379"
+        - "--scheduling-policy"
+        - "load-balance"
+        - "--enable-full-mode-scheduling=false"
+        ports:
+        - containerPort: 8088
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8088
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8088
+          initialDelaySeconds: 5
+          periodSeconds: 5

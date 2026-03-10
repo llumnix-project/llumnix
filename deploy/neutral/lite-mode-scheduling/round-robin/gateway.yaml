@@ -45,7 +45,7 @@ spec:
               from modelscope import snapshot_download
               
               model_dir = snapshot_download(
-                  'deepseek-ai/deepseek-moe-16b-base',
+                  'Qwen/Qwen3-30B-A3B-FP8',
                   cache_dir='/tokenizers',
                   allow_patterns=['tokenizer.json', 'tokenizer_config.json']
               )
@@ -81,7 +81,9 @@ spec:
             - "--scheduling-policy"
             - "round-robin"
             - "--tokenizer-path"
-            - "/tokenizers/deepseek-ai/deepseek-moe-16b-base"
+            - "/tokenizers/Qwen/Qwen3-30B-A3B-FP8"
+            - "--max-model-len"
+            - "40960"
             - "--enable-full-mode-scheduling=false"
           ports:
             - containerPort: 8089

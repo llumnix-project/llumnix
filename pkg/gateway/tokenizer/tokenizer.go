@@ -71,7 +71,7 @@ func GetModelMaxLength(path string) uint64 {
 	return uint64(maxLength)
 }
 
-func InitTokenizer(name, path, chatTemplatePath string) {
+func InitTokenizer(name, path, chatTemplatePath string, maxModelLen uint64) {
 	if name == "" && path == "" {
 		return
 	}
@@ -81,7 +81,13 @@ func InitTokenizer(name, path, chatTemplatePath string) {
 			klog.Errorf("Could not load the tokenizer: %v", err)
 		}
 		gTokenizer = tk
-		ModelMaxLen = GetModelMaxLength(path)
+		if maxModelLen > 0 {
+			ModelMaxLen = maxModelLen
+			klog.Infof("Using user-specified max model length: %d", maxModelLen)
+		} else {
+			ModelMaxLen = GetModelMaxLength(path)
+			klog.Infof("Using tokenizer_config.json model_max_length: %d", ModelMaxLen)
+		}
 	})
 }
 
