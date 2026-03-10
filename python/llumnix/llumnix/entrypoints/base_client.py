@@ -6,10 +6,9 @@ from typing import Dict, List, Set, Any
 from llumnix.outputs.queue.zmq_server import ZmqServer
 from llumnix.logging.logger import init_logger
 from llumnix.connection_pool import ConnectionType, LruConnectionPool
-from llumnix.utils import (RequestIDType, get_ip_address, get_free_port)
+from llumnix.utils import RequestIDType, get_ip_address, get_free_port
 
-from llumnix.server.proto import (llumlet_server_pb2,
-                                  llumlet_server_pb2_grpc)
+from llumnix.server.proto import llumlet_server_pb2, llumlet_server_pb2_grpc
 
 logger = init_logger(__name__)
 
@@ -28,7 +27,9 @@ class BaseLlumnixClient(ABC):
         # request_id -> number of output tokens of the request
         self.request_num_output_tokens: Dict[RequestIDType, int] = {}
 
-        self.grpc_conn_pool = LruConnectionPool(ConnectionType.GRPC_CHANNEL, max_connections=5)
+        self.grpc_conn_pool = LruConnectionPool(
+            ConnectionType.GRPC_CHANNEL, max_connections=5
+        )
         # Requests had been aborted but not notify EngineCore yet
         self.aborted_requests: Set[RequestIDType] = set()
 
@@ -52,7 +53,9 @@ class BaseLlumnixClient(ABC):
         self._clear_client_request_states(request_id)
         self.aborted_requests.add(request_id)
 
-    async def _call_llumlet_abort_requests(self, llumlet_addr: str, request_ids: List[RequestIDType]) -> None:
+    async def _call_llumlet_abort_requests(
+        self, llumlet_addr: str, request_ids: List[RequestIDType]
+    ) -> None:
         channel_conn = self.grpc_conn_pool.get_connection_through_address(llumlet_addr)
         async with channel_conn as channel:
             stub = llumlet_server_pb2_grpc.LlumletStub(channel)
@@ -60,7 +63,11 @@ class BaseLlumnixClient(ABC):
             requests.request_ids.extend(request_ids)
             response = await stub.Abort(requests)
             if not response.success:
-                logger.error("Abort requests {} on Llumlet failed: {}".format(request_ids, response.msg))
+                logger.error(
+                    "Abort requests {} on Llumlet failed: {}".format(
+                        request_ids, response.msg
+                    )
+                )
             else:
                 logger.info("Successfully aborted requests {}".format(request_ids))
                 self.aborted_requests -= set(request_ids)
@@ -69,5 +76,8 @@ class BaseLlumnixClient(ABC):
         self.request_num_output_tokens.pop(request_id, None)
         instance_ids = self.request_instances.pop(request_id, [])
         for instance_id in instance_ids:
-            if instance_id in self.instance_requests and request_id in self.instance_requests[instance_id]:
+            if (
+                instance_id in self.instance_requests
+                and request_id in self.instance_requests[instance_id]
+            ):
                 self.instance_requests[instance_id].remove(request_id)

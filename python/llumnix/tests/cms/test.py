@@ -27,6 +27,7 @@ from tests.mock_redis import MockRedisClient
 
 WAITING_TIME_S = 1
 
+
 def clear_test_db(redis_client):
     keys = redis_client.get_keys_by_prefix(LLUMNIX_INSTANCE_METADATA_PREFIX + "test:")
     for key in keys:
@@ -353,9 +354,13 @@ def test_cms_read_client_refresh_loop_performance():
     start_time = time.time()
     cms_read_client._refresh_metadata()  # Run one iteration of refresh loop
     elapsed_time = time.time() - start_time
-    print(f"Time to refresh {num_instances} instances metadata: {elapsed_time:.4f} seconds")
+    print(
+        f"Time to refresh {num_instances} instances metadata: {elapsed_time:.4f} seconds"
+    )
 
     start_time = time.time()
     cms_read_client._refresh_status()  # Run one iteration of refresh loop
     elapsed_time = time.time() - start_time
-    print(f"Time to refresh {num_instances} instances status: {elapsed_time:.4f} seconds")
+    print(
+        f"Time to refresh {num_instances} instances status: {elapsed_time:.4f} seconds"
+    )

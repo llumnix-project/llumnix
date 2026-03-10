@@ -22,11 +22,15 @@ from llumnix.logging.logger import init_logger
 
 logger = init_logger(__name__)
 
+
 def get_num_output_tokens(core_output: EngineCoreOutput) -> Optional[int]:
     num_output_tokens = None
     if isinstance(core_output.kv_transfer_params, dict):
-        num_output_tokens = core_output.kv_transfer_params.get("num_output_tokens", None)
+        num_output_tokens = core_output.kv_transfer_params.get(
+            "num_output_tokens", None
+        )
     return num_output_tokens
+
 
 class LlumnixClient(BaseLlumnixClient):
     # pylint: disable=unused-argument
@@ -39,17 +43,21 @@ class LlumnixClient(BaseLlumnixClient):
     ):
         BaseLlumnixClient.__init__(self, loop)
         self.output_processor = output_processor
-        self.core_output_stash: Dict[str, Tuple[List[EngineCoreOutput]]] = defaultdict(list)
+        self.core_output_stash: Dict[str, Tuple[List[EngineCoreOutput]]] = defaultdict(
+            list
+        )
 
     async def abort_requests_async(self, request_ids: list[str]) -> None:
         for request_id in request_ids:
             await self._abort(request_id)
 
-# ================== overriding from BaseLlumnixClient ==================
+    # ================== overriding from BaseLlumnixClient ==================
     async def get_request_outputs_loop(self):
         """Process output order and put EngineCoreOutputs to local queue"""
         while True:
-            request_outputs: LlumnixRequestOutputs = await self.output_queue_server.get()
+            request_outputs: LlumnixRequestOutputs = (
+                await self.output_queue_server.get()
+            )
             llumlet_addr = request_outputs.llumlet_grpc_address
             requests_to_abort: List[RequestIDType] = []
 
@@ -73,14 +81,18 @@ class LlumnixClient(BaseLlumnixClient):
                 if self.request_instances[request_id]:
                     self.request_instances[request_id][-1] = request_outputs.instance_id
                 else:
-                    self.request_instances[request_id].append(request_outputs.instance_id)
+                    self.request_instances[request_id].append(
+                        request_outputs.instance_id
+                    )
 
                 processed_output = self._process_output_order(request_id, core_output)
                 if not processed_output:
                     continue
                 processed_outputs.extend(processed_output)
                 last_output = processed_output[-1]
-                self.request_num_output_tokens[request_id] = get_num_output_tokens(last_output)
+                self.request_num_output_tokens[request_id] = get_num_output_tokens(
+                    last_output
+                )
                 if last_output.finished:
                     logger.info("Client finished request {}.".format(request_id))
                     self._clear_client_request_states(request_id)
@@ -114,7 +126,9 @@ class LlumnixClient(BaseLlumnixClient):
                 "request-{} outputs are out of order. Previous output was at "
                 "position {}, and now receiving {} new tokens, but correspond "
                 "to position {}.".format(
-                    request_id, prev_len, num_new_tokens, current_len))
+                    request_id, prev_len, num_new_tokens, current_len
+                )
+            )
             self.core_output_stash[request_id].append(core_output)
             return []
 
@@ -129,8 +143,10 @@ class LlumnixClient(BaseLlumnixClient):
                 engine_outputs=EngineCoreOutputs(),
             )
             for request_id in request_ids:
-                logger.info("Request {} is cancelled because instance {} is dead".format(
-                    request_id, dead_instance_id)
+                logger.info(
+                    "Request {} is cancelled because instance {} is dead".format(
+                        request_id, dead_instance_id
+                    )
                 )
                 llumnix_request_outputs.engine_outputs.outputs.append(
                     EngineCoreOutput(
@@ -148,6 +164,7 @@ class LlumnixClient(BaseLlumnixClient):
         super()._clear_client_request_states(request_id)
         self.core_output_stash.pop(request_id, None)
 
+
 class VLLMV1LlumnixClient(LlumnixClient, AsyncMPClient):
     # pylint: disable=unused-argument
     def __init__(
@@ -164,21 +181,31 @@ class VLLMV1LlumnixClient(LlumnixClient, AsyncMPClient):
         LlumnixClient.__init__(self, loop, output_processor)
 
         client_count, client_index, driver_tensor_queue_union = args
-        AsyncMPClient.__init__(self, vllm_config, executor_class, log_stats,
-                                client_addresses, client_count, client_index, driver_tensor_queue_union)
+        AsyncMPClient.__init__(
+            self,
+            vllm_config,
+            executor_class,
+            log_stats,
+            client_addresses,
+            client_count,
+            client_index,
+            driver_tensor_queue_union,
+        )
 
-# ================== overriding from AsyncMPClient ==================
+    # ================== overriding from AsyncMPClient ==================
     async def add_request_async(self, request: EngineCoreRequest) -> None:
         request.client_index = self.client_index
         request.queue_server_address = self.output_queue_server.server_address
         await self._send_input(EngineCoreRequestType.ADD, request)
         self._ensure_output_queue_task()
 
+
 class VLLMV1DPLlumnixClient(VLLMV1LlumnixClient, DPAsyncMPClient):
     def __init__(self, *args, **kwargs):
         self.current_wave = 0
 
         VLLMV1LlumnixClient.__init__(self, *args, **kwargs)
+
 
 class VLLMV1CELlumnixClient(LlumnixClient, AsyncMPClient):
     def __init__(
@@ -194,14 +221,23 @@ class VLLMV1CELlumnixClient(LlumnixClient, AsyncMPClient):
     ):
         LlumnixClient.__init__(self, loop, output_processor)
         client_count, client_index = args
-        AsyncMPClient.__init__(self, vllm_config, executor_class, log_stats,
-                                client_addresses, client_count, client_index)
+        AsyncMPClient.__init__(
+            self,
+            vllm_config,
+            executor_class,
+            log_stats,
+            client_addresses,
+            client_count,
+            client_index,
+        )
+
     # ================== overriding from AsyncMPClient ==================
     async def add_request_async(self, request: EngineCoreRequest) -> None:
         request.client_index = self.client_index
         request.queue_server_address = self.output_queue_server.server_address
         await self._send_input(EngineCoreRequestType.ADD, request)
         self._ensure_output_queue_task()
+
 
 class VLLMV1DPCELlumnixClient(LlumnixClient, DPAsyncMPClient):
     def __init__(
@@ -217,8 +253,16 @@ class VLLMV1DPCELlumnixClient(LlumnixClient, DPAsyncMPClient):
     ):
         LlumnixClient.__init__(self, loop, output_processor)
         client_count, client_index = args
-        DPAsyncMPClient.__init__(self, vllm_config, executor_class, log_stats,
-                                client_addresses, client_count, client_index)
+        DPAsyncMPClient.__init__(
+            self,
+            vllm_config,
+            executor_class,
+            log_stats,
+            client_addresses,
+            client_count,
+            client_index,
+        )
+
     # ================== overriding from DPAsyncMPClient ==================
     async def add_request_async(self, request: EngineCoreRequest) -> None:
         self._ensure_stats_update_task()
@@ -234,6 +278,7 @@ class VLLMV1DPCELlumnixClient(LlumnixClient, DPAsyncMPClient):
         await to_await
         self._ensure_output_queue_task()
 
+
 class VLLMV1CEDPLBLlumnixClient(LlumnixClient, DPLBAsyncMPClient):
     def __init__(
         self,
@@ -248,8 +293,15 @@ class VLLMV1CEDPLBLlumnixClient(LlumnixClient, DPLBAsyncMPClient):
     ):
         LlumnixClient.__init__(self, loop, output_processor)
         client_count, client_index = args
-        DPLBAsyncMPClient.__init__(self, vllm_config, executor_class, log_stats,
-                                client_addresses, client_count, client_index)
+        DPLBAsyncMPClient.__init__(
+            self,
+            vllm_config,
+            executor_class,
+            log_stats,
+            client_addresses,
+            client_count,
+            client_index,
+        )
 
     # ================== overriding from DPLBAsyncMPClient ==================
     async def add_request_async(self, request: EngineCoreRequest) -> None:

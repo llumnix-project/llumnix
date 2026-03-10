@@ -37,12 +37,16 @@ class ThreadOutputForwarder(BaseOutputForwarder):
 
         self.forwarder_loop = start_asyncio_thread("thread_output_forwarder")
         self.forward_status_lock = threading.Lock()
-        future = asyncio.run_coroutine_threadsafe(self._connect_llumlet(), self.forwarder_loop)
+        future = asyncio.run_coroutine_threadsafe(
+            self._connect_llumlet(), self.forwarder_loop
+        )
         try:
             future.result(timeout=INIT_LLUMLET_STUB_TIMEOUT)
         except TimeoutError as e:
             self.stop()
-            raise RuntimeError("ThreadOutputForwarder background initialization failed.") from e
+            raise RuntimeError(
+                "ThreadOutputForwarder background initialization failed."
+            ) from e
 
     async def _connect_llumlet(self):
         await self.connect_llumlet()
@@ -73,15 +77,21 @@ class ThreadOutputForwarder(BaseOutputForwarder):
                 previous_queue_server_addr = None
                 for engine_core_output in engine_core_outputs.outputs:
                     if previous_queue_server_addr is None:
-                        previous_queue_server_addr = engine_core_output.queue_server_address
-                    elif previous_queue_server_addr != engine_core_output.queue_server_address:
+                        previous_queue_server_addr = (
+                            engine_core_output.queue_server_address
+                        )
+                    elif (
+                        previous_queue_server_addr
+                        != engine_core_output.queue_server_address
+                    ):
                         multi_clients_for_engine_index = True
                         break
 
                 if multi_clients_for_engine_index:
                     base_engine_core_output = EngineCoreOutputs(
                         finished_requests=engine_core_outputs.finished_requests,
-                        scheduler_stats=engine_core_outputs.scheduler_stats)
+                        scheduler_stats=engine_core_outputs.scheduler_stats,
+                    )
 
                     for engine_core_output in engine_core_outputs.outputs:
                         queue_server_addr = engine_core_output.queue_server_address
@@ -93,13 +103,15 @@ class ThreadOutputForwarder(BaseOutputForwarder):
                                 copy.deepcopy(base_engine_core_output),
                             )
                             request_outputs[queue_server_addr] = llumnix_outputs
-                        llumnix_outputs.engine_outputs.outputs.append(engine_core_output)
+                        llumnix_outputs.engine_outputs.outputs.append(
+                            engine_core_output
+                        )
                 else:
-                    queue_server_addr = engine_core_outputs.outputs[0].queue_server_address
+                    queue_server_addr = engine_core_outputs.outputs[
+                        0
+                    ].queue_server_address
                     request_outputs[queue_server_addr] = LlumnixRequestOutputs(
-                        self.instance_id,
-                        self.llumlet_grpc_address,
-                        engine_core_outputs
+                        self.instance_id, self.llumlet_grpc_address, engine_core_outputs
                     )
 
             requests_to_abort = await self.put_nowait_to_servers_func(
@@ -109,7 +121,9 @@ class ThreadOutputForwarder(BaseOutputForwarder):
                 await self.abort_to_llumlet_func(requests_to_abort)
         # pylint: disable=broad-except
         except Exception:
-            logger.exception("Exception in ThreadOutputForwarder._put_nowait_to_servers")
+            logger.exception(
+                "Exception in ThreadOutputForwarder._put_nowait_to_servers"
+            )
 
     def forward_status(
         self,
@@ -139,18 +153,14 @@ class ThreadOutputForwarder(BaseOutputForwarder):
     def stop(self) -> None:
         if self.forwarder_loop.is_running():
             future = asyncio.run_coroutine_threadsafe(
-                self.output_queue_client.close(),
-                self.forwarder_loop
+                self.output_queue_client.close(), self.forwarder_loop
             )
             try:
                 future.result(timeout=OUTPUT_QUEUE_CLIENT_CLOSE_TIMEOUT)
             # pylint: disable=broad-except
             except Exception as e:
                 logger.exception("Failed to close output_queue_client: %s", e)
-            future = asyncio.run_coroutine_threadsafe(
-                self.close(),
-                self.forwarder_loop
-            )
+            future = asyncio.run_coroutine_threadsafe(self.close(), self.forwarder_loop)
             try:
                 future.result(timeout=OUTPUT_FORWARDER_CLOSE_TIMEOUT)
             # pylint: disable=broad-except

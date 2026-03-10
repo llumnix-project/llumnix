@@ -11,6 +11,7 @@ from llumnix.utils import MigrationParams, MigrationType, RequestMigrationPolicy
 
 logger = init_logger(__name__)
 
+
 class BaseMigrationFrontend(ABC):
     """
     Abstract base class for handling request migration.
@@ -25,7 +26,6 @@ class BaseMigrationFrontend(ABC):
         self.scheduler = scheduler
         self.get_detailed_migration_status = envs.LLUMNIX_DETAILED_MIG_STATUS
         self._is_shutdown = False
-
 
     @abstractmethod
     def shutdown(self):
@@ -59,7 +59,10 @@ class BaseMigrationFrontend(ABC):
         pass
 
     def get_migrated_requests(self, migration_params: MigrationParams) -> List[Any]:
-        if migration_params.migration_type == MigrationType.NUM_REQ and migration_params.num_reqs == -1:
+        if (
+            migration_params.migration_type == MigrationType.NUM_REQ
+            and migration_params.num_reqs == -1
+        ):
             return self.iter_scheduler_requests()
 
         migrated_out_requests = []
@@ -68,7 +71,10 @@ class BaseMigrationFrontend(ABC):
             running_reqs = self._get_running_requests()
             waiting_reqs = self._get_waiting_requests()
 
-            if migration_params.mig_req_policy in (RequestMigrationPolicy.FCW, RequestMigrationPolicy.FCWSR):
+            if migration_params.mig_req_policy in (
+                RequestMigrationPolicy.FCW,
+                RequestMigrationPolicy.FCWSR,
+            ):
                 selected, remaining_budget = self._select_requests_from_list(
                     reqs=waiting_reqs,
                     indices=range(len(waiting_reqs)),
@@ -78,8 +84,13 @@ class BaseMigrationFrontend(ABC):
                 )
                 migrated_out_requests.extend(selected)
 
-                if migration_params.mig_req_policy == RequestMigrationPolicy.FCWSR and remaining_budget > 0:
-                    sorted_indices = self._get_sorted_indices(migration_params.mig_req_policy, running_reqs)
+                if (
+                    migration_params.mig_req_policy == RequestMigrationPolicy.FCWSR
+                    and remaining_budget > 0
+                ):
+                    sorted_indices = self._get_sorted_indices(
+                        migration_params.mig_req_policy, running_reqs
+                    )
                     selected, _ = self._select_requests_from_list(
                         reqs=running_reqs,
                         indices=sorted_indices,
@@ -88,7 +99,9 @@ class BaseMigrationFrontend(ABC):
                     )
                     migrated_out_requests.extend(selected)
             else:
-                sorted_indices = self._get_sorted_indices(migration_params.mig_req_policy, running_reqs)
+                sorted_indices = self._get_sorted_indices(
+                    migration_params.mig_req_policy, running_reqs
+                )
                 selected, _ = self._select_requests_from_list(
                     reqs=running_reqs,
                     indices=sorted_indices,
@@ -104,7 +117,12 @@ class BaseMigrationFrontend(ABC):
         return migrated_out_requests
 
     def _select_requests_from_list(
-        self, reqs: List[Any], indices: List[int], budget: int, migration_type: MigrationType, is_in_waiting: bool = False
+        self,
+        reqs: List[Any],
+        indices: List[int],
+        budget: int,
+        migration_type: MigrationType,
+        is_in_waiting: bool = False,
     ) -> Tuple[List[Any], int]:
         selected_requests = []
         accumulated_cost = 0
@@ -123,13 +141,19 @@ class BaseMigrationFrontend(ABC):
 
         return selected_requests, max(0, budget - accumulated_cost)
 
-    def _get_sorted_indices(self, mig_policy: RequestMigrationPolicy, reqs: List[Any]) -> list[int]:
+    def _get_sorted_indices(
+        self, mig_policy: RequestMigrationPolicy, reqs: List[Any]
+    ) -> list[int]:
         indices = list(range(len(reqs)))
         if mig_policy == RequestMigrationPolicy.LCR.value:
             return list(reversed(indices))
 
-        key_func = lambda i: self._get_sorting_key(reqs[i])
-        if mig_policy in (RequestMigrationPolicy.SR.value, RequestMigrationPolicy.FCWSR.value):
+        def key_func(i):
+            return self._get_sorting_key(reqs[i])
+        if mig_policy in (
+            RequestMigrationPolicy.SR.value,
+            RequestMigrationPolicy.FCWSR.value,
+        ):
             return sorted(indices, key=key_func)
         if mig_policy == RequestMigrationPolicy.LR.value:
             return sorted(indices, key=key_func, reverse=True)
@@ -163,7 +187,10 @@ class BaseMigrationFrontend(ABC):
         if migration_params.migration_type == MigrationType.TOKEN:
             return migration_params.num_tokens
         if migration_params.migration_type == MigrationType.RATIO:
-            total_tokens = self.scheduler.cache_config.num_gpu_blocks * self.scheduler.cache_config.block_size
+            total_tokens = (
+                self.scheduler.cache_config.num_gpu_blocks
+                * self.scheduler.cache_config.block_size
+            )
             return int(total_tokens * migration_params.kv_cache_usage_ratio)
         if migration_params.migration_type == MigrationType.NUM_REQ:
             return migration_params.num_reqs

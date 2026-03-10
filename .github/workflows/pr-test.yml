@@ -12,6 +12,10 @@ on:
   workflow_dispatch:
 
 jobs:
+  lint:
+    name: Lint
+    uses: ./.github/workflows/lint.yml
+
   go-ut:
     name: Go Unit Tests
     uses: ./.github/workflows/ut-gateway-and-scheduler.yml
@@ -27,18 +31,14 @@ jobs:
     uses: ./.github/workflows/ut-discovery.yml
     secrets: inherit
 
-  # docs-build:
-  #   name: Build Documentation
-  #   uses: ./.github/workflows/docs-build.yml
-
   all-pr-tests:
     name: All PR Tests
     runs-on: [self-hosted, cpu]
     needs:
+      - lint
       - go-ut
       - llumnix-ut
       - discovery-ut
-      # - docs-build
     steps:
       - name: All tests passed
         run: echo "All tests passed!"

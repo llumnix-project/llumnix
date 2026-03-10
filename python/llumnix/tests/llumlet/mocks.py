@@ -7,6 +7,7 @@ class MockVllmConfig:
     def __init__(self):
         self.parallel_config = None
 
+
 class MockInstanceMetaData:
     def __init__(self, instance_id, utc_create, utc_update):
         self.instance_id = instance_id
@@ -16,14 +17,17 @@ class MockInstanceMetaData:
 
 class MockEngineClient:
     def __init__(self, engine_config, client_addresses):
-        logging.info(f"MockLlumletCoreClient initialized with addresses: {client_addresses}")
+        logging.info(
+            f"MockLlumletCoreClient initialized with addresses: {client_addresses}"
+        )
         self.get_core_instance_status_func = None
 
     async def get_core_instance_status(self):
         if self.get_core_instance_status_func:
             return await self.get_core_instance_status_func()
         await asyncio.sleep(0.01)
-        return {"schedulable":True}
+        return {"schedulable": True}
+
 
 class MockAsyncLLumletRPCServer:
     def __init__(self, port):
@@ -39,8 +43,10 @@ class MockAsyncLLumletRPCServer:
     async def stop(self):
         self._stop_event.set()
 
+
 class MockCMSWriteClient:
     """A mock for the CMSWriteClient to use in tests."""
+
     def __init__(self, *args, **kwargs):
         logging.info("MockCMSWriteClient initialized.")
         self.add_instance_called = False

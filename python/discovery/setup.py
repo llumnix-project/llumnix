@@ -14,16 +14,25 @@ class BuildPyCommand(build_py):
 
     def run(self):
         # Run make proto command
-        subprocess.check_call(['make', 'proto'])
+        subprocess.check_call(["make", "proto"])
         # Run the standard build process
         super().run()
 
+
 def get_discovery_version() -> str:
-    git_describe_command = ["git", "describe", "--dirty", "--tags", "--long", "--match", "v*[0-9]*[0-9]*[0-9]"]
+    git_describe_command = [
+        "git",
+        "describe",
+        "--dirty",
+        "--tags",
+        "--long",
+        "--match",
+        "v*[0-9]*[0-9]*[0-9]",
+    ]
     version = get_version(
         root="../..",
         write_to="python/discovery/version.py",
-        git_describe_command=git_describe_command
+        git_describe_command=git_describe_command,
     )
     return version
 
@@ -34,6 +43,7 @@ def get_requirements() -> List[str]:
         requirements = f.read().strip().split("\n")
     return requirements
 
+
 setup(
     name="discovery",
     setup_requires=["setuptools_scm"],
@@ -41,6 +51,6 @@ setup(
     packages=find_packages(),
     install_requires=get_requirements(),
     cmdclass={
-        'build_py': BuildPyCommand,
+        "build_py": BuildPyCommand,
     },
 )

@@ -22,6 +22,7 @@ class LlumnixRequestOutput:
 
 class LlumnixRequestOutputs:
     """Wrapper of vLLM v1 EngineCoreOutputs"""
+
     def __init__(
         self,
         instance_id: int,
@@ -34,8 +35,9 @@ class LlumnixRequestOutputs:
 
     def __iter__(self):
         for output in self.engine_outputs.outputs:
-            yield LlumnixRequestOutput(output.request_id, self.instance_id,
-                                      self.llumlet_grpc_address, output)
+            yield LlumnixRequestOutput(
+                output.request_id, self.instance_id, self.llumlet_grpc_address, output
+            )
 
 
 LlumnixRequestOutputsType = Union[List[LlumnixRequestOutput], LlumnixRequestOutputs]

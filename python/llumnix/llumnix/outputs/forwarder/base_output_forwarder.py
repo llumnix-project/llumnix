@@ -38,10 +38,18 @@ class BaseOutputForwarder(ABC):
 
     async def connect_llumlet(self):
         if self.update_instance_status_mode == UpdateInstanceStatusMode.PUSH:
-            self._llumlet_status_channel = grpc.aio.insecure_channel(self.llumlet_grpc_address)
-            self._llumlet_status_stub = llumlet_server_pb2_grpc.LlumletStub(self._llumlet_status_channel)
-        self._llumlet_abort_channel = grpc.aio.insecure_channel(self.llumlet_grpc_address)
-        self._llumlet_abort_stub = llumlet_server_pb2_grpc.LlumletStub(self._llumlet_abort_channel)
+            self._llumlet_status_channel = grpc.aio.insecure_channel(
+                self.llumlet_grpc_address
+            )
+            self._llumlet_status_stub = llumlet_server_pb2_grpc.LlumletStub(
+                self._llumlet_status_channel
+            )
+        self._llumlet_abort_channel = grpc.aio.insecure_channel(
+            self.llumlet_grpc_address
+        )
+        self._llumlet_abort_stub = llumlet_server_pb2_grpc.LlumletStub(
+            self._llumlet_abort_channel
+        )
 
     async def put_nowait_to_servers_func(
         self,
@@ -50,17 +58,28 @@ class BaseOutputForwarder(ABC):
     ) -> List[RequestIDType]:
         tasks = []
         aborted_request_ids = []
-        def output_done_callback(server_addr: str, req_outputs: LlumnixRequestOutputsType, fut):
+
+        def output_done_callback(
+            server_addr: str, req_outputs: LlumnixRequestOutputsType, fut
+        ):
             ret = fut.result()[0]
             if isinstance(ret, Exception):
-                logger.exception("Server (queue_server_address: %s) is dead.", server_addr, exc_info=ret)
+                logger.exception(
+                    "Server (queue_server_address: %s) is dead.",
+                    server_addr,
+                    exc_info=ret,
+                )
                 for req_output in req_outputs:
                     aborted_request_ids.append(req_output.request_id)
 
         for server_addr, req_outputs in request_outputs.items():
-            task = asyncio.gather(output_queue_client.put_nowait(server_addr, req_outputs),
-                                  return_exceptions=True)
-            task.add_done_callback(partial(output_done_callback, server_addr, req_outputs))
+            task = asyncio.gather(
+                output_queue_client.put_nowait(server_addr, req_outputs),
+                return_exceptions=True,
+            )
+            task.add_done_callback(
+                partial(output_done_callback, server_addr, req_outputs)
+            )
             tasks.append(task)
         await asyncio.gather(*tasks)
 
@@ -74,7 +93,7 @@ class BaseOutputForwarder(ABC):
             cms_instance_status = to_cms_status(instance_status)
             await asyncio.wait_for(
                 self._llumlet_status_stub.PushInstanceStatus(cms_instance_status),
-                timeout=GRPC_TIMEOUT
+                timeout=GRPC_TIMEOUT,
             )
             return True
         except asyncio.TimeoutError:
@@ -83,18 +102,21 @@ class BaseOutputForwarder(ABC):
         except grpc.aio.AioRpcError as e:
             logger.error(
                 "Push instance status to llumlet, gRPC call failed: %s - %s",
-                e.code(), e.details()
+                e.code(),
+                e.details(),
             )
             return False
-        except Exception as e: # pylint: disable=broad-except
-            logger.exception("Push instance status to llumlet failed, unexpected exception: %s", e)
+        except Exception as e:  # pylint: disable=broad-except
+            logger.exception(
+                "Push instance status to llumlet failed, unexpected exception: %s", e
+            )
             return False
 
     async def abort_to_llumlet_func(self, request_ids: List[RequestIDType]) -> bool:
         try:
             await asyncio.wait_for(
                 self._llumlet_abort_stub.Abort(AbortRequests(request_ids=request_ids)),
-                timeout=GRPC_TIMEOUT
+                timeout=GRPC_TIMEOUT,
             )
             return True
         except asyncio.TimeoutError:
@@ -103,10 +125,12 @@ class BaseOutputForwarder(ABC):
         except grpc.aio.AioRpcError as e:
             logger.error(
                 "Abort to llumlet, gRPC call failed: %s - %s, request_ids: %s",
-                e.code(), e.details(), request_ids
+                e.code(),
+                e.details(),
+                request_ids,
             )
             return False
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             logger.exception("Abort to llumlet failed, unexpected exception: %s", e)
             return False
 
@@ -122,7 +146,7 @@ class BaseOutputForwarder(ABC):
                 self._llumlet_status_stub = None
         try:
             await self._llumlet_abort_channel.close()
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             logger.exception("Error closing llumlet abort channel: %s", e)
         finally:
             self._llumlet_abort_channel = None

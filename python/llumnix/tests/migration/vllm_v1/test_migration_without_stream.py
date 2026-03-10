@@ -6,6 +6,7 @@ import httpx
 from llumnix.llumlet.proto import llumlet_server_pb2_grpc, llumlet_server_pb2
 from llumnix.utils import MigrationTriggerPolicy, MigrationType, RequestMigrationPolicy
 
+
 class LlumletClient:
     def __init__(self, port=50051):
         self.port = port
@@ -14,7 +15,7 @@ class LlumletClient:
 
     async def connect(self):
         print(f"Connecting to llumlet server at localhost:{self.port}...")
-        self.channel = grpc.aio.insecure_channel(f'localhost:{self.port}')
+        self.channel = grpc.aio.insecure_channel(f"localhost:{self.port}")
         self.stub = llumlet_server_pb2_grpc.LlumletStub(self.channel)
 
     async def close(self):
@@ -51,18 +52,22 @@ async def main(num_req, host, port, llumlet_port, dst_host, dst_port, num_mig):
     try:
         async with httpx.AsyncClient() as http_client:
             payloads = [
-                {"prompt": "'Please count from 1 to 100 one by one in your response.",
-                 "max_tokens": 1000,
-                 "temperature": 0,
-                 "kv_transfer_params": {"ali_llumnix_disagg": False}} for _ in range(num_req)
+                {
+                    "prompt": "'Please count from 1 to 100 one by one in your response.",
+                    "max_tokens": 1000,
+                    "temperature": 0,
+                    "kv_transfer_params": {"ali_llumnix_disagg": False},
+                }
+                for _ in range(num_req)
             ]
 
             http_tasks = [
-                asyncio.create_task(
-                    http_client.post(url, json=p, timeout=60)
-                ) for p in payloads
+                asyncio.create_task(http_client.post(url, json=p, timeout=60))
+                for p in payloads
             ]
-            print(f"{len(http_tasks)} HTTP requests have been dispatched to the background.")
+            print(
+                f"{len(http_tasks)} HTTP requests have been dispatched to the background."
+            )
             await asyncio.sleep(5)
             await grpc_client.connect()
             await grpc_client.send_migrate(dst_host, dst_port, num_mig)
@@ -80,14 +85,47 @@ async def main(num_req, host, port, llumlet_port, dst_host, dst_port, num_mig):
         await grpc_client.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--num_requests', type=int, default=1, help='total number of requests for each client')
-    parser.add_argument('--num_mig', type=int, default=1, help='total number of requests to be migrate out')
-    parser.add_argument('--host', type=str, default='localhost', help='host ip for src instance')
-    parser.add_argument('--port', type=int, default=8000, help='web port for src instance service')
-    parser.add_argument('--llumlet_port', type=int, default=50051, help='llumlet grpc port for migration')
-    parser.add_argument('--dst_host', type=str, default='localhost', help='host ip for dst instance')
-    parser.add_argument('--dst_port', type=int, default=29876, help='kvt port for dst instance')
+    parser.add_argument(
+        "--num_requests",
+        type=int,
+        default=1,
+        help="total number of requests for each client",
+    )
+    parser.add_argument(
+        "--num_mig",
+        type=int,
+        default=1,
+        help="total number of requests to be migrate out",
+    )
+    parser.add_argument(
+        "--host", type=str, default="localhost", help="host ip for src instance"
+    )
+    parser.add_argument(
+        "--port", type=int, default=8000, help="web port for src instance service"
+    )
+    parser.add_argument(
+        "--llumlet_port",
+        type=int,
+        default=50051,
+        help="llumlet grpc port for migration",
+    )
+    parser.add_argument(
+        "--dst_host", type=str, default="localhost", help="host ip for dst instance"
+    )
+    parser.add_argument(
+        "--dst_port", type=int, default=29876, help="kvt port for dst instance"
+    )
     args = parser.parse_args()
-    asyncio.run(main(args.num_requests, args.host, args.port, args.llumlet_port, args.dst_host, args.dst_port, args.num_mig))
+    asyncio.run(
+        main(
+            args.num_requests,
+            args.host,
+            args.port,
+            args.llumlet_port,
+            args.dst_host,
+            args.dst_port,
+            args.num_mig,
+        )
+    )

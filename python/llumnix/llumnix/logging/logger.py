@@ -22,7 +22,10 @@ LLUMNIX_LOGGING_PREFIX = envs.LLUMNIX_LOGGING_PREFIX
 LLUMNIX_LOG_STREAM = envs.LLUMNIX_LOG_STREAM
 LLUMNIX_LOG_NODE_PATH = envs.LLUMNIX_LOG_NODE_PATH
 
-_FORMAT = f"{LLUMNIX_LOGGING_PREFIX}%(levelname)s %(asctime)s " "%(filename)s:%(lineno)d] %(message)s"
+_FORMAT = (
+    f"{LLUMNIX_LOGGING_PREFIX}%(levelname)s %(asctime)s "
+    "%(filename)s:%(lineno)d] %(message)s"
+)
 
 DEFAULT_LOGGING_CONFIG = {
     "formatters": {
@@ -117,13 +120,19 @@ def _configure_llumnix_root_logger() -> None:
     if LLUMNIX_LOGGING_CONFIG_PATH:
         if not path.exists(LLUMNIX_LOGGING_CONFIG_PATH):
             # pylint: disable=raising-format-tuple
-            raise RuntimeError("Could not load logging config. File does not exist: %s", LLUMNIX_LOGGING_CONFIG_PATH)
+            raise RuntimeError(
+                "Could not load logging config. File does not exist: %s",
+                LLUMNIX_LOGGING_CONFIG_PATH,
+            )
         with open(LLUMNIX_LOGGING_CONFIG_PATH, encoding="utf-8") as file:
             custom_config = json.loads(file.read())
 
         if not isinstance(custom_config, dict):
             # pylint: disable=raising-format-tuple
-            raise ValueError("Invalid logging config. Expected Dict, got %s.", type(custom_config).__name__)
+            raise ValueError(
+                "Invalid logging config. Expected Dict, got %s.",
+                type(custom_config).__name__,
+            )
         logging_config = custom_config
 
     if logging_config:

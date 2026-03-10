@@ -122,3 +122,34 @@ unit-test: gateway-build scheduler-build
 	CGO_ENABLED=1 \
 	CGO_LDFLAGS="-L./lib/sglang/sgl-model-gateway/bindings/golang/target/release" \
 	go test -v -failfast $(TEST_DIRS) 2>&1 | grep -v "no test files"
+
+# ── Lint ───────────────────────────────────────────────────────────────────────
+PYLINT_VERSION=3.3.9
+WRAPT_VERSION=2.1.2
+
+.PHONY: lint-install
+lint-install:
+	pip3 install wrapt==$(WRAPT_VERSION) pylint==$(PYLINT_VERSION)
+
+.PHONY: lint-pylint
+lint-pylint:
+	pylint python/llumnix/llumnix/ --rcfile=.pylintrc || true
+	pylint python/discovery/discovery/ --rcfile=.pylintrc --ignore=__pycache__ || true
+	pylint benchmarks/ --rcfile=.pylintrc --ignore=__pycache__ || true
+	pylint tests/ --rcfile=./tests/.pylintrc --ignore=__pycache__ || true
+
+.PHONY: lint-go
+lint-go:
+	golangci-lint run ./... || true
+
+.PHONY: lint
+lint: lint-install lint-pylint lint-go
+
+# ── Format ──────────────────────────────────────────────────────────────────────
+.PHONY: format-install
+format-install:
+	pip3 install black
+
+.PHONY: format
+format:
+	black python/llumnix/ python/discovery/ benchmarks/ tests/

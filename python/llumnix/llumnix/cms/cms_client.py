@@ -31,7 +31,9 @@ LLUMNIX_INSTANCE_METADATA_PREFIX = "llumnix:instance_metadata:"
 LLUMNIX_INSTANCE_STATUS_PREFIX = "llumnix:instance_status:"
 CMS_REDIS_PULL_METADATA_INTERVAL_MS_DEFAULT = "10000"
 CMS_REDIS_PULL_STATUS_INTERVAL_MS_DEFAULT = "500"
-CMS_REFRESH_LOOP_SLEEP_TIME_MS_DEFAULT = "100" # must smaller than METADATA_INTERVAL_MS and STATUS_INTERVAL_MS
+CMS_REFRESH_LOOP_SLEEP_TIME_MS_DEFAULT = (
+    "100"  # must smaller than METADATA_INTERVAL_MS and STATUS_INTERVAL_MS
+)
 
 REDIS_SOCKET_TIMEOUT = float(os.getenv("REDIS_SOCKET_TIMEOUT", "1"))
 REDIS_RETRY_TIMES = int(os.getenv("REDIS_RETRY_TIMES", "1"))
@@ -60,7 +62,9 @@ class RedisClient:
         if password:
             redis_params["password"] = password
         if REDIS_RETRY_TIMES > 0:
-            redis_params["retry"] = Retry(ConstantBackoff(REDIS_RETRY_INTERVAL), REDIS_RETRY_TIMES)
+            redis_params["retry"] = Retry(
+                ConstantBackoff(REDIS_RETRY_INTERVAL), REDIS_RETRY_TIMES
+            )
 
         self.redis_client = redis.Redis(**redis_params)
         logger.info("Redis client initialized with host=%s, port=%s", host, port)
@@ -123,14 +127,20 @@ class CMSWriteClient:
         value = instance_metadata.SerializeToString()
         self.redis_client.set(key, value)
 
-    def update_instance_metadata(self, instance_id: str, instance_metadata: "InstanceMetadata"):
+    def update_instance_metadata(
+        self, instance_id: str, instance_metadata: "InstanceMetadata"
+    ):
         logger.info("Update instance metadata: %s", instance_id)
         key = LLUMNIX_INSTANCE_METADATA_PREFIX + instance_id
         value = instance_metadata.SerializeToString()
         self.redis_client.set(key, value)
 
     def update_instance_status(self, instance_id, instance_status: "InstanceStatus"):
-        logger.debug("Update instance status: %s, update_id: %d", instance_id, instance_status.update_id)
+        logger.debug(
+            "Update instance status: %s, update_id: %d",
+            instance_id,
+            instance_status.update_id,
+        )
         key = LLUMNIX_INSTANCE_STATUS_PREFIX + instance_id
         value = instance_status.SerializeToString()
         self.redis_client.set(key, value)
@@ -190,11 +200,17 @@ class CMSReadClient:
         instance_metadata_last_fresh_time = 0
         while True:
             time_now = time.time()
-            if time_now - instance_metadata_last_fresh_time > self.redis_pull_metadata_interval_ms / 1000.0:
+            if (
+                time_now - instance_metadata_last_fresh_time
+                > self.redis_pull_metadata_interval_ms / 1000.0
+            ):
                 self._refresh_metadata()
                 instance_metadata_last_fresh_time = time_now
 
-            if time_now - instance_status_last_fresh_time > self.redis_pull_status_interval_ms / 1000.0:
+            if (
+                time_now - instance_status_last_fresh_time
+                > self.redis_pull_status_interval_ms / 1000.0
+            ):
                 self._refresh_status()
                 instance_status_last_fresh_time = time_now
 
@@ -217,13 +233,17 @@ class CMSReadClient:
                 self.instance_id_set = set(instance_ids_new)
 
             # update instance metadata
-            instance_metadata_bytes_list = self.redis_client.mget(instance_metadata_keys)
+            instance_metadata_bytes_list = self.redis_client.mget(
+                instance_metadata_keys
+            )
             with self.rwlock.gen_wlock():
                 for instance_id in list(self.instance_metadata_dict):
                     if instance_id not in self.instance_id_set:
                         del self.instance_metadata_dict[instance_id]
 
-                for i, instance_metadata_bytes in enumerate(instance_metadata_bytes_list):
+                for i, instance_metadata_bytes in enumerate(
+                    instance_metadata_bytes_list
+                ):
                     instance_id = instance_ids_new[i]
                     if not instance_metadata_bytes:
                         self.instance_metadata_dict[instance_id] = None
@@ -247,7 +267,9 @@ class CMSReadClient:
                     LLUMNIX_INSTANCE_STATUS_PREFIX + instance_id
                     for instance_id in self.instance_ids
                 ]
-                instance_status_bytes_list = self.redis_client.mget(instance_status_keys)
+                instance_status_bytes_list = self.redis_client.mget(
+                    instance_status_keys
+                )
                 for instance_id in list(self.instance_status_dict):
                     if instance_id not in self.instance_id_set:
                         del self.instance_status_dict[instance_id]

@@ -30,7 +30,8 @@ class ZmqClient(BaseQueueClient):
         super().__init__()
         self.context = zmq.asyncio.Context(ZMQ_IO_THREADS)
         self.socket_conn_pool = LruConnectionPool(
-            connection_type=ConnectionType.ZMQ_SOCKET, context=self.context)
+            connection_type=ConnectionType.ZMQ_SOCKET, context=self.context
+        )
 
     async def close(self):
         await self.socket_conn_pool.close_all()
@@ -38,24 +39,28 @@ class ZmqClient(BaseQueueClient):
 
     # pylint: disable=arguments-differ
     async def put_nowait(self, server_addr: str, item: Any):
-        queue_request = RPCPutNoWaitQueueRequest(item=item, send_time=time.perf_counter())
+        queue_request = RPCPutNoWaitQueueRequest(
+            item=item, send_time=time.perf_counter()
+        )
         await self._send_one_way_rpc_request(
             request_type=RPCRequestType.PUT_NOWAIT,
             request=queue_request,
             ip=server_addr.split(":")[0],
             port=int(server_addr.split(":")[1]),
-            error_message="Unable to put item into queue."
+            error_message="Unable to put item into queue.",
         )
 
     # not used
     async def put_nowait_batch(self, server_addr: str, items: Iterable):
-        batch_queue_request = RPCPutNoWaitBatchQueueRequest(items=items, send_time=time.perf_counter())
+        batch_queue_request = RPCPutNoWaitBatchQueueRequest(
+            items=items, send_time=time.perf_counter()
+        )
         await self._send_one_way_rpc_request(
             request_type=RPCRequestType.PUT_NOWAIT_BATCH,
             request=batch_queue_request,
             ip=server_addr.split(":")[0],
             port=int(server_addr.split(":")[1]),
-            error_message="Unable to put items into queue."
+            error_message="Unable to put items into queue.",
         )
 
     async def _send_one_way_rpc_request(
@@ -66,8 +71,12 @@ class ZmqClient(BaseQueueClient):
         port: int,
         error_message: str,
     ):
-        async def do_rpc_call(socket: zmq.asyncio.Socket, request_type: RPCRequestType, request: Any):
-            await socket.send_multipart([request_type.value, cloudpickle.dumps(request)])
+        async def do_rpc_call(
+            socket: zmq.asyncio.Socket, request_type: RPCRequestType, request: Any
+        ):
+            await socket.send_multipart(
+                [request_type.value, cloudpickle.dumps(request)]
+            )
             if await socket.poll(timeout=ZMQ_RPC_TIMEOUT_SECOND * 1000) == 0:
                 raise TimeoutError(
                     f"Server didn't reply within {ZMQ_RPC_TIMEOUT_SECOND * 1000} ms"
@@ -92,7 +101,7 @@ class ZmqClient(BaseQueueClient):
             raise ValueError(error_message)
 
 
-class MigrationZmqClient():
+class MigrationZmqClient:
     """Migration zmq client, used to trigger migration"""
 
     def __init__(self, server_address: str):
@@ -108,12 +117,16 @@ class MigrationZmqClient():
             self.socket.close()
             logger.info("MigrationZmqClient disconnected from %s", self.server_address)
 
-    async def migrate(self, dst_host: str, dst_port: int, migration_params: MigrationParams):
-        queue_request = LlumletMigrateRequest(dst_host=dst_host, dst_port=dst_port, migration_params=migration_params)
+    async def migrate(
+        self, dst_host: str, dst_port: int, migration_params: MigrationParams
+    ):
+        queue_request = LlumletMigrateRequest(
+            dst_host=dst_host, dst_port=dst_port, migration_params=migration_params
+        )
         res = await self._send_request(
             request_type=LlumletRequestType.MIGRATE,
             request=queue_request,
-            error_message="Failed to migrate."
+            error_message="Failed to migrate.",
         )
         return res
 
@@ -137,11 +150,18 @@ class MigrationZmqClient():
             response = cloudpickle.loads(response_payload)
 
         except Exception as e:
-            logger.exception("Error during call to MigrationFrontend %s", self.server_address)
+            logger.exception(
+                "Error during call to MigrationFrontend %s", self.server_address
+            )
             raise RuntimeError(f"{error_message} Reason: {e}") from e
-        if not isinstance(response, str) or response not in (MIGRATION_SUCCESS_STR, MIGRATION_FAILURE_STR):
+        if not isinstance(response, str) or response not in (
+            MIGRATION_SUCCESS_STR,
+            MIGRATION_FAILURE_STR,
+        ):
             if isinstance(response, Exception):
-                logger.error("%s. Server returned an exception: %s", error_message, response)
+                logger.error(
+                    "%s. Server returned an exception: %s", error_message, response
+                )
                 raise response
         if response == MIGRATION_SUCCESS_STR:
             return True

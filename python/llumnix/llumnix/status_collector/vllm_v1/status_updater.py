@@ -8,13 +8,20 @@ from vllm.v1.outputs import ModelRunnerOutput
 from llumnix import envs
 from llumnix.instance_info import BackendType, ConnectorType, InstanceStatus
 from llumnix.logging.logger import init_logger
-from llumnix.migration_frontend.vllm_v1.base_migration_frontend import BaseMigrationFrontend
-from llumnix.outputs.forwarder.vllm_v1.thread_output_forwarder import ThreadOutputForwarder
-from llumnix.status_collector.vllm_v1.status_collector import InstanceStatusCollector, StepPhase
+from llumnix.migration_frontend.vllm_v1.base_migration_frontend import (
+    BaseMigrationFrontend,
+)
+from llumnix.outputs.forwarder.vllm_v1.thread_output_forwarder import (
+    ThreadOutputForwarder,
+)
+from llumnix.status_collector.vllm_v1.status_collector import (
+    InstanceStatusCollector,
+    StepPhase,
+)
 from llumnix.utils import UpdateInstanceStatusMode
 
-
 logger = init_logger(__name__)
+
 
 class StatusUpdater:
     _WAITING_STATUSES = {
@@ -36,20 +43,26 @@ class StatusUpdater:
         "scheduler_running_to_decode_tokens_num",
         "num_running_requests",
     }
-    def __init__(self, scheduler: "Scheduler",
-                 engine_type: BackendType,
-                 vllm_config: VllmConfig,
-                 mig_async: bool,
-                 connector_type: ConnectorType,
-                 migration_frontend: BaseMigrationFrontend=None,
-                 status_forwarder: ThreadOutputForwarder=None):
+
+    def __init__(
+        self,
+        scheduler: "Scheduler",
+        engine_type: BackendType,
+        vllm_config: VllmConfig,
+        mig_async: bool,
+        connector_type: ConnectorType,
+        migration_frontend: BaseMigrationFrontend = None,
+        status_forwarder: ThreadOutputForwarder = None,
+    ):
         self.engine_type: BackendType = BackendType.VLLM_V1
         self.update_freq = envs.LLUMNIX_INSTANCE_UPDATE_STEPS
         self.enable_migration = envs.LLUMNIX_ENABLE_MIGRATION
         self.get_detailed_migration_status = envs.LLUMNIX_DETAILED_MIG_STATUS
         self.scheduler = scheduler
         self.recent_waitings_set = set()
-        self.recent_waitings_staleness_seconds = envs.LLUMNIX_RECENT_WAITINGS_STALENESS_SECONDS
+        self.recent_waitings_staleness_seconds = (
+            envs.LLUMNIX_RECENT_WAITINGS_STALENESS_SECONDS
+        )
         self.update_instance_status_mode = envs.LLUMNIX_UPDATE_INSTANCE_STATUS_MODE
         self.step_id = 0
         self.update_id = 0
@@ -65,7 +78,9 @@ class StatusUpdater:
         self.migration_frontend = migration_frontend
         self.running_ref = None
         self.waiting_ref = None
-        self.update_collector = InstanceStatusCollector(scheduler, vllm_config, connector_type)
+        self.update_collector = InstanceStatusCollector(
+            scheduler, vllm_config, connector_type
+        )
         self.status_forwarder = status_forwarder
 
     def update_instance_status(
@@ -83,7 +98,9 @@ class StatusUpdater:
             self.update_id += 1
 
             if step_phase == StepPhase.AFTER_UPDATE:
-                self._update_profiling_status(instance_status, scheduler_output, model_output)
+                self._update_profiling_status(
+                    instance_status, scheduler_output, model_output
+                )
                 if self.enable_migration:
                     self.migration_frontend.clear_finished_reqs()
 
@@ -103,7 +120,9 @@ class StatusUpdater:
             else:
                 self._update_instance_status(instance_status)
                 self._update_waiting_status(instance_status)
-                self._update_running_status(instance_status, step_phase, scheduler_output)
+                self._update_running_status(
+                    instance_status, step_phase, scheduler_output
+                )
                 # There is no need to push instance status in STEP_BEGIN step phase,
                 # because the instance status will be pushed in AFTER_SCHEDULE step phase,
                 # which is right after the STEP_BEGIN step phase.
@@ -116,7 +135,6 @@ class StatusUpdater:
             logger.exception("Failed to update instance status.")
         return
 
-
     def _update_profiling_status(
         self,
         instance_status: InstanceStatus,
@@ -127,7 +145,11 @@ class StatusUpdater:
         if not (self.enable_profiling and self.profiling_id < self.profiling_steps):
             instance_status.profiling_id = -1
             return
-        if not (model_output.step_duration and scheduler_output and scheduler_output.total_num_scheduled_tokens > 0):
+        if not (
+            model_output.step_duration
+            and scheduler_output
+            and scheduler_output.total_num_scheduled_tokens > 0
+        ):
             instance_status.profiling_id = -1
             return
 
@@ -142,9 +164,10 @@ class StatusUpdater:
 
         self.profiling_id += 1
         instance_status.profiling_id = self.profiling_id
-        instance_status.step_duration = model_output.step_duration if num_scheduled_prefill_tokens > 0 else 0.0
+        instance_status.step_duration = (
+            model_output.step_duration if num_scheduled_prefill_tokens > 0 else 0.0
+        )
         instance_status.num_scheduled_prefill_tokens = num_scheduled_prefill_tokens
-
 
     def _update_recent_waitings_status(
         self,
@@ -165,9 +188,14 @@ class StatusUpdater:
         # because we only update recent waitings status at the beginning of step.
         if step_phase == StepPhase.STEP_BEGIN:
             for req in list(self.recent_waitings_set):
-                if time.time() - req.arrival_time > self.recent_waitings_staleness_seconds:
+                if (
+                    time.time() - req.arrival_time
+                    > self.recent_waitings_staleness_seconds
+                ):
                     self.recent_waitings_set.remove(req)
-        instance_status.recent_waiting_requests = [req.request_id for req in self.recent_waitings_set]
+        instance_status.recent_waiting_requests = [
+            req.request_id for req in self.recent_waitings_set
+        ]
 
     def _update_waiting_status(
         self,
@@ -178,13 +206,17 @@ class StatusUpdater:
 
         # waiting requests is not scheduled requests, so there is no need to correct computed tokens.
         if self.enable_migration and self.mig_async:
-            waiting_snapshot:list[Tuple["EngineCoreRequest", int]] = []
+            waiting_snapshot: list[Tuple["EngineCoreRequest", int]] = []
             for req in self.scheduler.waiting:
                 # EngineCoreRequest is static and has the same lifecycle as Request object.
-                waiting_snapshot.append((self.migration_frontend.get_enginecore_request(req), 0))
+                waiting_snapshot.append(
+                    (self.migration_frontend.get_enginecore_request(req), 0)
+                )
             self.waiting_ref = waiting_snapshot
         instance_status.waiting_requests = [req.request_id for req in all_waitings]
-        self.update_collector.get_waiting_status(self._WAITING_STATUSES, instance_status, all_waitings)
+        self.update_collector.get_waiting_status(
+            self._WAITING_STATUSES, instance_status, all_waitings
+        )
 
     def _update_running_status(
         self,
@@ -192,14 +224,21 @@ class StatusUpdater:
         step_phase: StepPhase,
         scheduler_output: SchedulerOutput = None,
     ) -> None:
-        self.update_collector.get_running_status(self._RUNNING_STATUSES, instance_status, step_phase, scheduler_output)
+        self.update_collector.get_running_status(
+            self._RUNNING_STATUSES, instance_status, step_phase, scheduler_output
+        )
         if self.enable_migration and self.mig_async:
             running_snapshot: List[Tuple["EngineCoreRequest", int]] = []
             if self.scheduler.running:
                 for req in self.scheduler.running:
                     if req.num_computed_tokens >= req.num_prompt_tokens:
                         try:
-                            running_snapshot.append((self.migration_frontend.get_enginecore_request(req), req.num_output_tokens))
+                            running_snapshot.append(
+                                (
+                                    self.migration_frontend.get_enginecore_request(req),
+                                    req.num_output_tokens,
+                                )
+                            )
                         except KeyError as e:
                             logger.error("Failed to append running_snapshot %s", e)
             self.running_ref = running_snapshot
@@ -211,9 +250,11 @@ class StatusUpdater:
         # basic instance statuses, always collected
         instance_status.step_id = self.step_id
         instance_status.update_id = self.update_id
-        instance_status.num_used_gpu_tokens = \
-            instance_status.num_total_gpu_tokens - \
-            self.scheduler.kv_cache_manager.block_pool.get_num_free_blocks() * self.scheduler.cache_config.block_size
+        instance_status.num_used_gpu_tokens = (
+            instance_status.num_total_gpu_tokens
+            - self.scheduler.kv_cache_manager.block_pool.get_num_free_blocks()
+            * self.scheduler.cache_config.block_size
+        )
         # Update migration status
         if self.enable_migration:
             self.migration_frontend.update_migration_status(instance_status)

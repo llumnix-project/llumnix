@@ -2,9 +2,11 @@ from typing import List
 
 from vllm.v1.request import Request
 
-from llumnix.compat.vllm_compat import cdiv
 from llumnix.compat.hybrid_connector_compat import get_param
-from llumnix.status_collector.vllm_v1.base_connector_status_collector import BaseConnectorStatusCollector
+from llumnix.status_collector.vllm_v1.base_connector_status_collector import (
+    BaseConnectorStatusCollector,
+)
+
 
 class HybridConnectorStatusCollector(BaseConnectorStatusCollector):
 
@@ -29,10 +31,13 @@ class HybridConnectorStatusCollector(BaseConnectorStatusCollector):
         if self.scheduler.connector is not None:
             # pylint: disable=protected-access
             for req, load, _ in self.scheduler.connector._sched._waiting:
-                _, num_new_local_computed_tokens = \
+                _, num_new_local_computed_tokens = (
                     self.scheduler.kv_cache_manager.get_computed_blocks(req)
+                )
                 if load:
-                    num_unallocated_tokens_waiting_decodes += req.num_tokens - num_new_local_computed_tokens
+                    num_unallocated_tokens_waiting_decodes += (
+                        req.num_tokens - num_new_local_computed_tokens
+                    )
         return num_unallocated_tokens_waiting_decodes
 
     def get_connector_waiting_to_decode_tokens_num(self) -> int:
@@ -49,10 +54,13 @@ class HybridConnectorStatusCollector(BaseConnectorStatusCollector):
         if self.scheduler.connector is not None:
             # pylint: disable=protected-access
             for req, _, save in self.scheduler.connector._sched._waiting:
-                _, num_new_local_computed_tokens = \
+                _, num_new_local_computed_tokens = (
                     self.scheduler.kv_cache_manager.get_computed_blocks(req)
+                )
                 if save:
-                    num_uncomputed_tokens_waiting_prefills += (req.num_tokens - num_new_local_computed_tokens)
+                    num_uncomputed_tokens_waiting_prefills += (
+                        req.num_tokens - num_new_local_computed_tokens
+                    )
         return num_uncomputed_tokens_waiting_prefills
 
     def is_migrating(self, req: Request) -> bool:

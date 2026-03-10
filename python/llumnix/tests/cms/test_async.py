@@ -28,10 +28,14 @@ WAITING_TIME_S = 1
 
 
 async def clear_test_db(redis_client):
-    keys = await redis_client.get_keys_by_prefix(LLUMNIX_INSTANCE_METADATA_PREFIX + "test:")
+    keys = await redis_client.get_keys_by_prefix(
+        LLUMNIX_INSTANCE_METADATA_PREFIX + "test:"
+    )
     for key in keys:
         await redis_client.remove(key)
-    keys = await redis_client.get_keys_by_prefix(LLUMNIX_INSTANCE_STATUS_PREFIX + "test:")
+    keys = await redis_client.get_keys_by_prefix(
+        LLUMNIX_INSTANCE_STATUS_PREFIX + "test:"
+    )
     for key in keys:
         await redis_client.remove(key)
 
@@ -144,27 +148,29 @@ async def test_cms_write_client():
     instance_metadata1 = gen_instance_metadata(instance_id1)
     await cms_write_client.add_instance(instance_id1, instance_metadata1)
     assert (
-            await redis_client.get(f"{LLUMNIX_INSTANCE_METADATA_PREFIX}{instance_id1}")
-            == instance_metadata1.SerializeToString()
+        await redis_client.get(f"{LLUMNIX_INSTANCE_METADATA_PREFIX}{instance_id1}")
+        == instance_metadata1.SerializeToString()
     )
 
     instance_metadata2 = gen_instance_metadata(instance_id2, instance_type="prefill")
     await cms_write_client.add_instance(instance_id2, instance_metadata2)
     assert (
-            await redis_client.get(f"{LLUMNIX_INSTANCE_METADATA_PREFIX}{instance_id1}")
-            == instance_metadata1.SerializeToString()
+        await redis_client.get(f"{LLUMNIX_INSTANCE_METADATA_PREFIX}{instance_id1}")
+        == instance_metadata1.SerializeToString()
     )
     assert (
-            await redis_client.get(f"{LLUMNIX_INSTANCE_METADATA_PREFIX}{instance_id2}")
-            == instance_metadata2.SerializeToString()
+        await redis_client.get(f"{LLUMNIX_INSTANCE_METADATA_PREFIX}{instance_id2}")
+        == instance_metadata2.SerializeToString()
     )
 
     # test update instance metadata
     new_instance_metadata1 = gen_instance_metadata(instance_id1, instance_type="decode")
-    await cms_write_client.update_instance_metadata(instance_id1, new_instance_metadata1)
+    await cms_write_client.update_instance_metadata(
+        instance_id1, new_instance_metadata1
+    )
     assert (
-            await redis_client.get(f"{LLUMNIX_INSTANCE_METADATA_PREFIX}{instance_id1}")
-            == new_instance_metadata1.SerializeToString()
+        await redis_client.get(f"{LLUMNIX_INSTANCE_METADATA_PREFIX}{instance_id1}")
+        == new_instance_metadata1.SerializeToString()
     )
     instance_metadata1 = new_instance_metadata1
 
@@ -172,31 +178,41 @@ async def test_cms_write_client():
     instance_status1 = gen_instance_status(instance_id1)
     await cms_write_client.update_instance_status(instance_id1, instance_status1)
     assert (
-            await redis_client.get(f"{LLUMNIX_INSTANCE_STATUS_PREFIX}{instance_id1}")
-            == instance_status1.SerializeToString()
+        await redis_client.get(f"{LLUMNIX_INSTANCE_STATUS_PREFIX}{instance_id1}")
+        == instance_status1.SerializeToString()
     )
 
     instance_status2 = gen_instance_status(instance_id2)
     await cms_write_client.update_instance_status(instance_id2, instance_status2)
     assert (
-            await redis_client.get(f"{LLUMNIX_INSTANCE_STATUS_PREFIX}{instance_id1}")
-            == instance_status1.SerializeToString()
+        await redis_client.get(f"{LLUMNIX_INSTANCE_STATUS_PREFIX}{instance_id1}")
+        == instance_status1.SerializeToString()
     )
     assert (
-            await redis_client.get(f"{LLUMNIX_INSTANCE_STATUS_PREFIX}{instance_id2}")
-            == instance_status2.SerializeToString()
+        await redis_client.get(f"{LLUMNIX_INSTANCE_STATUS_PREFIX}{instance_id2}")
+        == instance_status2.SerializeToString()
     )
 
     # test remove instance
     await cms_write_client.remove_instance(instance_id1)
-    assert await redis_client.get(f"{LLUMNIX_INSTANCE_METADATA_PREFIX}{instance_id1}") is None
     assert (
-            await redis_client.get(f"{LLUMNIX_INSTANCE_STATUS_PREFIX}{instance_id2}")
-            == instance_status2.SerializeToString()
+        await redis_client.get(f"{LLUMNIX_INSTANCE_METADATA_PREFIX}{instance_id1}")
+        is None
+    )
+    assert (
+        await redis_client.get(f"{LLUMNIX_INSTANCE_STATUS_PREFIX}{instance_id2}")
+        == instance_status2.SerializeToString()
     )
     await cms_write_client.remove_instance(instance_id2)
-    assert await redis_client.get(f"{LLUMNIX_INSTANCE_METADATA_PREFIX}{instance_id1}") is None
-    assert await redis_client.get(f"{LLUMNIX_INSTANCE_STATUS_PREFIX}{instance_id2}") is None
+    assert (
+        await redis_client.get(f"{LLUMNIX_INSTANCE_METADATA_PREFIX}{instance_id1}")
+        is None
+    )
+    assert (
+        await redis_client.get(f"{LLUMNIX_INSTANCE_STATUS_PREFIX}{instance_id2}")
+        is None
+    )
+
 
 async def test_cms_write_client_timeout():
     redis_client = await get_redis_client()
@@ -212,15 +228,23 @@ async def test_cms_write_client_timeout():
     instance_metadata = gen_instance_metadata(instance_id)
     await cms_write_client.add_instance(instance_id, instance_metadata, expired_time_s)
     instance_status = gen_instance_status(instance_id)
-    await cms_write_client.update_instance_status(instance_id, instance_status, expired_time_s)
+    await cms_write_client.update_instance_status(
+        instance_id, instance_status, expired_time_s
+    )
     assert await redis_client.get(metadata_key) is not None
     assert await redis_client.get(status_key) is not None
     await asyncio.sleep(wait_time_s)
-    assert await redis_client.get(metadata_key) is None, "Metadata key should have expired"
+    assert (
+        await redis_client.get(metadata_key) is None
+    ), "Metadata key should have expired"
     assert await redis_client.get(status_key) is None, "Status key should have expired"
     await cms_write_client.add_instance(instance_id, instance_metadata, expired=30)
     new_instance_metadata = gen_instance_metadata(instance_id, instance_type="decode")
-    await cms_write_client.update_instance_metadata(instance_id, new_instance_metadata, expired_time_s)
+    await cms_write_client.update_instance_metadata(
+        instance_id, new_instance_metadata, expired_time_s
+    )
     assert await redis_client.get(metadata_key) is not None
     await asyncio.sleep(wait_time_s)
-    assert await redis_client.get(metadata_key) is None, "Updated metadata key should have expired"
+    assert (
+        await redis_client.get(metadata_key) is None
+    ), "Updated metadata key should have expired"

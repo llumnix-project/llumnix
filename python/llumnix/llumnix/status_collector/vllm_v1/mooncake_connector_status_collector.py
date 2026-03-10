@@ -2,7 +2,10 @@ from typing import List
 
 from vllm.v1.request import Request
 
-from llumnix.status_collector.vllm_v1.base_connector_status_collector import BaseConnectorStatusCollector
+from llumnix.status_collector.vllm_v1.base_connector_status_collector import (
+    BaseConnectorStatusCollector,
+)
+
 
 class MooncakeConnectorStatusCollector(BaseConnectorStatusCollector):
 

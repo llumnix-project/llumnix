@@ -29,10 +29,10 @@ class MigrationType(str, Enum):
 class RequestMigrationPolicy(str, Enum):
     LCR = "LCR"  # last running
     FCR = "FCR"  # first running
-    LR = "LR"   # longest running
-    SR = "SR"   # shortest running
-    FCW = "FCW" # first waiting
-    FCWSR = "FCWSR" # first waiting and shortest running
+    LR = "LR"  # longest running
+    SR = "SR"  # shortest running
+    FCW = "FCW"  # first waiting
+    FCWSR = "FCWSR"  # first waiting and shortest running
 
 
 class MigrationTriggerPolicy(str, Enum):
@@ -47,8 +47,8 @@ class MigrationTriggerPolicy(str, Enum):
 
 
 class ForwardOutputType(str, Enum):
-    """Output types for ThreadOutputForwarder to forward.
-    """
+    """Output types for ThreadOutputForwarder to forward."""
+
     REQUEST_OUTPUTS = "REQUEST_OUTPUTS"
     RPC_RESULTS = "RPC_RESULTS"
     STOP = "STOP"
@@ -56,6 +56,7 @@ class ForwardOutputType(str, Enum):
 
 class UpdateInstanceStatusMode(str, Enum):
     """Update instance status mode."""
+
     PUSH = "push"
     PULL = "pull"
 
@@ -63,8 +64,9 @@ class UpdateInstanceStatusMode(str, Enum):
 @dataclass
 class MigrationParams:
     """Parameters for select migrate out reqs."""
+
     migration_type: MigrationType = MigrationType.NUM_REQ
-    mig_req_policy:RequestMigrationPolicy = RequestMigrationPolicy.SR
+    mig_req_policy: RequestMigrationPolicy = RequestMigrationPolicy.SR
     num_reqs: int = 1
     num_tokens: int = 0
     kv_cache_usage_ratio: float = 0
@@ -74,12 +76,14 @@ class MigrationParams:
 @dataclass
 class MigrationLimits:
     """Migration limits"""
-    max_req_mig_in:int = 1
-    max_req_mig_out:int = 1
-    max_token_mig_in:int = 10000
-    max_token_mig_out:int = 10000
-    max_kv_cache_usage_ratio_mig_in:float = 0.3
-    max_kv_cache_usage_ratio_mig_out:float = 0.3
+
+    max_req_mig_in: int = 1
+    max_req_mig_out: int = 1
+    max_token_mig_in: int = 10000
+    max_token_mig_out: int = 10000
+    max_kv_cache_usage_ratio_mig_in: float = 0.3
+    max_kv_cache_usage_ratio_mig_out: float = 0.3
+
 
 def get_migration_limits(detailed: bool) -> MigrationLimits:
     mig_limits = MigrationLimits()
@@ -88,9 +92,14 @@ def get_migration_limits(detailed: bool) -> MigrationLimits:
     if detailed:
         mig_limits.max_token_mig_in = envs.LLUMNIX_MAX_TOKEN_MIG_IN
         mig_limits.max_token_mig_out = envs.LLUMNIX_MAX_TOKEN_MIG_OUT
-        mig_limits.max_kv_cache_usage_ratio_mig_in = envs.LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_IN
-        mig_limits.max_kv_cache_usage_ratio_mig_out = envs.LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_OUT
+        mig_limits.max_kv_cache_usage_ratio_mig_in = (
+            envs.LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_IN
+        )
+        mig_limits.max_kv_cache_usage_ratio_mig_out = (
+            envs.LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_OUT
+        )
     return mig_limits
+
 
 def get_rpc_port() -> int:
     port = int(os.getenv("LLUMNIX_RPC_PORT", "-1"))
@@ -113,6 +122,7 @@ def get_rpc_port() -> int:
     logger.info("Set available port {} for llumlet.".format(port))
     return port
 
+
 # ================== Address related ==================
 def get_ip_address(ifname: str = None):
     # Try to get IP address for the specified interface first
@@ -121,7 +131,7 @@ def get_ip_address(ifname: str = None):
             addrs = netifaces.ifaddresses(ifname)
             ip_info = addrs.get(netifaces.AF_INET)
             if ip_info and len(ip_info) > 0:
-                return ip_info[0]['addr']
+                return ip_info[0]["addr"]
         except (ImportError, ValueError, KeyError, OSError):
             pass
 
@@ -157,9 +167,11 @@ def get_ip_address(ifname: str = None):
         "Failed to get the IP address, using 0.0.0.0 by default."
         "The value can be set by the environment variable"
         " VLLM_HOST_IP or HOST_IP.",
-        stacklevel=2)
+        stacklevel=2,
+    )
 
     return "0.0.0.0"
+
 
 def _get_port_by_pid(pid: int, start: int, end: int) -> int:
     assert start < end
@@ -210,22 +222,24 @@ def get_metric_push_interval():
     assert metadata_interval > 0
     return status_interval, metadata_interval
 
+
 # pylint: disable=unused-argument
 def _loop_on_ex(loop, context):
     logger.exception("loop ex. context=%s", context)
     os.abort()
 
+
 def _asyncio_loop_main(loop):
     asyncio.set_event_loop(loop)
     loop.run_forever()
 
+
 def start_asyncio_thread(name):
     loop = uvloop.new_event_loop()
     loop.set_exception_handler(_loop_on_ex)
-    threading.Thread(target=_asyncio_loop_main,
-                     args=(loop, ),
-                     name=name,
-                     daemon=True).start()
+    threading.Thread(
+        target=_asyncio_loop_main, args=(loop,), name=name, daemon=True
+    ).start()
     return loop
 
 
@@ -234,4 +248,5 @@ class NotEnoughSlotsError(Exception):
     """
     Exception class raised when the number of migration requests is larger than available slots.
     """
-    pass # pylint: disable=unnecessary-pass
+
+    pass  # pylint: disable=unnecessary-pass

@@ -22,6 +22,18 @@ on:
         required: false
         default: ''
         type: string
+  workflow_call:
+    inputs:
+      target:
+        description: 'Image to build (gateway / scheduler / discovery / vllm / all)'
+        required: true
+        default: 'all'
+        type: string
+      image_tag:
+        description: 'Custom image tag'
+        required: true
+        type: string
+    secrets: inherit
 
 env:
   REGISTRY: ${{ vars.ACR_REGISTRY }}

@@ -1,5 +1,4 @@
 from __future__ import annotations
-import math
 import random
 import time
 from types import SimpleNamespace
@@ -10,18 +9,25 @@ from dataclasses import dataclass
 import zmq
 from zmq import Context
 from sglang.srt.managers.schedule_batch import Req
-from sglang.srt.managers.io_struct import (LlumletInstanceStatusReqOutput,
-                                          MigrateOutReq, MigrateInReq,
-                                          MigrateOutReqOutput, MigrateInReqOutput,
-                                          TokenizedGenerateReqInput)
+from sglang.srt.managers.io_struct import (
+    LlumletInstanceStatusReqOutput,
+    MigrateOutReq,
+    MigrateInReq,
+    MigrateOutReqOutput,
+    MigrateInReqOutput,
+    TokenizedGenerateReqInput,
+)
 from sglang.srt.utils import get_zmq_socket
+
 if TYPE_CHECKING:
     from sglang.srt.managers.scheduler import Scheduler
 
 # pylint: disable-next=wrong-import-position
 from llumnix.logging.logger import init_logger
-# pylint: disable-next=wrong-import-position
+
+# pylint: disable-next=wrong-import-position,cyclic-import
 from llumnix.llumlet import Llumlet
+
 # pylint: disable-next=wrong-import-position
 from llumnix.utils import MigrationType
 
@@ -41,6 +47,7 @@ class SGLangConfig:
     dist_init_addr: str
     api_server_port: int
 
+
 class SchedulerLlumnixMixin:
     def init_llumnix(
         self: Scheduler,
@@ -56,10 +63,16 @@ class SchedulerLlumnixMixin:
             zmq_ipc_addresses = self.llumlet.add_llumlet_addresses(zmq_ipc_addresses)
 
             self.recv_from_llumlet = get_zmq_socket(
-                context, zmq.PULL, zmq_ipc_addresses["llumlet_to_scheduler_ipc_name"], True
+                context,
+                zmq.PULL,
+                zmq_ipc_addresses["llumlet_to_scheduler_ipc_name"],
+                True,
             )
             self.send_to_llumlet = get_zmq_socket(
-                context, zmq.PUSH, zmq_ipc_addresses["scheduler_to_llumlet_ipc_name"], True
+                context,
+                zmq.PUSH,
+                zmq_ipc_addresses["scheduler_to_llumlet_ipc_name"],
+                True,
             )
 
             self.llumlet.start()
@@ -109,9 +122,7 @@ class SchedulerLlumnixMixin:
 
         return LlumletInstanceStatusReqOutput(instance_status=ret)
 
-    def get_engine_config_for_llumlet(
-        self: Scheduler
-    ):
+    def get_engine_config_for_llumlet(self: Scheduler):
         return SGLangConfig(
             enable_dp_attention=self.server_args.enable_dp_attention,
             dp_rank=self.dp_rank,
@@ -120,7 +131,7 @@ class SchedulerLlumnixMixin:
             instance_type=self.server_args.disaggregation_mode,
             dp_size=self.dp_size,
             dist_init_addr=self.server_args.dist_init_addr,
-            api_server_port=self.server_args.port
+            api_server_port=self.server_args.port,
         )
 
     def get_external_detokenizer(
@@ -140,9 +151,7 @@ class SchedulerLlumnixMixin:
                 socket = self.detokenizer_zmq_socket_pool[detokenizer_ipc_name]
             else:
                 context = zmq.Context(2)
-                socket = get_zmq_socket(
-                    context, zmq.PUSH, detokenizer_ipc_name, False
-                )
+                socket = get_zmq_socket(context, zmq.PUSH, detokenizer_ipc_name, False)
                 self.detokenizer_zmq_socket_pool[detokenizer_ipc_name] = socket
 
             external_detokenizers.append(socket)
@@ -180,9 +189,13 @@ class SchedulerLlumnixMixin:
             migrate_out_req = self.running_batch.reqs[idx]
             migrate_out_req.bootstrap_room = random.randint(0, 2**63 - 1)
             if self.dp_size > 1:
-                migrate_out_req.bootstrap_room = (migrate_out_req.bootstrap_room //
-                                                 self.dp_size * self.dp_size + self.dp_rank)
-            migrate_out_req.bootstrap_port = self.server_args.disaggregation_bootstrap_port
+                migrate_out_req.bootstrap_room = (
+                    migrate_out_req.bootstrap_room // self.dp_size * self.dp_size
+                    + self.dp_rank
+                )
+            migrate_out_req.bootstrap_port = (
+                self.server_args.disaggregation_bootstrap_port
+            )
             migrate_out_req.bootstrap_host = self.migration_bootstrap_host
             migrate_out_req.migrate_in_ip_address = recv_req.migrate_in_ip_address
             migrate_out_req.migrate_in_port = recv_req.migrate_in_port
@@ -208,9 +221,11 @@ class SchedulerLlumnixMixin:
                 data_parallel_rank=0,
             )
             migrate_out_req.seqlen_before_migration = migrate_out_req.seqlen
-            detokenizer_ipc_name = (migrate_out_req.src_detokenizer_ipc_name
-                                   if hasattr(migrate_out_req, "src_detokenizer_ipc_name")
-                                   else self.detokenizer_ipc_name)
+            detokenizer_ipc_name = (
+                migrate_out_req.src_detokenizer_ipc_name
+                if hasattr(migrate_out_req, "src_detokenizer_ipc_name")
+                else self.detokenizer_ipc_name
+            )
             migrate_in_req = MigrateInReq(
                 tokenized_req,
                 migrate_out_req.output_ids,

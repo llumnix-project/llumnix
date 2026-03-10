@@ -23,11 +23,12 @@ from llumnix.utils import MigrationType
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s | %(levelname)-8s | %(name)-15s | %(message)s'
+    format="%(asctime)s | %(levelname)-8s | %(name)-15s | %(message)s",
 )
 logger = logging.getLogger("Benchmark")
 
 INVALID_ANSWER = -9999999
+
 
 @dataclass
 class KVTInfo:
@@ -35,16 +36,17 @@ class KVTInfo:
     llumlet_host: str = ""
     llumlet_port: int = ""
 
+
 @dataclass
 class BenchmarkConfig:
 
     # mode and dataset
-    mode: str = 'cnt'
+    mode: str = "cnt"
     num_questions: int = 1
     num_shots: int = 5
     data_path: str = "test.jsonl"
     max_tokens: int = 10000
-    num_mig: int =1
+    num_mig: int = 1
 
     # backend API
     url: str = "http://127.0.0.1:8080"
@@ -62,7 +64,6 @@ class BenchmarkConfig:
     dst_llumlet_host: int = ""
     dst_llumlet_port: int = 5678
 
-
     # result
     result_file: str = "result.jsonl"
 
@@ -70,7 +71,7 @@ class BenchmarkConfig:
     api_url: str = field(init=False)
 
     def __post_init__(self):
-        if self.mode == 'cnt':
+        if self.mode == "cnt":
             self.api_url = f"{self.url}/v1/chat/completions"
         else:
             self.api_url = f"{self.url}/v1/completions"
@@ -78,14 +79,16 @@ class BenchmarkConfig:
 
 def parse_args() -> BenchmarkConfig:
     parser = argparse.ArgumentParser(description="LLM Benchmark Script")
-    parser.add_argument("--url", type=str, default="http://127.0.0.1:8080", help="url for service")
+    parser.add_argument(
+        "--url", type=str, default="http://127.0.0.1:8080", help="url for service"
+    )
     parser.add_argument("--n-ctx", type=int, default=4096)
     parser.add_argument("--result-file", type=str, default="result.jsonl")
-    parser.add_argument("--mode", type=str, default='cnt', choices=['gsm8k', 'cnt'])
+    parser.add_argument("--mode", type=str, default="cnt", choices=["gsm8k", "cnt"])
     parser.add_argument("--num-questions", type=int, default=1)
     parser.add_argument("--parallel", type=int, default=64)
-    parser.add_argument("--send-migration", action='store_true')
-    parser.add_argument("--mutual-mig", action='store_true')
+    parser.add_argument("--send-migration", action="store_true")
+    parser.add_argument("--mutual-mig", action="store_true")
     parser.add_argument("--src-llumlet-host", type=str)
     parser.add_argument("--src-llumlet-port", type=int)
     parser.add_argument("--dst-llumlet-host", type=str)
@@ -96,31 +99,35 @@ def parse_args() -> BenchmarkConfig:
     args = parser.parse_args()
     if args.send_migration:
         required_for_migration = [
-            'src_llumlet_host',
-            'src_llumlet_port',
-            'dst_llumlet_host',
-            'dst_llumlet_port'
+            "src_llumlet_host",
+            "src_llumlet_port",
+            "dst_llumlet_host",
+            "dst_llumlet_port",
         ]
         missing_args = []
         for arg_name in required_for_migration:
             if getattr(args, arg_name) is None:
                 missing_args.append(f"--{arg_name.replace('_', '-')}")
         if missing_args:
-            parser.error(f"The following arguments are required when --send_migration is set: {', '.join(missing_args)}")
+            parser.error(
+                f"The following arguments are required when --send_migration is set: {', '.join(missing_args)}"
+            )
 
     if args.mutual_mig:
         required_for_migration = [
-            'send_migration',
-            'src_llumlet_host',
-            'src_llumlet_port',
-            'dst_llumlet_host',
-            'dst_llumlet_port',
+            "send_migration",
+            "src_llumlet_host",
+            "src_llumlet_port",
+            "dst_llumlet_host",
+            "dst_llumlet_port",
         ]
         for arg_name in required_for_migration:
             if getattr(args, arg_name) is None:
                 missing_args.append(f"--{arg_name.replace('_', '-')}")
         if missing_args:
-            parser.error(f"The following arguments are required when --mutual-mig is set: {', '.join(missing_args)}")
+            parser.error(
+                f"The following arguments are required when --mutual-mig is set: {', '.join(missing_args)}"
+            )
 
     return BenchmarkConfig(**vars(args))
 
@@ -137,7 +144,7 @@ class LlumletClient:
 
     async def connect(self):
         self._logger.info(f"Connecting to llumlet server at {self._url}...")
-        self._channel = grpc.aio.insecure_channel(f'{self._url}')
+        self._channel = grpc.aio.insecure_channel(f"{self._url}")
         self._stub = llumlet_server_pb2_grpc.LlumletStub(self._channel)
 
     async def close(self):
@@ -175,15 +182,19 @@ def download_and_cache_file(url: str, filename: Optional[str] = None) -> str:
     response = requests.get(url, stream=True)
     response.raise_for_status()
     total_size = int(response.headers.get("content-length", 0))
-    with open(filename, "wb") as f, tqdm(total=total_size, unit="B", unit_scale=True) as bar:
+    with open(filename, "wb") as f, tqdm(
+        total=total_size, unit="B", unit_scale=True
+    ) as bar:
         for chunk in response.iter_content(chunk_size=1024):
             f.write(chunk)
             bar.update(len(chunk))
     return filename
 
+
 class Dataset(Protocol):
     def get_prompts(self) -> List[str]: ...
     def get_labels(self) -> List[Any]: ...
+
 
 class GSM8KDataset:
     def __init__(self, num_questions: int, num_shots: int):
@@ -205,9 +216,16 @@ class GSM8KDataset:
                 ret += f" {lines[i]['answer']}"
             return ret
 
-        few_shot_examples = "\n\n".join([get_one_example(self._lines, i, True) for i in range(self._num_shots)]) + "\n\n"
+        few_shot_examples = (
+            "\n\n".join(
+                [get_one_example(self._lines, i, True) for i in range(self._num_shots)]
+            )
+            + "\n\n"
+        )
 
-        questions = [get_one_example(self._lines, i, False) for i in range(len(self._lines))]
+        questions = [
+            get_one_example(self._lines, i, False) for i in range(len(self._lines))
+        ]
         labels = [self._get_answer_value(line["answer"]) for line in self._lines]
 
         # extend prompts to num_questions
@@ -217,7 +235,7 @@ class GSM8KDataset:
             prompts.extend([few_shot_examples + q for q in questions])
             final_labels.extend(labels)
 
-        return prompts[:self._num_questions], final_labels[:self._num_questions]
+        return prompts[: self._num_questions], final_labels[: self._num_questions]
 
     @staticmethod
     def _get_answer_value(answer_str: str) -> int:
@@ -234,6 +252,7 @@ class GSM8KDataset:
     def get_labels(self) -> List[Any]:
         return self._labels
 
+
 class CountingDataset:
     def __init__(self, num_questions: int):
         self._num_questions = num_questions
@@ -246,7 +265,14 @@ class CountingDataset:
 
 
 class APIClient(Protocol):
-    async def generate(self, prompt: str, loop: asyncio.AbstractEventLoop, executor: ThreadPoolExecutor, max_tokens: int) -> str: ...
+    async def generate(
+        self,
+        prompt: str,
+        loop: asyncio.AbstractEventLoop,
+        executor: ThreadPoolExecutor,
+        max_tokens: int,
+    ) -> str: ...
+
 
 class VLLMAPIClient:
     def __init__(self, url: str):
@@ -254,15 +280,24 @@ class VLLMAPIClient:
 
     def _sync_call(self, prompt: str, max_tokens):
         data = {
-            "prompt": prompt, "temperature": 0, "max_tokens": max_tokens,
-            "stop": ["Question", "Assistant:", "<|separator|>"]
+            "prompt": prompt,
+            "temperature": 0,
+            "max_tokens": max_tokens,
+            "stop": ["Question", "Assistant:", "<|separator|>"],
         }
         res = requests.post(self._url, json=data)
         res.raise_for_status()
-        return res.json()['choices'][0]["text"]
+        return res.json()["choices"][0]["text"]
 
-    async def generate(self, prompt: str, loop: asyncio.AbstractEventLoop, executor: ThreadPoolExecutor, max_tokens: int) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        loop: asyncio.AbstractEventLoop,
+        executor: ThreadPoolExecutor,
+        max_tokens: int,
+    ) -> str:
         return await loop.run_in_executor(executor, self._sync_call, prompt, max_tokens)
+
 
 class CountingAPIClient:
     def __init__(self, url: str):
@@ -270,20 +305,37 @@ class CountingAPIClient:
 
     def _sync_call(self, prompt: str, max_tokens):
         # 'prompt' is unused for this mode
-        messages = [{'role': 'system', 'content': 'Please count from 0 to 100 one by one in your response with'},]
+        messages = [
+            {
+                "role": "system",
+                "content": "Please count from 0 to 100 one by one in your response with",
+            },
+        ]
         data = {
-            "messages": messages, "stream": False, "temperature": 0, "max_tokens": max_tokens
+            "messages": messages,
+            "stream": False,
+            "temperature": 0,
+            "max_tokens": max_tokens,
         }
         res = requests.post(self._url, json=data)
         res.raise_for_status()
-        return res.json()['choices'][0]['message']['content']
+        return res.json()["choices"][0]["message"]["content"]
 
-    async def generate(self, prompt: str, loop: asyncio.AbstractEventLoop, executor: ThreadPoolExecutor, max_tokens: int) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        loop: asyncio.AbstractEventLoop,
+        executor: ThreadPoolExecutor,
+        max_tokens: int,
+    ) -> str:
         return await loop.run_in_executor(executor, self._sync_call, prompt, max_tokens)
 
 
 class Evaluator(Protocol):
-    def evaluate(self, predictions: List[str], labels: List[Any]) -> Dict[str, float]: ...
+    def evaluate(
+        self, predictions: List[str], labels: List[Any]
+    ) -> Dict[str, float]: ...
+
 
 class GSM8KEvaluator:
     def evaluate(self, predictions: List[str], labels: List[int]) -> Dict[str, float]:
@@ -300,9 +352,11 @@ class GSM8KEvaluator:
         logger.info(f"Invalid Rate: {invalid_rate:.4f}")
         return {"accuracy": accuracy, "invalid_rate": invalid_rate}
 
+
 class CountingEvaluator:
     def _find_longest_consecutive_subsequence(self, numbers: list):
-        if not numbers: return []
+        if not numbers:
+            return []
         longest, current = [], []
         for num in numbers:
             if not current or num == current[-1] + 1:
@@ -315,7 +369,7 @@ class CountingEvaluator:
 
     def _validate(self, text: str, start: int, end: int) -> bool:
         try:
-            numbers_found = [int(num) for num in re.findall(r'\d+', text)]
+            numbers_found = [int(num) for num in re.findall(r"\d+", text)]
         except (ValueError, TypeError):
             return False
 
@@ -371,35 +425,47 @@ class BenchmarkRunner:
         self._evaluator: Evaluator = self._create_evaluator()
         self._result_logger = ResultLogger(config)
         self._grpc_client: Optional[LlumletClient] = None
-        self.src = KVTInfo(id="src", llumlet_host=self._config.src_llumlet_host, llumlet_port=self._config.src_llumlet_port)
-        self.dst = KVTInfo(id="dst", llumlet_host=self._config.dst_llumlet_host, llumlet_port=self._config.dst_llumlet_port)
+        self.src = KVTInfo(
+            id="src",
+            llumlet_host=self._config.src_llumlet_host,
+            llumlet_port=self._config.src_llumlet_port,
+        )
+        self.dst = KVTInfo(
+            id="dst",
+            llumlet_host=self._config.dst_llumlet_host,
+            llumlet_port=self._config.dst_llumlet_port,
+        )
 
     def _create_dataset(self) -> Dataset:
-        if self._config.mode == 'gsm8k':
+        if self._config.mode == "gsm8k":
             return GSM8KDataset(self._config.num_questions, self._config.num_shots)
-        elif self._config.mode == 'cnt':
+        elif self._config.mode == "cnt":
             return CountingDataset(self._config.num_questions)
         else:
             raise ValueError(f"Unsupported mode: {self._config.mode}")
 
     def _create_api_client(self) -> APIClient:
-        if self._config.mode == 'cnt':
+        if self._config.mode == "cnt":
             return CountingAPIClient(self._config.api_url)
         return VLLMAPIClient(self._config.api_url)
 
     def _create_evaluator(self) -> Evaluator:
-        if self._config.mode == 'gsm8k':
+        if self._config.mode == "gsm8k":
             return GSM8KEvaluator()
-        elif self._config.mode == 'cnt':
+        elif self._config.mode == "cnt":
             return CountingEvaluator()
         else:
             raise ValueError(f"Unsupported mode: {self._config.mode}")
 
-    async def _run_migration_task(self, stop_event: asyncio.Event, grpc_client, src, dst, num_mig):
+    async def _run_migration_task(
+        self, stop_event: asyncio.Event, grpc_client, src, dst, num_mig
+    ):
         self._logger.info("Background migration task started.")
         while not stop_event.is_set():
             try:
-                await asyncio.wait_for(stop_event.wait(), timeout=random.randint(200,500)*0.001)
+                await asyncio.wait_for(
+                    stop_event.wait(), timeout=random.randint(200, 500) * 0.001
+                )
             except asyncio.TimeoutError:
                 if grpc_client:
                     self._logger.info("send migrate")
@@ -420,28 +486,51 @@ class BenchmarkRunner:
         num_mig = self._config.num_mig
 
         if self._config.send_migration:
-            self._grpc_client_src = LlumletClient(self._config.src_llumlet_host, self._config.src_llumlet_port)
+            self._grpc_client_src = LlumletClient(
+                self._config.src_llumlet_host, self._config.src_llumlet_port
+            )
             await self._grpc_client_src.connect()
-            migration_task_src = asyncio.create_task(self._run_migration_task(stop_event, self._grpc_client_src, self.src, self.dst, num_mig))
+            migration_task_src = asyncio.create_task(
+                self._run_migration_task(
+                    stop_event, self._grpc_client_src, self.src, self.dst, num_mig
+                )
+            )
             if self._config.mutual_mig:
-                self._grpc_client_dst = LlumletClient(self._config.dst_llumlet_host, self._config.dst_llumlet_port)
+                self._grpc_client_dst = LlumletClient(
+                    self._config.dst_llumlet_host, self._config.dst_llumlet_port
+                )
                 await self._grpc_client_dst.connect()
-                migration_task_dst = asyncio.create_task(self._run_migration_task(stop_event, self._grpc_client_dst, self.dst, self.src, num_mig))
+                migration_task_dst = asyncio.create_task(
+                    self._run_migration_task(
+                        stop_event, self._grpc_client_dst, self.dst, self.src, num_mig
+                    )
+                )
 
-        self._logger.info(f"Starting benchmark for mode '{self._config.mode}' with {len(prompts)} requests...")
+        self._logger.info(
+            f"Starting benchmark for mode '{self._config.mode}' with {len(prompts)} requests..."
+        )
         start_time = time.perf_counter()
 
         with ThreadPoolExecutor(self._config.parallel) as executor:
+
             async def process_request(i):
                 try:
-                    result = await self._api_client.generate(prompts[i], loop, executor, self._config.max_tokens)
+                    result = await self._api_client.generate(
+                        prompts[i], loop, executor, self._config.max_tokens
+                    )
                     predictions[i] = result
                 except Exception:
                     self._logger.error(f"Request {i} failed.", exc_info=True)
 
-            main_tasks = [asyncio.create_task(process_request(i)) for i in range(len(prompts))]
+            main_tasks = [
+                asyncio.create_task(process_request(i)) for i in range(len(prompts))
+            ]
 
-            for future in tqdm(asyncio.as_completed(main_tasks), total=len(main_tasks), desc="Processing Requests"):
+            for future in tqdm(
+                asyncio.as_completed(main_tasks),
+                total=len(main_tasks),
+                desc="Processing Requests",
+            ):
                 await future
 
         latency = time.perf_counter() - start_time
@@ -472,4 +561,3 @@ if __name__ == "__main__":
     except Exception as e:
         logger.critical("An unhandled exception occurred.", exc_info=True)
         sys.exit(1)
-

@@ -2,19 +2,19 @@ CPU_CORES := $(shell nproc --all 2>/dev/null || echo 4)
 
 .PHONY: vllm_install
 vllm_install: proto
-	@pip install -e .[vllm] --no-build-isolation
+	@python3 -m pip install -e .[vllm] --no-build-isolation
 
 .PHONY: lint
 lint: check_pylint_installed
 	@err=0; \
 	targets=$$(find llumnix -name "*.py" -not -path "*/\.*"); \
-	echo "$$targets" | xargs pylint --rcfile=.pylintrc -s n --jobs=$(CPU_CORES) || err=1; \
-	pylint --rcfile=.pylintrc -s n --jobs=$(CPU_CORES) setup.py || err=1; \
-	if [ "$$err" -ne "0" ]; then exit 1; fi
+	echo "$$targets" | xargs pylint --rcfile=../../.pylintrc -s n --jobs=$(CPU_CORES) || err=1; \
+	pylint --rcfile=../../.pylintrc -s n --jobs=$(CPU_CORES) setup.py || err=1; \
+	if [ "$$err" -ne 0 ]; then exit 1; fi
 
 ##################################### pylint begin ######################################
 
-PYLINT_VERSION = 2.12.2
+PYLINT_VERSION = 3.3.9
 
 .PHONY: check_pylint_installed
 check_pylint_installed:

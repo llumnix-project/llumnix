@@ -10,6 +10,7 @@ except ImportError:
         # pylint: disable=unused-import
         from vllm.version import __version__ as VLLM_VERSION
         from llumnix.utils import envs
+
         error_message = (
             "FATAL: Failed to import 'get_ip' from both 'vllm.utils.network_utils' and 'vllm.utils'. "
             "Your vllm installation might be broken, incomplete, or an unsupported version."

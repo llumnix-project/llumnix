@@ -39,7 +39,9 @@ environment_variables: Dict[str, Callable[[], Any]] = {
     # If set to 0, llumnix will not configure logging
     # If set to 1, llumnix will configure logging using the default configuration
     # or the configuration file specified by LLUMNIX_LOGGING_CONFIG_PATH
-    "LLUMNIX_CONFIGURE_LOGGING": lambda: int(os.getenv("LLUMNIX_CONFIGURE_LOGGING", "1")),
+    "LLUMNIX_CONFIGURE_LOGGING": lambda: int(
+        os.getenv("LLUMNIX_CONFIGURE_LOGGING", "1")
+    ),
     "LLUMNIX_LOGGING_CONFIG_PATH": lambda: os.getenv("LLUMNIX_LOGGING_CONFIG_PATH"),
     # this is used for configuring the default logging level
     "LLUMNIX_LOGGING_LEVEL": lambda: os.getenv("LLUMNIX_LOGGING_LEVEL", "INFO"),
@@ -50,63 +52,84 @@ environment_variables: Dict[str, Callable[[], Any]] = {
     # if set, llumnix will routing all node logs to this path
     "LLUMNIX_LOG_NODE_PATH": lambda: os.getenv("LLUMNIX_LOG_NODE_PATH", ""),
     # if set, llumnix will push instance status with specific interval
-    "LLUMNIX_STATUS_PUSH_INTERVAL": lambda: float(os.getenv("LLUMNIX_STATUS_PUSH_INTERVAL", "0.04")),
+    "LLUMNIX_STATUS_PUSH_INTERVAL": lambda: float(
+        os.getenv("LLUMNIX_STATUS_PUSH_INTERVAL", "0.04")
+    ),
     # if set, llumnix will push metadata with specific interval.
     # To prevent the record from expiring prematurely in Redis, this value MUST be shorter
     # than the record's Time-To-Live (TTL), which is controlled by the 'LLUMNIX_CMS_EXPIRED_TIME' environment variable
-    "LLUMNIX_METADATA_PUSH_INTERVAL": lambda: float(os.getenv("LLUMNIX_METADATA_PUSH_INTERVAL", "20")),
+    "LLUMNIX_METADATA_PUSH_INTERVAL": lambda: float(
+        os.getenv("LLUMNIX_METADATA_PUSH_INTERVAL", "20")
+    ),
     # this is used for configuring the timeout for get_instance_status engine call
-    "LLUMNIX_ENGINE_GET_STATUS_TIMEOUT": lambda: float(os.getenv("LLUMNIX_ENGINE_GET_STATUS_TIMEOUT", "30.0")),
+    "LLUMNIX_ENGINE_GET_STATUS_TIMEOUT": lambda: float(
+        os.getenv("LLUMNIX_ENGINE_GET_STATUS_TIMEOUT", "30.0")
+    ),
     # this is used for configuring the timeout for migrate engine call
-    "LLUMNIX_ENGINE_MIGRATE_TIMEOUT": lambda: float(os.getenv("LLUMNIX_ENGINE_MIGRATE_TIMEOUT", "5.0")),
+    "LLUMNIX_ENGINE_MIGRATE_TIMEOUT": lambda: float(
+        os.getenv("LLUMNIX_ENGINE_MIGRATE_TIMEOUT", "5.0")
+    ),
     # this is used for configuring the timeout for abort engine call
-    "LLUMNIX_ENGINE_ABORT_TIMEOUT": lambda: float(os.getenv("LLUMNIX_ENGINE_ABORT_TIMEOUT", "5.0")),
+    "LLUMNIX_ENGINE_ABORT_TIMEOUT": lambda: float(
+        os.getenv("LLUMNIX_ENGINE_ABORT_TIMEOUT", "5.0")
+    ),
     # this is used for setting instance status frequency
-    "LLUMNIX_INSTANCE_UPDATE_STEPS": lambda: int(os.getenv("LLUMNIX_INSTANCE_UPDATE_STEPS", "1")),
+    "LLUMNIX_INSTANCE_UPDATE_STEPS": lambda: int(
+        os.getenv("LLUMNIX_INSTANCE_UPDATE_STEPS", "1")
+    ),
     # if set, llumnix will limit the number of migrate in reqs size
     "LLUMNIX_MAX_REQ_MIG_IN": lambda: int(os.getenv("LLUMNIX_MAX_REQ_MIG_IN", "1")),
     # if set, llumnix will limit the number of migrate out reqs size
     "LLUMNIX_MAX_REQ_MIG_OUT": lambda: int(os.getenv("LLUMNIX_MAX_REQ_MIG_OUT", "1")),
     # if set llumnix will report detailed migration instance status
-    "LLUMNIX_DETAILED_MIG_STATUS": lambda: bool(int(os.getenv("LLUMNIX_DETAILED_MIG_STATUS", "0"))),
-
+    "LLUMNIX_DETAILED_MIG_STATUS": lambda: bool(
+        int(os.getenv("LLUMNIX_DETAILED_MIG_STATUS", "0"))
+    ),
     # if set migration concurrency is limited, only works when LLUMNIX_DETAILED_MIG_STATUS == True
     # if set, llumnix will limit the number of migrate in tokens
-    "LLUMNIX_MAX_TOKEN_MIG_IN": lambda: int(os.getenv("LLUMNIX_MAX_TOKEN_MIG_IN", "100000")),
+    "LLUMNIX_MAX_TOKEN_MIG_IN": lambda: int(
+        os.getenv("LLUMNIX_MAX_TOKEN_MIG_IN", "100000")
+    ),
     # if set, llumnix will limit the number of migrate out tokens
-    "LLUMNIX_MAX_TOKEN_MIG_OUT": lambda: int(os.getenv("LLUMNIX_MAX_TOKEN_MIG_OUT", "100000")),
+    "LLUMNIX_MAX_TOKEN_MIG_OUT": lambda: int(
+        os.getenv("LLUMNIX_MAX_TOKEN_MIG_OUT", "100000")
+    ),
     # if set, llumnix will limit the kv cache usage ratio of migrate in tokens
-    "LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_IN": lambda: float(os.getenv("LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_IN", "0.3")),
+    "LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_IN": lambda: float(
+        os.getenv("LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_IN", "0.3")
+    ),
     # if set, llumnix will limit the kv cache usage atio of migrate out tokens
-    "LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_OUT": lambda: float(os.getenv("LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_OUT", "0.3")),
-
+    "LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_OUT": lambda: float(
+        os.getenv("LLUMNIX_MAX_KV_CACHE_USAGE_RATIO_MIG_OUT", "0.3")
+    ),
     # this is used for configuring the timeout for migrate_in engine call
-    "LLUMNIX_ENGINE_MIGRATE_IN_TIMEOUT": lambda: float(os.getenv("LLUMNIX_ENGINE_MIGRATE_IN_TIMEOUT", "5.0")),
-
+    "LLUMNIX_ENGINE_MIGRATE_IN_TIMEOUT": lambda: float(
+        os.getenv("LLUMNIX_ENGINE_MIGRATE_IN_TIMEOUT", "5.0")
+    ),
     # this is used for setting the interval of reporting instance status
-    "LLUMNIX_REPORT_INSTANCE_STATUS_INTERVAL_S": lambda: float(os.getenv("LLUMNIX_REPORT_INSTANCE_STATUS_INTERVAL_S", "10.0")),
-
+    "LLUMNIX_REPORT_INSTANCE_STATUS_INTERVAL_S": lambda: float(
+        os.getenv("LLUMNIX_REPORT_INSTANCE_STATUS_INTERVAL_S", "10.0")
+    ),
     # this is used for setting the stale interval of recent waiting requests
-    "LLUMNIX_RECENT_WAITINGS_STALENESS_SECONDS": lambda: float(os.getenv("LLUMNIX_RECENT_WAITINGS_STALENESS_SECONDS", "10.0")),
-    
+    "LLUMNIX_RECENT_WAITINGS_STALENESS_SECONDS": lambda: float(
+        os.getenv("LLUMNIX_RECENT_WAITINGS_STALENESS_SECONDS", "10.0")
+    ),
     # this is used to setting up redis expired time, to disable, set the value to a negative number.
-    "LLUMNIX_CMS_EXPIRED_TIME": lambda: int(os.getenv("LLUMNIX_CMS_EXPIRED_TIME", "100")),
-
+    "LLUMNIX_CMS_EXPIRED_TIME": lambda: int(
+        os.getenv("LLUMNIX_CMS_EXPIRED_TIME", "100")
+    ),
     # if set, llumnix will enable migration
     "LLUMNIX_ENABLE_MIGRATION": lambda: int(os.getenv("LLUMNIX_ENABLE_MIGRATION", "1")),
-
     # there are two modes "push" and "pull" of updating instance status
-    "LLUMNIX_UPDATE_INSTANCE_STATUS_MODE": lambda: os.getenv("LLUMNIX_UPDATE_INSTANCE_STATUS_MODE", "push"),
-
+    "LLUMNIX_UPDATE_INSTANCE_STATUS_MODE": lambda: os.getenv(
+        "LLUMNIX_UPDATE_INSTANCE_STATUS_MODE", "push"
+    ),
     # If set, llumnix will enable profiling ttft/tpot
     "LLUMNIX_ENABLE_PROFILING": lambda: int(os.getenv("LLUMNIX_ENABLE_PROFILING", "0")),
-
     # If set, llumnix will profile ttft in the initial steps
     "LLUMNIX_PROFILING_STEPS": lambda: int(os.getenv("LLUMNIX_PROFILING_STEPS", "50")),
-
     # If not all, llumnix will only collect statuses that are used by metrics.
     "LLUMNIX_USED_METRICS": lambda: os.getenv("LLUMNIX_USED_METRICS", "all"),
-
     # If set, override the instance type. Valid values: "prefill", "decode", "neutral".
     # Default is empty, which means the instance type is determined by engine config.
     "LLUMNIX_INSTANCE_TYPE": lambda: os.getenv("LLUMNIX_INSTANCE_TYPE", ""),

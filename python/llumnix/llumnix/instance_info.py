@@ -15,15 +15,18 @@ class BackendType(str, Enum):
     BLADELLM = "BladeLLM"
     SGLANG = "SGLang"
 
+
 class ConnectorType(str, Enum):
     MOONCAKE = "mooncake"
     HYBRID = "hybrid"
+
 
 @dataclass
 class InstanceMetaData:
     """
     Generated when instance is created
     """
+
     # engine meta
     instance_id: str = ""
     instance_type: InstanceType = InstanceType.NEUTRAL  # type: ignore
@@ -65,6 +68,7 @@ class InstanceStatus:
     """
     Generated when instance is created
     """
+
     instance_id: str = ""
 
     # step loop status

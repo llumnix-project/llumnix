@@ -77,8 +77,10 @@ class LruConnectionPool:
             self.connection_pool.move_to_end(dst_address, last=True)
             return self.connection_pool[dst_address]
 
-        if self.max_connections > 0 and \
-            len(self.connection_pool) >= self.max_connections:
+        if (
+            self.max_connections > 0
+            and len(self.connection_pool) >= self.max_connections
+        ):
             self.connection_pool.popitem(last=False)
 
         if self.connection_type == ConnectionType.ZMQ_SOCKET:

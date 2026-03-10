@@ -25,11 +25,11 @@ VLLM_MIGRATION_RETRIES: int = 2
 MIGRATION_FRONTEND_TIMEOUT: float = 10.0  # seconds
 
 # llumnix/outputs/forwarder/thread_output_forwarder.py
-INIT_LLUMLET_STUB_TIMEOUT: float = 10.0  #seconds
+INIT_LLUMLET_STUB_TIMEOUT: float = 10.0  # seconds
 OUTPUT_QUEUE_CLIENT_CLOSE_TIMEOUT: float = 10.0
 OUTPUT_FORWARDER_CLOSE_TIMEOUT: float = 10.0
 
 # llumnix/outputs/forwarder/base_output_forwarder.py
 GRPC_TIMEOUT: float = 5.0
 MIGRATION_FRONTEND_INIT_TIMEOUT: float = 30  # seconds
-PRESTOP_TIMEOUT: float = 5 # seconds
+PRESTOP_TIMEOUT: float = 5  # seconds

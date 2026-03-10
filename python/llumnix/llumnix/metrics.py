@@ -52,16 +52,18 @@ METRIC_STATUSES_REQUIREMENTS: Dict[str, Set[str]] = {
     },
 }
 
+
 def parse_used_metrics_from_env() -> List[str]:
     metrics_str = envs.LLUMNIX_USED_METRICS
     if not metrics_str:
         return []
 
-    separators = [',', ';']
+    separators = [",", ";"]
     for sep in separators:
-        metrics_str = metrics_str.replace(sep, ',')
+        metrics_str = metrics_str.replace(sep, ",")
 
-    return [m.strip() for m in metrics_str.split(',') if m.strip()]
+    return [m.strip() for m in metrics_str.split(",") if m.strip()]
+
 
 def generate_instance_status_mask(used_metrics: List[str]) -> Dict[str, bool]:
     logger.debug("Used metrics: {}".format(used_metrics))
@@ -77,7 +79,11 @@ def generate_instance_status_mask(used_metrics: List[str]) -> Dict[str, bool]:
         statuses = METRIC_STATUSES_REQUIREMENTS.get(metric, None)
         if statuses is None:
             collect_all_statuses = True
-            logger.warning("Metric {} is not supported, all statuses will be collected.".format(metric))
+            logger.warning(
+                "Metric {} is not supported, all statuses will be collected.".format(
+                    metric
+                )
+            )
             break
         if statuses:
             required_statuses.update(statuses)
@@ -90,9 +96,6 @@ def generate_instance_status_mask(used_metrics: List[str]) -> Dict[str, bool]:
             for status_name in all_statuses
         }
     else:
-        status_mask = {
-            status_name: True
-            for status_name in all_statuses
-        }
+        status_mask = {status_name: True for status_name in all_statuses}
 
     return status_mask

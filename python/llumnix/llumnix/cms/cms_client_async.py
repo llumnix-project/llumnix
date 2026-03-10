@@ -122,7 +122,9 @@ class CMSWriteClient:
         self.redis_client = redis_client if redis_client else RedisClient()
         logger.info("CMSWriteClient initialized")
 
-    async def add_instance(self, instance_id: str, instance_metadata: InstanceMetadata, expired: int = 0):
+    async def add_instance(
+        self, instance_id: str, instance_metadata: InstanceMetadata, expired: int = 0
+    ):
         logger.info("Adding instance: %s", instance_id)
         key = LLUMNIX_INSTANCE_METADATA_PREFIX + instance_id
         value = instance_metadata.SerializeToString()
@@ -136,8 +138,14 @@ class CMSWriteClient:
         value = instance_metadata.SerializeToString()
         await self.redis_client.set(key, value, expired)
 
-    async def update_instance_status(self, instance_id, instance_status: InstanceStatus, expired: int = 0):
-        logger.debug("Update instance status: %s, update_id: %d", instance_id, instance_status.update_id)
+    async def update_instance_status(
+        self, instance_id, instance_status: InstanceStatus, expired: int = 0
+    ):
+        logger.debug(
+            "Update instance status: %s, update_id: %d",
+            instance_id,
+            instance_status.update_id,
+        )
         key = LLUMNIX_INSTANCE_STATUS_PREFIX + instance_id
         value = instance_status.SerializeToString()
         await self.redis_client.set(key, value, expired)

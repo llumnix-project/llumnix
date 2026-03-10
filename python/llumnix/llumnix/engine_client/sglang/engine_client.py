@@ -19,7 +19,7 @@ from sglang.srt.managers.io_struct import (
     MigrateOutReqOutput,
     MigrateInReqOutput,
     AbortMigrateInReq,
-    AbortMigrateInReqOutput
+    AbortMigrateInReqOutput,
 )
 
 from llumnix.engine_client.base_engine_client import BaseEngineClient
@@ -31,11 +31,12 @@ from llumnix.server.proto import llumlet_server_pb2_grpc, llumlet_server_pb2
 
 logger = init_logger(__name__)
 
+
 class SGLangEngineClient(BaseEngineClient):
     def __init__(
         self,
         client_addresses: Optional[dict[str, str]] = None,
-        ):
+    ):
         context = zmq.asyncio.Context(2)
 
         self.send_to_scheduler = get_zmq_socket(
@@ -53,33 +54,34 @@ class SGLangEngineClient(BaseEngineClient):
             self.send_to_scheduler
         )
 
-        self.migrate_in_communicator = _RequestReplyCommunicator(
-            self.send_to_scheduler
-        )
+        self.migrate_in_communicator = _RequestReplyCommunicator(self.send_to_scheduler)
 
         self.abort_migrate_in_communicator = _RequestReplyCommunicator(
             self.send_to_scheduler
         )
 
-        self._result_dispatcher = TypeBasedDispatcher([
-            (LlumletInstanceStatusReqOutput,
-            self.get_internal_status_communicator.handle_reply),
-            (MigrateOutReqOutput,
-            self.migrate_out_communicator.handle_reply),
-            (MigrateInReqOutput,
-            self.migrate_in_communicator.handle_reply),
-            (AbortMigrateInReq,
-            self._call_remote_abort_migate_in_req),
-            (AbortMigrateInReqOutput,
-            self.abort_migrate_in_communicator.handle_reply),
-        ])
+        self._result_dispatcher = TypeBasedDispatcher(
+            [
+                (
+                    LlumletInstanceStatusReqOutput,
+                    self.get_internal_status_communicator.handle_reply,
+                ),
+                (MigrateOutReqOutput, self.migrate_out_communicator.handle_reply),
+                (MigrateInReqOutput, self.migrate_in_communicator.handle_reply),
+                (AbortMigrateInReq, self._call_remote_abort_migate_in_req),
+                (
+                    AbortMigrateInReqOutput,
+                    self.abort_migrate_in_communicator.handle_reply,
+                ),
+            ]
+        )
         self._handle_loop_task: Optional[asyncio.Task] = None
         self.host_ip = get_ip_address()
 
     async def start(self):
         """Starts the background message handling loop."""
         if self._handle_loop_task is not None:
-            return # Already running
+            return  # Already running
         self._handle_loop_task = asyncio.create_task(self._handle_loop())
         logger.info("SGLangSchedulerClient background handler started.")
 
@@ -110,28 +112,49 @@ class SGLangEngineClient(BaseEngineClient):
         except asyncio.CancelledError:
             logger.info("SGLangSchedulerClient handle_loop cancelled.")
             raise
-        except Exception: # pylint: disable=broad-except
+        except Exception:  # pylint: disable=broad-except
             logger.exception("Error in SGLangSchedulerClient handle_loop")
 
     # Called by LlumletProc to send a LlumletInstanceStatusReq request to the scheduler.
     async def get_instance_status(self) -> dict:
         req = LlumletInstanceStatusReq()
-        response: LlumletInstanceStatusReqOutput = await self.get_internal_status_communicator(req)
+        response: LlumletInstanceStatusReqOutput = (
+            await self.get_internal_status_communicator(req)
+        )
         return response.instance_status
 
-    async def migrate_out(self, dst_engine_host: str, dst_engine_port: str, migration_params: MigrationParams) -> bool:
-        logger.info("Received migrate_out call. Migrating a request to %s:%s.", dst_engine_host, dst_engine_port)
+    async def migrate_out(
+        self,
+        dst_engine_host: str,
+        dst_engine_port: str,
+        migration_params: MigrationParams,
+    ) -> bool:
+        logger.info(
+            "Received migrate_out call. Migrating a request to %s:%s.",
+            dst_engine_host,
+            dst_engine_port,
+        )
         try:
-            migrate_out_req = MigrateOutReq("1", dst_engine_host, dst_engine_port, self.host_ip, migration_params)
-            logger.info("Sending MigrateOutReq to the scheduler to select a request for migration.")
-            migrate_out_req_output: MigrateOutReqOutput = await self.migrate_out_communicator(migrate_out_req)
+            migrate_out_req = MigrateOutReq(
+                "1", dst_engine_host, dst_engine_port, self.host_ip, migration_params
+            )
+            logger.info(
+                "Sending MigrateOutReq to the scheduler to select a request for migration."
+            )
+            migrate_out_req_output: MigrateOutReqOutput = (
+                await self.migrate_out_communicator(migrate_out_req)
+            )
             if not migrate_out_req_output.reqs:
                 logger.warning("No requests available for migration")
                 return True
 
-            logger.info("Received MigrateInReq from the scheduler, now send it to the destination's llumlet.")
+            logger.info(
+                "Received MigrateInReq from the scheduler, now send it to the destination's llumlet."
+            )
             # 2. 序列化请求数据
-            serialized_data, serialization_format = self._serialize_migrate_request(migrate_out_req_output)
+            serialized_data, serialization_format = self._serialize_migrate_request(
+                migrate_out_req_output
+            )
 
             # 3. 发起RPC调用
             success = await self._call_remote_migrate_in(
@@ -142,51 +165,72 @@ class SGLangEngineClient(BaseEngineClient):
 
         except grpc.RpcError as e:
             logger.error("gRPC error in migrate_out: %s", e, exc_info=True)
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             logger.error("migrate_out failed: %s", e, exc_info=True)
         return False
-
 
     async def abort(self, request_ids: RequestIDType) -> None:
         # TODO Implementation would go here
         pass
 
-    async def migrate_in(self, serialized_migrate_req: bytes, serialization_format: str) -> None:
+    async def migrate_in(
+        self, serialized_migrate_req: bytes, serialization_format: str
+    ) -> None:
         try:
             # 根据序列化格式选择合适的反序列化方法
             if serialization_format == "pickle":
-                migrate_out_req_output: MigrateOutReqOutput = pickle.loads(serialized_migrate_req)
+                migrate_out_req_output: MigrateOutReqOutput = pickle.loads(
+                    serialized_migrate_req
+                )
             else:
-                raise ValueError("Unsupported serialization format: %s" % serialization_format)
+                raise ValueError(
+                    "Unsupported serialization format: %s" % serialization_format
+                )
 
             logger.info("Received MigrateInReq, now send it to the scheduler.")
             # 处理反序列化后的MigrateInReq对象
-            response: MigrateInReqOutput =  await self.migrate_in_communicator(migrate_out_req_output)
+            response: MigrateInReqOutput = await self.migrate_in_communicator(
+                migrate_out_req_output
+            )
             if response.success:
-                request_ids = [migrate_req.req.rid for migrate_req in migrate_out_req_output.reqs]
-                logger.info("MigrateIn request for %s sent to scheduler successfully", request_ids)
+                request_ids = [
+                    migrate_req.req.rid for migrate_req in migrate_out_req_output.reqs
+                ]
+                logger.info(
+                    "MigrateIn request for %s sent to scheduler successfully",
+                    request_ids,
+                )
 
         except Exception as e:
             logger.error("Failed to process migrate_in request: %s", e, exc_info=True)
             raise RuntimeError("Failed to process migrate_in request") from e
 
-    async def abort_migrate_in(self, request_id: str, migrate_in_ip_address: str, migrate_in_port: str) -> None:
+    async def abort_migrate_in(
+        self, request_id: str, migrate_in_ip_address: str, migrate_in_port: str
+    ) -> None:
         """Process abort migrate in request by sending to scheduler"""
         try:
             # 构造AbortMigrateInReq对象
             abort_migrate_in_req = AbortMigrateInReq(
                 rid=request_id,
                 migrate_in_ip_address=migrate_in_ip_address,
-                migrate_in_port=migrate_in_port
+                migrate_in_port=migrate_in_port,
             )
 
             # 通过communicator发送给scheduler
-            response: AbortMigrateInReqOutput = await self.abort_migrate_in_communicator(abort_migrate_in_req)
+            response: AbortMigrateInReqOutput = (
+                await self.abort_migrate_in_communicator(abort_migrate_in_req)
+            )
             if response.success:
-                logger.info("AbortMigrateIn request for %s sent to scheduler successfully", request_id)
+                logger.info(
+                    "AbortMigrateIn request for %s sent to scheduler successfully",
+                    request_id,
+                )
 
         except Exception as e:
-            logger.error("Failed to process abort_migrate_in request: %s", e, exc_info=True)
+            logger.error(
+                "Failed to process abort_migrate_in request: %s", e, exc_info=True
+            )
             raise RuntimeError("Failed to process abort_migrate_in request") from e
 
     def _serialize_migrate_request(self, migrate_in_req) -> tuple[bytes, str]:
@@ -195,7 +239,9 @@ class SGLangEngineClient(BaseEngineClient):
             serialized_data = pickle.dumps(migrate_in_req)
             serialization_format = "pickle"
 
-            logger.debug("Serialized migrate request, size: %s bytes", len(serialized_data))
+            logger.debug(
+                "Serialized migrate request, size: %s bytes", len(serialized_data)
+            )
             return serialized_data, serialization_format
 
         except Exception as e:
@@ -207,7 +253,7 @@ class SGLangEngineClient(BaseEngineClient):
         dst_engine_host: str,
         dst_engine_port: str,
         serialized_data: bytes,
-        serialization_format: str
+        serialization_format: str,
     ) -> bool:
         """Call remote llumlet's MigrateIn RPC method"""
 
@@ -224,7 +270,7 @@ class SGLangEngineClient(BaseEngineClient):
             # 构造请求消息
             request = llumlet_server_pb2.MigrateInRequest(
                 serialized_migrate_req=serialized_data,
-                serialization_format=serialization_format
+                serialization_format=serialization_format,
             )
 
             # 发起异步RPC调用
@@ -241,7 +287,7 @@ class SGLangEngineClient(BaseEngineClient):
         except grpc.aio.AioRpcError as e:
             logger.error("gRPC call failed: %s - %s", e.code(), e.details())
             return False
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             logger.error("Unexpected error during RPC call: %s", e, exc_info=True)
             return False
         finally:
@@ -249,14 +295,14 @@ class SGLangEngineClient(BaseEngineClient):
             if channel:
                 await channel.close()
 
-    async def _call_remote_abort_migate_in_req(
-        self,
-        abort_migrate_in_req
-    ):
+    async def _call_remote_abort_migate_in_req(self, abort_migrate_in_req):
         """Call remote llumlet's AbortMigrateIn RPC method"""
 
         # 构建目标地址
-        target_address = "%s:%s" % (abort_migrate_in_req.migrate_in_ip_address, abort_migrate_in_req.migrate_in_port)
+        target_address = "%s:%s" % (
+            abort_migrate_in_req.migrate_in_ip_address,
+            abort_migrate_in_req.migrate_in_port,
+        )
         logger.info("Connecting to remote llumlet at %s", target_address)
 
         channel = None
@@ -269,7 +315,7 @@ class SGLangEngineClient(BaseEngineClient):
             request = llumlet_server_pb2.AbortMigrateInRequest(
                 request_id=abort_migrate_in_req.rid,
                 migrate_in_ip_address=abort_migrate_in_req.migrate_in_ip_address,
-                migrate_in_port=abort_migrate_in_req.migrate_in_port
+                migrate_in_port=abort_migrate_in_req.migrate_in_port,
             )
 
             # 发起异步RPC调用
@@ -277,7 +323,9 @@ class SGLangEngineClient(BaseEngineClient):
 
             # 检查响应结果
             if response.success:
-                logger.info("AbortMigrateIn request sent successfully: %s", response.message)
+                logger.info(
+                    "AbortMigrateIn request sent successfully: %s", response.message
+                )
                 return True
 
             logger.error("AbortMigrateIn request failed: %s", response.message)
@@ -286,7 +334,7 @@ class SGLangEngineClient(BaseEngineClient):
         except grpc.aio.AioRpcError as e:
             logger.error("gRPC call failed: %s - %s", e.code(), e.details())
             return False
-        except Exception as e: # pylint: disable=broad-except
+        except Exception as e:  # pylint: disable=broad-except
             logger.error("Unexpected error during RPC call: %s", e, exc_info=True)
             return False
         finally:
@@ -296,6 +344,7 @@ class SGLangEngineClient(BaseEngineClient):
 
 
 T = TypeVar("T")
+
 
 class _RequestReplyCommunicator(Generic[T]):
     """
@@ -349,8 +398,9 @@ class _RequestReplyCommunicator(Generic[T]):
             logger.warning(
                 "Received a reply but no active request is waiting. "
                 "This might be a late reply for a timed-out request. Reply ignored: %s",
-                reply_obj
+                reply_obj,
             )
+
 
 def sglang_get_instance_meta_data(cfg: SGLangConfig) -> dict:
     if cfg.instance_type == "prefill":
@@ -368,7 +418,9 @@ def sglang_get_instance_meta_data(cfg: SGLangConfig) -> dict:
             dp_rank = 0
 
     if cfg.dist_init_addr is not None:
-        namespace_uuid = uuid.UUID(hashlib.sha1(instance_type.encode('utf-8')).hexdigest()[:32])
+        namespace_uuid = uuid.UUID(
+            hashlib.sha1(instance_type.encode("utf-8")).hexdigest()[:32]
+        )
         generated_uuid = uuid.uuid5(namespace_uuid, cfg.dist_init_addr)
     else:
         generated_uuid = uuid.uuid4()
@@ -387,13 +439,18 @@ def sglang_get_instance_meta_data(cfg: SGLangConfig) -> dict:
     }
     return metadata
 
+
 def sglang_get_addresses() -> dict[str, str]:
     # pylint: disable=consider-using-with
-    llumlet_to_scheduler_ipc_name = "ipc://%s" % tempfile.NamedTemporaryFile(delete=False).name
-    scheduler_to_llumlet_ipc_name = "ipc://%s" % tempfile.NamedTemporaryFile(delete=False).name
+    llumlet_to_scheduler_ipc_name = (
+        "ipc://%s" % tempfile.NamedTemporaryFile(delete=False).name
+    )
+    scheduler_to_llumlet_ipc_name = (
+        "ipc://%s" % tempfile.NamedTemporaryFile(delete=False).name
+    )
 
     addresses = {
         "llumlet_to_scheduler_ipc_name": llumlet_to_scheduler_ipc_name,
-        "scheduler_to_llumlet_ipc_name": scheduler_to_llumlet_ipc_name
+        "scheduler_to_llumlet_ipc_name": scheduler_to_llumlet_ipc_name,
     }
     return addresses

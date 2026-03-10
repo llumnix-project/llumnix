@@ -3,6 +3,7 @@ from typing import Any, List
 
 from vllm.v1.request import Request
 
+
 class BaseConnectorStatusCollector(ABC):
 
     def __init__(self, scheduler: "Scheduler"):

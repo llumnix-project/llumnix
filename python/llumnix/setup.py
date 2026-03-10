@@ -14,17 +14,25 @@ class BuildPyCommand(build_py):
 
     def run(self):
         # Run make proto command
-        subprocess.check_call(['make', 'proto'])
+        subprocess.check_call(["make", "proto"])
         # Run the standard build process
         super().run()
 
 
 def get_llumnix_version() -> str:
-    git_describe_command = ["git", "describe", "--dirty", "--tags", "--long", "--match", "v*[0-9]*[0-9]*[0-9]"]
+    git_describe_command = [
+        "git",
+        "describe",
+        "--dirty",
+        "--tags",
+        "--long",
+        "--match",
+        "v*[0-9]*[0-9]*[0-9]",
+    ]
     version = get_version(
         root="../..",
         write_to="python/llumnix/llumnix/version.py",
-        git_describe_command=git_describe_command
+        git_describe_command=git_describe_command,
     )
     return version
 
@@ -58,6 +66,6 @@ setup(
         "sglang": get_engine_requirements("sglang"),
     },
     cmdclass={
-        'build_py': BuildPyCommand,
+        "build_py": BuildPyCommand,
     },
 )

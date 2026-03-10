@@ -69,14 +69,24 @@ class ZmqServer(BaseQueueServer):
                 break
             # pylint: disable=broad-except
             except Exception as e:
-                logger.error("Failed to bind QueueServer's socket to {}, exception: {}.".format(rpc_path, e))
+                logger.error(
+                    "Failed to bind QueueServer's socket to {}, exception: {}.".format(
+                        rpc_path, e
+                    )
+                )
                 if attempt < MAX_BIND_ADDRESS_RETRIES - 1:
-                    logger.warning("The rpc path {} is already in use, sleep {}s, and retry bind to it again."
-                                   .format(rpc_path, RETRY_BIND_ADDRESS_INTERVAL))
+                    logger.warning(
+                        "The rpc path {} is already in use, sleep {}s, and retry bind to it again.".format(
+                            rpc_path, RETRY_BIND_ADDRESS_INTERVAL
+                        )
+                    )
                     time.sleep(RETRY_BIND_ADDRESS_INTERVAL)
                 else:
-                    logger.error("The rpc path {} is still in use after {} times retries."
-                                 .format(rpc_path, MAX_BIND_ADDRESS_RETRIES))
+                    logger.error(
+                        "The rpc path {} is still in use after {} times retries.".format(
+                            rpc_path, MAX_BIND_ADDRESS_RETRIES
+                        )
+                    )
                     raise
 
         self.maxsize = maxsize
@@ -118,8 +128,10 @@ class ZmqServer(BaseQueueServer):
     def put_nowait_batch(self, items):
         # If maxsize is 0, queue is unbounded, so no need to check size.
         if self.maxsize > 0 and len(items) + self.qsize > self.maxsize:
-            raise RPCQueueFullError("Cannot add {} items to queue of size {} "
-                "and maxsize {}.".format(len(items), self.qsize, self.maxsize))
+            raise RPCQueueFullError(
+                "Cannot add {} items to queue of size {} "
+                "and maxsize {}.".format(len(items), self.qsize, self.maxsize)
+            )
         for item in items:
             self.queue.put_nowait(item)
 
@@ -153,7 +165,9 @@ class ZmqServer(BaseQueueServer):
     async def _send_response(self, identity, response_error=True):
         try:
             await asyncio.wait_for(
-                self.socket.send_multipart([identity, cloudpickle.dumps(RPC_SUCCESS_STR)]),
+                self.socket.send_multipart(
+                    [identity, cloudpickle.dumps(RPC_SUCCESS_STR)]
+                ),
                 timeout=ZMQ_RPC_TIMEOUT_SECOND,
             )
         # pylint: disable=broad-except
@@ -194,11 +208,17 @@ class ZmqServer(BaseQueueServer):
 
     def _log_exception(self, e: Exception):
         if isinstance(e, asyncio.TimeoutError):
-            logger.error("Zmq server send response to zmq client timeout (host: {})."
-                         .format(get_ip_address()))
+            logger.error(
+                "Zmq server send response to zmq client timeout (host: {}).".format(
+                    get_ip_address()
+                )
+            )
         else:
-            logger.exception("Error in zmq server send response to zmq client (host: {})"
-                             .format(get_ip_address()))
+            logger.exception(
+                "Error in zmq server send response to zmq client (host: {})".format(
+                    get_ip_address()
+                )
+            )
 
     @property
     def server_address(self):
@@ -209,7 +229,7 @@ class ZmqServer(BaseQueueServer):
         return self.queue.qsize()
 
 
-class MigrationZmqServer():
+class MigrationZmqServer:
 
     def __init__(self, handler):
         super().__init__()
@@ -251,7 +271,9 @@ class MigrationZmqServer():
 
                 except zmq.error.ZMQError as e:
                     if self._is_running:
-                        logger.error("ZMQ error in server loop at %s: %s", self.address, e)
+                        logger.error(
+                            "ZMQ error in server loop at %s: %s", self.address, e
+                        )
                     else:
                         break
         finally:
@@ -271,9 +293,11 @@ class MigrationZmqServer():
         try:
             if request_type == LlumletRequestType.MIGRATE.value:
                 request: LlumletMigrateRequest = cloudpickle.loads(request)
-                res = await self.handler.migrate_out(migration_params=request.migration_params,
-                                        dst_engine_host=request.dst_host,
-                                        dst_engine_port=request.dst_port)
+                res = await self.handler.migrate_out(
+                    migration_params=request.migration_params,
+                    dst_engine_host=request.dst_host,
+                    dst_engine_port=request.dst_port,
+                )
             else:
                 raise ValueError(f"Unknown or unsupported request type: {request_type}")
             if res:
@@ -282,7 +306,9 @@ class MigrationZmqServer():
                 await self._send_response(identity, MIGRATION_FAILURE_STR)
         # pylint: disable=broad-except
         except Exception as e:
-            logger.exception("Error handling request from client %s: %s", identity.hex(), e)
+            logger.exception(
+                "Error handling request from client %s: %s", identity.hex(), e
+            )
             await self._send_response(identity, e)
 
     async def _send_response(self, identity, payload: Any):
