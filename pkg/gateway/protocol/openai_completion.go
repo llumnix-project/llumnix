@@ -106,6 +106,7 @@ type CompletionRequest struct {
 	TopP                float32                `json:"top_p,omitempty"`
 	User                string                 `json:"user,omitempty"`
 	KvTransferParams    map[string]interface{} `json:"kv_transfer_params,omitempty"`
+	IgnoreEos           bool                   `json:"ignore_eos,omitempty"`
 	BootStrapHost       string                 `json:"bootstrap_host,omitempty"` // sglang
 	BootStrapRoom       string                 `json:"bootstrap_room,omitempty"` // sglang
 }

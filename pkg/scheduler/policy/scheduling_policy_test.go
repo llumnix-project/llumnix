@@ -1,4 +1,4 @@
-package scheduling_policy
+package policy
 
 import (
 	"context"
@@ -101,7 +101,7 @@ func newDispatchPolicy(t *testing.T, config *options.SchedulerConfig, inferType 
 		getRedisClient(t), config.CmsPullStatusIntervalMs, config.CmsPullMetadataIntervalMs,
 		false, config.EnableInstanceStatusLocalAccount, config.EnableCacheAwareScheduling,
 		config.RequestLocalAccountStalenessSeconds, -1, false,
-		config.NumPredictorWarmupSamples)
+		config.NumPredictorWarmupSamples, false)
 
 	var kvsClient kvs.KVSClientInterface
 	var tokenHasher *hasher.TokenHasher
@@ -1277,7 +1277,11 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 	}
 
 	promptTokenIds := []uint32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	req := &types.SchedulingRequest{SchedulingMode: types.SchedulingModeNeutral, PromptTokenIds: promptTokenIds}
+	req := &types.SchedulingRequest{
+		SchedulingMode:  types.SchedulingModeNeutral,
+		PromptNumTokens: len(promptTokenIds),
+		PromptTokenIds:  promptTokenIds,
+	}
 
 	result1 := policy.schedule(req, clusterViewScheduling)
 	assert.Equal(t, int32(1), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)

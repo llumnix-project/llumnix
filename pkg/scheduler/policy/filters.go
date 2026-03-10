@@ -1,7 +1,8 @@
-package scheduling_policy
+package policy
 
 import (
 	"fmt"
+	"reflect"
 	"time"
 
 	"k8s.io/apimachinery/pkg/util/sets"
@@ -116,6 +117,45 @@ func (f *schedulabilityFilter) instanceFilteredOut(instance *instanceViewSchedul
 }
 
 func (f *schedulabilityFilter) skipWhenFallback() bool {
+	return false
+}
+
+type instanceAttributeFilter struct {
+	attrKey       string
+	rejectedValue interface{}
+}
+
+func (f *instanceAttributeFilter) instanceFilteredOut(instance *instanceViewScheduling) bool {
+	if instance.cmsView == nil {
+		klog.Warningf("cmsView is nil")
+		return false
+	}
+
+	v := reflect.ValueOf(instance.cmsView)
+
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+
+	targetValue := v.FieldByName(f.attrKey)
+
+	if !targetValue.IsValid() {
+		klog.Warningf("field %s not found", f.attrKey)
+		return false
+	}
+
+	targetInterface := targetValue.Interface()
+	equal := reflect.DeepEqual(targetInterface, f.rejectedValue)
+
+	if equal {
+		klog.V(3).Infof("instanceAttributeFilter applied, instance %s filtered out (attribute %s: %v matches rejected value: %s)",
+			instance.cmsView.GetInstanceId(), f.attrKey, targetValue, f.rejectedValue)
+	}
+
+	return equal
+}
+
+func (f *instanceAttributeFilter) skipWhenFallback() bool {
 	return false
 }
 

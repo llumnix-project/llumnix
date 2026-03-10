@@ -1,4 +1,4 @@
-package scheduling_policy
+package policy
 
 import (
 	"math"

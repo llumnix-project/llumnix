@@ -216,7 +216,8 @@ class KVTMigrationFrontend(BaseMigrationFrontend):
         return self.latest_waiting_snapshot
 
     def _should_skip_migration(self, req: Tuple[Any, int], is_in_waiting: bool):
-        _ = is_in_waiting
+        if not is_in_waiting and req[1] < 1:
+            return True
         return req[0].request_id in self.migrating_reqs
 
     def _get_sorting_key(self, req: Tuple[Any, int]) -> int:
@@ -378,7 +379,6 @@ class KVTMigrationFrontend(BaseMigrationFrontend):
         dst_engine_host: str,
         dst_engine_port: int,
     ) -> bool:
-
         if not self.migration_finish_event.is_set():
             logger.info("A pre-stop migration is requested, but another is in progress. Waiting for it to complete...")
             finished_in_time = self.migration_finish_event.wait(timeout=PRESTOP_TIMEOUT)

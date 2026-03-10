@@ -38,7 +38,7 @@ def get_gateway_command(
     command = (
         f"./bin/gateway "
         f"--port={GATEWAY_PORT} "
-        f"--enable-log-input "
+        f"--enable-log-input=true "
         f"--llm-backend-discovery=redis "
         f"--scheduler-discovery=endpoints "
         f"--scheduler-endpoints=localhost:{SCHEDULER_PORT} "
@@ -81,7 +81,7 @@ def get_scheduler_command(
         f"./bin/scheduler "
         f"--port={SCHEDULER_PORT} "
         f"--host=0.0.0.0 "
-        f"--enable-log-input "
+        f"--enable-log-input=true "
         f"--llm-backend-discovery=redis "
         f"--discovery-redis-host=127.0.0.1 "
         f"--discovery-redis-port=6379 "

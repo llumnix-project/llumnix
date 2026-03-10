@@ -1,4 +1,4 @@
-package scheduling_policy
+package policy
 
 import (
 	"reflect"
@@ -19,11 +19,11 @@ import (
 
 func NewReschedulingPolicyPartial(c *options.SchedulerConfig) *ReschedulingPolicy {
 	rp := &ReschedulingPolicy{
-		c:                    c,
-		cmsClient:            nil,
+		c:                      c,
+		cmsClient:              nil,
 		reschedulingIntervalMs: c.ReschedulingIntervalMs,
-		grpcTimeoutSeconds:   5,
-		stopChan:             make(chan bool),
+		grpcTimeoutSeconds:     5,
+		stopChan:               make(chan bool),
 	}
 
 	if len(c.ReschedulingPolicies) > 0 {
@@ -31,15 +31,6 @@ func NewReschedulingPolicyPartial(c *options.SchedulerConfig) *ReschedulingPolic
 		for _, policy := range polices {
 			rp.policies = append(rp.policies, newReschedulingPolicyInternal(c, policy))
 		}
-	}
-
-	if c.EnableAdaptivePD {
-		rp.policies = append(rp.policies, newReschedulingPolicyInternal(c,
-			consts.ReschedulingPolicyCleanUpDecodeRequestsOnPrefill))
-		rp.policies = append(rp.policies, newReschedulingPolicyInternal(c,
-			consts.ReschedulingPolicyAggregateDecodeRequestsOnPrefill))
-		rp.policies = append(rp.policies, newReschedulingPolicyInternal(c,
-			consts.ReschedulingPolicyEaseBusyDecodeWithFreePrefill))
 	}
 
 	return rp
@@ -92,10 +83,10 @@ func TestReschedulingLoop(t *testing.T) {
 	}
 
 	rp := &ReschedulingPolicy{
-		c:                    config,
-		cmsClient:            nil,
+		c:                      config,
+		cmsClient:              nil,
 		reschedulingIntervalMs: config.ReschedulingIntervalMs,
-		stopChan:             make(chan bool),
+		stopChan:               make(chan bool),
 	}
 
 	executionCount := 0

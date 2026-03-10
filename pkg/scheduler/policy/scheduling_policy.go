@@ -1,4 +1,4 @@
-package scheduling_policy
+package policy
 
 import (
 	"time"
@@ -115,7 +115,8 @@ func NewDispatchPolicy(
 			c.RequestLocalAccountStalenessSeconds,
 			c.CmsRecordMetricsInterval,
 			c.EnablePredictorEnhancedScheduling,
-			c.NumPredictorWarmupSamples)
+			c.NumPredictorWarmupSamples,
+			c.EnableAdaptivePD)
 		if err != nil {
 			panic(err)
 		}
@@ -236,18 +237,30 @@ func (p *DispatchPolicy) Schedule(request *types.SchedulingRequest) error {
 		if instance == nil {
 			continue
 		}
+		targetInstance := *instance.GetInstance()
 
-		schResults = append(schResults, *instance.GetInstance())
+		// For adaptive pd, all instances can serve as both Prefill and Decode,
+		// with the specific role being determined at runtime.
+		if p.c.EnableAdaptivePD {
+			targetInstance.InferType = consts.InferTypePrefill
+		}
+
+		schResults = append(schResults, targetInstance)
 		klog.V(4).Infof("Added token from instance: %s", instance.GetInstanceId())
 		logSelectedInstance(instance, request.Id, consts.InferTypePrefill, p.c.EnableFullModeScheduling)
 	}
+
 	if len(selectedInstances) > 1 {
 		for _, instance := range selectedInstances[1] {
 			if instance == nil {
 				continue
 			}
+			targetInstance := *instance.GetInstance()
+			if p.c.EnableAdaptivePD {
+				targetInstance.InferType = consts.InferTypeDecode
+			}
 
-			schResults = append(schResults, *instance.GetInstance())
+			schResults = append(schResults, targetInstance)
 			klog.V(4).Infof("Added token2 from instance: %s", instance.GetInstanceId())
 			logSelectedInstance(instance, request.Id, consts.InferTypeDecode, p.c.EnableFullModeScheduling)
 		}
@@ -375,19 +388,22 @@ func (p *DispatchPolicy) executeSchedule(
 ) *instanceViewScheduling {
 	var availableInstanceViews map[string]*instanceViewScheduling
 
+	var targetInstanceViews map[string]*instanceViewScheduling
+	if !p.c.EnableAdaptivePD {
+		targetInstanceViews = clusterView.groupedInstanceViews[inferType]
+	} else {
+		targetInstanceViews = clusterView.instanceViews
+	}
+
 	fallback := false
 	availableInstanceViews = p.policyInternal.filter(
-		inferType,
-		clusterView.groupedInstanceViews[inferType],
-		fallback)
+		inferType, targetInstanceViews, fallback)
 
 	if len(availableInstanceViews) == 0 {
 		klog.V(4).Info("No instances found without fallback, executing scheduling steps with fallback=true")
 		fallback = true
 		availableInstanceViews = p.policyInternal.filter(
-			inferType,
-			clusterView.groupedInstanceViews[inferType],
-			fallback)
+			inferType, targetInstanceViews, fallback)
 	}
 
 	if len(availableInstanceViews) == 0 {
@@ -398,7 +414,7 @@ func (p *DispatchPolicy) executeSchedule(
 	klog.V(4).Infof("Available instances count: %d, fallback: %v, instance IDs: %v",
 		len(availableInstanceViews), fallback, maps.Keys(availableInstanceViews))
 
-	selected := p.policyInternal.selectInstance(inferType, availableInstanceViews)
+	selected := p.policyInternal.selectInstance(inferType, availableInstanceViews, fallback)
 	if selected == nil {
 		klog.V(4).Info("No instance selected by policy internal, return nil")
 		return nil
@@ -419,7 +435,8 @@ type dispatchPolicyInternal interface {
 		fallback bool) map[string]*instanceViewScheduling
 	selectInstance(
 		inferType consts.InferType,
-		instanceViews map[string]*instanceViewScheduling) *instanceViewScheduling
+		instanceViews map[string]*instanceViewScheduling,
+		fallback bool) *instanceViewScheduling
 }
 
 type baseDispatchPolicy map[consts.InferType]*inferTypeBaseDispatchPolicy
@@ -458,9 +475,10 @@ func (p baseDispatchPolicy) filter(
 
 func (p baseDispatchPolicy) selectInstance(
 	inferType consts.InferType,
-	instanceViews map[string]*instanceViewScheduling) *instanceViewScheduling {
+	instanceViews map[string]*instanceViewScheduling,
+	fallback bool) *instanceViewScheduling {
 
-	selected := p[inferType].selectors.selectInstance(instanceViews)
+	selected := p[inferType].selectors.selectInstance(instanceViews, fallback)
 	if selected != nil {
 		klog.V(4).Infof("Instance selected: %s", selected.GetInstanceId())
 	} else {

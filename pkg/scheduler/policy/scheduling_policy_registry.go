@@ -1,4 +1,4 @@
-package scheduling_policy
+package policy
 
 import (
 	"fmt"
@@ -108,6 +108,7 @@ func newLoadBalanceDispatchFullMode(p *options.SchedulerConfig) *loadBalanceDisp
 		},
 	}
 
+	// TODO(sunbiao.sun): Extract this part into a separate function
 	// Placed the cache locality metric as the first metric to be used in the metric-based selector
 	if p.EnableCacheAwareScheduling {
 		prefillInferTypeMetrics := policy.baseDispatchPolicy[consts.InferTypePrefill].metrics
@@ -133,6 +134,8 @@ func newSloDispatchFullMode(p *options.SchedulerConfig) *sloDispatchPolicy {
 	// init latency predictor, fast fail
 	GetLatencyPredictor(p.TtftProfilingDataPath, p.TpotProfilingDataPath)
 
+	// TODO(KuilongCui): add a configurable argument to allow users to choose whether to reject
+	// requests that fail to meet SLO targets for SloDispatchPolicy and Adaptive PD.
 	policy := &sloDispatchPolicy{
 		baseDispatchPolicy: baseDispatchPolicy{
 			consts.InferTypePrefill: {
@@ -188,7 +191,66 @@ func newSloDispatchFullMode(p *options.SchedulerConfig) *sloDispatchPolicy {
 		},
 	}
 
+	if p.EnableAdaptivePD {
+		configureAdaptivePDForSlo(policy, p)
+	}
+
 	return policy
+}
+
+func configureAdaptivePDForSlo(policy *sloDispatchPolicy, p *options.SchedulerConfig) {
+	// On instances without decode requests, the instance with the lowest predicted TTFT will be selected for Prefill.
+	policy.baseDispatchPolicy[consts.InferTypePrefill].metrics[consts.SchedulingMetricDecodeBatchSize] =
+		getSchedulingMetric(p, consts.SchedulingMetricDecodeBatchSize)
+	policy.baseDispatchPolicy[consts.InferTypePrefill].metrics[consts.SchedulingMetricPredictedTpot] =
+		getSchedulingMetric(p, consts.SchedulingMetricPredictedTpot)
+	policy.baseDispatchPolicy[consts.InferTypePrefill].singleInstanceFilters = []singleInstanceFilter{
+		&schedulabilityFilter{},
+		&stalenessFilter{
+			instanceStalenessSeconds: p.InstanceStalenessSeconds,
+		},
+		&instanceAttributeFilter{
+			attrKey:       consts.AttrKeyReservedInferType,
+			rejectedValue: consts.InferTypeDecode,
+		},
+		&metricBasedFilter{
+			metricName: consts.SchedulingMetricPredictedTtft,
+			threshold:  p.TtftSlo * p.TtftSloDispatchThreshold,
+		},
+		&metricBasedFilter{
+			metricName:          consts.SchedulingMetricDecodeBatchSize,
+			threshold:           0.1,
+			notSkipWhenFallback: true,
+		}}
+	policy.baseDispatchPolicy[consts.InferTypePrefill].selectors = &sloPrefillApdSelector{}
+
+	// Select the instance with the highest Predicted TPOT that does not exceed the TPOT SLO as decode
+	// (bin-packing for decode). If no available instance is found, attempt to convert the P instance with
+	// the lowest Predicted TTFT to D. Finally, if no available instance that meets the TPOT SLO can be
+	// found, perform load balancing across all D instances.
+	policy.baseDispatchPolicy[consts.InferTypeDecode].metrics[consts.SchedulingMetricPredictedTtft] =
+		getSchedulingMetric(p, consts.SchedulingMetricPredictedTtft)
+	policy.baseDispatchPolicy[consts.InferTypeDecode].metrics[consts.SchedulingMetricDecodeBatchSize] =
+		getSchedulingMetric(p, consts.SchedulingMetricDecodeBatchSize)
+	policy.baseDispatchPolicy[consts.InferTypeDecode].singleInstanceFilters = []singleInstanceFilter{
+		&schedulabilityFilter{},
+		&stalenessFilter{
+			instanceStalenessSeconds: p.InstanceStalenessSeconds,
+		},
+		&instanceAttributeFilter{
+			attrKey:       consts.AttrKeyReservedInferType,
+			rejectedValue: consts.InferTypePrefill,
+		},
+		&metricBasedFilter{
+			metricName: consts.SchedulingMetricPredictedTtft,
+			threshold:  p.TpotSlo * p.TpotSloDispatchThreshold,
+		},
+		&metricBasedFilter{
+			metricName: consts.SchedulingMetricPredictedTpot,
+			threshold:  p.TpotSlo * p.TpotSloDispatchThreshold,
+		},
+	}
+	policy.baseDispatchPolicy[consts.InferTypeDecode].selectors = &sloDecodeApdSelector{}
 }
 
 // The flood policy attempts to always route requests to the same instance whenever possible.
