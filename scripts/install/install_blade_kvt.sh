@@ -60,11 +60,7 @@ main() {
     cd "$work_dir"
     python3 setup.py bdist_wheel
     pip install dist/*.whl
-    
-    local project_root="$(cd - && pwd)"
-    mkdir -p "$project_root/lib"
-    cp "$work_dir/dist/blade_kvt-*.whl" "$project_root/lib/"
-    echo "✓ Wheel copied to $project_root/lib/"
+
 }
 
 main "$@"

@@ -57,7 +57,7 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 RUN if [ "$INCLUDE_MOONCAKE" = "true" ]; then \
         git clone https://github.com/kvcache-ai/Mooncake.git /tmp/Mooncake/ \
         && cd /tmp/Mooncake \
-        && bash dependencies.sh \
+        && bash dependencies.sh -y \
         && mkdir build && cd build \
         && cmake .. \
             -DPython_EXECUTABLE=/usr/bin/python3.12 \
