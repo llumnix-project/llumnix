@@ -133,14 +133,14 @@ lint-install:
 
 .PHONY: lint-pylint
 lint-pylint:
-	pylint python/llumnix/llumnix/ --rcfile=.pylintrc || true
-	pylint python/discovery/discovery/ --rcfile=.pylintrc --ignore=__pycache__ || true
-	pylint benchmarks/ --rcfile=.pylintrc --ignore=__pycache__ || true
-	pylint tests/ --rcfile=./tests/.pylintrc --ignore=__pycache__ || true
+	pylint python/llumnix/llumnix/ --rcfile=.pylintrc
+	pylint python/discovery/discovery/ --rcfile=.pylintrc --ignore=__pycache__
+	pylint benchmarks/ --rcfile=.pylintrc --ignore=__pycache__
+	pylint tests/ --rcfile=./tests/.pylintrc --ignore=__pycache__
 
 .PHONY: lint-go
 lint-go:
-	golangci-lint run ./... || true
+	golangci-lint run ./...
 
 .PHONY: lint
 lint: lint-install lint-pylint lint-go
