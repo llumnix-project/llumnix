@@ -102,7 +102,8 @@ For non-PD deployments, a single request is sent to the selected instance. For P
 The following describes how a `/v1/chat/completions` request travels through the gateway.
 
 ```mermaid
-graph LR
+%%{init: {'flowchart': {'curve': 'basis', 'nodeSpacing': 30}}}%%
+graph TB
     Client[Client]
     
     subgraph Gateway["Gateway"]
@@ -125,18 +126,18 @@ graph LR
     Client -->|/v1/chat/completions| Service
     Service --> |ChatCompletionRequest| Handler
     Handler --> |Preprocess| PreProc
-    PreProc --> |CompletionRequest| Handler
+    PreProc -.-> |CompletionRequest| Handler
     Handler --> |Enqueue| Queue
     Queue --> |Dequeue|Router
     Router -->|schedule| LB
     LB -->|/schedule| Scheduler
-    Scheduler -->|selected instances| LB
+    Scheduler -.->|selected instances| LB
     LB --> Forwarder
     Forwarder -->|CompletionRequest| Internal
-    Internal -->|Stream Chunks| Forwarder
-    Forwarder -->|Stream Chunks| PostProc
-    PostProc -->|Serialized ChatCompletionResponse| Handler
-    Handler -->|SSE Stream| Client
+    Internal -.->|Stream Chunks| Forwarder
+    Forwarder -.->|Stream Chunks| PostProc
+    PostProc -.->|Serialized ChatCompletionResponse| Handler
+    Handler -.->|SSE Stream| Client
 ```
 
 ### 1. HTTP Request Reception

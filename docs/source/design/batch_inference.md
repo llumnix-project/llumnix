@@ -7,6 +7,39 @@ The workflow is as follows:
 3. Wait for the batch task to complete. You can check the task status through the query API.
 4. Download the results. Once the task is completed, an output file and an error file (if any) are generated. You can retrieve the results through the file API.
 
+## Architecture
+
+```mermaid
+graph LR
+    Client[Client]
+
+    subgraph Gateway["LLM Gateway"]
+        FileAPI[File API]
+        BatchAPI[Batch API]
+        Reactor[Shard & Parallel Dispatch]
+        InferenceAPI[Inference API]
+    end
+
+    OSS[(OSS)]
+    Redis[(Redis)]
+    Scheduler[Scheduler]
+    Engine1[Inference Engine]
+    Engine2[Inference Engine]
+
+    Client -->|"1. Upload file"| FileAPI
+    FileAPI -->|store| OSS
+    Client -->|"2. Create batch"| BatchAPI
+    BatchAPI -->|read/write metadata| Redis
+    BatchAPI --> Reactor
+    Reactor -->|"3. HTTP loopback<br/>(127.0.0.1)"| InferenceAPI
+    InferenceAPI --> Scheduler
+    Scheduler --> Engine1
+    Scheduler --> Engine2
+    Reactor -->|"4. Write results"| OSS
+    Client -->|"5. Download results"| FileAPI
+    FileAPI -->|read| OSS
+```
+
 ## Service Deployment Example
 
 To enable Batch API support in LLM Gateway, you need:
