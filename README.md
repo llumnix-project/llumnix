@@ -6,7 +6,7 @@ Llumnix provides key functionalities for modern distributed serving deployments 
 
 Note that with this new repository, we are re-architecting Llummix to a more modular and cloud-native design (Llumnix v1). The old Ray-based architecture (Llumnix v0) is a better choice for local deployments and quick prototyping and experimentation of scheduling ideas.
 
-# Key features
+# Key Features
 - **Scheduler + rescheduler architecture** for fully dynamic request scheduling: initial routing + continuous migration
 - **Advanced scheduling policies**: load balancing, KV-aware, SLO/predictor-based scheduling, adaptive PD disaggregation, etc.
 - **Dual-mode scheduling**
