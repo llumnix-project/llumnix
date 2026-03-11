@@ -16,7 +16,7 @@ import (
 
 func predictNumComputedPrefillTokens(
 	instances map[string]*instanceViewScheduling, ttftPredictor *predictor.QuadraticPredictor, maxNumBatchedTokens int32) {
-	if ttftPredictor.Fitted() == false {
+	if !ttftPredictor.Fitted() {
 		klog.V(4).Info("[predictNumComputedPrefillTokens] TTFT predictor not fitted, skip prediction")
 		return
 	}

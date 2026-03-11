@@ -99,8 +99,3 @@ func TestValidateMetadata(t *testing.T) {
 		}
 	})
 }
-
-// Helper function to create int64 pointer
-func int64Ptr(v int64) *int64 {
-	return &v
-}

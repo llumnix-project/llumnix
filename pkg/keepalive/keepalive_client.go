@@ -91,7 +91,9 @@ func (kac *KeepAliveClient) checkPingPong(ctx context.Context, conn *websocket.C
 
 	conn.SetPingHandler(func(appData string) error {
 		missedPings.Store(0)
-		conn.WriteMessage(websocket.PongMessage, []byte(appData))
+		if err := conn.WriteMessage(websocket.PongMessage, []byte(appData)); err != nil {
+			klog.Warningf("Failed to write pong message: %v", err)
+		}
 		return nil
 	})
 

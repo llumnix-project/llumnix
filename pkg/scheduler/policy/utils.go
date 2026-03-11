@@ -47,19 +47,19 @@ func verifySchedulingPolicy(c *options.SchedulerConfig) {
 
 func verifySchedulingFeature(c *options.SchedulerConfig) {
 	if !c.EnableFullModeScheduling {
-		if c.EnableCacheAwareScheduling == true {
+		if c.EnableCacheAwareScheduling {
 			c.EnableCacheAwareScheduling = false
 			klog.Warningf("The scheduling feature cache-aware scheduling is not supported when not enable full-mode scheduling, forcefully disable it here.")
 		}
-		if c.EnablePredictorEnhancedScheduling == true {
+		if c.EnablePredictorEnhancedScheduling {
 			c.EnablePredictorEnhancedScheduling = false
 			klog.Warningf("The scheduling feature predictor-enhanced scheduling is not supported when not enable full-mode scheduling, forcefully disable it here.")
 		}
-		if c.EnableAdaptivePD == true {
+		if c.EnableAdaptivePD {
 			c.EnableAdaptivePD = false
 			klog.Warningf("The scheduling feature adaptive-pd is not supported when not enable full-mode scheduling, forcefully disable it here.")
 		}
-		if c.EnableRescheduling == true {
+		if c.EnableRescheduling {
 			c.EnableRescheduling = false
 			klog.Warningf("The scheduling feature rescheduling is not supported when not enable full-mode scheduling, forcefully disable it here.")
 		}

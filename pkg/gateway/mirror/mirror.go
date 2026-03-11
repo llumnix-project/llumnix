@@ -106,7 +106,7 @@ func (m *Mirror) TryMirror(req *types.RequestContext) {
 		}
 		defer resp.Body.Close()
 
-		io.ReadAll(resp.Body)
+		_, _ = io.ReadAll(resp.Body)
 
 		if mirrorConfig.EnableLog {
 			klog.Infof("[%s] Mirror request sent to %s, status: %d", req.Id, mirrorURL, resp.StatusCode)

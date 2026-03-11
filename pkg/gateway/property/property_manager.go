@@ -53,7 +53,9 @@ func NewConfigManager(configPaths map[string]string) *ConfigManager {
 	}
 
 	// Load initial configs
-	cm.loadConfigs()
+	if err := cm.loadConfigs(); err != nil {
+		klog.Warningf("Failed to load initial configs: %v", err)
+	}
 
 	// Start watching for changes
 	go cm.watchConfigs()

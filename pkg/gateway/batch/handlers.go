@@ -562,7 +562,11 @@ func (h *BatchHandler) CancelBatchTaskHandler(w http.ResponseWriter, r *http.Req
 		return
 	}
 	// Release lock when done
-	defer h.redisStore.ReleaseTaskLock(r.Context(), taskID, h.instanceID)
+	defer func() {
+		if err := h.redisStore.ReleaseTaskLock(r.Context(), taskID, h.instanceID); err != nil {
+			klog.Warningf("Failed to release task lock for %s: %v", taskID, err)
+		}
+	}()
 
 	// Get task again after acquiring lock to ensure we have the most up-to-date status
 	taskStatus, err = h.redisStore.GetTaskStatus(r.Context(), taskID)

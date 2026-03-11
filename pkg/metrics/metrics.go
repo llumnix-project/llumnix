@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	kMetricURL = "http://127.0.0.1:8080/api/builtin/realtime_metrics?internal=true"
+	kMetricURL = "http://127.0.0.1:8080/api/builtin/realtime_metrics?internal=true" //nolint:unused
 )
 
 type Metric struct {
@@ -22,16 +22,16 @@ type Metric struct {
 }
 
 type MetricContext struct {
-	client *http.Client
+	client *http.Client //nolint:unused
 }
 
-func newMetricContext() *MetricContext {
+func newMetricContext() *MetricContext { //nolint:unused
 	return &MetricContext{
 		client: &http.Client{Timeout: 5 * time.Second},
 	}
 }
 
-func (m *MetricContext) submitMetrics(metrics []Metric) {
+func (m *MetricContext) submitMetrics(metrics []Metric) { //nolint:unused
 	if len(metrics) == 0 {
 		return
 	}
@@ -55,7 +55,7 @@ func (m *MetricContext) submitMetrics(metrics []Metric) {
 	}
 }
 
-func (m *MetricContext) run() {
+func (m *MetricContext) run() { //nolint:unused
 	start := time.Now()
 	for {
 		time.Sleep(consts.MetricRecordDuration)

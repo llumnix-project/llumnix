@@ -186,7 +186,11 @@ func (tr *TaskReactor) processSingleValidatingTask(ctx context.Context) {
 	}
 
 	// Ensure lock is released if we acquired it
-	defer tr.redisStore.ReleaseTaskLock(ctx, taskID, tr.instanceID)
+	defer func() {
+		if err := tr.redisStore.ReleaseTaskLock(ctx, taskID, tr.instanceID); err != nil {
+			klog.Warningf("Failed to release task lock for %s: %v", taskID, err)
+		}
+	}()
 
 	// Process the task in validating phase
 	if err := tr.processValidatingTask(ctx, taskID); err != nil {
@@ -402,7 +406,11 @@ func (tr *TaskReactor) CheckShardsAndMoveToFinalizing(ctx context.Context, taskI
 		return false, nil
 	}
 
-	defer tr.redisStore.ReleaseTaskLock(ctx, taskID, tr.instanceID)
+	defer func() {
+		if err := tr.redisStore.ReleaseTaskLock(ctx, taskID, tr.instanceID); err != nil {
+			klog.Warningf("Failed to release task lock for %s: %v", taskID, err)
+		}
+	}()
 
 	// If all shards are completed, move task from in_progress to finalizing
 	err = tr.redisStore.MoveTaskAndUpdateStatusAtomically(ctx, taskID, StatusInProgress, StatusFinalizing)
@@ -486,7 +494,9 @@ func (tr *TaskReactor) processTaskShards(ctx context.Context, taskID, workerID s
 
 		if err := tr.redisStore.MoveShardAtomically(ctx, taskID, shardID, ShardStatusPending, ShardStatusInProgress); err != nil {
 			// Release the lock if we fail to move the shard
-			tr.redisStore.ReleaseShardLock(ctx, taskID, shardID, tr.instanceID, workerID)
+			if err := tr.redisStore.ReleaseShardLock(ctx, taskID, shardID, tr.instanceID, workerID); err != nil {
+				klog.Warningf("Failed to release shard lock for task %s shard %s: %v", taskID, shardID, err)
+			}
 			return fmt.Errorf("failed to move shard %s of task %s to in_progress: %v", shardID, taskID, err)
 		}
 	} else {
@@ -504,7 +514,11 @@ func (tr *TaskReactor) processTaskShards(ctx context.Context, taskID, workerID s
 	}
 
 	// Ensure lock is released when we're done (for both pending and recovered shards)
-	defer tr.redisStore.ReleaseShardLock(ctx, taskID, shardID, tr.instanceID, workerID)
+	defer func() {
+		if err := tr.redisStore.ReleaseShardLock(ctx, taskID, shardID, tr.instanceID, workerID); err != nil {
+			klog.Warningf("Failed to release shard lock for task %s shard %s: %v", taskID, shardID, err)
+		}
+	}()
 
 	// Process the shard
 	if err := tr.processShard(ctx, taskID, shardID, workerID); err != nil {
@@ -853,7 +867,11 @@ func (tr *TaskReactor) processSingleFinalizingTask(ctx context.Context) {
 	}
 
 	// Ensure lock is released when function exits
-	defer tr.redisStore.ReleaseTaskLock(ctx, taskID, tr.instanceID)
+	defer func() {
+		if err := tr.redisStore.ReleaseTaskLock(ctx, taskID, tr.instanceID); err != nil {
+			klog.Warningf("Failed to release task lock for %s: %v", taskID, err)
+		}
+	}()
 
 	// Process the task in finalizing phase
 	if err := tr.processFinalizingTask(ctx, taskID); err != nil {
