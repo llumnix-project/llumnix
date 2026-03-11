@@ -122,7 +122,9 @@ class Heartbeat:
 
             except Exception as e:
                 endpoint.error_message = f"Unknown error: {str(e)}"
-                logger.error("%s:%d - Unknown error: %s", endpoint.host, endpoint.port, e)
+                logger.error(
+                    "%s:%d - Unknown error: %s", endpoint.host, endpoint.port, e
+                )
 
             if attempt < self.config.retry_times - 1:
                 await asyncio.sleep(self.config.retry_interval)
@@ -150,7 +152,10 @@ class Heartbeat:
 
         if old_status != endpoint.status:
             logger.info(
-                "%s status changed: %s -> %s", key, old_status.value, endpoint.status.value
+                "%s status changed: %s -> %s",
+                key,
+                old_status.value,
+                endpoint.status.value,
             )
             for callback in self._callbacks:
                 try:
@@ -257,7 +262,7 @@ class Heartbeat:
 
 
 async def status_change_callback(
-        endpoint: str, old_status: HealthStatus, new_status: HealthStatus
+    endpoint: str, old_status: HealthStatus, new_status: HealthStatus
 ):
     logger.info(
         "Alert: %s changed from %s to %s", endpoint, old_status.value, new_status.value

@@ -193,6 +193,7 @@ def dump_res(results: List[Any], dataset: str, acc: float, num_questions: int):
         f.write(json.dumps(value) + "\n")
     print(f"Summary results dumped to {res_file}")
 
+
 # pylint: disable=unused-argument
 @pytest.mark.parametrize("test_config", generate_mig_correct_config(), indirect=True)
 def test_migration_correctness(setup_services, test_config):

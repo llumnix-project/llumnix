@@ -132,7 +132,7 @@ class RequestMonitor:
         self.success = success
 
     def collect(self) -> Tuple[Optional[float], List[float], Optional[float], int]:
-        """ Return optional ttft, list of itls, tpot and total_tokens since last collect."""
+        """Return optional ttft, list of itls, tpot and total_tokens since last collect."""
         now = time.time()
         ttft = self.ttft
         self.ttft = None
@@ -156,22 +156,34 @@ class RequestMonitor:
                 tpot = (stat_end_time - self.decoding_stat_start_time) / total_token
             elif total_token_from_d_step:
                 # 如果接口不支持total_token，从decode step上计算tokens数量
-                tpot = (stat_end_time - self.decoding_stat_start_time) / total_token_from_d_step
-            
+                tpot = (
+                    stat_end_time - self.decoding_stat_start_time
+                ) / total_token_from_d_step
+
             if tpot > 70:
-                print(f">>>>>>>> {now=} {stat_end_time=} {self.decoding_stat_start_time=} {total_token=} {num_tokens_debug=}", flush=True)
+                print(
+                    f">>>>>>>> {now=} {stat_end_time=} {self.decoding_stat_start_time=} {total_token=} {num_tokens_debug=}",
+                    flush=True,
+                )
             self.decoding_stat_start_time = now
 
-        return ttft, itls, tpot, (total_token if total_token != 0 else total_token_from_d_step)
+        return (
+            ttft,
+            itls,
+            tpot,
+            (total_token if total_token != 0 else total_token_from_d_step),
+        )
 
-    async def __aenter__(self) -> 'RequestMonitor':
+    async def __aenter__(self) -> "RequestMonitor":
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback):
         if self.monitor:
             self.monitor.close_request(self.idx)
 
+
 FAKE_REQUEST_MONITOR = RequestMonitor(-1, None)
+
 
 class RealtimeMonitor:
     def __init__(self):
@@ -185,7 +197,7 @@ class RealtimeMonitor:
         assert self.req_idx not in self.requests
         m = RequestMonitor(self.req_idx, self)
         self.requests[self.req_idx] = m
-        self.req_idx+= 1
+        self.req_idx += 1
         return m
 
     def close_request(self, idx: int):
@@ -200,6 +212,7 @@ class RealtimeMonitor:
     async def _loop(self):
 
         COLLECT_INTERVAL = 5
+
         def _do_collect(reqeuests, ttfts, itls, tpots) -> int:
             total_tokens = 0
             for idx, m in reqeuests.items():
@@ -221,14 +234,15 @@ class RealtimeMonitor:
             avg_tps = total_tokens / COLLECT_INTERVAL
 
             num_decoding = sum([r.is_decoding for _, r in self.requests.items()])
-            num_failed = sum([not r.success for _, r in self.requests.items()]) \
-                + sum([not r.success for _, r in self.closing.items()])
+            num_failed = sum([not r.success for _, r in self.requests.items()]) + sum(
+                [not r.success for _, r in self.closing.items()]
+            )
 
             num_running = len(self.requests)
             num_finished = len(self.closing)
 
             self.closing.clear()
-            nan = float('nan')
+            nan = float("nan")
             mean_ttft = np.mean(ttfts or nan) * 1000
             p99_ttft = np.percentile(ttfts or nan, 99) * 1000
             max_ttft = np.max(ttfts or nan) * 1000
@@ -239,12 +253,13 @@ class RealtimeMonitor:
             p99_tpot = np.percentile(tpots or nan, 99) * 1000
             max_tpot = np.max(tpots or nan) * 1000
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            tqdm.write(f"[{timestamp}] Running: {num_running:>4}, Decoding: {num_decoding:>4}, Finished: {num_finished:>2}, Failed: {num_failed:>2}, Latencies (mean/p99/max in ms) "
+            tqdm.write(
+                f"[{timestamp}] Running: {num_running:>4}, Decoding: {num_decoding:>4}, Finished: {num_finished:>2}, Failed: {num_failed:>2}, Latencies (mean/p99/max in ms) "
                 f" TTFT: {mean_ttft:>9.2f} / {p99_ttft:>9.2f} / {max_ttft:>9.2f} ,"
                 f" ITL: {mean_itl:>7.2f} / {p99_itl:>7.2f} / {max_itl:>7.2f} ,"
                 f" TPOT: {mean_tpot:>7.2f} / {p99_tpot:>7.2f} / {max_tpot:>7.2f} ,"
-                f" TPS: {avg_tps:>7.2f} .")
-
+                f" TPS: {avg_tps:>7.2f} ."
+            )
 
 
 # trt llm does not support ignore_eos
@@ -333,7 +348,7 @@ async def async_request_openai_completions(
     prompt = request_func_input.prompt
 
     req_monitor = monitor.new_request() if monitor else FAKE_REQUEST_MONITOR
-    async with _create_bench_client_session() as session, req_monitor: 
+    async with _create_bench_client_session() as session, req_monitor:
         payload = {
             "model": request_func_input.model,
             "prompt": prompt,
@@ -341,10 +356,7 @@ async def async_request_openai_completions(
             "best_of": 1,
             "max_tokens": request_func_input.output_len,
             "stream": not args.disable_stream,
-            "stream_options": {
-                "include_usage": True,
-                "continuous_usage_stats": True
-            },
+            "stream_options": {"include_usage": True, "continuous_usage_stats": True},
             "ignore_eos": not args.disable_ignore_eos,
             **request_func_input.extra_request_body,
         }
@@ -377,10 +389,8 @@ async def async_request_openai_completions(
                         else:
                             data = json.loads(chunk)
 
-
                             # if data["choices"] and data["choices"][0]["finish_reason"]:
                             #     print(f"finish_reason:{data["choices"][0]["finish_reason"]}",flush=True)
-
 
                             # NOTE: Some completion API might have a last
                             # usage summary response without a token so we
@@ -401,8 +411,15 @@ async def async_request_openai_completions(
                                     itl = timestamp - most_recent_timestamp
                                     num_tokens = output_len - last_output_len
                                     output.itl.append(itl)
-                                    gen_tokens = len(tokenizer(data["choices"][0]["text"], add_special_tokens=False).input_ids)
-                                    await req_monitor.on_generate(itl, num_tokens, gen_tokens)
+                                    gen_tokens = len(
+                                        tokenizer(
+                                            data["choices"][0]["text"],
+                                            add_special_tokens=False,
+                                        ).input_ids
+                                    )
+                                    await req_monitor.on_generate(
+                                        itl, num_tokens, gen_tokens
+                                    )
 
                                 most_recent_timestamp = timestamp
                                 last_output_len = output_len
@@ -414,7 +431,7 @@ async def async_request_openai_completions(
                     output.output_len = output_len
                     req_monitor.on_finish(success=True)
                 else:
-                    print(f'response status {response.status}, body {response.text}')
+                    print(f"response status {response.status}, body {response.text}")
                     output.error = response.reason or ""
                     output.success = False
                     req_monitor.on_finish(success=False)
@@ -434,7 +451,7 @@ async def async_request_openai_completions(
 async def async_request_truss(
     request_func_input: RequestFuncInput,
     pbar: Optional[tqdm] = None,
-    monitor: Optional[RealtimeMonitor] = None
+    monitor: Optional[RealtimeMonitor] = None,
 ) -> RequestFuncOutput:
     api_url = request_func_input.api_url
 
@@ -1043,7 +1060,6 @@ def sample_sharegpt_requests(
     return filtered_dataset
 
 
-
 def sample_qwen_prompt_txt_requests(
     dataset_path: str,
     num_requests: int,
@@ -1054,17 +1070,19 @@ def sample_qwen_prompt_txt_requests(
     dataset = []
     num_lines = len(prompt_contents)
     for i in range(num_requests):
-        prompt = prompt_contents[i % num_lines]  
+        prompt = prompt_contents[i % num_lines]
         prompt += "<think>\n"
         prompt_len = len(tokenizer(prompt).input_ids)
-        dataset.append(DatasetRow(
-            prompt=prompt,
-            prompt_len=prompt_len,
-            output_len=int(output_lens[i]),
-        ))
-    start = int(time.time()*100000) % (len(dataset) - num_requests)
-    print("dataset[0]", dataset[start]) 
-    return dataset[start:start+num_requests]
+        dataset.append(
+            DatasetRow(
+                prompt=prompt,
+                prompt_len=prompt_len,
+                output_len=int(output_lens[i]),
+            )
+        )
+    start = int(time.time() * 100000) % (len(dataset) - num_requests)
+    print("dataset[0]", dataset[start])
+    return dataset[start : start + num_requests]
 
 
 def sample_random_requests(
@@ -1390,7 +1408,13 @@ def log_results(
     )
 
     if trim_ratio > 0:
-        print("\n{s:{c}^{n}}".format(s=f" Serving Benchmark Result with Trimming: {trim_ratio:.1f}x ", n=50, c="="))
+        print(
+            "\n{s:{c}^{n}}".format(
+                s=f" Serving Benchmark Result with Trimming: {trim_ratio:.1f}x ",
+                n=50,
+                c="=",
+            )
+        )
     else:
         print("\n{s:{c}^{n}}".format(s=" Serving Benchmark Result ", n=50, c="="))
 
@@ -1519,7 +1543,9 @@ def log_results(
         if args.dataset_name.startswith("random"):
             output_file_name = f"{result_dir}/{args.backend}_{now}_{args.num_prompts}_{args.random_input_len}_{args.random_output_len}.jsonl"
         else:
-            output_file_name = f"/{args.backend}_{now}_{args.num_prompts}_sharegpt.jsonl"
+            output_file_name = (
+                f"/{args.backend}_{now}_{args.num_prompts}_sharegpt.jsonl"
+            )
 
     result_details = {
         "input_lens": [output.prompt_len for output in outputs],
@@ -1532,7 +1558,9 @@ def log_results(
 
     # Append results to a JSONL file
     if trim_ratio > 0:
-        output_file_name = output_file_name.replace(".jsonl", f"_with_trim_ratio_{trim_ratio}.jsonl")
+        output_file_name = output_file_name.replace(
+            ".jsonl", f"_with_trim_ratio_{trim_ratio}.jsonl"
+        )
 
     with open(output_file_name, "a") as file:
         if args.output_details:
@@ -1573,9 +1601,13 @@ async def benchmark(
 
     async def limited_request_func(request_func_input, pbar, **kwargs):
         if semaphore is None:
-            return await request_func(request_func_input=request_func_input, pbar=pbar, **kwargs)
+            return await request_func(
+                request_func_input=request_func_input, pbar=pbar, **kwargs
+            )
         async with semaphore:
-            return await request_func(request_func_input=request_func_input, pbar=pbar, **kwargs)
+            return await request_func(
+                request_func_input=request_func_input, pbar=pbar, **kwargs
+            )
 
     # Warmup
     print(f"Starting warmup with {warmup_requests} sequences...")
@@ -1661,7 +1693,11 @@ async def benchmark(
 
         tasks.append(
             asyncio.create_task(
-                limited_request_func(request_func_input=request_func_input, pbar=pbar, monitor=request_monitor)
+                limited_request_func(
+                    request_func_input=request_func_input,
+                    pbar=pbar,
+                    monitor=request_monitor,
+                )
             )
         )
     outputs: List[RequestFuncOutput] = await asyncio.gather(*tasks)
@@ -1703,7 +1739,7 @@ async def benchmark(
         request_rate,
         max_concurrency,
         accept_length,
-        args
+        args,
     )
 
     # bubble filter:
@@ -1711,10 +1747,11 @@ async def benchmark(
         filtered_prompts_num = int(args.trim_ratio * max_concurrency)
         left = filtered_prompts_num
         right = len([o for o in outputs if o.success]) - filtered_prompts_num
-        filtered_benchmark_duration = np.abs(outputs[right-1].finish_time - outputs[left].finish_time)
-        filtered_input_requests = input_requests[left: right]
-        filtered_outputs = outputs[left: right]
-
+        filtered_benchmark_duration = np.abs(
+            outputs[right - 1].finish_time - outputs[left].finish_time
+        )
+        filtered_input_requests = input_requests[left:right]
+        filtered_outputs = outputs[left:right]
 
         filtered_result, filtered_result_details = log_results(
             filtered_benchmark_duration,
@@ -1726,22 +1763,25 @@ async def benchmark(
             max_concurrency,
             accept_length=None,
             args=args,
-            trim_ratio=args.trim_ratio
+            trim_ratio=args.trim_ratio,
         )
 
     return result | result_details
 
-def show_request_stats(requests:  List[DatasetRow]):
+
+def show_request_stats(requests: List[DatasetRow]):
     if not requests:
         return
     BIN_WIDTH = 100
     input_lens = [r.prompt_len for r in requests]
     min_val = min(input_lens) // BIN_WIDTH * BIN_WIDTH
     max_val = max(input_lens) // BIN_WIDTH * BIN_WIDTH + BIN_WIDTH
-    counts, bin_edges = np.histogram(input_lens, bins=list(range(min_val, max_val, BIN_WIDTH)))
+    counts, bin_edges = np.histogram(
+        input_lens, bins=list(range(min_val, max_val, BIN_WIDTH))
+    )
     print("================= Input Distribution ===================")
     for i in range(len(counts)):
-        lower, upper = bin_edges[i], bin_edges[i+1]
+        lower, upper = bin_edges[i], bin_edges[i + 1]
         print(f"[{lower}-{upper})  {counts[i]} prompts")
     # --- 新增：统计摘要 ---
     arr = np.array(input_lens)
@@ -1807,7 +1847,9 @@ def run_benchmark(args_: argparse.Namespace):
 
     print(f"benchmark_args={args}")
 
-    assert args.trim_ratio * 2 * args.max_concurrency < args.num_prompts, f"filtered prompts={args.trim_ratio * 2 * args.max_concurrency} are more than {args.num_prompts=}"
+    assert (
+        args.trim_ratio * 2 * args.max_concurrency < args.num_prompts
+    ), f"filtered prompts={args.trim_ratio * 2 * args.max_concurrency} are more than {args.num_prompts=}"
 
     # Set global environments
     set_ulimit()
@@ -1936,7 +1978,7 @@ def run_benchmark(args_: argparse.Namespace):
             pd_separated=args.pd_separated,
             flush_cache=args.flush_cache,
             warmup_requests=args.warmup_requests,
-            trim_ratio=args.trim_ratio
+            trim_ratio=args.trim_ratio,
         )
     )
 

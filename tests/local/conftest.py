@@ -46,7 +46,7 @@ def redis_server() -> Generator[subprocess.Popen, None, None]:
 
 @pytest.fixture
 def gateway_server(
-        test_config: Dict[str, Any],
+    test_config: Dict[str, Any],
 ) -> Generator[subprocess.Popen, None, None]:
     """Start Gateway server"""
     policy = test_config.get("policy", "round-robin")
@@ -70,7 +70,7 @@ def gateway_server(
 
 @pytest.fixture
 def scheduler_server(
-        test_config: Dict[str, Any],
+    test_config: Dict[str, Any],
 ) -> Generator[subprocess.Popen | None, None, None]:
     """Start Scheduler server"""
     proc = None
@@ -94,7 +94,7 @@ def scheduler_server(
 
 @pytest.fixture
 def vllm_servers(
-        test_config: Dict[str, Any],
+    test_config: Dict[str, Any],
 ) -> Generator[List[subprocess.Popen], None, None]:
     """Start vLLM instances and runtime discovery"""
     processes = []
@@ -103,7 +103,7 @@ def vllm_servers(
 
     # pylint: disable=unused-argument
     def launch_vllm_process(
-            instance_type: str, port: int, cuda: int, tag: str, connector_type: str
+        instance_type: str, port: int, cuda: int, tag: str, connector_type: str
     ) -> subprocess.Popen:
         vllm_proc = start_process(
             f"vLLM-{cuda}",
@@ -180,7 +180,7 @@ def setup_environment():
 # pylint: disable=unused-argument
 @pytest.fixture
 def setup_services(
-        setup_environment, redis_server, scheduler_server, gateway_server, vllm_servers
+    setup_environment, redis_server, scheduler_server, gateway_server, vllm_servers
 ):
     time.sleep(20)  # wait for redis discovery work
     yield

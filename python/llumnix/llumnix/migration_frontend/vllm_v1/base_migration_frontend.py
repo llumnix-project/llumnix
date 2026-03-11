@@ -150,6 +150,7 @@ class BaseMigrationFrontend(ABC):
 
         def key_func(i):
             return self._get_sorting_key(reqs[i])
+
         if mig_policy in (
             RequestMigrationPolicy.SR.value,
             RequestMigrationPolicy.FCWSR.value,

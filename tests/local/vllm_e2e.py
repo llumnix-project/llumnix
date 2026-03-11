@@ -43,6 +43,7 @@ def generate_e2e_config():
 
     return base_configs
 
+
 # pylint: disable=unused-argument
 @pytest.mark.parametrize("test_config", generate_e2e_config(), indirect=True)
 def test_simple_requests(setup_services):
@@ -159,6 +160,7 @@ def generate_migration_config():
     base_configs = update_configs
 
     return base_configs
+
 
 # pylint: disable=unused-argument
 @pytest.mark.parametrize("test_config", generate_migration_config())

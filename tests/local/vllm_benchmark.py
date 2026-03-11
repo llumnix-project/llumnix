@@ -126,6 +126,6 @@ def test_benchmark(setup_services, test_config, prepare_dataset):
 
     assert result is not None, "Benchmark has no result"
     assert (
-            result["completed"] > 0
+        result["completed"] > 0
     ), "Benchmark run successfully but completed 0 requests"
     print(f"Test finished with {result['completed']} requests completed.")

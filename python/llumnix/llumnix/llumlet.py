@@ -702,7 +702,8 @@ class LlumletProc:
                     )
         else:
             success, _ = await self._execute_with_timeout(
-                lambda: self.engine_client.abort_migrate_in(request_ids),  # pylint: disable=no-value-for-parameter
+                # pylint: disable=no-value-for-parameter
+                lambda: self.engine_client.abort_migrate_in(request_ids),
                 "abort_migrate_in",
                 envs.LLUMNIX_ENGINE_ABORT_TIMEOUT,
             )

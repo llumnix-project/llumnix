@@ -26,12 +26,12 @@ def get_redis_command() -> str:
 
 
 def get_gateway_command(
-        policy: str = "round-robin",
-        tokenizer_path: str = MODEL_PATH,
-        enable_pd: bool = False,
-        enable_full_mode_scheduling: bool = False,
-        separate_pd_scheduling: bool = False,
-        connector_type: str = "HybridConnector",
+    policy: str = "round-robin",
+    tokenizer_path: str = MODEL_PATH,
+    enable_pd: bool = False,
+    enable_full_mode_scheduling: bool = False,
+    separate_pd_scheduling: bool = False,
+    connector_type: str = "HybridConnector",
 ) -> str:
     command = (
         f"./bin/gateway "
@@ -70,10 +70,10 @@ def get_gateway_command(
 
 
 def get_scheduler_command(
-        policy: str = "load-balance",
-        enable_full_mode_scheduling: bool = False,
-        enable_migration: bool = False,
-        enable_pd: bool = False,
+    policy: str = "load-balance",
+    enable_full_mode_scheduling: bool = False,
+    enable_migration: bool = False,
+    enable_pd: bool = False,
 ) -> str:
     command = (
         f"./bin/scheduler "
@@ -116,12 +116,12 @@ def get_scheduler_command(
 
 
 def get_vllm_command(
-        instance_type: str,
-        port: int,
-        cuda: int,
-        enable_full_mode_scheduling: bool,
-        tag: str,
-        connector_type: str,
+    instance_type: str,
+    port: int,
+    cuda: int,
+    enable_full_mode_scheduling: bool,
+    tag: str,
+    connector_type: str,
 ) -> str:
     if instance_type == "prefill":
         kv_role = "kv_producer"
@@ -134,10 +134,12 @@ def get_vllm_command(
             backend = "kvt"
         else:
             backend = "kvt+migration"
-        kv_transfer_config = f'{{"kv_connector":"HybridConnector", "kv_role": "{kv_role}",' \
-                             f'"kv_connector_extra_config": {{"backend":"{backend}",' \
-                             f'"naming_url": "file:{NAMING_DIR}","kvt_inst_id": "{tag}",' \
-                             f'"rpc_port":{port + KVT_PORT_OFFSET}}}}}'
+        kv_transfer_config = (
+            f'{{"kv_connector":"HybridConnector", "kv_role": "{kv_role}",'
+            f'"kv_connector_extra_config": {{"backend":"{backend}",'
+            f'"naming_url": "file:{NAMING_DIR}","kvt_inst_id": "{tag}",'
+            f'"rpc_port":{port + KVT_PORT_OFFSET}}}}}'
+        )
     elif connector_type == "MooncakeConnector":
         kv_transfer_config = f'{{"kv_connector":"MooncakeConnector","kv_role":"{kv_role}","kv_connector_module_path":"mooncake.mooncake_connector_v1"}}'
     else:
@@ -174,9 +176,9 @@ def get_vllm_command(
 
 
 def get_discovery_command(
-        instance_type: str = "neutral",
-        port: int = 8000,
-        dp_size_local: int = 1,
+    instance_type: str = "neutral",
+    port: int = 8000,
+    dp_size_local: int = 1,
 ):
     command = (
         f"python3 -m discovery.discovery "
@@ -277,9 +279,9 @@ def cleanup_processes(processes: List[subprocess.Popen]):
 
 
 def send_request(
-        payload: Dict[str, Any],
-        endpoint_type: str = "completions",
-        ignore_output: bool = False,
+    payload: Dict[str, Any],
+    endpoint_type: str = "completions",
+    ignore_output: bool = False,
 ):
     """
     Unified function for both completions and chat completions
@@ -308,8 +310,8 @@ def send_request(
                             chunks.append(chunk_json)
 
                             if (
-                                    "choices" in chunk_json
-                                    and len(chunk_json["choices"]) > 0
+                                "choices" in chunk_json
+                                and len(chunk_json["choices"]) > 0
                             ):
                                 choice = chunk_json["choices"][0]
                                 if endpoint_type == "chat":

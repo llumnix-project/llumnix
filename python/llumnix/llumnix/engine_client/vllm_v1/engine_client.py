@@ -67,9 +67,7 @@ class VLLMEngineClient(BaseEngineClient, AsyncMPClient):
         output_handler: Optional[
             Callable[[AsyncMPClient, EngineCoreOutputs], Awaitable[None]]
         ] = getattr(self.__class__, "process_engine_outputs", None)
-        _self_ref = (
-            weakref.ref(self) if output_handler else None
-        )
+        _self_ref = weakref.ref(self) if output_handler else None
         output_socket = resources.output_socket
         assert output_socket is not None
 
@@ -231,7 +229,7 @@ def vllm_get_instance_meta_data(cfg: VllmConfig) -> dict:
             "eth0"
         ),  # Use the IP of eth0 to ensure that llm-gateway can reach the API server.
         "ip_kvs": get_host_ip(),
-        "instance_type": instance_type, # pylint: disable=possibly-used-before-assignment
+        "instance_type": instance_type,  # pylint: disable=possibly-used-before-assignment
         "unit_id": unit_id,
         "api_server_port": api_server_port,
         "max_num_batched_tokens": cfg.scheduler_config.max_num_batched_tokens,

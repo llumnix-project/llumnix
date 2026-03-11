@@ -140,7 +140,7 @@ lint-pylint:
 	pylint tests/ --rcfile=./tests/.pylintrc --ignore=__pycache__
 
 .PHONY: lint-go
-lint-go: lib-tokenizers-build gateway-proto-build
+lint-go: gateway-proto-build
 	golangci-lint run ./cmd/... ./pkg/...
 
 .PHONY: lint

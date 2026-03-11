@@ -23,21 +23,21 @@ LLUMNIX_DISCOVERY_PREFIX = "llumnix:discovery:"
 class ServiceDiscovery:
 
     def __init__(
-            self,
-            pod_name: str,
-            entrypoint_ip: str,
-            entrypoint_port: int,
-            kv_transfer_ip: str,
-            kv_transfer_port: int,
-            instance_type: str,
-            dp_size_local: int,
-            redis_address: str,
-            redis_port: int,
-            heartbeat_config: HeartbeatConfig,
-            redis_username: Optional[str] = None,
-            redis_password: Optional[str] = None,
-            model: str = "",
-            version: int = 1,
+        self,
+        pod_name: str,
+        entrypoint_ip: str,
+        entrypoint_port: int,
+        kv_transfer_ip: str,
+        kv_transfer_port: int,
+        instance_type: str,
+        dp_size_local: int,
+        redis_address: str,
+        redis_port: int,
+        heartbeat_config: HeartbeatConfig,
+        redis_username: Optional[str] = None,
+        redis_password: Optional[str] = None,
+        model: str = "",
+        version: int = 1,
     ):
         self.pod_name = pod_name
         self.dp_size_local = dp_size_local
