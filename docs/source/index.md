@@ -11,6 +11,7 @@ New to Llumnix? Start here.
 
 - [Quick Start](getting_started/quick_start.md) — Deploy your first Llumnix cluster in minutes
 - [Deployment Guide](getting_started/e2e_deploy.md) - Full deployment guide covering all modes: neutral, PD, and PD-KVS
+- [Benchmark](getting_started/benchmark.md) - Performance benchmarks for Llumnix on Kubernetes 
 - [Llumlet Configuration](getting_started/engine_conf.md) — Configure Llumlet
 
 ---
@@ -48,6 +49,7 @@ Understand how Llumnix works internally.
 getting_started/quick_start
 getting_started/e2e_deploy
 getting_started/engine_conf
+getting_started/benchmark
 :::
 
 :::{toctree}
@@ -62,6 +64,8 @@ design/adaptive_pd_scheduling
 design/request_migration
 design/Llumlet&Llumlet_proxy
 design/real_time_instance_status_tracking
+design/gateway_architecture
+design/batch_inference
 :::
 
 :::{toctree}

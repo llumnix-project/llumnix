@@ -10,7 +10,7 @@ registry deployment), follow the steps below.
 - Access to your own image registry
 - Repository cloned with submodules initialized:
   ```bash
-  git clone https://github.com/your-org/llumnix.git
+  git clone https://github.com/llumnix-project/llumnix.git
   cd llumnix
   git submodule update --init --recursive
   ```
