@@ -4,11 +4,9 @@ on:
   push:
     branches:
       - main
-      - master
-  pull_request:
+  pull_request_target:
     branches:
       - main
-      - master
   workflow_dispatch:
   workflow_call:
 
@@ -50,6 +48,7 @@ jobs:
         run: ./scripts/build_tokenizers.sh --image ${{ env.DEV_IMAGE }}
 
       - name: Set up Go
+        if: ${{ !env.GOROOT }}
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
