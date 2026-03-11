@@ -40,8 +40,8 @@ html_theme_options = {
     "use_repository_button": True,
     "home_page_in_toc": True,
     "collapse_navbar": True,
-    "show_navbar_depth": 1,
-    "default_mode": "light", 
+    "show_navbar_depth": 2,
+    "default_mode": "light",
 }
 
 
