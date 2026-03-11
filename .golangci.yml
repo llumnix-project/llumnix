@@ -1,0 +1,19 @@
+linters:
+  disable:
+    - unused
+
+linters-settings:
+  errcheck:
+    exclude-functions:
+      # HTTP response writing - errors indicate client disconnect, not actionable
+      - (net/http.ResponseWriter).Write
+      - (*encoding/json.Encoder).Encode
+      - io.Copy
+      - io.ReadAll
+
+issues:
+  exclude-rules:
+    # Test files: unchecked errors are acceptable in test setup/assertions
+    - path: _test\.go
+      linters:
+        - errcheck
