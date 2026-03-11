@@ -28,6 +28,8 @@ Profiling data should be collected from benchmark runs on your target hardware:
 
 ### Profiling Data Format
 
+The profiling data should be formatted as JSON and the schema is defined as follows. Now, only p50 values are used.
+
 **TTFT Profiling Data** (`--ttft-profiling-data-path`):
 
 ```json
@@ -77,8 +79,8 @@ Profiling data should be collected from benchmark runs on your target hardware:
 
 The `LatencyPredictor` (defined in predict_utils.go) uses interpolation-based prediction from profiling data:
 
-- **TTFT Prediction**: Based on prefill tokens and decode batch size. Uses chunked prefill modeling when applicable.
-- **TPOT Prediction**: Based on decode batch size and tokens per request.
+- **TTFT Prediction**: Based on prefill tokens, decode batch size and decode tokens. Uses chunked prefill modeling when applicable.
+- **TPOT Prediction**: Based on decode batch size and decode tokens.
 
 ### Prediction Algorithm
 
@@ -141,7 +143,7 @@ The effective dispatch threshold is computed as `SLO * DispatchThreshold`. Insta
 
 ## Best Practices
 
-1. **Accurate profiling data**: Collect profiling data on the same hardware configuration as production. Inaccurate profiling data leads to poor latency predictions.
+1. **Accurate profiling data**: Collect profiling data on the same hardware configuration and engine launch parameters as production. Inaccurate profiling data leads to poor latency predictions.
 
 2. **Conservative thresholds**: Start with `--ttft-slo-dispatch-threshold` and `--tpot-slo-dispatch-threshold` values slightly below 1.0 to allow some margin for prediction errors.
 
