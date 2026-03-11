@@ -112,7 +112,7 @@ Key filters:
   - **Implementation**: compares instance infer type against the target infer type.
 - **`failoverFilter` (global)**
   - **Function**: block all instances within the failure domain of unhealthy instances.
-  - **Implementation**: reads `needsFailover` marks from single-instance filters and blocks instances according to `FailoverScope` (instance / node / instance-unit / node-unit).
+  - **Implementation**: reads `needsFailover` marks from single-instance filters and blocks instances according to `FailoverDomain` (instance / node / instance-unit / node-unit).
 - **`failoverMigrationSrcFilter` (global)**
   - **Function**: select valid migration source instances for rescheduling.
   - **Implementation**: runs schedulability and staleness checks to tag failover instances, then keeps the remaining instances as migration sources.
@@ -140,7 +140,7 @@ The load-balance policy routes requests to the instance with the lowest load.
 - **Full-mode (`EnableFullModeScheduling = true`)**
   - Uses CMS-based cluster view.
   - **Filters**:
-    - Global: `failoverFilter` (respecting `FailoverScope`).
+    - Global: `failoverFilter` (respecting `FailoverDomain`).
     - Single-instance: `schedulabilityFilter`, `stalenessFilter`, `metricBasedFilter` on configured load metrics.
   - **Metrics** (typical defaults):
     - `prefill`: `DispatchPrefillLoadMetric`, by default `all_prefills_tokens_num`.

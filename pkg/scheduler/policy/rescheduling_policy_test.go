@@ -506,7 +506,7 @@ func generateReschedulerInstances() map[string]*instanceViewScheduling {
 func TestDecodeLoadBalanceReschedulingPolicy(t *testing.T) {
 	config := &options.SchedulerConfig{
 		FullModeSchedulingConfig: config.FullModeSchedulingConfig{
-			FailoverScope:                    consts.FailoverScopeNode,
+			FailoverDomain:                   consts.FailoverDomainNode,
 			ReschedulingDecodeLoadMetric:     consts.SchedulingMetricKVCacheUsageRatioProjected,
 			ReschedulingDecodeLoadThreshold:  1.0,
 			ReschedulingPrefillLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
@@ -531,7 +531,7 @@ func TestDecodeLoadBalanceReschedulingPolicy(t *testing.T) {
 func TestNeutralLoadBalanceReschedulingPolicy(t *testing.T) {
 	config := &options.SchedulerConfig{
 		FullModeSchedulingConfig: config.FullModeSchedulingConfig{
-			FailoverScope:                    consts.FailoverScopeNode,
+			FailoverDomain:                   consts.FailoverDomainNode,
 			ReschedulingDecodeLoadMetric:     consts.SchedulingMetricKVCacheUsageRatioProjected,
 			ReschedulingDecodeLoadThreshold:  1.0,
 			ReschedulingPrefillLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
@@ -555,7 +555,7 @@ func TestNeutralLoadBalanceReschedulingPolicy(t *testing.T) {
 func TestFailoverReschedulingPolicy(t *testing.T) {
 	config := &options.SchedulerConfig{
 		FullModeSchedulingConfig: config.FullModeSchedulingConfig{
-			FailoverScope:                   consts.FailoverScopeNode,
+			FailoverDomain:                    consts.FailoverDomainNode,
 			InstanceStalenessSeconds:        100,
 			ReschedulingDecodeLoadMetric:    consts.SchedulingMetricKVCacheUsageRatioProjected,
 			ReschedulingDecodeLoadThreshold: 1.0,
@@ -610,7 +610,7 @@ func TestDecodeLoadBalanceReschedulingPolicyUnitLoadBalance(t *testing.T) {
 			ReschedulingReqSelectRule:        consts.MigrationReqSelectRuleToken,
 			ReschedulingLoadBalanceThreshold: 0.0,
 			InstanceStalenessSeconds:         100,
-			FailoverScope:                    consts.FailoverScopeNode,
+			FailoverDomain:                   consts.FailoverDomainNode,
 		},
 	}
 	rp := NewReschedulingPolicyPartial(config)

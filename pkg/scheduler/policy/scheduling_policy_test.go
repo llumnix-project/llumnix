@@ -88,7 +88,7 @@ func newConfig() *options.SchedulerConfig {
 			DispatchPrefillLoadThreshold:       1.0,
 			DispatchDecodeLoadMetric:           consts.SchedulingMetricKVCacheUsageRatioProjected,
 			DispatchDecodeLoadThreshold:        1.0,
-			FailoverScope:                      consts.FailoverScopeNodeUnit,
+			FailoverDomain:                     consts.FailoverDomainNodeUnit,
 			InstanceStalenessSeconds:           60,
 			DispatchPrefillCacheLocalityMetric: consts.SchedulingMetricKVCacheHitLen,
 			EnableCacheAwareScheduling:         false,

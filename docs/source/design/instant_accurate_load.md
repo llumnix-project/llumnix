@@ -22,7 +22,7 @@ Modern LLM schedulers typically adopt one of two paradigms for maintaining load:
 2. **Scheduler-side bookkeeping**  
    The scheduler maintains per-instance counters directly, increasing request/token counts when dispatching a request to an instance and decreasing them when the request completes.
 
-Llumnix supports both paradigms via its **CMS (Cluster Metadata Store)** path and its **LRS (local real-time state)** path, as described in the *Scheduling modes: full-mode and lite-mode* sections of `docs/policy_framework.md`.
+Llumnix supports both paradigms via its **CMS (Cluster Metadata Store)** path and its **LRS (local real-time state)** path, as described in the *Scheduling modes: full-mode and lite-mode* sections of [Scheduling Policy Framework](policy_framework.md).
 
 ---
 

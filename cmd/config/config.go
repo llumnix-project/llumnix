@@ -227,7 +227,7 @@ type FullModeSchedulingConfig struct {
 	TpotMigrateOutFloorThreshold float32
 
 	// filter
-	FailoverScope            string
+	FailoverDomain            string
 	InstanceStalenessSeconds int64
 
 	// rescheduling
@@ -308,7 +308,7 @@ func (c *FullModeSchedulingConfig) AddFullModeSchedulingConfigFlags(flags *pflag
 	flags.BoolVar(&c.EnableAdaptivePD, "enable-adaptive-pd", consts.DefaultEnableAdaptivePD, "Llumnix enable adaptive pd")
 	flags.Float32Var(&c.TpotMigrateOutFloorThreshold, "tpot-migrate-out-floor-threshold", consts.DefaultTpotMigrateOutFloorThreshold, "Llumnix tpot migrate out floor threshold")
 
-	flags.StringVar(&c.FailoverScope, "failover-scope", consts.DefaultFailoverScope, "Llumnix failover scope")
+	flags.StringVar(&c.FailoverDomain, "failover-domain", consts.DefaultFailoverDomain, "Llumnix failover domain")
 	flags.Int64Var(&c.InstanceStalenessSeconds, "instance-staleness-seconds", consts.DefaultInstanceStalenessSeconds, "Llumnix instance staleness seconds")
 
 	flags.BoolVar(&c.EnableRescheduling, "enable-rescheduling", consts.DefaultEnableRescheduling, "Llumnix enable rescheduling")

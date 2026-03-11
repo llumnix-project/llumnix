@@ -86,7 +86,7 @@ func TestFilter(t *testing.T) {
 	}
 
 	gf := []globalFilter{
-		&failoverFilter{failoverScope: consts.FailoverScopeNodeUnit},
+		&failoverFilter{failoverDomain: consts.FailoverDomainNodeUnit},
 	}
 
 	remainingInstances := filter(instanceViews, sif, gf, false)

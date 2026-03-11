@@ -288,43 +288,43 @@ func TestFailoverFilter(t *testing.T) {
 	// Test cases
 	tests := []struct {
 		name          string
-		failoverScope string
+		failoverDomain string
 		parallelSize  int32
 		expected      []string
 	}{
 		{
-			name:          "instance failover scope",
-			failoverScope: consts.FailoverScopeInstance,
-			parallelSize:  1,
+			name:          "instance failover domain",
+			failoverDomain: consts.FailoverDomainInstance,
+			parallelSize: 1,
 			expected:      []string{"0"},
 		},
 		{
-			name:          "node failover scope",
-			failoverScope: consts.FailoverScopeNode,
-			parallelSize:  1,
+			name:          "node failover domain",
+			failoverDomain: consts.FailoverDomainNode,
+			parallelSize: 1,
 			expected:      []string{"0", "1", "2"},
 		},
 		{
-			name:          "instance unit failover scope without data parallel",
-			failoverScope: consts.FailoverScopeInstanceUnit,
+			name:          "instance unit failover domain without data parallel",
+			failoverDomain: consts.FailoverDomainInstanceUnit,
 			parallelSize:  1,
 			expected:      []string{"0"},
 		},
 		{
-			name:          "instance unit failover scope with data parallel",
-			failoverScope: consts.FailoverScopeInstanceUnit,
+			name:          "instance unit failover domain with data parallel",
+			failoverDomain: consts.FailoverDomainInstanceUnit,
 			parallelSize:  2,
 			expected:      []string{"0", "1", "3"},
 		},
 		{
-			name:          "node unit failover scope without data parallel",
-			failoverScope: consts.FailoverScopeNodeUnit,
-			parallelSize:  1,
+			name:          "node unit failover domain without data parallel",
+			failoverDomain: consts.FailoverDomainNodeUnit,
+			parallelSize: 1,
 			expected:      []string{"0", "1", "2"},
 		},
 		{
-			name:          "node unit failover scope with data parallel",
-			failoverScope: consts.FailoverScopeNodeUnit,
+			name:          "node unit failover domain with data parallel",
+			failoverDomain: consts.FailoverDomainNodeUnit,
 			parallelSize:  2,
 			expected:      []string{"0", "1", "2", "3", "4"},
 		},
@@ -347,7 +347,7 @@ func TestFailoverFilter(t *testing.T) {
 			}
 
 			// Run test
-			filter := &failoverFilter{failoverScope: tt.failoverScope}
+			filter := &failoverFilter{failoverDomain: tt.failoverDomain}
 			result := filter.filterOutInstances(instanceViews)
 
 			// Verify result
@@ -450,32 +450,32 @@ func TestFailoverMigrationSrcFilter(t *testing.T) {
 	// Test cases
 	tests := []struct {
 		name          string
-		failoverScope string
+		failoverDomain string
 		parallelSize  int32
 		expected      []string
 	}{
 		{
-			name:          "instance failover scope",
-			failoverScope: consts.FailoverScopeInstance,
-			parallelSize:  1,
+			name:          "instance failover domain",
+			failoverDomain: consts.FailoverDomainInstance,
+			parallelSize: 1,
 			expected:      []string{"1", "2", "3", "4"},
 		},
 		{
-			name:          "node failover scope",
-			failoverScope: consts.FailoverScopeNode,
+			name:          "node failover domain",
+			failoverDomain: consts.FailoverDomainNode,
+			parallelSize: 1,
+			expected:      []string{"3", "4"},
+		},
+		{
+			name:          "unit failover domain without data parallel",
+			failoverDomain: consts.FailoverDomainNodeUnit,
 			parallelSize:  1,
 			expected:      []string{"3", "4"},
 		},
 		{
-			name:          "unit failover scope without data parallel",
-			failoverScope: consts.FailoverScopeNodeUnit,
-			parallelSize:  1,
-			expected:      []string{"3", "4"},
-		},
-		{
-			name:          "unit failover scope with data parallel",
-			failoverScope: consts.FailoverScopeNodeUnit,
-			parallelSize:  2,
+			name:          "unit failover domain with data parallel",
+			failoverDomain: consts.FailoverDomainNodeUnit,
+			parallelSize: 2,
 			expected:      []string{},
 		},
 	}
@@ -497,7 +497,7 @@ func TestFailoverMigrationSrcFilter(t *testing.T) {
 			}
 
 			// Run test
-			filter := &failoverMigrationSrcFilter{failoverScope: tt.failoverScope, instanceStalenessSeconds: instanceStalenessSeconds}
+			filter := &failoverMigrationSrcFilter{failoverDomain: tt.failoverDomain, instanceStalenessSeconds: instanceStalenessSeconds}
 			result := filter.filterOutInstances(instanceViews)
 
 			// Verify result

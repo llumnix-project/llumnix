@@ -39,7 +39,7 @@ func newLoadBalanceDispatchFullMode(p *options.SchedulerConfig) *loadBalanceDisp
 				},
 				globalFilters: []globalFilter{
 					&failoverFilter{
-						failoverScope: p.FailoverScope,
+						failoverDomain: p.FailoverDomain,
 					},
 				},
 				singleInstanceFilters: []singleInstanceFilter{
@@ -63,7 +63,7 @@ func newLoadBalanceDispatchFullMode(p *options.SchedulerConfig) *loadBalanceDisp
 				},
 				globalFilters: []globalFilter{
 					&failoverFilter{
-						failoverScope: p.FailoverScope,
+						failoverDomain: p.FailoverDomain,
 					},
 				},
 				singleInstanceFilters: []singleInstanceFilter{
@@ -87,7 +87,7 @@ func newLoadBalanceDispatchFullMode(p *options.SchedulerConfig) *loadBalanceDisp
 				},
 				globalFilters: []globalFilter{
 					&failoverFilter{
-						failoverScope: p.FailoverScope,
+						failoverDomain: p.FailoverDomain,
 					},
 				},
 				singleInstanceFilters: []singleInstanceFilter{
@@ -144,7 +144,7 @@ func newSloDispatchFullMode(p *options.SchedulerConfig) *sloDispatchPolicy {
 				},
 				globalFilters: []globalFilter{
 					&failoverFilter{
-						failoverScope: p.FailoverScope,
+						failoverDomain: p.FailoverDomain,
 					},
 				},
 				singleInstanceFilters: []singleInstanceFilter{
@@ -169,7 +169,7 @@ func newSloDispatchFullMode(p *options.SchedulerConfig) *sloDispatchPolicy {
 				},
 				globalFilters: []globalFilter{
 					&failoverFilter{
-						failoverScope: p.FailoverScope,
+						failoverDomain: p.FailoverDomain,
 					},
 				},
 				singleInstanceFilters: []singleInstanceFilter{
@@ -265,7 +265,7 @@ func newFloodDispatchPolicyFullMode(p *options.SchedulerConfig) *floodDispatchPo
 				metrics: map[string]func() instanceSchedulingMetric{},
 				globalFilters: []globalFilter{
 					&failoverFilter{
-						failoverScope: p.FailoverScope,
+						failoverDomain: p.FailoverDomain,
 					},
 				},
 				singleInstanceFilters: []singleInstanceFilter{
@@ -280,7 +280,7 @@ func newFloodDispatchPolicyFullMode(p *options.SchedulerConfig) *floodDispatchPo
 				metrics: map[string]func() instanceSchedulingMetric{},
 				globalFilters: []globalFilter{
 					&failoverFilter{
-						failoverScope: p.FailoverScope,
+						failoverDomain: p.FailoverDomain,
 					},
 				},
 				singleInstanceFilters: []singleInstanceFilter{
@@ -295,7 +295,7 @@ func newFloodDispatchPolicyFullMode(p *options.SchedulerConfig) *floodDispatchPo
 				metrics: map[string]func() instanceSchedulingMetric{},
 				globalFilters: []globalFilter{
 					&failoverFilter{
-						failoverScope: p.FailoverScope,
+						failoverDomain: p.FailoverDomain,
 					},
 				},
 				singleInstanceFilters: []singleInstanceFilter{

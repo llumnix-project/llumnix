@@ -22,16 +22,17 @@ Understand how Llumnix works internally.
 
 - [Architecture Overview](design/architecture.md) — Full-stack component design
 - Scheduler
-	- [Scheduling Policy Framework](design/policy_framework.md) — Scheduler Policy design
-	- [Instant and Accurate Load for Scheduling](design/instant_accurate_load.md) — Load Obervation and Modeling
+	- [Scheduling Policy Framework](design/policy_framework.md) — Scheduling policy design
+	- [Instant and Accurate Load for Scheduling](design/instant_accurate_load.md) — Instance load obervation and modeling
 	- [KV-aware Scheduling](design/cache_aware_scheduling.md) — Scheduling with KV cache state awareness
-	- [SLO-aware Scheduling](design/slo_aware_scheduling.md) — Scheduling with SLO awareness
+    - [SLO-aware Scheduling](design/slo_aware_scheduling.md) — Scheduling with SLO awareness
 	- [Adaptive PD Scheduling](design/adaptive_pd_scheduling.md) — Adaptive P/D role assignment to maximize SLO attainment
-	- [Rescheduling(Coming Soon)](design/rescheduling.md) — Continuous rebalancing via request migration
+- Rescheduler
+	- [Rescheduler](design/rescheduler.md) — Continuous rescheduling via request migration
 - Gateway
 - Llumlet
 	- [Llumlet & Llumlet Proxy](design/Llumlet&Llumlet_proxy.md) — Engine-side agent bridging local engine and global scheduler
-	- [Realtime Instance Status Tracking](design/real_time_instance_status_tracking.md) — How Llumnix tracks engine state with minimal overhead
+	- [Realtime Instance Status Tracking](design/real_time_instance_status_tracking.md) — How Llumnix tracks engine state with minimal delay and overhead
 	- [Migration](design/request_migration.md) — Request migration implementation
 
 ---

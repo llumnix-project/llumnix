@@ -114,14 +114,14 @@ const (
 )
 
 const (
-	// FailoverScopeInstanceUnit failover instances sharing the unit with the unschedulable instances
-	FailoverScopeInstanceUnit = "instance-unit"
-	// FailoverScopeNodeUnit failover instances sharing units with instances on nodes requiring failover
-	FailoverScopeNodeUnit = "node-unit"
-	// FailoverScopeNode failover instances sharing the same node with the unschedulable instances
-	FailoverScopeNode = "node"
-	// FailoverScopeInstance When the failover scope is instance, it is equivalent to failover filter not being enabled.
-	FailoverScopeInstance = "instance"
+	// FailoverDomainInstanceUnit failover instances sharing the unit with the unschedulable instances
+	FailoverDomainInstanceUnit = "instance-unit"
+	// FailoverDomainNodeUnit failover instances sharing units with instances on nodes requiring failover
+	FailoverDomainNodeUnit = "node-unit"
+	// FailoverDomainNode failover instances sharing the same node with the unschedulable instances
+	FailoverDomainNode = "node"
+	// FailoverDomainInstance When the failover domain is instance, it is equivalent to failover filter not being enabled.
+	FailoverDomainInstance = "instance"
 )
 
 const (
@@ -190,7 +190,7 @@ const (
 	DefaultTpotMigrateOutFloorThreshold = 0.60
 
 	// Filter defaults
-	DefaultFailoverScope            = FailoverScopeInstanceUnit
+	DefaultFailoverDomain             = FailoverDomainInstanceUnit
 	DefaultInstanceStalenessSeconds = 60
 
 	// Rescheduling defaults
@@ -204,8 +204,8 @@ const (
 	DefaultReschedulingNeutralLoadThreshold = 1.0
 	DefaultReschedulingReqSelectOrder       = MigrationReqSelectOrderSR
 	DefaultReschedulingReqSelectRule        = MigrationReqSelectRuleToken
-	DefaultReschedulingReqSelectValue       = 1
-	DefaultReschedulingLoadBalanceThreshold = 0.01
+	DefaultReschedulingReqSelectValue       = 1024
+	DefaultReschedulingLoadBalanceThreshold = 0.7
 	DefaultReschedulingLoadBalanceScope     = ReschedulingLoadBalanceScopeCluster
 
 	// Llumlet defaults

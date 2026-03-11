@@ -81,7 +81,7 @@ The round-robin balancer maintains a live instance list by subscribing to resolv
 
 `Forwarder` dispatches one or two backend HTTP calls based on a `RequestContext` and returns a `<-chan StreamChunk`. This abstraction shields the handler from backend protocol differences: regardless of whether the deployment is non-PD or PD disaggregated, the handler always consumes the same chunk channel.
 
-For non-PD deployments, a single request is sent to the selected instance. For PD disaggregated deployments, the forwarder implements the protocol-specific dispatch logic, including how KV transfer parameters are constructed and how requests are issued to prefill and decode instances. The concrete forwarder is selected at startup based on `--pd-disagg-protocol` (e.g., `vllm-kvt`, `vllm-mooncake`).
+For non-PD deployments, a single request is sent to the selected instance. For PD disaggregated deployments, the forwarder implements the protocol-specific dispatch logic, including how KV transfer parameters are constructed and how requests are issued to prefill and decode instances. The concrete forwarder is selected at startup based on `--pd-disagg-protocol` (e.g., `vllm-kvt`, `vllm-mooncake`). See [P/D Disaggregation Protocol](pdd_protocol.md) for protocol details.
 
 ### lrs
 
@@ -93,7 +93,7 @@ For non-PD deployments, a single request is sent to the selected instance. For P
 
 ### batch
 
-`BatchService` implements the OpenAI batch inference API. Clients upload JSONL input files; the service stores them in Alibaba Cloud OSS, tracks task state in Redis, and processes individual lines by forwarding them to the gateway's own `/v1/completions` endpoint. Background reactor goroutines drive state transitions: validating → in_progress → finalizing → completed (or failed / cancelled / expired). Results are written back to OSS as JSONL output files.
+`BatchService` implements the OpenAI batch inference API. Clients upload JSONL input files; the service stores them in Alibaba Cloud OSS, tracks task state in Redis, and processes individual lines by forwarding them to the gateway's own `/v1/completions` endpoint. Background reactor goroutines drive state transitions: validating → in_progress → finalizing → completed (or failed / cancelled / expired). Results are written back to OSS as JSONL output files. See [Batch Inference](batch_inference.md) for the full design.
 
 ---
 

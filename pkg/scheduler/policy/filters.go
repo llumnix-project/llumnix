@@ -185,7 +185,7 @@ func (f *stalenessFilter) skipWhenFallback() bool {
 }
 
 type failoverFilter struct {
-	failoverScope string
+	failoverDomain string
 }
 
 func isDataParallelEnabled(instanceViews map[string]*instanceViewScheduling) bool {
@@ -288,47 +288,47 @@ func getUnitFailoverInstances(
 func (f *failoverFilter) filterOutInstances(instanceViews map[string]*instanceViewScheduling) sets.String {
 
 	needsFailoverInstances := getNeedsFailoverInstances(instanceViews)
-	switch f.failoverScope {
-	case consts.FailoverScopeInstance:
-		// When the failover scope is instance, failover instances are identical to needs failover instances.
-		klog.V(3).Infof("Instance scope failover, filtered out instances: %v",
+	switch f.failoverDomain {
+	case consts.FailoverDomainInstance:
+		// When the failover domain is instance, failover instances are identical to needs failover instances.
+		klog.V(3).Infof("Instance domain failover, filtered out instances: %v",
 			needsFailoverInstances.List())
 		return needsFailoverInstances
-	case consts.FailoverScopeNode:
+	case consts.FailoverDomainNode:
 		// Failover instances sharing the same node with the needs failover instances.
 		failoverNodes := getFailoverNodes(needsFailoverInstances, instanceViews)
 		result := getNodeFailoverInstances(failoverNodes, instanceViews)
-		klog.V(3).Infof("Node scope failover, filtered out instances: %v", result.List())
+		klog.V(3).Infof("Node domain failover, filtered out instances: %v", result.List())
 		return result
-	case consts.FailoverScopeInstanceUnit:
+	case consts.FailoverDomainInstanceUnit:
 		if !isDataParallelEnabled(instanceViews) {
 			klog.V(3).Infof(
-				"Data parallel disabled, instance unit scope failover filtered out instances: %v",
+				"Data parallel disabled, instance domain failover filtered out instances: %v",
 				needsFailoverInstances.List())
 			return needsFailoverInstances
 		}
 		failoverUnits := getFailoverUnits(needsFailoverInstances, instanceViews)
 		result := getUnitFailoverInstances(failoverUnits, instanceViews)
-		klog.V(3).Infof("Instance unit scope failover filtered out instances: %v",
+		klog.V(3).Infof("Instance domain failover filtered out instances: %v",
 			result.List())
 		return result
-	case consts.FailoverScopeNodeUnit:
+	case consts.FailoverDomainNodeUnit:
 		// 1. Find instances on nodes that have needs failover instances
 		// 2. Failover instances that share the same unit with instances found in step 1
 		failoverNodes := getFailoverNodes(needsFailoverInstances, instanceViews)
 		nodeFailoverInstances := getNodeFailoverInstances(failoverNodes, instanceViews)
 		if !isDataParallelEnabled(instanceViews) {
-			klog.V(3).Infof("Data parallel disabled, Node unit scope failover filtered out instances: %v",
+			klog.V(3).Infof("Data parallel disabled, Node domain failover filtered out instances: %v",
 				nodeFailoverInstances.List())
 			return nodeFailoverInstances
 		}
 		failoverUnits := getFailoverUnits(nodeFailoverInstances, instanceViews)
 		result := getUnitFailoverInstances(failoverUnits, instanceViews)
-		klog.V(3).Infof("Node unit scope failover filtered out instances: %v", result.List())
+		klog.V(3).Infof("Node domain failover filtered out instances: %v", result.List())
 		return result
 	default:
-		klog.Errorf("Unsupported failover scope: %s", f.failoverScope)
-		panic(fmt.Sprintf("unsupported failover scope: %s", f.failoverScope))
+		klog.Errorf("Unsupported failover domain: %s", f.failoverDomain)
+		panic(fmt.Sprintf("unsupported failover domain: %s", f.failoverDomain))
 	}
 }
 
@@ -352,7 +352,7 @@ func (f *inferTypeFilter) skipWhenFallback() bool {
 
 type failoverMigrationSrcFilter struct {
 	instanceStalenessSeconds int64
-	failoverScope            string
+	failoverDomain          string
 }
 
 func (fmf *failoverMigrationSrcFilter) filterOutInstances(
@@ -368,7 +368,7 @@ func (fmf *failoverMigrationSrcFilter) filterOutInstances(
 		}
 	}
 	temporaryFailoverFilter := failoverFilter{
-		failoverScope: fmf.failoverScope,
+		failoverDomain: fmf.failoverDomain,
 	}
 	// Generate failover filtered out instance id set.
 	failoverFilteredOutInstanceIds := temporaryFailoverFilter.filterOutInstances(instanceViews)

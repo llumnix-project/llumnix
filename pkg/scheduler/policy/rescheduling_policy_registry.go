@@ -125,12 +125,12 @@ func newLoadBalanceRescheduling(p *options.SchedulerConfig, inferType consts.Inf
 			},
 			srcGlobalFilters: []globalFilter{
 				&failoverFilter{
-					failoverScope: p.FailoverScope,
+					failoverDomain: p.FailoverDomain,
 				},
 			},
 			dstGlobalFilters: []globalFilter{
 				&failoverFilter{
-					failoverScope: p.FailoverScope,
+					failoverDomain: p.FailoverDomain,
 				},
 			},
 			selector: &metricBalanceSelector{
@@ -226,12 +226,12 @@ func newFailoverRescheduling(p *options.SchedulerConfig, inferType consts.InferT
 			srcGlobalFilters: []globalFilter{
 				&failoverMigrationSrcFilter{
 					instanceStalenessSeconds: p.InstanceStalenessSeconds,
-					failoverScope:            p.FailoverScope,
+					failoverDomain:         p.FailoverDomain,
 				},
 			},
 			dstGlobalFilters: []globalFilter{
 				&failoverFilter{
-					failoverScope: p.FailoverScope,
+					failoverDomain: p.FailoverDomain,
 				},
 			},
 			selector: &roundRobinSelector{},
@@ -304,12 +304,12 @@ func newBinPackingMitigationRescheduling(p *options.SchedulerConfig) *binPacking
 			},
 			srcGlobalFilters: []globalFilter{
 				&failoverFilter{
-					failoverScope: p.FailoverScope,
+					failoverDomain: p.FailoverDomain,
 				},
 			},
 			dstGlobalFilters: []globalFilter{
 				&failoverFilter{
-					failoverScope: p.FailoverScope,
+					failoverDomain: p.FailoverDomain,
 				},
 			},
 			selector: &binPackingMitigationSelector{},
@@ -395,12 +395,12 @@ func newBinPackingConsolidationRescheduling(p *options.SchedulerConfig) *binPack
 			},
 			srcGlobalFilters: []globalFilter{
 				&failoverFilter{
-					failoverScope: p.FailoverScope,
+					failoverDomain: p.FailoverDomain,
 				},
 			},
 			dstGlobalFilters: []globalFilter{
 				&failoverFilter{
-					failoverScope: p.FailoverScope,
+					failoverDomain: p.FailoverDomain,
 				},
 			},
 			selector: &binPackingConsolidationSelector{},
