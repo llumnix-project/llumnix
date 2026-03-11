@@ -132,12 +132,12 @@ graph TB
     Router -->|7. schedule| LB
     LB -->|8. /schedule| Scheduler
     Scheduler -.->|9. selected instances| LB
-    LB --> Forwarder
-    Forwarder -->|10. CompletionRequest| Internal
-    Internal -.->|11. Stream Chunks| Forwarder
-    Forwarder -.->|12. Stream Chunks| PostProc
-    PostProc -.->|13. ChatCompletionResponse| Handler
-    Handler -.->|14. SSE Stream| Client
+    LB -->|10. forward| Forwarder
+    Forwarder -->|11. CompletionRequest| Internal
+    Internal -.->|12. Stream Chunks| Forwarder
+    Forwarder -.->|13. Stream Chunks| PostProc
+    PostProc -.->|14. ChatCompletionResponse| Handler
+    Handler -.->|15. SSE Stream| Client
 ```
 
 ### 1. HTTP Request Reception
