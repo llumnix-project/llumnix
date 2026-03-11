@@ -16,6 +16,13 @@ New to Llumnix? Start here.
 
 ---
 
+## 🛠️ Development Guide
+
+- [Development Setup](develop/developer_guide.md) — Environment setup, build commands, and e2e unit tests guide
+- [Build Images](develop/image_build) — Manually build and push component images
+
+---
+
 ## 🏗️ Design
 
 Understand how Llumnix works internally.
@@ -30,17 +37,13 @@ Understand how Llumnix works internally.
 - Rescheduler
 	- [Rescheduler](design/rescheduler.md) — Continuous rescheduling via request migration
 - Gateway
+  - [Gateway Architecture](./design/gateway_architecture.md) - Gateway architecture and basic functionalities
+	- [PDD Protocol](design/pdd_protocol.md) — Prefill-Decode disaggregation protocol
+	- [Batch Inference](design/batch_inference.md) — Batch inference support
 - Llumlet
 	- [Llumlet & Llumlet Proxy](design/Llumlet&Llumlet_proxy.md) — Engine-side agent bridging local engine and global scheduler
 	- [Realtime Instance Status Tracking](design/real_time_instance_status_tracking.md) — How Llumnix tracks engine state with minimal delay and overhead
 	- [Migration](design/request_migration.md) — Request migration implementation
-
----
-
-## 🛠️ Development Guide
-
-- [Development Setup](develop/developer_guide.md) — Environment setup, build commands, and e2e unit tests guide
-- [Build Images](develop/image_build) — Manually build and push component images
 
 ---
 
@@ -56,6 +59,14 @@ getting_started/benchmark
 
 :::{toctree}
 :hidden:
+:caption: Development
+
+develop/developer_guide
+develop/image_build
+:::
+
+:::{toctree}
+:hidden:
 :caption: Design Documents
 
 design/architecture
@@ -63,18 +74,11 @@ design/policy_framework
 design/instant_accurate_load
 design/cache_aware_scheduling
 design/slo_aware_scheduling
-design/adaptive_pd_scheduling
-design/request_migration
-design/Llumlet&Llumlet_proxy
 design/real_time_instance_status_tracking
+design/adaptive_pd_scheduling
+design/Llumlet&Llumlet_proxy
+design/request_migration
 design/gateway_architecture
+design/pdd_protocol
 design/batch_inference
-:::
-
-:::{toctree}
-:hidden:
-:caption: Development
-
-develop/developer_guide
-develop/image_build
 :::
