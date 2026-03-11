@@ -6,6 +6,53 @@ Prefill computation scales quadratically with prompt length. Prefix caching miti
 
 ## Design and implementation
 
+```mermaid
+graph TB
+    Request([Request])
+
+    subgraph Llumnix[" "]
+        direction LR
+        subgraph Gateway
+            Tokenizer[Tokenizer]
+        end
+        subgraph Scheduler
+            Hash("1. Token Hashing")
+            Lookup("2. Cache Hit Lookup")
+            Dispatch("3. Cache-aware Dispatch")
+        end
+    end
+
+    KVS[(KVS Metadata Service)]
+
+    subgraph InferenceService["Inference Service"]
+        direction TB
+        subgraph InstanceN[Instance N]
+            direction LR
+            EngineN[Inference Engine]
+            StoreN[KV Cache Store]
+        end
+        subgraph Instance1[Instance 1]
+            direction LR
+            Engine1[Inference Engine]
+            Store1[KV Cache Store]
+        end
+        subgraph Instance0[Instance 0]
+            direction LR
+            Engine0[Inference Engine]
+            Store0[KV Cache Store]
+        end
+    end
+
+    Request --> Tokenizer
+    Tokenizer -->|token IDs| Hash
+    Hash --> Lookup
+    Lookup <-->|query / cache locations| KVS
+    Lookup --> Dispatch
+    Dispatch -->|instance ID| Gateway
+    Gateway -->|dispatch| InferenceService
+    KVS -.-|metadata management| InferenceService
+```
+
 Existing distributed inference scheduling projects typically maintain global cache state (e.g. LRU cache, global radix tree) inside the scheduler and synchronize KV cache events with inference engines via a KV indexer or equivalent. Llumnix instead leverages the KVS metadata service, which already tracks KV cache object locations as part of the distributed KV cache store, eliminating the need for separate synchronization and yielding a simpler and more extensible architecture.
 
 For each incoming request, the gateway tokenizes the prompt and passes the token IDs to the scheduler. The scheduler hashes the token IDs into prefix chunk keys, queries the KVS metadata service for cache hits, and selects the instance that best balances cache affinity and load. The gateway then dispatches the request to the selected instance.

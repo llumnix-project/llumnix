@@ -75,6 +75,44 @@ A Ial-oriented scheduler must therefore design metrics that accurately model the
 
 ### 4.2 CMS (engine-side) path
 
+```mermaid
+graph TB
+    Request([Request]) --> Gateway
+
+    subgraph GW_Sched[" "]
+        direction LR
+        subgraph Scheduler
+            LocalCMS[CMS View]:::dashed
+        end
+        Gateway <-->|/schedule| Scheduler
+    end
+
+    CMS[(CMS)]
+
+    subgraph InferenceService["Inference Service"]
+        direction LR
+        subgraph Instance0[Instance 0]
+            direction TB
+            Engine0[Engine] --> Llumlet0[Llumlet]
+        end
+        subgraph Instance1[Instance 1]
+            direction TB
+            Engine1[Engine] --> Llumlet1[Llumlet]
+        end
+        subgraph InstanceN[Instance N]
+            direction TB
+            EngineN[Engine] --> LlumletN[Llumlet]
+        end
+    end
+
+    Gateway -->|dispatch| InferenceService
+    Llumlet0 -->|status| CMS
+    Llumlet1 -->|status| CMS
+    LlumletN -->|status| CMS
+    LocalCMS -->|pull| CMS
+    classDef dashed stroke-dasharray: 5 5
+```
+
 Llumnix’s full-mode uses a CMS-backed status path (engine → llumlet → CMS → scheduler). On this path, Ial is achieved by explicitly closing the three temporal gaps above:
 
 1. **Load-change-event-triggered status exporting (fixes step-loop-bound status exporting)**  
@@ -95,10 +133,36 @@ Together, these mechanisms make the CMS path provide the most instant load view 
 
 ### 4.3 LRS (scheduler-side) path
 
+```mermaid
+graph TB
+    Request([Request]) --> GW
+
+    subgraph GW_Sched2[" "]
+        direction LR
+        subgraph GW[Gateway]
+            RST[RequestStateTracker]
+        end
+        subgraph Scheduler2[Scheduler]
+            LRS[LRS View]:::dashed
+        end
+        GW <-->|/schedule| Scheduler2
+    end
+
+    subgraph InferenceService["Inference Service"]
+        Engine0[Engine 0] ~~~ Engine1[Engine 1] ~~~ EngineN[Engine N]
+    end
+
+    GW <-->|dispatch / SSE stream| InferenceService
+    RST -->|/report| Scheduler2
+    GW -->|/release| Scheduler2
+    classDef dashed stroke-dasharray: 5 5
+```
+
 On the LRS path, Llumnix implements scheduler-side bookkeeping with a focus on temporal freshness:
 
 1. **Dispatch-driven increments**: per-instance load counters increase when the scheduler dispatches a request to an instance.
-2. **Streaming-driven updates**: as the engine streams responses back, gateway continuously updates token counts from the stream rather than waiting for request completion, and reports the states to scheduler periodically. This realizes the *theoretical best case* for scheduler-side bookkeeping in terms of temporal freshness.
+2. **Streaming-driven updates**: as the engine streams responses back, `RequestStateTracker` in the gateway continuously extracts and updates token counts based on each SSE response chunk rather than waiting for request completion, and reports the states to the scheduler periodically via `/report`. This realizes the *theoretical best case* for scheduler-side bookkeeping in terms of temporal freshness.
+3. **Completion-driven release**: when a request finishes, the gateway calls the scheduler's `/release` endpoint to remove the request's state from the scheduler's LRS, ensuring that completed requests no longer contribute to instance load.
 
 The remaining limitation on the LRS path is informational rather than temporal: scheduler-side bookkeeping cannot directly observe accurate engine-internal state and therefore can only accumulate request/token counts without accounting for prefix cache sharing, so even with dispatch- and streaming-driven updates, the resulting load view remains a rough approximation rather than a fully accurate reflection of actual engine load.
 
