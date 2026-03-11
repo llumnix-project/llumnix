@@ -1,3 +1,5 @@
+# Batch API
+
 Llumnix LLM Gateway supports OpenAI's [Batch API](https://platform.openai.com/docs/guides/batch) (i.e., batch inference), following the OpenAI interface specification. Batch inference processes large volumes of inference requests asynchronously, making it ideal for running during idle periods to fully utilize machine resources.
 
 The workflow is as follows:

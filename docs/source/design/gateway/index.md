@@ -2,11 +2,9 @@
 
 The gateway component handles request routing and dispatching in Llumnix.
 
-## Contents
-
 ```{toctree}
-:hidden:
-:maxdepth: 1
+:maxdepth: 2
+:caption: Contents
 
 gateway_architecture
 pdd_protocol

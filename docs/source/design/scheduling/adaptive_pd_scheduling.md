@@ -17,7 +17,7 @@ Adaptive PD scheduling imposes the following requirements on the underlying infr
 
 ## Overview
 
-![adaptive_pd_architecture](../image/adaptive_pd_architecture.png)
+![adaptive_pd_architecture](../../image/adaptive_pd_architecture.png)
 
 Under certain SLO constraints, static prefill-decode (PD) instance ratios exhibit an inherent limitation: when prefill instances are heavily loaded while decode instances remain underutilized, or vice versa, rebalancing the PD ratio involves instance-level scaling up and down — a heavyweight operation too cumbersome to keep pace with rapidly fluctuating traffic patterns. Adaptive PD addresses this by dynamically adjusting the effective number of prefill and decode instances at the scheduling layer — without any instance scaling or redeployment — leveraging only the pool of already-provisioned instances.
 
@@ -94,9 +94,9 @@ Setup: Qwen3-32B, TP=1, evaluated on [the Azure LLM Inference Trace (Conversatio
 
 SLO targets: TPOT ≤ 50 ms, TTFT ≤ 6000 ms.
 
-![adaptive_pd_slo_attainment](../image/adaptive_pd_slo_attainment.png)
+![adaptive_pd_slo_attainment](../../image/adaptive_pd_slo_attainment.png)
 
-![adaptive_pd_instance_status_distribution](../image/adaptive_pd_instance_status_distribution.png)
+![adaptive_pd_instance_status_distribution](../../image/adaptive_pd_instance_status_distribution.png)
 
 Adaptive PD is compared against a load balancing scheduling policy based on the number of prefill and decode tokens. Specifically, the comparison targets two static deployment configurations: 3D/5P and 2D/6P. With a static assignment of 3D / 5P, the decode side is adequately handled, but the prefill instances are severely overloaded. Changing to 2D / 6P alleviates prefill pressure, but causes a significant drop in TPOT SLO attainment.
 

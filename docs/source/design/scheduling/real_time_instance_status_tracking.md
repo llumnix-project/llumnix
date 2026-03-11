@@ -2,7 +2,7 @@
 
 ## Architecture
 
-![image](../image/Instance_status_tracking.png)
+![image](../../image/Instance_status_tracking.png)
 Llumnix introduces a centralized Cluster Meta Store (CMS) dedicated to caching instance metadata and real-time status. Within this architecture, Llumlet is responsible for aggregating data from the inference engine and updating the CMS.
 
 To collect the engine's real-time status, Llumnix requires access to internal states from components such as the Scheduler and KV Connector. Therefore, we have instrumented the engine with an internal Status Updater. This component supports both pushing status to Llumlet and allowing Llumlet to actively poll for updates. To ensure state freshness, the Status Updater's update cycle is tightly coupled with the engine's execution steps.

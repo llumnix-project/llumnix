@@ -2,11 +2,9 @@
 
 The scheduling system in Llumnix handles dynamic request scheduling for distributed LLM inference.
 
-## Contents
-
 ```{toctree}
-:hidden:
-:maxdepth: 1
+:maxdepth: 2
+:caption: Contents
 
 policy_framework
 instant_accurate_load

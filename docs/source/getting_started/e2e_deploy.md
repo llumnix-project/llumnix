@@ -1,5 +1,5 @@
 
-# Llumnix Deployment Guide
+# Deployment Guide
 
 ## 1. Deployment Modes Overview
 

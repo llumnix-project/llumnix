@@ -1,8 +1,8 @@
-# Architecture-Llumlet&Llumlet\_proxy
+# Llumlet & Llumlet\_proxy
 
 ## Architecture Diagram
 
-![llumlet](../image/Llumlet&Llumlet_proxy.png){width="70%"}
+![llumlet](../../image/Llumlet&Llumlet_proxy.png){width="70%"}
 Llumlet\_proxy and Enginecore share a single process, whereas Llumlet is a standalone process.
 
 ## Component Responsibilities

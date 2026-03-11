@@ -11,7 +11,7 @@ The rescheduler serves three primary functions:
 
 1. **Load Balancing**: Continuously monitors instance load and migrates requests from overloaded instances to underutilized ones, mitigating fragmentation and eliminating hotspots for improved latency.
 
-2. **Adaptive PD Rescheduling**: Enhances adaptive prefill-decode disaggregation by migrating decode requests based on predicted TPOT, consolidating underutilized instances and mitigating overloaded ones to further improve SLO attainment and resource efficiency. See [Adaptive PD Scheduling](adaptive_pd_scheduling.md) for details.
+2. **Adaptive PD Rescheduling**: Enhances adaptive prefill-decode disaggregation by migrating decode requests based on predicted TPOT, consolidating underutilized instances and mitigating overloaded ones to further improve SLO attainment and resource efficiency. See [Adaptive PD Scheduling](./scheduling/adaptive_pd_scheduling.md) for details.
 
 3. **Failover**: Detects unhealthy or unschedulable instances and proactively migrates their requests to healthy instances within configurable failure domains (instance/node/unit domain).
 
@@ -137,7 +137,7 @@ Each policy implements its own metric calculation, instance filtering, and pair 
 
 ### 3.3 Adaptive PD Rescheduling Policies
 
-For the full design of adaptive PD scheduling (including scheduler dispatch logic and rescheduling), see [Adaptive PD Scheduling](adaptive_pd_scheduling.md).
+For the full design of adaptive PD scheduling (including scheduler dispatch logic and rescheduling), see [Adaptive PD Scheduling](./scheduling/adaptive_pd_scheduling.md).
 
 **Purpose**: Enhances adaptive prefill-decode disaggregation by migrating decode requests based on predicted TPOT, consolidating underutilized instances and mitigating overloaded ones to further improve SLO attainment and resource efficiency.
 
@@ -172,7 +172,7 @@ For the full design of adaptive PD scheduling (including scheduler dispatch logi
 
 **Example - Consolidation**: Instance D3 has predicted TPOT = 25ms (below 0.60 × 50ms = 30ms floor) with active decode requests. Policy migrates all requests from D3 to D4 (predicted TPOT = 40ms, heavily loaded but SLO-compliant), freeing D3 for prefill assignment.
 
-> **Note**: For details, see [Adaptive PD Scheduling](adaptive_pd_scheduling.md).
+> **Note**: For details, see [Adaptive PD Scheduling](./scheduling/adaptive_pd_scheduling.md).
 
 ### 3.4 Failover Policy
 
@@ -287,7 +287,7 @@ The migration execution pipeline (lines 177-259 in `rescheduling_policy.go`):
 | `--rescheduling-policies` | `"binpacking_mitigation,binpacking_consolidation"` | Rescheduling policies for adaptive PD|
 | `--rescheduling-interval-ms` | `500` | Interval between rescheduling iterations (use `100` for adaptive PD) |
 
-> **Note**: For details, see [Adaptive PD Scheduling](adaptive_pd_scheduling.md).
+> **Note**: For details, see [Adaptive PD Scheduling](./scheduling/adaptive_pd_scheduling.md).
 
 ### 5.4 Failover Configuration
 

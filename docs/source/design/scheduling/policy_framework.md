@@ -1,4 +1,4 @@
-# Policy framework overview
+# Policy Framework Overview
 
 llumnix scheduling policies follow a **metrics → filters → selectors** pipeline.
 

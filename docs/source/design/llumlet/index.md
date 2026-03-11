@@ -2,11 +2,9 @@
 
 Llumlet is the engine-side agent that bridges the local engine and the global scheduler.
 
-## Contents
-
 ```{toctree}
-:hidden:
-:maxdepth: 1
+:maxdepth: 2
+:caption: Contents
 
 Llumlet&Llumlet_proxy
 request_migration

@@ -2,7 +2,7 @@
 
 ## Workflow
 
-![image](../image/request_migration_workflow.png)
+![image](../../image/request_migration_workflow.png)
 
 ## Request selection for migration
 
@@ -78,7 +78,7 @@ To reduce migration overhead and to support failover-triggered migration
 
 ##  Token forwarding
 
-![token_forward](../image/token_forward.png){width="60%"}
+![token_forward](../../image/token_forward.png){width="60%"}
 
 ### API Server Address-Aware 
 

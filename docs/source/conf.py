@@ -39,7 +39,7 @@ html_theme_options = {
     "repository_url": "https://github.com/llumnix-project/llumnix",
     "use_repository_button": True,
     "home_page_in_toc": True,
-    "collapse_navbar": True,
+    "collapse_navbar": False,
     "show_navbar_depth": 2,
     "default_mode": "light",
 }
