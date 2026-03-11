@@ -192,8 +192,8 @@ func (e *InstanceStatusLocalAccountEditor) revertRequestPrefillLocalAccount(
 	delete(instanceView.InstanceStatusLocalAccount.RequestLocalAccount, requestId)
 }
 
-func trimRequestIDsToSets(rawRequestIDs []string) sets.String {
-	result := sets.NewString()
+func trimRequestIDsToSets(rawRequestIDs []string) sets.Set[string] {
+	result := sets.New[string]()
 	for _, reqID := range rawRequestIDs {
 		trimmedID := trimRequestID(reqID)
 		result.Insert(trimmedID)

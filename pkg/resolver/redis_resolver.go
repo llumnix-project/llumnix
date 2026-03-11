@@ -65,9 +65,7 @@ func (r *redisResolver) GetLLMInstances() (types.LLMInstanceSlice, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	instances := make(types.LLMInstanceSlice, 0, len(r.instances))
-	for idx := range r.instances {
-		instances = append(instances, r.instances[idx])
-	}
+	instances = append(instances, r.instances...)
 	return instances, nil
 }
 

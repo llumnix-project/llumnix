@@ -98,7 +98,7 @@ func NewDispatchPolicy(
 	verifyConfig(c)
 
 	var cmsClient *cms.CMSReadClient
-	var clusterViewClient ClusterViewClientInterface = nil
+	var clusterViewClient ClusterViewClientInterface
 	if c.EnableFullModeScheduling {
 		client, err := cms.CreateOrGetClient(
 			c.CmsRedisHost,

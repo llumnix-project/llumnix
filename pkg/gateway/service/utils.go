@@ -54,7 +54,7 @@ func SimpleHTTPProxy(client *http.Client, url string, w http.ResponseWriter, r *
 }
 
 func GetResponseUsage(req *types.RequestContext) *protocol.Usage {
-	var usage *protocol.Usage = nil
+	var usage *protocol.Usage
 	switch req.LLMRequest.Protocol {
 	case protocol.OpenAIChatCompletion:
 		if req.LLMRequest.ClientStream {

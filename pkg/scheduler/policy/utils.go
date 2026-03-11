@@ -27,8 +27,8 @@ func verifyConfig(c *options.SchedulerConfig) {
 }
 
 func verifySchedulingPolicy(c *options.SchedulerConfig) {
-	liteModeSchedulingPolicySet := sets.NewString(consts.SchedulingPolicyLoadBalance)
-	fullModeSchedulingPolicySet := sets.NewString(
+	liteModeSchedulingPolicySet := sets.New[string](consts.SchedulingPolicyLoadBalance)
+	fullModeSchedulingPolicySet := sets.New[string](
 		consts.SchedulingPolicyLoadBalance,
 		consts.SchedulingPolicyFlood,
 		consts.SchedulingPolicySlo)
@@ -71,9 +71,9 @@ func verifySchedulingFeature(c *options.SchedulerConfig) {
 }
 
 func verifyDispatchLoadMetric(c *options.SchedulerConfig) {
-	liteModeSchedulingMetricSet := sets.NewString(
+	liteModeSchedulingMetricSet := sets.New[string](
 		consts.SchedulingMetricNumRequests, consts.SchedulingMetricNumTokens)
-	fullModeSchedulingMetricSet := sets.NewString(
+	fullModeSchedulingMetricSet := sets.New[string](
 		consts.SchedulingMetricKVCacheUsageRatioProjected, consts.SchedulingMetricDecodeBatchSize,
 		consts.SchedulingMetricNumWaitingRequests, consts.SchedulingMetricAllPrefillsTokensNum,
 		consts.SchedulingMetricKVCacheHitLen, consts.SchedulingMetricCacheAwareAllPrefillsTokensNum,
@@ -178,9 +178,9 @@ func toClusterViewScheduling(cv clusterView) clusterViewScheduling {
 
 func getRemainingInstanceIds(
 	instanceViews map[string]*instanceViewScheduling,
-	filteredOutInstanceIds sets.String) sets.String {
+	filteredOutInstanceIds sets.Set[string]) sets.Set[string] {
 
-	allInstanceIds := sets.NewString()
+	allInstanceIds := sets.New[string]()
 	for id := range instanceViews {
 		allInstanceIds.Insert(id)
 	}

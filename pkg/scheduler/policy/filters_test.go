@@ -256,7 +256,7 @@ func TestNeedsFailoverInstances(t *testing.T) {
 	}
 
 	// 4. Apply filters and collect filtered out instances
-	filteredOutInstances := sets.NewString()
+	filteredOutInstances := sets.New[string]()
 	for _, instance := range instances {
 		for _, filter := range filters {
 			if filter.instanceFilteredOut(instance) {
@@ -266,7 +266,7 @@ func TestNeedsFailoverInstances(t *testing.T) {
 	}
 
 	// 5. Verify results
-	assert.Equal(t, sets.NewString("0", "2", "3"), filteredOutInstances)
+	assert.Equal(t, sets.New[string]("0", "2", "3"), filteredOutInstances)
 }
 func TestFailoverFilter(t *testing.T) {
 	// Helper function to create test instances
@@ -351,7 +351,7 @@ func TestFailoverFilter(t *testing.T) {
 			result := filter.filterOutInstances(instanceViews)
 
 			// Verify result
-			assert.Equal(t, sets.NewString(tt.expected...), result)
+			assert.Equal(t, sets.New[string](tt.expected...), result)
 		})
 	}
 }
@@ -409,14 +409,14 @@ func TestInferTypeFilter(t *testing.T) {
 		t.Run(test.testName, func(t *testing.T) {
 			inferTypeFilter := &inferTypeFilter{targetInferType: test.targetInferType}
 			assert.False(t, inferTypeFilter.skipWhenFallback())
-			filteredOutInstances := sets.NewString()
+			filteredOutInstances := sets.New[string]()
 			for _, instance := range instances {
 				if inferTypeFilter.instanceFilteredOut(instance) {
 					filteredOutInstances.Insert(instance.GetInstanceId())
 				}
 			}
 
-			assert.Equal(t, sets.NewString(test.expectedFilteredOutInstances...), filteredOutInstances)
+			assert.Equal(t, sets.New[string](test.expectedFilteredOutInstances...), filteredOutInstances)
 		})
 	}
 }
@@ -501,7 +501,7 @@ func TestFailoverMigrationSrcFilter(t *testing.T) {
 			result := filter.filterOutInstances(instanceViews)
 
 			// Verify result
-			assert.Equal(t, sets.NewString(tt.expected...), result)
+			assert.Equal(t, sets.New[string](tt.expected...), result)
 		})
 	}
 }

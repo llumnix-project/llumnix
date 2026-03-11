@@ -14,7 +14,7 @@ import (
 // based on the provided prefix hashes and their corresponding hit instances.
 // It accumulates chunkSize for each consecutive hit; a gap marks the instance as broken.
 func calcInstancesPrefixCacheHitLen(
-	chunkSize int, prefixHashes []string, prefixHashHitInstances map[string]sets.String) map[string]int {
+	chunkSize int, prefixHashes []string, prefixHashHitInstances map[string]sets.Set[string]) map[string]int {
 	if len(prefixHashes) == 0 || prefixHashHitInstances == nil {
 		return nil
 	}
@@ -120,12 +120,12 @@ func getInstancesPrefixCacheHitLen(
 
 func convertToCacheHitInstances(
 	cmsClient cms.CMSReadClientInterface,
-	prefixHashHitKVSInstances map[string][]string) map[string]sets.String {
+	prefixHashHitKVSInstances map[string][]string) map[string]sets.Set[string] {
 	if len(prefixHashHitKVSInstances) == 0 {
 		return nil
 	}
 
-	prefixHashHitInstances := make(map[string]sets.String, len(prefixHashHitKVSInstances))
+	prefixHashHitInstances := make(map[string]sets.Set[string], len(prefixHashHitKVSInstances))
 	for prefixHash, hitKVSInstances := range prefixHashHitKVSInstances {
 		prefixHashHitInstances[prefixHash] = cmsClient.GetInstanceIDsByIPs(hitKVSInstances)
 	}

@@ -46,7 +46,7 @@ func filter(
 			delete(availableInstanceViews, instanceId)
 		}
 		if globalFilteredOutInstanceIds.Len() > 0 {
-			klog.V(4).Infof("Global filter filtered out instances: %v", globalFilteredOutInstanceIds.List())
+			klog.V(4).Infof("Global filter filtered out instances: %v", globalFilteredOutInstanceIds.UnsortedList())
 		}
 	}
 
@@ -62,7 +62,7 @@ type singleInstanceFilter interface {
 }
 
 type globalFilter interface {
-	filterOutInstances(map[string]*instanceViewScheduling) sets.String
+	filterOutInstances(map[string]*instanceViewScheduling) sets.Set[string]
 }
 
 type invertedSingleInstanceFilterWrapper struct {
@@ -203,25 +203,25 @@ func isDataParallelEnabled(instanceViews map[string]*instanceViewScheduling) boo
 }
 
 func getNeedsFailoverInstances(
-	instanceViews map[string]*instanceViewScheduling) sets.String {
+	instanceViews map[string]*instanceViewScheduling) sets.Set[string] {
 
-	needsFailoverInstances := sets.NewString()
+	needsFailoverInstances := sets.New[string]()
 	for id, view := range instanceViews {
 		if view.schedulingCtx.needsFailover {
 			needsFailoverInstances.Insert(id)
 		}
 	}
 	if needsFailoverInstances.Len() > 0 {
-		klog.V(3).Infof("Needs failover instances: %v", needsFailoverInstances.List())
+		klog.V(3).Infof("Needs failover instances: %v", needsFailoverInstances.UnsortedList())
 	}
 	return needsFailoverInstances
 }
 
 func getFailoverNodes(
-	needsFailoverInstances sets.String,
-	instanceViews map[string]*instanceViewScheduling) sets.String {
+	needsFailoverInstances sets.Set[string],
+	instanceViews map[string]*instanceViewScheduling) sets.Set[string] {
 
-	failoverNodes := sets.NewString()
+	failoverNodes := sets.New[string]()
 	for id := range needsFailoverInstances {
 		view := instanceViews[id]
 		if view != nil && view.cmsView.Metadata.NodeId != "" {
@@ -230,16 +230,16 @@ func getFailoverNodes(
 	}
 	if failoverNodes.Len() > 0 {
 		klog.V(3).Infof("Failover nodes %v based on needs failover instances: %v",
-			failoverNodes.List(), needsFailoverInstances.List())
+			failoverNodes.UnsortedList(), needsFailoverInstances.UnsortedList())
 	}
 	return failoverNodes
 }
 
 func getNodeFailoverInstances(
-	failoverNodes sets.String,
-	instanceViews map[string]*instanceViewScheduling) sets.String {
+	failoverNodes sets.Set[string],
+	instanceViews map[string]*instanceViewScheduling) sets.Set[string] {
 
-	nodeFailoverInstances := sets.NewString()
+	nodeFailoverInstances := sets.New[string]()
 	for id, view := range instanceViews {
 		if failoverNodes.Has(view.cmsView.Metadata.NodeId) {
 			nodeFailoverInstances.Insert(id)
@@ -247,32 +247,32 @@ func getNodeFailoverInstances(
 	}
 	if nodeFailoverInstances.Len() > 0 {
 		klog.V(3).Infof("Failover instances %v based on failover nodes %v",
-			nodeFailoverInstances.List(), failoverNodes.List())
+			nodeFailoverInstances.UnsortedList(), failoverNodes.UnsortedList())
 	}
 	return nodeFailoverInstances
 }
 
 func getFailoverUnits(
-	nodeFailoverInstances sets.String,
-	instanceViews map[string]*instanceViewScheduling) sets.String {
+	nodeFailoverInstances sets.Set[string],
+	instanceViews map[string]*instanceViewScheduling) sets.Set[string] {
 
-	failoverUnits := sets.NewString()
+	failoverUnits := sets.New[string]()
 	for id := range nodeFailoverInstances {
 		view := instanceViews[id]
 		failoverUnits.Insert(view.cmsView.Metadata.UnitId)
 	}
 	if failoverUnits.Len() > 0 {
 		klog.V(3).Infof("Failover units %v based on node failover instances %v",
-			failoverUnits.List(), nodeFailoverInstances.List())
+			failoverUnits.UnsortedList(), nodeFailoverInstances.UnsortedList())
 	}
 	return failoverUnits
 }
 
 func getUnitFailoverInstances(
-	failoverUnits sets.String,
-	instanceViews map[string]*instanceViewScheduling) sets.String {
+	failoverUnits sets.Set[string],
+	instanceViews map[string]*instanceViewScheduling) sets.Set[string] {
 
-	unitFailoverInstances := sets.NewString()
+	unitFailoverInstances := sets.New[string]()
 	for id, view := range instanceViews {
 		if failoverUnits.Has(view.cmsView.Metadata.UnitId) {
 			unitFailoverInstances.Insert(id)
@@ -280,37 +280,37 @@ func getUnitFailoverInstances(
 	}
 	if unitFailoverInstances.Len() > 0 {
 		klog.V(3).Infof("Failover instances %v based on failover units %v",
-			unitFailoverInstances.List(), failoverUnits.List())
+			unitFailoverInstances.UnsortedList(), failoverUnits.UnsortedList())
 	}
 	return unitFailoverInstances
 }
 
-func (f *failoverFilter) filterOutInstances(instanceViews map[string]*instanceViewScheduling) sets.String {
+func (f *failoverFilter) filterOutInstances(instanceViews map[string]*instanceViewScheduling) sets.Set[string] {
 
 	needsFailoverInstances := getNeedsFailoverInstances(instanceViews)
 	switch f.failoverDomain {
 	case consts.FailoverDomainInstance:
 		// When the failover domain is instance, failover instances are identical to needs failover instances.
 		klog.V(3).Infof("Instance domain failover, filtered out instances: %v",
-			needsFailoverInstances.List())
+			needsFailoverInstances.UnsortedList())
 		return needsFailoverInstances
 	case consts.FailoverDomainNode:
 		// Failover instances sharing the same node with the needs failover instances.
 		failoverNodes := getFailoverNodes(needsFailoverInstances, instanceViews)
 		result := getNodeFailoverInstances(failoverNodes, instanceViews)
-		klog.V(3).Infof("Node domain failover, filtered out instances: %v", result.List())
+		klog.V(3).Infof("Node domain failover, filtered out instances: %v", result.UnsortedList())
 		return result
 	case consts.FailoverDomainInstanceUnit:
 		if !isDataParallelEnabled(instanceViews) {
 			klog.V(3).Infof(
 				"Data parallel disabled, instance domain failover filtered out instances: %v",
-				needsFailoverInstances.List())
+				needsFailoverInstances.UnsortedList())
 			return needsFailoverInstances
 		}
 		failoverUnits := getFailoverUnits(needsFailoverInstances, instanceViews)
 		result := getUnitFailoverInstances(failoverUnits, instanceViews)
 		klog.V(3).Infof("Instance domain failover filtered out instances: %v",
-			result.List())
+			result.UnsortedList())
 		return result
 	case consts.FailoverDomainNodeUnit:
 		// 1. Find instances on nodes that have needs failover instances
@@ -319,12 +319,12 @@ func (f *failoverFilter) filterOutInstances(instanceViews map[string]*instanceVi
 		nodeFailoverInstances := getNodeFailoverInstances(failoverNodes, instanceViews)
 		if !isDataParallelEnabled(instanceViews) {
 			klog.V(3).Infof("Data parallel disabled, Node domain failover filtered out instances: %v",
-				nodeFailoverInstances.List())
+				nodeFailoverInstances.UnsortedList())
 			return nodeFailoverInstances
 		}
 		failoverUnits := getFailoverUnits(nodeFailoverInstances, instanceViews)
 		result := getUnitFailoverInstances(failoverUnits, instanceViews)
-		klog.V(3).Infof("Node domain failover filtered out instances: %v", result.List())
+		klog.V(3).Infof("Node domain failover filtered out instances: %v", result.UnsortedList())
 		return result
 	default:
 		klog.Errorf("Unsupported failover domain: %s", f.failoverDomain)
@@ -356,7 +356,7 @@ type failoverMigrationSrcFilter struct {
 }
 
 func (fmf *failoverMigrationSrcFilter) filterOutInstances(
-	instanceViews map[string]*instanceViewScheduling) sets.String {
+	instanceViews map[string]*instanceViewScheduling) sets.Set[string] {
 	failoverSingleInstanceFilters := []singleInstanceFilter{
 		&schedulabilityFilter{},
 		&stalenessFilter{instanceStalenessSeconds: fmf.instanceStalenessSeconds},
@@ -377,6 +377,6 @@ func (fmf *failoverMigrationSrcFilter) filterOutInstances(
 	result := getRemainingInstanceIds(instanceViews, failoverFilteredOutInstanceIds)
 	klog.V(3).Infof(
 		"Failover migration src filter, failover filtered out instances: %v, remaining instances: %v",
-		failoverFilteredOutInstanceIds.List(), result.List())
+		failoverFilteredOutInstanceIds.UnsortedList(), result.UnsortedList())
 	return result
 }

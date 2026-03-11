@@ -101,18 +101,18 @@ func (ss *SchedulerService) handleKeepalive(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if ss.config.EnableRequestStateTracking() {
-		// add gateway for local realtime state
-		ss.lrsClient.AddGateway(remoteEndpoint.String())
-	}
+    if ss.config.EnableRequestStateTracking() {
+        // add gateway for local realtime state
+        ss.lrsClient.AddGateway(remoteEndpoint.String())
+    }
 
 	// block and do keepalive with gateway
 	kac.StartKeepAlive(func() {
-		if ss.config.EnableRequestStateTracking() {
-			// If the goroutine terminates, it indicates that an anomaly occurred with the connection, which could be due to a ping pong
-			// failure or an abnormal TCP disconnection. Ultimately, we need to reclaim the request states that are in use.
-			ss.lrsClient.RemoveGateway(remoteEndpoint.String())
-		}
+        if ss.config.EnableRequestStateTracking() {
+            // If the goroutine terminates, it indicates that an anomaly occurred with the connection, which could be due to a ping pong
+            // failure or an abnormal TCP disconnection. Ultimately, we need to reclaim the request states that are in use.
+            ss.lrsClient.RemoveGateway(remoteEndpoint.String())
+        }
 	})
 }
 
@@ -155,7 +155,7 @@ func (ss *SchedulerService) handleSchedule(w http.ResponseWriter, r *http.Reques
 
 	if err != nil {
 		metrics.IncrLlumnixCounterByOne(
-			metrics.LlumnixMetricSchedulingFailedCount, metrics.Labels{{"error_type", err.Error()}})
+			metrics.LlumnixMetricSchedulingFailedCount, metrics.Labels{{Name: "error_type", Value: err.Error()}})
 		w.WriteHeader(statusCode)
 		w.Write([]byte(err.Error()))
 		if ss.config.EnableLogInput {

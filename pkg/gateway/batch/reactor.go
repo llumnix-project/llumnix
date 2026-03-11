@@ -941,7 +941,11 @@ func (tr *TaskReactor) processExpiredTask(ctx context.Context, taskID string) er
 		return fmt.Errorf("failed to lock task")
 	}
 
-	defer tr.redisStore.ReleaseTaskLock(ctx, taskID, tr.instanceID)
+	defer func() {
+		if err := tr.redisStore.ReleaseTaskLock(ctx, taskID, tr.instanceID); err != nil {
+			klog.Warningf("Failed to release task lock for task %s: %v", taskID, err)
+		}
+	}()
 
 	taskStatus, err := tr.redisStore.GetTaskStatus(ctx, taskID)
 	if err != nil {
@@ -974,7 +978,11 @@ func (tr *TaskReactor) processSingleCancellingTask(ctx context.Context) {
 	}
 
 	// Ensure lock is released when function exits
-	defer tr.redisStore.ReleaseTaskLock(ctx, taskID, tr.instanceID)
+	defer func() {
+		if err := tr.redisStore.ReleaseTaskLock(ctx, taskID, tr.instanceID); err != nil {
+			klog.Warningf("Failed to release task lock for task %s: %v", taskID, err)
+		}
+	}()
 
 	// Check that task is not also in validating or in_progress sets
 	// These checks are done after acquiring the lock to prevent race conditions
@@ -1101,7 +1109,7 @@ func (tr *TaskReactor) processFinalizingTask(ctx context.Context, taskID string)
 
 		shard, err := tr.redisStore.GetFileShard(ctx, taskID, shardID)
 		if err != nil {
-
+			klog.Errorf("Failed to get shard %s: %v", shardID, err)
 		}
 
 		requestCounts.Total += shard.RequestCounts.Total

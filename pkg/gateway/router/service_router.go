@@ -45,7 +45,7 @@ type RouteEndpoint struct {
 	Model  string
 }
 
-func (re *RouteEndpoint) String() string { return fmt.Sprintf("%s", re.URL) }
+func (re *RouteEndpoint) String() string { return re.URL }
 
 func (re *RouteEndpoint) JoinURL(path string) string {
 	re.URL = strings.TrimSuffix(re.URL, "/")

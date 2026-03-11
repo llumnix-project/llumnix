@@ -74,7 +74,7 @@ type CMSReadClientInterface interface {
 	GetInstanceStatusByID(instanceID string) *InstanceStatus
 
 	// GetInstanceIDsByIPs get instance id set of given ips
-	GetInstanceIDsByIPs(ips []string) sets.String
+	GetInstanceIDsByIPs(ips []string) sets.Set[string]
 
 	// GetInstanceViews returns all instance views
 	GetInstanceViews() map[string]*InstanceView
@@ -91,13 +91,13 @@ type CMSReadClient struct {
 	// BE CAREFUL when reading the data from outside CMSReadClient, e.g., from the scheduling policy.
 	// You MUST call cms.RLock() and defer cms.RUnlock() before reading the data.
 	instanceIDs           []string
-	instanceIDsSet        sets.String
+	instanceIDsSet        sets.Set[string]
 	instanceMetadatas     map[string]*InstanceMetadata
 	instanceStatuses      map[string]*InstanceStatus
 	instanceViews         map[string]*InstanceView
 	groupedInstanceViews  map[consts.InferType]map[string]*InstanceView
 	statusUnmarshalBuffer InstanceStatus
-	ipToInstanceIDs       map[string]sets.String
+	ipToInstanceIDs       map[string]sets.Set[string]
 	instanceIDToIP        map[string]string
 
 	mu       sync.RWMutex
@@ -186,14 +186,14 @@ func NewCMSReadClient(
 	client := &CMSReadClient{
 		redisClient:                       redisClient,
 		ctx:                               context.Background(),
-		instanceIDsSet:                    sets.NewString(),
+		instanceIDsSet:                    sets.New[string](),
 		instanceMetadatas:                 make(map[string]*InstanceMetadata),
 		instanceStatuses:                  make(map[string]*InstanceStatus),
 		instanceViews:                     make(map[string]*InstanceView),
 		groupedInstanceViews:              make(map[consts.InferType]map[string]*InstanceView),
 		statusUnmarshalBuffer:             InstanceStatus{},
 		instanceIDToIP:                    make(map[string]string),
-		ipToInstanceIDs:                   make(map[string]sets.String),
+		ipToInstanceIDs:                   make(map[string]sets.Set[string]),
 		stopChan:                          make(chan bool),
 		redisPullStatusIntervalMs:         pullStatusIntervalMs,
 		redisPullMetadataIntervalMs:       pullMetadataIntervalMs,
@@ -325,7 +325,7 @@ func (c *CMSReadClient) refreshInstanceMetadata() {
 	}
 
 	instanceIDsNew := make([]string, 0, len(instanceIDsInRedis))
-	instanceIDsSet := sets.NewString()
+	instanceIDsSet := sets.New[string]()
 	for _, id := range instanceIDsInRedis {
 		instanceID := strings.TrimPrefix(id, LlumnixInstanceMetadataPrefix)
 		instanceIDsNew = append(instanceIDsNew, instanceID)
@@ -429,7 +429,7 @@ func (c *CMSReadClient) addToIpToInstanceIDsMap(ip, instanceID string) {
 	if instanceIDs, exists := c.ipToInstanceIDs[ip]; exists {
 		instanceIDs.Insert(instanceID)
 	} else {
-		c.ipToInstanceIDs[ip] = sets.NewString(instanceID)
+		c.ipToInstanceIDs[ip] = sets.New[string](instanceID)
 	}
 }
 
@@ -592,10 +592,10 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 
 		if needRecordMetrics {
 			metrics.SetLlumnixStatusValue(metrics.LlumnixMetricInstanceNumUncomputedTokensAllWaitingPrefills,
-				metrics.Labels{{"instance_id", c.instanceStatuses[instanceID].InstanceId}},
+				metrics.Labels{{Name: "instance_id", Value: c.instanceStatuses[instanceID].InstanceId}},
 				float32(c.instanceStatuses[instanceID].NumUncomputedTokensAllWaitingPrefills))
 			metrics.SetLlumnixStatusValue(metrics.LlumnixMetricInstanceNumUsedGpuTokens,
-				metrics.Labels{{"instance_id", c.instanceStatuses[instanceID].InstanceId}},
+				metrics.Labels{{Name: "instance_id", Value: c.instanceStatuses[instanceID].InstanceId}},
 				float32(c.instanceStatuses[instanceID].NumUsedGpuTokens))
 		}
 	}
@@ -748,8 +748,8 @@ func (c *CMSReadClient) GetInstanceStatusByID(instanceID string) *InstanceStatus
 	return nil
 }
 
-func (c *CMSReadClient) GetInstanceIDsByIPs(ips []string) sets.String {
-	instanceIDs := sets.NewString()
+func (c *CMSReadClient) GetInstanceIDsByIPs(ips []string) sets.Set[string] {
+	instanceIDs := sets.New[string]()
 	klog.V(5).Infof("[GetInstanceIDsByIPs] ipToInstanceIDs=%+v", c.ipToInstanceIDs)
 	for _, ip := range ips {
 		if ids, ok := c.ipToInstanceIDs[ip]; ok {

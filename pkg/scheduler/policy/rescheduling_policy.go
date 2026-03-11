@@ -236,7 +236,7 @@ func (p *ReschedulingPolicy) executeMigrations(reschedulingPairs []*rescheduling
 			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(p.grpcTimeoutSeconds)*time.Second)
 			defer cancel()
 			defer p.llumletClientManager.DecrClientConnectionRequestCnt(rp.srcView.GetInstanceId())
-			migrateResponse := &llumlet.MigrateResponse{}
+			var migrateResponse *llumlet.MigrateResponse
 			migrateResponse, err = srcLlumletClientConnection.LlumletClient.Migrate(ctx, migrationRequest)
 			if err != nil {
 				if errors.Is(ctx.Err(), context.DeadlineExceeded) {

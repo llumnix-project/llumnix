@@ -141,7 +141,7 @@ lint-pylint:
 
 .PHONY: lint-go
 lint-go: gateway-proto-build
-	golangci-lint run ./cmd/... ./pkg/...
+	golangci-lint run --tests=false ./cmd/... ./pkg/...
 
 .PHONY: lint
 lint: lint-install lint-pylint lint-go

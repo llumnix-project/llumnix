@@ -21,7 +21,7 @@ type aggregateSelector struct {
 func (as *aggregateSelector) selectPairs(
 	srcCandidates, dstCandidates map[string]*instanceViewScheduling) (pairs []*reschedulingPair) {
 
-	usedInstanceIds := sets.NewString()
+	usedInstanceIds := sets.New[string]()
 	srcCandidateIds := getKeySliceFromMap(srcCandidates)
 	sort.SliceStable(srcCandidateIds, func(i, j int) bool {
 		return srcCandidates[srcCandidateIds[i]].metrics[as.srcMetric].Less(

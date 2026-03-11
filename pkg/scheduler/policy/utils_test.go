@@ -279,7 +279,7 @@ func TestKVSClient_ConvertToPrefixHashHitInstances(t *testing.T) {
 	tests := []struct {
 		name                      string
 		prefixHashHitKVSInstances map[string][]string
-		expectedInstances         map[string]sets.String
+		expectedInstances         map[string]sets.Set[string]
 	}{
 		{
 			name: "normal case",
@@ -287,9 +287,9 @@ func TestKVSClient_ConvertToPrefixHashHitInstances(t *testing.T) {
 				"hash1": {"192.168.1.1", "192.168.1.2"},
 				"hash2": {"192.168.1.2", "192.168.1.3"},
 			},
-			expectedInstances: map[string]sets.String{
-				"hash1": sets.NewString("instance1", "instance2", "instance3"),
-				"hash2": sets.NewString("instance1", "instance2", "instance3"),
+			expectedInstances: map[string]sets.Set[string]{
+				"hash1": sets.New[string]("instance1", "instance2", "instance3"),
+				"hash2": sets.New[string]("instance1", "instance2", "instance3"),
 			},
 		},
 		{
@@ -297,14 +297,14 @@ func TestKVSClient_ConvertToPrefixHashHitInstances(t *testing.T) {
 			prefixHashHitKVSInstances: map[string][]string{
 				"hash1": {},
 			},
-			expectedInstances: map[string]sets.String{
-				"hash1": sets.NewString(),
+			expectedInstances: map[string]sets.Set[string]{
+				"hash1": sets.New[string](),
 			},
 		},
 		{
 			name:                      "empty input",
 			prefixHashHitKVSInstances: map[string][]string{},
-			expectedInstances:         map[string]sets.String{},
+			expectedInstances:         map[string]sets.Set[string]{},
 		},
 	}
 
@@ -325,7 +325,7 @@ func TestKVSClient_ConvertToPrefixHashHitInstances(t *testing.T) {
 
 				if !resultSet.Equal(expectedSet) {
 					t.Errorf("For prefix hash %s: expected instances %v, got %v",
-						prefixHash, expectedSet.List(), resultSet.List())
+						prefixHash, expectedSet.UnsortedList(), resultSet.UnsortedList())
 				}
 			}
 		})
@@ -377,8 +377,8 @@ func (m *MockCMSReadClient) GetInstanceStatusByID(instanceID string) *cms.Instan
 	return nil
 }
 
-func (m *MockCMSReadClient) GetInstanceIDsByIPs(ips []string) sets.String {
-	result := sets.NewString()
+func (m *MockCMSReadClient) GetInstanceIDsByIPs(ips []string) sets.Set[string] {
+	result := sets.New[string]()
 	for _, ip := range ips {
 		if instances, ok := m.ipToInstanceIDsMap[ip]; ok {
 			result.Insert(instances...)
@@ -399,11 +399,11 @@ func TestCalcInstancesCacheHitLen_BrokenOnGap(t *testing.T) {
 	chunkSize := 4
 
 	prefixHashes := []string{"h1", "h2", "h3", "h4"}
-	hit := map[string]sets.String{
-		"h1": sets.NewString("i1", "i2"),
-		"h2": sets.NewString("i1"),       // i2 gap starts here
-		"h3": sets.NewString("i1", "i2"), // i2 reappears, but should be broken and not counted further
-		"h4": sets.NewString("i1"),
+	hit := map[string]sets.Set[string]{
+		"h1": sets.New[string]("i1", "i2"),
+		"h2": sets.New[string]("i1"),       // i2 gap starts here
+		"h3": sets.New[string]("i1", "i2"), // i2 reappears, but should be broken and not counted further
+		"h4": sets.New[string]("i1"),
 	}
 
 	got := calcInstancesPrefixCacheHitLen(chunkSize, prefixHashes, hit)
