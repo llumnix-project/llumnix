@@ -25,6 +25,7 @@ Understand how Llumnix works internally.
 	- [Scheduling Policy Framework](design/policy_framework.md) — Scheduler Policy design
 	- [Instant and Accurate Load for Scheduling](design/instant_accurate_load.md) — Load Obervation and Modeling
 	- [KV-aware Scheduling](design/cache_aware_scheduling.md) — Scheduling with KV cache state awareness
+	- [SLO-aware Scheduling](design/slo_aware_scheduling.md) — Scheduling with SLO awareness
 	- [Adaptive PD Scheduling](design/adaptive_pd_scheduling.md) — Adaptive P/D role assignment to maximize SLO attainment
 	- [Rescheduling(Coming Soon)](design/rescheduling.md) — Continuous rebalancing via request migration
 - Gateway
@@ -60,6 +61,7 @@ design/architecture
 design/policy_framework
 design/instant_accurate_load
 design/cache_aware_scheduling
+design/slo_aware_scheduling
 design/adaptive_pd_scheduling
 design/request_migration
 design/Llumlet&Llumlet_proxy
