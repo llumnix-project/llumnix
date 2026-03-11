@@ -16,9 +16,9 @@ graph TB
             Tokenizer[Tokenizer]
         end
         subgraph Scheduler
-            Hash["1. Token Hashing"]
-            Lookup["2. Cache Hit Lookup"]
-            Dispatch["3. Cache-aware Dispatch"]
+            Hash("1. Token Hashing")
+            Lookup("2. Cache Hit Lookup")
+            Dispatch("3. Cache-aware Dispatch")
         end
     end
 
