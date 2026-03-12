@@ -59,7 +59,7 @@ spec:
         - "--cms-redis-port"
         - "6379"
         - "--cms-pull-status-interval-ms"
-        - "5000"
+        - "500"
         - "--cms-pull-metadata-interval-ms"
         - "10000"
         - "--enable-full-mode-scheduling=true"

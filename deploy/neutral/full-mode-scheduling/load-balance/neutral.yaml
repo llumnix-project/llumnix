@@ -162,14 +162,14 @@ spec:
               port: metrics
             periodSeconds: 30
             timeoutSeconds: 5
-            failureThreshold: 2700
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /health
               port: metrics
             periodSeconds: 10
             timeoutSeconds: 5
-            failureThreshold: 2700
+            failureThreshold: 3
           resources:
             limits:
               ephemeral-storage: 256Gi

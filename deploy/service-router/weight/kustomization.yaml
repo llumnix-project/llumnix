@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Scenario: weight-based routing between internal and external vLLM.
+#
+# Both services run the same model (Qwen3-8B) to test pure weight-based routing
+# (50/50 random distribution), not prefix-based routing.
+#
+# internal.yaml  -- Deployment, Qwen3-8B (1 GPU, full-mode scheduling)
+#                     Contains discovery sidecar + LLUMNIX_* env vars
+#
+# external.yaml  -- Deployment + Service, Qwen3-8B (1 GPU, standalone)
+#                     No discovery sidecar, direct proxy only
+#
+# gateway.yaml   -- Weight-based routing (50% internal, 50% external)
+#
+# scheduler.yaml -- Standard scheduler for internal service
+
+resources:
+  - ../../base
+  - internal.yaml
+  - external.yaml
+  - gateway.yaml
+  - scheduler.yaml

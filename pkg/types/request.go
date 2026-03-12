@@ -48,7 +48,13 @@ type RequestStats struct {
 	// When the scheduled backend instance is abnormal, retry is performed.
 	RetryCount int
 
+	FailedInstances []string
+
 	DefaultLabels metrics.Labels
+}
+
+func (req *RequestStats) RecordFailedInstance(instanceID string) {
+	req.FailedInstances = append(req.FailedInstances, instanceID)
 }
 
 func (req *RequestStats) OutputExceedMaxTokens() bool {
@@ -203,6 +209,7 @@ type SchedulingContext struct {
 
 	// whether to schedule the request
 	NeedScheduling bool
+
 }
 
 // ErrorResponse is used when the engine returns an error directly.

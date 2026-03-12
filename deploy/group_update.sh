@@ -77,19 +77,22 @@ fi
 
 DEFAULT_REPOSITORY="llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix"
 export REPOSITORY="${CUSTOM_REPOSITORY:-${REPOSITORY:-$DEFAULT_REPOSITORY}}"
-export GATEWAY_IMAGE_TAG="${GATEWAY_TAG:-20260302-200550}"
-export SCHEDULER_IMAGE_TAG="${SCHEDULER_TAG:-20260302-200658}"
-export VLLM_IMAGE_TAG="${VLLM_TAG:-20260306-165123}"
-export DISCOVERY_IMAGE_TAG="${DISCOVERY_TAG:-20260302-203317}"
-export MOONCAKE_VLLM_IMAGE_TAG="${MOONCAKE_VLLM_TAG:-mooncake-20260305-184831}"
+# Priority: 1) command line args, 2) parent script env vars, 3) default values
+export GATEWAY_IMAGE_TAG="${GATEWAY_TAG:-${GATEWAY_IMAGE_TAG:-20260312-143526}}"
+export SCHEDULER_IMAGE_TAG="${SCHEDULER_TAG:-${SCHEDULER_IMAGE_TAG:-20260302-200658}}"
+export VLLM_IMAGE_TAG="${VLLM_TAG:-${VLLM_IMAGE_TAG:-20260306-165123}}"
+export DISCOVERY_IMAGE_TAG="${DISCOVERY_TAG:-${DISCOVERY_IMAGE_TAG:-20260302-203317}}"
+export MOONCAKE_VLLM_IMAGE_TAG="${MOONCAKE_VLLM_TAG:-${MOONCAKE_VLLM_IMAGE_TAG:-mooncake-20260305-184831}}"
 
-echo "Using repository:  $REPOSITORY"
-echo "Gateway tag:       $GATEWAY_IMAGE_TAG"
-echo "Scheduler tag:     $SCHEDULER_IMAGE_TAG"
-echo "vLLM tag:          $VLLM_IMAGE_TAG"
-echo "Discovery tag:     $DISCOVERY_IMAGE_TAG"
-echo "Mooncake-vLLM tag: $MOONCAKE_VLLM_IMAGE_TAG"
-
+echo "[group_update] Using repository:  $REPOSITORY"
+echo "[group_update] Gateway tag:       $GATEWAY_IMAGE_TAG"
+echo "[group_update] Scheduler tag:     $SCHEDULER_IMAGE_TAG"
+echo "[group_update] vLLM tag:          $VLLM_IMAGE_TAG"
+echo "[group_update] Discovery tag:     $DISCOVERY_IMAGE_TAG"
+# Only show mooncake tag if it's actually used in the deployment
+if grep -r "MOONCAKE_VLLM_IMAGE_TAG\|mooncake" "$KUSTOMIZE_DIR"/*.yaml >/dev/null 2>&1; then
+    echo "[group_update] Mooncake-vLLM tag: $MOONCAKE_VLLM_IMAGE_TAG"
+fi
 echo ""
 echo "Updating deployment in namespace: $GROUP_NAME"
 echo "Kustomize directory: $KUSTOMIZE_DIR"

@@ -11,6 +11,7 @@ import (
 
 	"k8s.io/klog/v2"
 
+	"llumnix/pkg/consts"
 	"llumnix/pkg/gateway/protocol"
 	"llumnix/pkg/types"
 )
@@ -64,9 +65,11 @@ func makeBackendRequest(req *types.RequestContext, body []byte, instance *types.
 }
 
 // doRequest executes HTTP request with retry mechanism.
+// Returns typed errors (NetworkError, UpstreamError) for retry decision by callers.
 func doRequest(req *http.Request, client *http.Client, body []byte) (io.ReadCloser, error) {
 	var resp *http.Response
 	var err error
+	url := req.URL.String()
 
 	for retry := 0; retry <= connectRetry; retry++ {
 		resp, err = client.Do(req)
@@ -76,12 +79,12 @@ func doRequest(req *http.Request, client *http.Client, body []byte) (io.ReadClos
 
 		if netErr, ok := err.(net.Error); ok {
 			klog.Errorf("failed to forward request to %s: %v (is_timeout=%v), retry: %d",
-				req.URL, err, netErr.Timeout(), retry)
+				url, err, netErr.Timeout(), retry)
 			if netErr.Timeout() {
-				return nil, fmt.Errorf("request to %s timed out: %v", req.URL, err)
+				return nil, &consts.NetworkError{URL: url, Err: err}
 			}
 		} else {
-			klog.Errorf("failed to forward request to %s: %v, retry: %d", req.URL, err, retry)
+			klog.Errorf("failed to forward request to %s: %v, retry: %d", url, err, retry)
 		}
 
 		if retry < connectRetry {
@@ -91,13 +94,13 @@ func doRequest(req *http.Request, client *http.Client, body []byte) (io.ReadClos
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, &consts.NetworkError{URL: url, Err: err}
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		klog.Errorf("failed to forward request to %s, status code: %d", req.URL, resp.StatusCode)
+		klog.Errorf("failed to forward request to %s, status code: %d", url, resp.StatusCode)
 		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to forward request to %s, status code: %d, body: %s", req.URL, resp.StatusCode, string(respBody))
+		return nil, consts.NewUpstreamError(url, resp.StatusCode, respBody, "")
 	}
 	return resp.Body, nil
 }

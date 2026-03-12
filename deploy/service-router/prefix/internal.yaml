@@ -1,0 +1,168 @@
+# Internal vLLM service managed by llumnix (gateway + scheduler).
+# Simplest single-GPU deployment (TP=1, DP=1, EP=1), model: Qwen/Qwen3-8B.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: internal
+  labels:
+    app: internal
+    role: internal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: internal
+  template:
+    metadata:
+      labels:
+        app: internal
+        role: internal
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: vllm
+        image: ${REPOSITORY}/vllm:${VLLM_IMAGE_TAG}
+        imagePullPolicy: Always
+        securityContext:
+          capabilities:
+            add:
+            - IPC_LOCK
+            - SYS_RAWIO
+          runAsGroup: 0
+          runAsUser: 0
+        command:
+          - /bin/bash
+          - -c
+        args:
+          - |-
+            # Clear /dev/shm on start to prevent running out of space when crashes occur
+            find /dev/shm -type f -delete
+
+            #################
+            # RUN vLLM worker
+            #################
+            CUDA_VISIBLE_DEVICES=0 exec vllm serve \
+              Qwen/Qwen3-8B \
+              --port 8000 \
+              --trust-remote-code \
+              --tensor-parallel-size 1 \
+              --async-scheduling \
+              --gpu-memory-utilization 0.8
+
+        env:
+        # configuration for Llumnix
+        - name: LLUMNIX_CMS_REDIS_ADDRESS
+          value: "redis"
+        - name: LLUMNIX_CMS_REDIS_PORT
+          value: "6379"
+        - name: LLUMNIX_CMS_REDIS_USERNAME
+          value: ""
+        - name: LLUMNIX_CMS_REDIS_PASSWORD
+          value: ""
+        - name: VLLM_ENABLE_LLUMNIX
+          value: "1"
+        - name: LLUMNIX_ENABLE_MIGRATION
+          value: "0"
+        - name: LLUMNIX_INSTANCE_TYPE
+          value: "neutral"
+
+        # download models
+        - name: VLLM_USE_MODELSCOPE
+          value: "true"
+
+        - name: TRITON_LIBCUDA_PATH
+          value: /usr/lib64
+        - name: VLLM_SKIP_P2P_CHECK
+          value: "1"
+        - name: GLOO_SOCKET_IFNAME
+          value: eth0
+        - name: NCCL_SOCKET_IFNAME
+          value: eth0
+        - name: VLLM_LOGGING_LEVEL
+          value: DEBUG
+
+        # Use cache directories from the mounted volume under one easy to mount
+        # root directory.
+        - name: CUDA_CACHE_PATH
+          value: /var/cache/vllm/cuda
+        - name: CCACHE_DIR
+          value: /var/cache/vllm/ccache
+        - name: VLLM_CACHE_ROOT
+          value: /var/cache/vllm/vllm
+        - name: FLASHINFER_WORKSPACE_BASE
+          value: /var/cache/vllm/flashinfer
+        # HuggingFace is likely to be quite a bit larger, give it its own cache
+        - name: HF_HUB_CACHE
+          value: /var/cache/huggingface
+
+        ports:
+        - containerPort: 8000
+          name: metrics
+          protocol: TCP
+        startupProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          initialDelaySeconds: 0
+          periodSeconds: 1
+          timeoutSeconds: 5
+          failureThreshold: 2700
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          limits:
+            cpu: 16
+            ephemeral-storage: 128Gi
+            memory: 128Gi
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: 16
+            ephemeral-storage: 128Gi
+            memory: 128Gi
+            nvidia.com/gpu: "1"
+      - name: discovery
+        image: ${REPOSITORY}/discovery:${DISCOVERY_IMAGE_TAG}
+        command:
+          - /bin/bash
+          - -c
+        args:
+          - |-
+            cd /discovery && \
+            exec python3 -m discovery.discovery \
+            --instance_type neutral \
+            --pod_name $(POD_NAME) \
+            --entrypoint_ip $(POD_IP) \
+            --entrypoint_port 8000 \
+            --kv_transfer_ip $(POD_IP) \
+            --kv_transfer_port 28000 \
+            --dp_size_local 1 \
+            --redis_address redis \
+            --redis_port 6379
+        resources:
+          limits:
+            memory: 256Mi
+            cpu: "200m"
+          requests:
+            memory: 128Mi
+            cpu: "100m"
+        env:
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP

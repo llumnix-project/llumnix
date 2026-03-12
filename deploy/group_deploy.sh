@@ -88,22 +88,25 @@ fi
 DEFAULT_REPOSITORY="llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix"
 export REPOSITORY="${CUSTOM_REPOSITORY:-$DEFAULT_REPOSITORY}"
 
-export GATEWAY_IMAGE_TAG="${GATEWAY_TAG:-20260309-150351}"
-export SCHEDULER_IMAGE_TAG="${SCHEDULER_TAG:-20260302-200658}"
+export GATEWAY_IMAGE_TAG="${GATEWAY_TAG:-20260312-143526}"
+export SCHEDULER_IMAGE_TAG="${SCHEDULER_TAG:-20260312-172410}"
 export VLLM_IMAGE_TAG="${VLLM_TAG:-20260306-165123}"
 export DISCOVERY_IMAGE_TAG="${DISCOVERY_TAG:-20260302-203317}"
 export MOONCAKE_VLLM_IMAGE_TAG="${MOONCAKE_VLLM_TAG:-mooncake-20260305-184831}"
 
-echo "Using repository: $REPOSITORY"
-echo "Gateway tag:      $GATEWAY_IMAGE_TAG"
-echo "Scheduler tag:    $SCHEDULER_IMAGE_TAG"
-echo "vLLM tag:         $VLLM_IMAGE_TAG"
-echo "Discovery tag:    $DISCOVERY_IMAGE_TAG"
+echo "[group_deploy] Using repository: $REPOSITORY"
+echo "[group_deploy] Gateway tag:      $GATEWAY_IMAGE_TAG"
+echo "[group_deploy] Scheduler tag:    $SCHEDULER_IMAGE_TAG"
+echo "[group_deploy] vLLM tag:         $VLLM_IMAGE_TAG"
+echo "[group_deploy] Discovery tag:    $DISCOVERY_IMAGE_TAG"
+echo ""
 
 # Create namespace
 echo "Creating namespace: $GROUP_NAME"
 kubectl create namespace "$GROUP_NAME" --dry-run=client -o yaml | kubectl apply -f -
 
-# Delegate deploy + status reporting to group_update.sh
+# Delegate actual deployment to group_update.sh (handles kustomize + kubectl apply)
+echo "[group_deploy] Delegating to group_update.sh for actual deployment..."
+echo ""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bash "$SCRIPT_DIR/group_update.sh" "$GROUP_NAME" "$KUSTOMIZE_DIR"

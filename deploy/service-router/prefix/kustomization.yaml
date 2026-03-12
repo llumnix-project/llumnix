@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Scenario: prefix-based routing + fallback between internal and external vLLM.
+#
+# internal.yaml  -- Deployment, Qwen3-8B (1 GPU, full-mode scheduling)
+#                   Contains discovery sidecar + LLUMNIX_* env vars -> registered in
+#                   Redis -> visible to scheduler and gateway balancer.
+#
+# external.yaml  -- Deployment + Service, Qwen2.5-7B (1 GPU, standalone)
+#                   No discovery sidecar -> NOT registered in Redis -> invisible to
+#                   scheduler; reachable only via Service name "vllm-external:8000".
+#                   Exposes Qwen/Qwen3-8B as a model alias so that Qwen3
+#                   fallback requests are also accepted by this service.
+#
+# gateway.yaml   -- neutral/full-mode-scheduling/load-balance/gateway.yaml +
+#                   --retry-max-count 2
+#                   --route-policy prefix
+#                   --route-config (Qwen/Qwen3-* -> local, Qwen/Qwen2.5-* -> external)
+#
+# scheduler.yaml -- Verbatim copy of neutral/full-mode-scheduling/load-balance/scheduler.yaml
+
+resources:
+  - ../../base
+  - internal.yaml
+  - external.yaml
+  - gateway.yaml
+  - scheduler.yaml

@@ -226,19 +226,14 @@ func (h *OpenAIHandler) marshalResponse(reqCtx *types.RequestContext) ([]byte, e
 // Handle processes the LLM inference request and streams the response back to the client.
 // It coordinates the entire request lifecycle: inference execution, response parsing,
 // post-processing, and response writing. Timing metrics like TTFT and ITL are tracked.
-// The response channel is automatically closed when processing completes.
-func (h *OpenAIHandler) Handle(req *types.RequestContext) {
-	defer func() {
-		close(req.ResponseChan)
-		req.OnPostRequest()
-	}()
-
+// Returns nil on success, or an error if initial forwarding failed (before any response was sent).
+// The caller is responsible for closing ResponseChan and calling OnPostRequest.
+func (h *OpenAIHandler) Handle(req *types.RequestContext) error {
 	// Initiate streaming inference from the backend
 	chunkChan, err := h.forwarder.Forward(req)
 	if err != nil {
 		klog.Errorf("failed to stream inference: %v", err)
-		writeErrorResponse(req, err)
-		return
+		return err
 	}
 
 	// Initialize timing metrics for TTFT (Time To First Token) and ITL (Inter-Token Latency)
@@ -252,84 +247,68 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) {
 
 		// Record timing metrics for performance monitoring
 		if isFirst {
-			// Record Time To First Token (TTFT)
 			lastTime = time.Now()
 			req.RequestStats.FirstTime = lastTime
-
-			// Trigger post-prefill hook to release prefill node resource if PD mode
 			req.OnPostPrefill()
-
 			isFirst = false
 		} else {
-			// Record Inter-Token Latency (ITL)
 			req.RequestStats.ITLs = append(req.RequestStats.ITLs, time.Since(lastTime).Milliseconds())
 			lastTime = time.Now()
-
-			// Trigger post-decode-first-stream-response hook to add request state of decode instance
 			if isFirstDecode {
 				req.OnPostDecodeFirstStreamResponse()
 			}
 			isFirstDecode = false
 		}
 
-		// Handle stream errors and end-of-stream conditions
 		if chunk.Err != nil {
 			if chunk.Err == io.EOF {
-				// Normal stream end - process any remaining data before completing
 				if len(chunk.Data) > 0 {
-					// Parse and process the final chunk that came with EOF
 					err := h.parseResponse(req, chunk.Data)
 					if err != nil && err != io.EOF {
 						klog.Errorf("failed to parse final response: %v", err)
 						writeErrorResponse(req, err)
-						return
+						return nil
 					}
 					if err := h.processAndWriteChunk(req, true); err != nil {
 						klog.Errorf("failed to process final chunk: %v", err)
 						writeErrorResponse(req, err)
-						return
+						return nil
 					}
 				}
 				break
 			}
-			// Handle unexpected errors during streaming
 			klog.Errorf("error during stream inference: %v", chunk.Err)
 			writeErrorResponse(req, chunk.Err)
-			return
+			return nil
 		}
 
-		// Parse the chunk data into internal response structure
 		err := h.parseResponse(req, chunk.Data)
 		if err != nil && err != io.EOF {
 			klog.Errorf("failed to parse response: %v", err)
 			writeErrorResponse(req, err)
-			return
+			return nil
 		}
 
-		// Trigger post-decode-each-stream-response hook to update request state of decode instance
 		if len(req.RequestStats.ITLs) > 0 {
 			req.OnPostDecodeEachStreamResponse()
 		}
 
-		// Determine if this is the final chunk in the stream
 		isStreamEnd := err == io.EOF
 
-		// Process through post-processor chain and write to client
 		if err := h.processAndWriteChunk(req, isStreamEnd); err != nil {
 			klog.Errorf("failed to process and write chunk: %v", err)
 			writeErrorResponse(req, err)
-			return
+			return nil
 		}
 
-		// Check if maximum token limit has been reached
 		if req.RequestStats.OutputExceedMaxTokens() {
-			// Send final chunk to gracefully end the stream
 			if err := h.processAndWriteChunk(req, true); err != nil {
 				klog.Errorf("failed to write final chunk: %v", err)
 			}
-			return
+			return nil
 		}
 	}
+	return nil
 }
 
 // processAndWriteChunk processes a response chunk through post-processors and writes it to the client.

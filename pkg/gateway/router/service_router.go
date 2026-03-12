@@ -48,12 +48,11 @@ type RouteEndpoint struct {
 func (re *RouteEndpoint) String() string { return re.URL }
 
 func (re *RouteEndpoint) JoinURL(path string) string {
-	re.URL = strings.TrimSuffix(re.URL, "/")
-	hasBaseVersion := baseVersionRegex.MatchString(re.URL)
-	if hasBaseVersion && strings.HasPrefix(path, "/v") {
+	base := strings.TrimSuffix(re.URL, "/")
+	if baseVersionRegex.MatchString(base) && strings.HasPrefix(path, "/v") {
 		path = pathVersionRegex.ReplaceAllString(path, "")
 	}
-	return fmt.Sprintf("%s%s", re.URL, path)
+	return fmt.Sprintf("%s%s", base, path)
 }
 
 type RouteResult struct {
@@ -123,6 +122,9 @@ func (sr *ServiceRouter) selectByWeight() (*RouteConfig, RouteType) {
 	totalWeight := 0
 	for _, config := range sr.routingConfigs {
 		totalWeight += config.Weight
+	}
+	if totalWeight == 0 {
+		return nil, RouteUnknown
 	}
 
 	randNum := rand.Intn(totalWeight)
@@ -201,6 +203,12 @@ func (sr *ServiceRouter) Route(req *types.RequestContext) (*RouteEndpoint, Route
 	} else {
 		return nil, rType
 	}
+}
+
+// CanFallback checks if there are available fallback endpoints for the request.
+func (sr *ServiceRouter) CanFallback(req *types.RequestContext) bool {
+	fallbackAttempt := req.RequestStats.FallbackAttempt
+	return len(sr.fallbackConfigs) > 0 && fallbackAttempt < len(sr.fallbackConfigs)
 }
 
 // Fallback gets fallback endpoint from fallback configs
