@@ -1,6 +1,6 @@
 # About
 
-Llumnix is a full-stack solution for distributed LLM inference serving. It has been a key part of the LLM serving infrastructure of [PAI-EAS](https://help.aliyun.com/zh/pai/user-guide/overview-2?spm=a2c4g.11174283.help-menu-30347.d_3_3_0.3416192348t6Fw), a cloud-native inference serving platform on Alibaba Cloud, supporting production-grade inference deployments.
+Llumnix is a full-stack solution for distributed LLM inference serving. It has been a key part of the LLM serving infrastructure of [Alibaba Cloud PAI-EAS](https://help.aliyun.com/zh/pai/user-guide/overview-2?spm=a2c4g.11174283.help-menu-30347.d_3_3_0.3416192348t6Fw), a cloud-native inference serving platform, supporting production-grade inference deployments.
 
 Llumnix provides key functionalities for modern distributed serving deployments (e.g., PD disaggregation, wide EP), such as LLM-specialized request gateway, intelligent and dynamic scheduling, high-performance KV cache transfer/storage support, etc. With a scheduler + rescheduler architecture and white-box scheduling design, Llumnix achieves fully dynamic request scheduling and pushes the performance of inference engines to the limit.
 

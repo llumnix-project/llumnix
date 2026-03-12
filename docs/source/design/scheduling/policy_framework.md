@@ -1,19 +1,19 @@
 # Policy Framework Overview
 
-llumnix scheduling policies follow a **metrics → filters → selectors** pipeline.
+Llumnix scheduling policies follow a **metrics → filters → selectors** pipeline.
 
 - **Per-infer-mode composition**: each policy defines separate metrics, filters, and selector for `prefill`, `decode`, and `neutral` infer types.
 - **Execution flow**: the dispatcher (`DispatchPolicy.Schedule`) builds a cluster view — a snapshot of all instance states and metadata grouped by infer type, sourced from CMS (Cluster Metadata Store, enabled in full-mode) or LRS (Local Realtime State, enabled in lite-mode) — then for each infer type:
   1. **Metric computation**: computes configured metrics for every candidate instance.
-  2. **Filtering**: removes unsuitable candidate instances (with a fallback pass if necessary).
-  3. **Selection**: picks the target instance based on metric comparison.
-- **Policy families**: llumnix provides **load-balance** and **slo** policies, running in **full-mode** or **lite-mode**. Cache-aware scheduling, predictor-enhanced scheduling, and rescheduling are enabled via feature flags.
+  2. **Filtering**: removes unsuitable candidate instances (with a fallback pass if no candidates found).
+  3. **Selection**: picks the target instance, e.g., based on metric comparison.
+- **Policy families**: Llumnix provides **load-balance** and **slo** policies, running in **full-mode** or **lite-mode**. Cache-aware scheduling, predictor-enhanced scheduling, and rescheduling are enabled via feature flags.
 
 ---
 
 ## Scheduling modes: full-mode and lite-mode
 
-- **Full-mode** deploys a **llumlet** component alongside each inference engine and requires a **CMS** service. llumlet collects load data directly from the engine and writes it to CMS, giving the scheduler precise instance states (KV cache usage, schedulability). This requires patching vLLM, so a custom inference image (patched vLLM + llumnix) is needed.
+- **Full-mode** deploys a **llumlet** component alongside each inference engine and requires a **CMS** service. llumlet collects load data directly from the engine and writes it to CMS, giving the scheduler precise instance states (e.g., KV cache usage, schedulability). This requires patching vLLM, so a custom inference image (patched vLLM + llumnix) is needed.
   - Key advantage: engine-internal state is visible to the scheduler. For example, when prefix caching is enabled, shared prefix cache reduces actual load within an instance — only the engine can report this; the scheduler cannot infer it from request dispatch.
   - Other advantage: llumlet also enables **live request migration** between instances for load balancing or failover.
 
@@ -28,7 +28,7 @@ graph LR
 ```
 
 - **Lite-mode** requires no vLLM patching and no CMS; it works with official vLLM images. The gateway and scheduler track instance load (request count, token count) via request dispatch and streaming responses, maintained as local real-time state (LRS).
-  - Trade-off: load data is less accurate. Features depending on engine-internal state (prefix cache sharing, exact KV cache usage) are unavailable. Inaccurate load data degrades the quality of scheduling, rescheduling, and advanced scheduling features, resulting in suboptimal resource utilization.
+  - Trade-off: load data is less accurate. Features depending on engine-internal state (prefix cache sharing, exact KV cache usage) are unavailable. Inaccurate load data could degrade the quality of scheduling, rescheduling, and advanced scheduling features, resulting in suboptimal resource utilization.
 
 ```{mermaid}
 graph LR
@@ -185,7 +185,7 @@ These features require **full-mode scheduling** (`--enable-full-mode-scheduling`
   - Uses latency predictors to estimate completion prefill tokens since last instance status update and adjusts `all_prefills_tokens_num` accordingly.
 
 - **Rescheduling (`--enable-rescheduling`)**
-  - Periodically migrates requests from overloaded instances on a background reschedule.
+  - Launches the rescheduler process for continuous request migration (see [Rescheduler](../rescheduler.md) for details).
 
 ---
 
@@ -210,6 +210,6 @@ These features require **full-mode scheduling** (`--enable-full-mode-scheduling`
 
 ## Future work
 
-- **More advanced scheduling features**: with the general-purpose **metrics + filters + selectors** framework in place, llumnix will open-source more advanced features built on top of it, including **elastic EP** and **adaptive PD**.
+- **More advanced scheduling features**: with the general-purpose **metrics + filters + selectors** framework in place, Llumnix will open-source more advanced features built on top of it, including **elastic EP** and **adaptive PD**.
 
 - **YAML-based policy configuration**: users will be able to define metrics, filters, and selectors via YAML, freely composing custom scheduling policies without writing code and recompiling.

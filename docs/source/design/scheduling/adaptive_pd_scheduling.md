@@ -42,15 +42,15 @@ Since reserved instances may crash or become unavailable, the scheduler attempts
 
 ## Scheduling Strategy
 
-Decode Instance Selection
+### Decode Instance Selection
 
 The scheduler selects the instance with **the highest predicted TPOT that still satisfies the TPOT SLO** (bin-packing). If no such instance exists, the scheduler attempts to convert a prefill-only instance (excluding the reserved prefill) with the lowest predicted TTFT to serve as a decode instance. If no instance can satisfy the TPOT SLO under any assignment, the scheduler falls back to load balancing across all decode instances.
 
-Prefill Instance Selection
+### Prefill Instance Selection
 
 The scheduler selects the instance with the lowest predicted TTFT among instances with no active decode workload. Because one instance is always reserved for prefill, there is always at least one eligible candidate.
 
-Integration with SLO Scheduling Policy
+### Integration with SLO Scheduling Policy
 
 Adaptive PD integrates with the SLO scheduling policy, but differs from the standard SLO policy in one key way: **rather than rejecting requests that cannot meet SLO targets, it always returns an instance**. Specifically, Adaptive PD dynamically reassigns instance roles to satisfy SLOs whenever possible, and degrades gracefully when they cannot be met. When SLO attainment deviates from the expected value for an extended period, external infrastructure is responsible for scaling out or in accordingly. In a future release, a configurable argument will be added to allow users to choose whether to reject requests that fail to meet SLO targets.
 
@@ -90,7 +90,7 @@ For adaptive PD related rescheduling, only decode requests will be migrated and 
 
 ## Performance
 
-Setup: Qwen3-32B, TP=1, evaluated on [the Azure LLM Inference Trace (Conversational) dataset](https://github.com/Azure/AzurePublicDataset/blob/master/data/AzureLLMInferenceTrace_conv.csv), deployed on 8 vLLM instances.
+Setup: Qwen3-32B, TP=1 (H20), evaluated on [the Azure LLM Inference Trace (Conversational) dataset](https://github.com/Azure/AzurePublicDataset/blob/master/data/AzureLLMInferenceTrace_conv.csv), deployed on 8 vLLM instances.
 
 SLO targets: TPOT ≤ 50 ms, TTFT ≤ 6000 ms.
 
