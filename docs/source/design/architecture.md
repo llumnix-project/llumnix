@@ -1,10 +1,7 @@
 # Architecture Overview
 
 ## System Diagram
-<div align="center">
-  <img src="../image/architecture.png" width="80%" />
-</div>
-
+![architecture](../image/architecture.png)
 
 ### Components
 #### 1. LlumSched
