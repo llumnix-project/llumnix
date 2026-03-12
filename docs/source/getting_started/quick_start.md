@@ -9,7 +9,7 @@ This quick start guides you through installing and deploying Llumnix on a Kubern
 - **Kubernetes cluster**: A running Kubernetes cluster with sufficient resources (including GPUs if you plan to run inference workloads).
 - **LWS CRD installed (optional)**: The LeaderWorkerSet (LWS) custom resource definitions are required for wide EP (expert-parallel) workloads. See the official installation guide at `https://lws.sigs.k8s.io/docs/installation/`.
 - **Sufficient permissions**: You must have permissions to install or update CRDs and cluster roles during infrastructure setup; after prerequisites are in place, namespace editor permissions are typically sufficient for deploying model servers.
-- **kubectl configured locally**: `kubectl` (Kubernetes CLI) installed on your local machine with a kubeconfig that allows access to the target Kubernetes cluster. For installation instructions, see the [Kubernetes tools documentation](https://kubernetes.io/docs/tasks/tools/).
+- **Kubectl configured locally**: `kubectl` (Kubernetes CLI) installed on your local machine with a kubeconfig that allows access to the target Kubernetes cluster. For installation instructions, see the [Kubernetes tools documentation](https://kubernetes.io/docs/tasks/tools/).
 
 ---
 

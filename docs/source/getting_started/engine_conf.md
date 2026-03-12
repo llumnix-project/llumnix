@@ -12,13 +12,13 @@ It will trigger the internal initialization sequence within the vLLM e
 
 1.  `llumlet_proxy` Initialization: vLLM will initialize the `llumlet_proxy`, which acts as the critical bridge between the inference engine and the Llumix management layer.
     
-2.  `llumlet` Child Process: vLLM will spawn the `llumlet` child process. This dedicated process handles all heavy-lifting tasks, such as request migration and heartbeat reporting.
+2.  `llumlet` Child Process: vLLM will spawn the `llumlet` child process. This dedicated process handles all heavy-lifting tasks, such as request migration and heartbeat reporting.
     
 This is the default configuration for full-mode Scheduling.
 
 ## CMS Client Setup
 
-Since instance metrics and status are reported to the CMS, the engine-side (Llumlet) must be configured with the CMS service address and authentication details after CMS initialization.
+Since instance metrics and status are reported to the CMS, the engine-side (Llumlet) must be configured with the CMS service address and authentication details after CMS initialization.
 
 These settings are typically passed to the container or process via environment variables. Please ensure the following variables are set on the engine side:
 
@@ -64,9 +64,9 @@ env:
 ```
 *   `LLUMNIX_STATUS_PUSH_INTERVAL`
     
-    *   Description: Determines how often (in seconds) Llumlet pushes real-time instance status to the CMS.
+    *   Description: Determines how often (in seconds) Llumlet pushes real-time instance status to the CMS.
         
-    *   Impact: A smaller value allows the global scheduler to make highly accurate load-balancing decisions, but increases network I/O. 
+    *   Impact: A smaller value allows the global scheduler to make highly accurate load-balancing decisions, but increases network I/O.
         
 *    `LLUMNIX_METADATA_PUSH_INTERVAL`
     
@@ -76,7 +76,7 @@ env:
         
 *   `LLUMNIX_CMS_EXPIRED_TIME`
     
-    *   Description: The Time-To-Live (TTL) for the instance's metadata and status in the CMS. If the CMS does not receive an update within this timeframe, it will consider the Llumlet instance as "dead" or disconnected and automatically remove it from the scheduling pool.
+    *   Description: The Time-To-Live (TTL) for the instance's metadata and status in the CMS. If the CMS does not receive an update within this timeframe, it will consider the Llumlet instance as "dead" or  disconnected and automatically remove it from the scheduling pool.
         
     *   Impact: Acts as a heartbeat timeout threshold for fault tolerance. 
         
@@ -112,21 +112,21 @@ env:
  
 *   `LLUMNIX_DETAILED_MIG_STATUS`:
     
-    *   Description: A boolean flag (`True` / `False`) that dictates whether Llumlet should calculate and report fine-grained  migration metrics (token counts and KV cache usage ratios) to CMS, rather than just basic request counts.
+    *   Description: A boolean flag (`True` / `False`) that dictates whether Llumlet should calculate and report fine-grained migration metrics (token counts and KV cache usage ratios) to CMS, rather than just basic request counts.
         
     *   Impact & Behavior: This variable does not trigger migrations; instead, it acts as a detailed visibility and local safeguard mechanism.
         
         *   Enhanced Status Reporting: When `True`, the `InstanceStatus` pushed to the CMS is enriched with detailed capacity fields (e.g., `num_available_migrate_in_tokens`, `available_kv_cache_usage_ratio_migrate_in`). 
             
-        *   Local Execution Safeguard: When receiving a migration command from the scheduler, Llumlet performs a strict local pre-check. If detailed status is enabled, it will actively reject the outgoing migration (raising a `NotEnoughSlotsError`) if the parameters exceed the local token or KV cache migration-out limits.
+        *   Local Execution Safeguard: When receiving a migration command from the scheduler, Llumlet performs a strict local pre-check. If detailed status is enabled, it will actively reject the outgoing migration (raising a `NotEnoughSlotsError`) if the parameters exceed the local token or KV cache migration-out limits.
             
-        *   When set to `False`: Llumlet minimizes computational overhead by only reporting and validating coarse-grained _Request Slots_ (`num_reqs`).
-            
+        *   When set to `False`: Llumlet minimizes computational overhead by only reporting and validating coarse-grained _Request Slots_ (`num_reqs`).
+                    
 *   `LLUMNIX_USED_METRICS`
     
-    *   Description: Specifies the exact list of high-level metrics that Llumlet should collect and report. The value should be a string of metric names separated by commas (`,`) or semicolons (`;`).
+    *   Description: Specifies the exact list of high-level metrics that Llumlet should collect and report. The value should be a string of metric names separated by commas (`,`) or semicolons (`;`).
         
-    *   Impact & Behavior: This configuration acts as a performance optimization filter (Status Mask). Llumlet intelligently maps your requested metrics to their underlying low-level engine states, generating a boolean mask. It only serializes and transmits the required fields, significantly reducing the network payload.
+    *   Impact & Behavior: This configuration acts as a performance optimization filter (Status Mask). Llumlet intelligently maps your requested metrics to their underlying low-level engine states, generating a boolean mask. It only serializes and transmits the required fields, significantly reducing the network payload.
         
     *   Supported Metrics Reference：Below is the definitive list of valid metric keys you can use in the `LLUMNIX_USED_METRICS` environment variable. You can combine them based on your scheduling algorithms
         
@@ -136,7 +136,7 @@ env:
 	| `all` | Bypasses the mask and collects every available status field. |
 	| `kv_cache_usage_ratio_projected` | Calculates the KV cache usage by analyzing currently used tokens. |
 	| `decode_batch_size` | Tracks the total number of requests currently in the decode phase. |
-	| `adaptive_decode_batch_size` | Similar to `decode_batch_size`, but typically utilized by adaptive prefill-decode schedule mode. |
+	| `adaptive_decode_batch_size` | Similar to `decode_batch_size`, but typically utilized by adaptive prefill-decode schedule mode. |
 	| `num_waiting_requests` | A simple counter for requests that are queued and waiting to be processed. |
 	| `num_requests` | The total aggregate of all requests in the instance. |
 	| `all_prefills_tokens_num` | The total number of tokens currently in the prefill phase. |
@@ -188,7 +188,7 @@ Key Parameter Descriptions:
 
 	* If the instance's `role` is `"decode"`: `backend` can be set to `"kvt+migration"`. This specific setting explicitly enables KV Cache migration.
 
-*  `kv_connector_extra_config.naming_url`: Specifies a public file or service that enables the connector to discover the URLs of other instances in the system. This allows for inter-instance communication and coordination.
+*  `kv_connector_extra_config.naming_url`: Specifies a public file or service that enables the connector to discover the URLs of other instances in the system. This allows for inter-instance communication and coordination.
 
 *  `kv_connector_extra_config.kvt_inst_id`: Sets a unique identifier for the KV Transfer instance.
 
@@ -254,4 +254,4 @@ asyncio.run(trigger_manual_migration())
 ```
 
   
-`dst_engine_port` represents the target engine's KV Transfer (KVT) port (metadata field `kvt_port`), which can be obtained from the destination engine's metadata.
+Where `dst_engine_port` represents the target engine's KV Transfer (KVT) port (metadata field `kvt_port`), which can be obtained from the destination engine's metadata.

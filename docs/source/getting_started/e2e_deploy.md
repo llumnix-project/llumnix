@@ -78,7 +78,7 @@ Resource requirements differ by mode and configuration:
 | **PD-KVS** | prefill Pod | 1 | 16 | 128 G |
 | **PD-KVS** | decode Pod | 1 | 16 | 128 G |
 
-> Note： These are the default values from the example configurations.
+> Note：These are the default values from the example configurations.
 
 #### CPU Nodes (for Gateway / Scheduler / Redis)
 
@@ -229,8 +229,9 @@ PD-KVS mode requires RDMA hardware for KV Cache transfer:
 	```
 
 3. Update device_name in prefill.yaml to match your hardware:
-   
+  ```yaml
    "device_name": "erdma_0"   # Replace with your actual device name
+  ```
 
 
 ### 6.2 Default Resource Requirements
