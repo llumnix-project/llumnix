@@ -61,6 +61,7 @@ jobs:
       - name: Install protoc
         run: |
           echo "$HOME/.local/bin" >> $GITHUB_PATH
+          export GOPROXY=https://goproxy.cn,https://goproxy.io,direct
           if ! command -v protoc &> /dev/null && ! [ -x "$HOME/.local/bin/protoc" ]; then
             PB_VER=28.3
             curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${PB_VER}/protoc-${PB_VER}-linux-x86_64.zip"
