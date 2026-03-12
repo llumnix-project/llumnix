@@ -1,9 +1,9 @@
 
 # Deployment Guide
 
-## 1. Deployment Modes Overview
+## Deployment Modes Overview
 
-### 1.1 Mode Comparison
+### Mode Comparison
 
 | Mode | Prefill/Decode | KV Transfer | Scheduler | Best For |
 |------|---------------|-------------|-----------|---------|
@@ -11,7 +11,7 @@
 | **PD** | PD disaggregation | HybridConnector | Required | Production, PD disaggregation |
 | **PD-KVS** | PD disaggregation  | HybridConnector  | Required | Production, prefix caching, cache-aware scheduling |
 
-### 1.2 Scheduling Variants
+### Scheduling Variants
 
 | Directory | Scheduling | Routing | Scheduler Pod | Best For |
 |-----------|-----------|---------|--------------|---------|
@@ -36,9 +36,9 @@
 > [Llumlet Configuration Guide](./engine_conf.md).
 
 
-## 2. Prerequisites
+## Prerequisites
 
-### 2.1 Cluster Requirements
+### Cluster Requirements
 
 | Component | Requirement |
 |-----------|-------------|
@@ -64,7 +64,7 @@ yum install gettext
 brew install gettext && brew link --force gettext
 ```
 
-### 2.2 Node Resource Requirements
+### Node Resource Requirements
 
 #### GPU Nodes
 
@@ -87,9 +87,9 @@ Resource requirements differ by mode and configuration:
 | CPU | 1 core |
 | Memory | 1 Gi |
 
-## 3. Before You Begin
+## Before You Begin
 
-### 3.1 Install LeaderWorkerSet CRD
+### Install LeaderWorkerSet CRD
 
 All deployment modes depend on the **LeaderWorkerSet CRD**. This must be installed regardless of which mode you choose.
 
@@ -105,7 +105,7 @@ kubectl get crd leaderworkersets.leaderworkerset.x-k8s.io
 # leaderworkersets.leaderworkerset.x-k8s.io    2026-xx-xx
 ```
 
-### 3.2 Verify GPU Node Availability
+### Verify GPU Node Availability
 
 ```bash
 kubectl get nodes -o custom-columns=\
@@ -120,11 +120,11 @@ MEM:.status.allocatable.memory"
 ```
 
 
-## 4. Neutral Mode
+## Neutral Mode
 
 In neutral mode, each Pod runs both prefill and decode within a single vLLM instance. This is the simplest deployment mode.
 
-### 4.1 Deploy
+### Deploy
 
 ```bash
 cd deploy
@@ -139,7 +139,7 @@ cd deploy
 ./group_deploy.sh llumnix neutral/lite-mode-scheduling/round-robin
 ```
 
-### 4.2 Deployed Components
+### Deployed Components
 
 | Component | full-mode/load-balance | lite-mode/load-balance | lite-mode/round-robin |
 |-----------|----------------------|----------------------|----------------------|
@@ -148,7 +148,7 @@ cd deploy
 | Gateway | ✅ | ✅ | ✅ |
 | Scheduler | ✅ | ✅ | ❌ |
 
-### 4.3 Expected Output
+### Expected Output
 
 ```
 Using repository: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix
@@ -167,25 +167,25 @@ neutral-0           0/2     Running   gpu-node
 > Note: `neutral-0` will show `0/2 Running` while vLLM loads the model. This typically takes a few minutes.
 
 
-## 5. PD Mode
+## PD Mode
 
 In PD mode, Prefill and Decode run in separate Pods. In the provided example (`deploy/pd/full-mode-scheduling/load-balance/`), KV Cache is transferred using **HybridConnector** with the **kvt** backend.
 
-### 5.1 Default Resource Requirements
+### Default Resource Requirements
 
 | Component | GPU | CPU | Memory |
 |-----------|-----|-----|--------|
 | Prefill Pod | 4 (`TP_SIZE=4`) | 32 | 256 G |
 | Decode Pod | 4 (`TP_SIZE=4`) | 32 | 256 G |
 
-### 5.2 Deploy
+### Deploy
 
 ```bash
 cd deploy
 ./group_deploy.sh llumnix pd/full-mode-scheduling/load-balance
 ```
 
-### 5.3 Deployed Components
+### Deployed Components
 
 | Component | Description |
 |-----------|-------------|
@@ -195,7 +195,7 @@ cd deploy
 | Gateway | PD disagg protocol: `vllm-kvt` |
 | Scheduler | Full-mode scheduling with CMS Redis |
 
-### 5.4 Expected Output
+### Expected Output
 
 ```
 NAME                READY   STATUS    NODE
@@ -208,11 +208,11 @@ scheduler-xxx       1/1     Running   node-a
 > Note: `prefill-0` and `decode-0 ` will show `0/2 Running` while vLLM loads the model. This typically takes a few minutes.
 
 
-## 6. PD-KVS Mode
+## PD-KVS Mode
 
 PD-KVS mode extends PD mode by introducing a **KV Cache Store** (backed by Mooncake) for centralized KV Cache management. This enables **prefix caching** and **cache-aware scheduling**.
 
-### 6.1 Additional Requirements
+### Additional Requirements
 
 PD-KVS mode requires RDMA hardware for KV Cache transfer:
 1. An RDMA-capable network adapter must be present.
@@ -234,7 +234,7 @@ PD-KVS mode requires RDMA hardware for KV Cache transfer:
   ```
 
 
-### 6.2 Default Resource Requirements
+### Default Resource Requirements
 
 | Component | GPU | CPU | Memory |
 |-----------|-----|-----|--------|
@@ -244,7 +244,7 @@ PD-KVS mode requires RDMA hardware for KV Cache transfer:
 
 > ⚠️ The Mooncake Master Pod does **not** require GPU, but has significant CPU and memory requirements.
 
-### 6.3 Deploy
+### Deploy
 
 ```bash
 cd deploy
@@ -253,7 +253,7 @@ cd deploy
 
 > Note: PD-KVS mode requires a vLLM image built with Mooncake support. Build it with: `bash scripts/build_vllm_release.sh --include_mooncake` (optionally add `--tag <tag>` for a fixed tag). The default image tag is `mooncake-<timestamp>`. When deploying with custom images, pass that tag via `--mooncake-vllm-tag`.
 
-### 6.4 Deployed Components
+### Deployed Components
 
 | Component | Description |
 |-----------|-------------|
@@ -264,7 +264,7 @@ cd deploy
 | Gateway | PD disagg protocol: `vllm-kvt` |
 | Scheduler | Full-mode scheduling + cache-aware scheduling via Mooncake metadata |
 
-### 6.5 Expected Output
+### Expected Output
 
 ```
 NAME                        READY   STATUS    NODE
@@ -276,9 +276,9 @@ redis-xxx                   1/1     Running   node-a
 scheduler-xxx               1/1     Running   node-a
 ```
 
-## 7. Configuration Reference
+## Configuration Reference
 
-### 7.1 Changing the Model
+### Changing the Model
 
 Update the `vllm serve` command in the respective yaml file and update the tokenizer path in `gateway.yaml`.
 
@@ -315,7 +315,7 @@ args:
 - "/tokenizers/your-org/your-model-name"   # ← Replace here
 ```
 
-### 7.2 Using a Custom Registry
+### Using a Custom Registry
 
 Pass `--repository` and each component's image tag to the deploy script. For PD-KVS mode, also pass `--mooncake-vllm-tag` (the tag of the image built with `build_vllm_release.sh --include_mooncake`).
 
@@ -339,7 +339,7 @@ export DISCOVERY_IMAGE_TAG="20260101-150000"
 
 ./group_update.sh llumnix neutral/full-mode-scheduling/load-balance
 ```
-### 7.3 Advanced: Llumlet Configuration
+### Advanced: Llumlet Configuration
 
 The vLLM Pods in full-mode scheduling run an embedded **Llumlet** process,
 which acts as the bridge between the vLLM inference engine and the Llumix
@@ -353,9 +353,9 @@ The default environment variables in the provided YAML files are sufficient
 for most deployments. If you need to customize the following, refer to the
 [Llumlet Configuration Guide](./engine_conf.md):
 
-## 8. Update and Teardown
+## Update and Teardown
 
-### 8.1 Update a Running Deployment
+### Update a Running Deployment
 
 After modifying any yaml files, apply changes using:
 
@@ -373,7 +373,7 @@ export DISCOVERY_IMAGE_TAG="20260302-203317"
 ./group_update.sh llumnix neutral/full-mode-scheduling/load-balance
 ```
 
-### 8.2 Delete a Deployment
+### Delete a Deployment
 
 ```bash
 ./group_delete.sh llumnix
