@@ -52,7 +52,7 @@ Beyond its core components, Llumnix provides the following features:
    - [Rescheduler](./scheduler/rescheduler.md) for continuous migration
 
 2. **Advanced scheduling policies** for modern distributed serving
-   - Extreme load balancing for PD+EP: migration-enhanced DPLB, predictor-based prefill scheduling, [SLO-based scheduling](./scheduler/slo_aware_scheduling.md)
+   - Extreme load balancing for PD+EP: migration-enhanced DPLB, [Predictor-Enhanced Scheduling](./scheduler/predictor_enhanced_scheduling.md), [SLO-based scheduling](./scheduler/slo_aware_scheduling.md)
    - Precise [Cache-aware Scheduling](./scheduler/cache_aware_scheduling.md)
    - [Adaptive PD disaggregation](./scheduler/adaptive_pd_scheduling.md): taming instantaneous P-D load fluctuation
 
