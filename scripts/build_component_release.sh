@@ -5,6 +5,7 @@ TARGET=""
 PUSH_IMAGE=false
 CUSTOM_REPOSITORY=""
 CUSTOM_TAG=""
+BASE_IMAGE=""
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -12,7 +13,8 @@ while [[ "$#" -gt 0 ]]; do
         --push) PUSH_IMAGE=true ;;
         --repository) CUSTOM_REPOSITORY="$2"; shift ;;
         --tag) CUSTOM_TAG="$2"; shift ;;
-        *) echo "Unknown parameter: $1"; echo "Usage: $0 [gateway|scheduler|discovery] [--push] [--repository <your-registry>/<your-repo>] [--tag <image-tag>]"; exit 1 ;;
+        --base-image) BASE_IMAGE="$2"; shift ;;
+        *) echo "Unknown parameter: $1"; echo "Usage: $0 [gateway|scheduler|discovery] [--push] [--repository <your-registry>/<your-repo>] [--tag <image-tag>] [--base-image <base-image>]"; exit 1 ;;
     esac
     shift
 done
@@ -27,10 +29,16 @@ else
     REPOSITORY="$DEFAULT_REPOSITORY"
 fi
 
+BUILD_ARGS=""
+if [ -n "$BASE_IMAGE" ]; then
+    BUILD_ARGS="--build-arg BASE_IMAGE=${BASE_IMAGE}"
+fi
+
 echo "Building ${TARGET} image..."
 
 DOCKER_BUILDKIT=1 docker build \
     --network=host \
+    ${BUILD_ARGS} \
     -t ${REPOSITORY}:${IMAGE_TAG} \
     -f ./container/Dockerfile.${TARGET} \
     .
