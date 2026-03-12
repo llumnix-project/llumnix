@@ -44,8 +44,7 @@ ENV CUDA_HOME=/usr/local/cuda \
 
 # Install blade-kvt
 COPY ./scripts /tmp/scripts
-RUN  bash /tmp/scripts/install/install_blade_kvt.sh
-
+RUN bash /tmp/scripts/install/install_blade_kvt.sh
 
 RUN if [ "$INCLUDE_MOONCAKE" = "true" ]; then \
         pip uninstall -y mooncake-transfer-engine \

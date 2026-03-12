@@ -3,7 +3,7 @@ kind: LeaderWorkerSet
 metadata:
   name: decode
 spec:
-  replicas: 1
+  replicas: 2
   leaderWorkerTemplate:
     size: 1
     workerTemplate:
@@ -38,28 +38,16 @@ spec:
              #################
              # RUN vLLM decode worker
              #################
-             START_RANK=$(( ${LWS_WORKER_INDEX:-0} * DP_SIZE_LOCAL ))
-
-             # --data-parallel-hybrid-lb: Use exernal load balancing across nodes, and internal load balancing within a node
-             # --enable-expert-parallel: Use TPxDP in attention, EP in MoE layers
-             # --async-scheduling: Reduce white space between engine steps
-             # --enable-dbo: Dual batch overlap (DBO) overlaps compute with collective communication.
-             # --enable-eplb:  Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU Divisibility constraint: num_routed_experts (256 for DSv3) + num_redundant_experts must be divisible by the number of GPUs.
 
              CUDA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES} exec vllm serve \
-                Qwen/Qwen3-30B-A3B \
+                Qwen/Qwen3-32B \
                 --port 8000 \
                 --trust-remote-code \
-                --enable-expert-parallel \
-                --tensor-parallel-size $TP_SIZE \
-                --data-parallel-size $((LWS_GROUP_SIZE * DP_SIZE_LOCAL)) \
-                --data-parallel-size-local $DP_SIZE_LOCAL \
-                --data-parallel-address ${LWS_LEADER_ADDRESS} \
-                --data-parallel-rpc-port 5555 \
-                --data-parallel-start-rank $START_RANK \
-                --async-scheduling \
-                --kv-transfer-config '{"kv_connector": "HybridConnector", "kv_role": "kv_consumer", "kv_connector_extra_config": {"backend": "kvt", "rpc_port": 28000}}'\
-                --gpu-memory-utilization 0.8
+                --max-model-len 16384 \
+                --enforce-eager \
+                --tensor-parallel-size 1 \
+                --kv-transfer-config '{"kv_connector": "HybridConnector", "kv_role": "kv_consumer", "kv_connector_extra_config": {"backend": "kvt+migration", "rpc_port": 28000}}' \
+                --gpu-memory-utilization 0.85
 
           env:
           # Redis configuration for Llumnix
@@ -85,11 +73,9 @@ spec:
           # kvt args
           - name: MC_MTU
             value: "1024"
-
-          - name: DP_SIZE_LOCAL
+          - name: VLLM_ENABLE_BYPASS_TASK
             value: "1"
-          - name: TP_SIZE
-            value: "4"
+
           - name: TRITON_LIBCUDA_PATH
             value: /usr/lib64
           - name: VLLM_SKIP_P2P_CHECK
@@ -162,12 +148,12 @@ spec:
             limits:
               ephemeral-storage: 256Gi
               memory: 256Gi
-              nvidia.com/gpu: "4"
+              nvidia.com/gpu: "1"
             requests:
-              cpu: 32
+              cpu: 8
               ephemeral-storage: 256Gi
               memory: 256Gi
-              nvidia.com/gpu: "4"
+              nvidia.com/gpu: "1"
         - name: discovery
           image: ${REPOSITORY}/discovery:${DISCOVERY_IMAGE_TAG}
           command:

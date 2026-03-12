@@ -1,0 +1,128 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: scheduler
+  labels:
+    app: scheduler
+    role: scheduler
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8088
+      targetPort: 8088
+      protocol: TCP
+      name: http
+  selector:
+    app: scheduler
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scheduler
+  labels:
+    app: scheduler
+    role: scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scheduler
+  template:
+    metadata:
+      labels:
+        app: scheduler
+        role: scheduler
+    spec:
+      terminationGracePeriodSeconds: 300
+
+      initContainers:
+      - name: download-profiling-data
+        image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/ubuntu:22.04
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          apt-get update && apt-get install -y wget && mkdir -p /profiling/Qwen3-32B-h20 && \
+          wget https://llumnix.oss-cn-beijing.aliyuncs.com/profiling/Qwen3-32B-h20/ttft.json -O /profiling/Qwen3-32B-h20/ttft.json && \
+          wget https://llumnix.oss-cn-beijing.aliyuncs.com/profiling/Qwen3-32B-h20/tpot.json -O /profiling/Qwen3-32B-h20/tpot.json
+        volumeMounts:
+        - name: profiling-data
+          mountPath: /profiling
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
+      containers:
+      - name: scheduler
+        image: ${REPOSITORY}/scheduler:${SCHEDULER_IMAGE_TAG}
+        imagePullPolicy: Always
+        command: ["/usr/local/bin/scheduler"]
+        args:
+        - "--port"
+        - "8088"
+        - "-v"
+        - "4"
+        - "--host"
+        - "0.0.0.0"
+        - "--llm-backend-discovery"
+        - "redis"
+        - "--discovery-redis-host"
+        - "redis"
+        - "--discovery-redis-port"
+        - "6379"
+        - "--scheduling-policy"
+        - "slo"
+        - "--cms-redis-host"
+        - "redis"
+        - "--cms-redis-port"
+        - "6379"
+        - "--cms-pull-status-interval-ms"
+        - "5000"
+        - "--cms-pull-metadata-interval-ms"
+        - "10000"
+        - "--ttft-slo"
+        - "6000"
+        - "--tpot-slo"
+        - "50"
+        - "--ttft-slo-dispatch-threshold"
+        - "0.9"
+        - "--tpot-slo-dispatch-threshold"
+        - "0.9"
+        - "--ttft-profiling-data-path"
+        - "/profiling/Qwen3-32B-h20/ttft.json"
+        - "--tpot-profiling-data-path"
+        - "/profiling/Qwen3-32B-h20/tpot.json"
+        - "--enable-full-mode-scheduling=true"
+        ports:
+        - containerPort: 8088
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8088
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8088
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: profiling-data
+          mountPath: /profiling
+          readOnly: true
+      volumes:
+      - name: profiling-data
+        emptyDir: {}

@@ -6,10 +6,12 @@
 ### Mode Comparison
 
 | Mode | Prefill/Decode | KV Transfer | Scheduler | Best For |
-|------|---------------|-------------|-----------|---------|
+|------|---------------|-------------|-----------|------|
 | **Neutral** | Combined | N/A | Optional | Getting started, simple deployments |
 | **PD** | PD disaggregation | HybridConnector | Required | Production, PD disaggregation |
 | **PD-KVS** | PD disaggregation  | HybridConnector  | Required | Production, prefix caching, cache-aware scheduling |
+| **SLO-Aware** | PD disaggregation | HybridConnector | Required | Latency-sensitive workloads with TTFT/TPOT SLO enforcement |
+| **SLO-Aware Adaptive-PD** | PD disaggregation | HybridConnector | Required | SLO enforcement with dynamic PD ratio adjustment and migration |
 
 ### Scheduling Variants
 
@@ -77,6 +79,8 @@ Resource requirements differ by mode and configuration:
 | **PD** | decode Pod | 4 | 32 | 256 G | 
 | **PD-KVS** | prefill Pod | 1 | 16 | 128 G |
 | **PD-KVS** | decode Pod | 1 | 16 | 128 G |
+| **SLO-Aware** | prefill Pod | 1 | 8 | 256 G |
+| **SLO-Aware** | decode Pod | 1 | 8 | 256 G |
 
 > Note：These are the default values from the example configurations.
 
@@ -153,7 +157,7 @@ cd deploy
 ```
 Using repository: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix
 Gateway tag:      20260302-200550
-Scheduler tag:    20260302-200658
+Scheduler tag:    20260312-204249
 vLLM tag:         20260130-105854
 Creating namespace: llumnix
 ...
@@ -276,6 +280,108 @@ redis-xxx                   1/1     Running   node-a
 scheduler-xxx               1/1     Running   node-a
 ```
 
+## SLO-Aware Mode
+
+SLO-Aware base mode targets **latency-sensitive production workloads** where Time-to-First-Token (TTFT) and Time-per-Output-Token (TPOT) Service Level Objectives (SLOs) must be satisfied. But in adaptive PD mode, the Scheduler always returns an instance even if it does not satisfy the SLOs. It builds on PD disaggregation (the same HybridConnector + kvt KV transfer as PD mode), but the Scheduler uses an SLO-driven policy backed by per-model profiling data to make dispatch decisions.
+
+Two sub-variants are provided:
+
+| Variant | Directory | Adaptive PD | Migration | Best For |
+|---------|-----------|-------------|-----------|----------|
+| **Base** | `slo-aware/base` | ❌ | ❌ | SLO enforcement with fixed PD ratio |
+| **Adaptive-PD** | `slo-aware/adaptive-pd` | ✅ | ✅ | SLO constraints with dynamic PD ratio and request migration |
+
+### Additional Requirements
+
+SLO-Aware mode requires RDMA hardware for KV Cache transfer (same as PD mode):
+
+1. An RDMA-capable network adapter must be present. Verify with:
+   ```bash
+   ls /sys/class/infiniband/
+   # Example output on Alibaba Cloud: erdma_0
+   ```
+
+2. The InfiniBand device directory must exist:
+   ```bash
+   ls /dev/infiniband/
+   # Expected: rdma_cm  uverbs0  ...
+   ```
+
+### Default Resource Requirements
+
+| Component | GPU | CPU | Memory | Replicas |
+|-----------|-----|-----|--------|----------|
+| Prefill Pod | 1 (`TP_SIZE=1`) | 8 | 256 Gi | 2 |
+| Decode Pod | 1 (`TP_SIZE=1`) | 8 | 256 Gi | 2 |
+
+### Deploy
+
+```bash
+cd deploy
+
+# SLO-Aware base (fixed PD ratio)
+./group_deploy.sh llumnix slo-aware/base
+
+# SLO-Aware with Adaptive PD (dynamic PD ratio + migration)
+./group_deploy.sh llumnix slo-aware/adaptive-pd
+```
+
+### Deployed Components
+
+| Component | Description |
+|-----------|-------------|
+| Redis | Service discovery + CMS state |
+| Prefill Pod | vLLM with `HybridConnector`, role `kv_producer` (kvt backend), `LLUMNIX_INSTANCE_TYPE=prefill` |
+| Decode Pod | vLLM with `HybridConnector`, role `kv_consumer` (kvt backend), `LLUMNIX_INSTANCE_TYPE=decode` |
+| Gateway | SLO scheduling policy (`--scheduling-policy slo`), PD disagg protocol `vllm-kvt` |
+| Scheduler | SLO policy + full-mode scheduling; profiling data downloaded at init |
+
+### SLO Parameters
+
+The Scheduler uses pre-collected profiling data (TTFT and TPOT latency curves) to predict whether dispatching a request to a given instance will satisfy the configured SLOs. The default values in the provided YAML are tuned for **Qwen3-32B on H20**:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `--ttft-slo` | `6000` ms | TTFT SLO target |
+| `--tpot-slo` | `50` ms | TPOT SLO target |
+| `--ttft-slo-dispatch-threshold` | `0.9` | Dispatch only when predicted TTFT satisfaction probability ≥ 0.9 |
+| `--tpot-slo-dispatch-threshold` | `0.9` | Dispatch only when predicted TPOT satisfaction probability ≥ 0.9 |
+| `--ttft-profiling-data-path` | `/profiling/Qwen3-32B-h20/ttft.json` | Path to TTFT profiling data |
+| `--tpot-profiling-data-path` | `/profiling/Qwen3-32B-h20/tpot.json` | Path to TPOT profiling data |
+
+The profiling data is automatically downloaded at Scheduler startup from `https://llumnix.oss-cn-beijing.aliyuncs.com/profiling/Qwen3-32B-h20/`. To use a different model, replace the profiling data path and supply your own profiling files.
+
+### Adaptive PD (`slo-aware/adaptive-pd`)
+
+The Adaptive-PD variant adds dynamic PD ratio adjustment and request migration on top of the base SLO policy. When a decode instance is predicted to violate the TPOT SLO, the Scheduler can migrate in-flight requests to other decode instances. The additional Scheduler flags are:
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| `--enable-adaptive-pd` | `true` | Enable adaptive PD ratio scheduling |
+| `--colocated-rescheduling-mode` | `true` | Allow rescheduling across colocated instances |
+| `--rescheduling-interval-ms` | `100` | Rescheduling check interval |
+| `--rescheduling-policies` | `binpacking_mitigation,binpacking_consolidation` | Policies applied during rescheduling |
+| `--tpot-migrate-out-floor-threshold` | `0.6` | Start migrating out when TPOT satisfaction drops below this value |
+| `--tpot-migrate-out-ceil-threshold` | `0.95` | Stop migrating out once TPOT satisfaction rises above this value |
+
+The Gateway in this variant also enables `--separate-pd-scheduling=true`, which causes prefill and decode instance selection to be performed independently.
+
+### Expected Output
+
+```
+NAME                READY   STATUS    NODE
+decode-0            0/2     Running   gpu-node-a
+decode-1            0/2     Running   gpu-node-b
+gateway-xxx         1/1     Running   node-a
+prefill-0           0/2     Running   gpu-node-c
+prefill-1           0/2     Running   gpu-node-d
+redis-xxx           1/1     Running   node-a
+scheduler-xxx       1/1     Running   node-a
+```
+
+> Note: `prefill-*` and `decode-*` will show `0/2 Running` while vLLM loads the model. This typically takes a few minutes.
+
+
 ## Configuration Reference
 
 ### Changing the Model
@@ -366,7 +472,7 @@ After modifying any yaml files, apply changes using:
 # Or call group_update.sh directly (requires env vars to be set)
 export REPOSITORY="llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix"
 export GATEWAY_IMAGE_TAG="20260302-200550"
-export SCHEDULER_IMAGE_TAG="20260302-200658"
+export SCHEDULER_IMAGE_TAG="20260312-204249"
 export VLLM_IMAGE_TAG="20260306-165123"
 export DISCOVERY_IMAGE_TAG="20260302-203317"
 

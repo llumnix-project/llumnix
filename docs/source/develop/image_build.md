@@ -112,10 +112,10 @@ Example (Neutral / PD mode):
 ```bash
 bash deploy/group_deploy.sh llumnix deploy/neutral/full-mode-scheduling/load-balance \
     --repository my-registry.example.com/my-repo \
-    --gateway-tag gateway-20260101-120000 \
-    --scheduler-tag scheduler-20260101-130000 \
+    --gateway-tag 20260101-120000 \
+    --scheduler-tag 20260101-130000 \
     --vllm-tag 20260101-140000 \
-    --discovery-tag discovery-20260101-150000
+    --discovery-tag 20260101-150000
 ```
 
 Example (PD-KVS mode with custom Mooncake vLLM image):
@@ -124,10 +124,10 @@ Example (PD-KVS mode with custom Mooncake vLLM image):
 # Build Mooncake vLLM image first: bash scripts/build_vllm_release.sh --include_mooncake
 bash deploy/group_deploy.sh llumnix deploy/pd-kvs/full-mode-scheduling/load-balance \
     --repository my-registry.example.com/my-repo \
-    --gateway-tag gateway-20260101-120000 \
-    --scheduler-tag scheduler-20260101-130000 \
+    --gateway-tag 20260101-120000 \
+    --scheduler-tag 20260101-130000 \
     --vllm-tag 20260101-140000 \
     --mooncake-vllm-tag mooncake-20260101-140000 \
-    --discovery-tag discovery-20260101-150000
+    --discovery-tag 20260101-150000
 ```
 

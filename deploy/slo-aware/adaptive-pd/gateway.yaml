@@ -45,7 +45,7 @@ spec:
           from modelscope import snapshot_download
           
           model_dir = snapshot_download(
-              'Qwen/Qwen3-30B-A3B',
+              'Qwen/Qwen3-32B',
               cache_dir='/tokenizers',
               allow_patterns=['tokenizer.json', 'tokenizer_config.json']
           )
@@ -71,7 +71,7 @@ spec:
         - "--port"
         - "8089"
         - "-v"
-        - "2"
+        - "4"
         - "--scheduler-discovery"
         - "endpoints"
         - "--scheduler-endpoints"
@@ -85,11 +85,12 @@ spec:
         - "--discovery-redis-port"
         - "6379"
         - "--scheduling-policy"
-        - "load-balance"
+        - "slo"
         - "--tokenizer-path"
-        - "/tokenizers/Qwen/Qwen3-30B-A3B"
+        - "/tokenizers/Qwen/Qwen3-32B"
         - "--pd-disagg-protocol"
         - "vllm-kvt"
+        - "--separate-pd-scheduling=true"
         - "--enable-full-mode-scheduling=true"
         ports:
         - containerPort: 8089

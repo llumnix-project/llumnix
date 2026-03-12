@@ -25,6 +25,9 @@ echo ""
 echo "--- StatefulSets ---"
 kubectl get statefulsets -n "$GROUP_NAME" 2>/dev/null || echo "None"
 echo ""
+echo "--- Jobs ---"
+kubectl get jobs -n "$GROUP_NAME" 2>/dev/null || echo "None"
+echo ""
 echo "--- Services ---"
 kubectl get services -n "$GROUP_NAME" 2>/dev/null || echo "None"
 echo ""
@@ -45,10 +48,21 @@ delete_resource() {
   kubectl delete "$resource_type" --all -n "$GROUP_NAME" --ignore-not-found=true --timeout=10s 2>/dev/null || true
 }
 
+# 0. Delete LeaderWorkerSets (CRD)
+if kubectl api-resources | grep -q "leaderworkersets"; then
+  echo "==> Deleting LeaderWorkerSets (CRD)"
+  kubectl delete leaderworkersets --all -n "$GROUP_NAME" \
+    --ignore-not-found=true \
+    --timeout=60s 2>/dev/null || true
+else
+  echo "==> LeaderWorkerSet CRD not found, skipping"
+fi
+
 # 1. Delete workloads
 delete_resource "statefulsets"
 delete_resource "deployments"
 delete_resource "daemonsets"
+delete_resource "jobs"
 
 # 2. Delete pods
 delete_resource "pods"

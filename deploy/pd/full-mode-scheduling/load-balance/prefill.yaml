@@ -11,7 +11,7 @@ spec:
         terminationGracePeriodSeconds: 30
         containers:
         - name: vllm
-          image: ${REPOSITORY}/vllm:${MOONCAKE_VLLM_IMAGE_TAG}
+          image: ${REPOSITORY}/vllm:${VLLM_IMAGE_TAG}
           securityContext:
             privileged: true
             capabilities:
@@ -46,7 +46,7 @@ spec:
              # --enable-dbo: Dual batch overlap (DBO) overlaps compute with collective communication.
              # --enable-eplb:  Expert-parallel load balancing reduces EP load imbalance by replicating heavily-used experts Performance-memory tradeoff: on DeepSeekV3 eplb uses an extra 2GB per redundant expert per GPU Divisibility constraint: num_routed_experts (256 for DSv3) + num_redundant_experts must be divisible by the number of GPUs.
 
-             exec vllm serve \
+             CUDA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES} exec vllm serve \
                 Qwen/Qwen3-30B-A3B \
                 --port 8000 \
                 --trust-remote-code \
