@@ -383,10 +383,10 @@ func (c *CMSReadClient) refreshInstanceMetadata() {
 
 		if metadata, exists := c.instanceMetadatas[instanceID]; !exists || metadata == nil {
 			c.instanceMetadatas[instanceID] = &InstanceMetadata{}
-			klog.V(4).Infof("[refreshInstanceMetadata] instanceID=%s, metadata=%+v",
-				instanceID, c.instanceMetadatas[instanceID])
 		}
 		instanceMetadata := c.instanceMetadatas[instanceID]
+		klog.V(4).Infof("[refreshInstanceMetadata] instanceID=%s, metadata=%+v",
+			instanceID, c.instanceMetadatas[instanceID])
 
 		// unmarshal: all-or-nothing
 		if err := proto.Unmarshal(instanceMetadataBytes, instanceMetadata); err != nil {

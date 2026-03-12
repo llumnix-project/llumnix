@@ -1,0 +1,138 @@
+# External vLLM service - NOT registered in Redis.
+# Simplest single-GPU deployment (TP=1, DP=1, EP=1).
+# Gateway routes to this service by name "vllm-external:8000".
+# --served-model-name exposes Qwen3 alias so Qwen3 fallback requests are accepted.
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-external
+  labels:
+    app: vllm-external
+    role: external
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+  selector:
+    app: vllm-external
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-external
+  labels:
+    app: vllm-external
+    role: external
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-external
+  template:
+    metadata:
+      labels:
+        app: vllm-external
+        role: external
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+      - name: vllm
+        image: ${REPOSITORY}/vllm:${VLLM_IMAGE_TAG}
+        imagePullPolicy: Always
+        securityContext:
+          capabilities:
+            add:
+            - IPC_LOCK
+            - SYS_RAWIO
+          runAsGroup: 0
+          runAsUser: 0
+        command:
+          - /bin/bash
+          - -c
+        args:
+          - |-
+            # Clear /dev/shm on start to prevent running out of space when crashes occur
+            find /dev/shm -type f -delete
+
+            #################
+            # RUN vLLM worker
+            #################
+            CUDA_VISIBLE_DEVICES=0 exec vllm serve \
+              Qwen/Qwen2.5-7B \
+              --port 8000 \
+              --trust-remote-code \
+              --tensor-parallel-size 1 \
+              --async-scheduling \
+              --gpu-memory-utilization 0.8 \
+              --served-model-name "Qwen/Qwen2.5-7B" "Qwen/Qwen3-8B"
+
+        env:
+        # download models
+        - name: VLLM_USE_MODELSCOPE
+          value: "true"
+
+        - name: TRITON_LIBCUDA_PATH
+          value: /usr/lib64
+        - name: VLLM_SKIP_P2P_CHECK
+          value: "1"
+        - name: GLOO_SOCKET_IFNAME
+          value: eth0
+        - name: NCCL_SOCKET_IFNAME
+          value: eth0
+        - name: VLLM_LOGGING_LEVEL
+          value: DEBUG
+
+        # Use cache directories from the mounted volume under one easy to mount
+        # root directory.
+        - name: CUDA_CACHE_PATH
+          value: /var/cache/vllm/cuda
+        - name: CCACHE_DIR
+          value: /var/cache/vllm/ccache
+        - name: VLLM_CACHE_ROOT
+          value: /var/cache/vllm/vllm
+        - name: FLASHINFER_WORKSPACE_BASE
+          value: /var/cache/vllm/flashinfer
+        # HuggingFace is likely to be quite a bit larger, give it its own cache
+        - name: HF_HUB_CACHE
+          value: /var/cache/huggingface
+
+        ports:
+        - containerPort: 8000
+          name: metrics
+          protocol: TCP
+        startupProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          initialDelaySeconds: 0
+          periodSeconds: 1
+          timeoutSeconds: 5
+          failureThreshold: 2700
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: metrics
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        resources:
+          limits:
+            cpu: "16"
+            ephemeral-storage: 128Gi
+            memory: 128Gi
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: "16"
+            ephemeral-storage: 128Gi
+            memory: 128Gi
+            nvidia.com/gpu: "1"

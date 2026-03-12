@@ -1,0 +1,148 @@
+# Source: deploy/neutral/full-mode-scheduling/load-balance/gateway.yaml
+# Changes:
+#   - --retry-max-count 2 added (retry internal workers before triggering fallback)
+#   - --route-policy prefix and --route-config added
+#
+# Routing rules (prefix policy):
+#   Qwen/Qwen3-*   -> local (internal llumnix-managed pool)
+#   Qwen/Qwen2.5-* -> http://vllm-external:8000 [fallback=true]
+#
+# Flow:
+#   model=Qwen/Qwen3-8B     -> internal (llumnix)
+#                              on failure after 2 retries -> fallback -> vllm-external:8000
+#   model=Qwen/Qwen2.5-7B   -> vllm-external:8000 (direct proxy, no llumnix scheduling)
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  labels:
+    app: gateway
+    role: gateway
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8089
+      targetPort: 8089
+      protocol: TCP
+      name: http
+  selector:
+    app: gateway
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  labels:
+    app: gateway
+    role: gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+        role: gateway
+    spec:
+      terminationGracePeriodSeconds: 300
+      initContainers:
+      - name: download-tokenizer
+        image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/python3:3.12-slim-bookworm
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          pip3 install modelscope -i https://mirrors.aliyun.com/pypi/simple/ && \
+          python3 << 'EOF'
+          from modelscope import snapshot_download
+          
+          model_dir = snapshot_download(
+              'Qwen/Qwen3-8B',
+              cache_dir='/tokenizers',
+              allow_patterns=['tokenizer.json', 'tokenizer_config.json']
+          )
+          
+          print(f"download tokenizer done: {model_dir}")
+          EOF
+        volumeMounts:
+        - name: tokenizer-storage
+          mountPath: /tokenizers
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+      containers:
+      - name: gateway
+        image: ${REPOSITORY}/gateway:${GATEWAY_IMAGE_TAG}
+        imagePullPolicy: Always
+        command: ["/usr/local/bin/gateway"]
+        args:
+        - "--port"
+        - "8089"
+        - "-v"
+        - "3"
+        - "--discovery-redis-status-ttl-ms"
+        - "60000"
+        - "--scheduler-endpoints"
+        - "scheduler:8088"
+        - "--llm-backend-discovery"
+        - "redis"
+        - "--scheduler-discovery"
+        - "endpoints"
+        - "--discovery-redis-host"
+        - "redis"
+        - "--discovery-redis-port"
+        - "6379"
+        - "--scheduling-policy"
+        - "load-balance"
+        - "--tokenizer-path"
+        - "/tokenizers/Qwen/Qwen3-8B"
+        - "--max-model-len"
+        - "40960"
+        - "--enable-full-mode-scheduling=true"
+        # Retry internal workers up to 2 times before triggering fallback to external.
+        - "--retry-max-count"
+        - "2"
+        # -----------------------------------------------------------------------
+        # Service router: prefix policy
+        #   Qwen/Qwen3-*   -> local (internal llumnix-managed pool)
+        #   Qwen/Qwen2.5-* -> http://vllm-external:8000 (direct proxy, also fallback)
+        # -----------------------------------------------------------------------
+        - "--route-policy"
+        - "prefix"
+        - "--route-config"
+        - '[{"prefix":"Qwen/Qwen3-*","base_url":"local","fallback":false},{"prefix":"Qwen/Qwen2.5-*","base_url":"http://vllm-external:8000","fallback":true}]'
+        ports:
+        - containerPort: 8089
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8089
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8089
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: tokenizer-storage
+          mountPath: /tokenizers
+          readOnly: true
+      volumes:
+      - name: tokenizer-storage
+        emptyDir: {}

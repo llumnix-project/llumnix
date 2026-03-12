@@ -11,7 +11,7 @@ import (
 )
 
 type DiscoveryConfig struct {
-	// instead of relying on the active registration of inference workers, the
+	// instead of relying on the active registration of inference instances, the
 	// backend services are actively discovered through the scheduler, which can
 	// only be used in the scenario where BackendService are set
 	LLMBackendDiscovery string
@@ -91,11 +91,27 @@ func (c *ProcessorConfig) AddProcessorConfigFlags(flags *pflag.FlagSet) {
 type RouteConfig struct {
 	RoutePolicy    string
 	RouteConfigRaw string
+
+	RetryMaxCount int
+
+	FallbackRetryQueueEnabled bool
+	FallbackRetryQueueSize    int
+	FallbackRetryWorkerSize   int
+	FallbackRetryMaxCount     int
+	FallbackRetryInitDelayMs  int
+	FallbackRetryMaxDelayMs   int
 }
 
 func (c *RouteConfig) AddRouteConfigFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&c.RoutePolicy, "route-policy", "", "route policy, support weight and prefix")
 	flags.StringVar(&c.RouteConfigRaw, "route-config", "", "route config, include api key, base url, weight/prefix and fallback priority")
+	flags.IntVar(&c.RetryMaxCount, "retry-max-count", 0, "max retry count for internal routing on retryable errors")
+	flags.BoolVar(&c.FallbackRetryQueueEnabled, "fallback-retry-queue-enabled", false, "enable a retry queue that automatically retries fallback requests receiving 429 (Too Many Requests) with exponential backoff")
+	flags.IntVar(&c.FallbackRetryQueueSize, "fallback-retry-queue-size", 100, "max number of 429-retry tasks that can be queued; new tasks are dropped when full")
+	flags.IntVar(&c.FallbackRetryWorkerSize, "fallback-retry-worker-size", 10, "number of concurrent goroutines processing 429-retry tasks")
+	flags.IntVar(&c.FallbackRetryMaxCount, "fallback-retry-max-count", 3, "max number of 429 retries per request before giving up")
+	flags.IntVar(&c.FallbackRetryInitDelayMs, "fallback-retry-init-delay-ms", 500, "when a fallback endpoint returns 429, wait this many ms before the first retry; subsequent retries double this delay (exponential backoff)")
+	flags.IntVar(&c.FallbackRetryMaxDelayMs, "fallback-retry-max-delay-ms", 5000, "upper bound (ms) for the exponential backoff delay between 429 retries on fallback endpoints")
 }
 
 type PDDisaggConfig struct {

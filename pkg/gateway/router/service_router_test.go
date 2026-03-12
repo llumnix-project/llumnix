@@ -113,6 +113,22 @@ func TestSelectByWeight_EmptyConfigs(t *testing.T) {
 	assert.Equal(t, RouteUnknown, routerType)
 }
 
+func TestSelectByWeight_AllZeroWeights(t *testing.T) {
+	routingConfigs := []RouteConfig{
+		{URL: "http://service1", Weight: 0},
+		{URL: "http://service2", Weight: 0},
+	}
+	sr := NewServiceRouter(consts.RoutePolicyWeight, "")
+	sr.routingConfigs = routingConfigs
+
+	// All-zero weights must not panic, should return RouteUnknown
+	assert.NotPanics(t, func() {
+		config, routerType := sr.selectByWeight()
+		assert.Nil(t, config)
+		assert.Equal(t, RouteUnknown, routerType)
+	})
+}
+
 func TestSelectByPrefix(t *testing.T) {
 	routingConfigs := []RouteConfig{
 		{URL: "http://service1", Weight: 50, Prefix: "gpt-3*"},
@@ -346,8 +362,343 @@ func TestGetFallbackTokens_NoMoreFallbacks(t *testing.T) {
 	nextTokens, err := sr.Fallback(context)
 
 	assert.Error(t, err)
-	assert.Equal(t, consts.ErrorNoAvailableEndpoint, err)
+	assert.ErrorIs(t, err, consts.ErrorNoAvailableEndpoint)
 	assert.Nil(t, nextTokens)
+}
+
+func TestCanFallback(t *testing.T) {
+	routingConfigs := []RouteConfig{
+		{URL: "http://service1", Weight: 50, Prefix: "gpt-4*", Model: "gpt-4-model", IsFallback: true},
+		{URL: "http://service2", Weight: 50, Prefix: "gpt-3*", Model: "gpt-3-model", IsFallback: true},
+	}
+
+	sr := NewServiceRouter(consts.RoutePolicyWeight, "")
+	sr.routingConfigs = routingConfigs
+	sr.setupFallbackConfigs(routingConfigs)
+
+	req := createTestRequest("gpt-3-turbo")
+	ctx := &types.RequestContext{RequestStats: &types.RequestStats{FallbackAttempt: 0}, LLMRequest: req}
+
+	assert.True(t, sr.CanFallback(ctx))
+
+	ctx.RequestStats.FallbackAttempt = 1
+	assert.True(t, sr.CanFallback(ctx))
+
+	ctx.RequestStats.FallbackAttempt = 2
+	assert.False(t, sr.CanFallback(ctx))
+}
+
+func TestCanFallback_NoFallbackConfigs(t *testing.T) {
+	sr := NewServiceRouter(consts.RoutePolicyWeight, "")
+
+	req := createTestRequest("gpt-3-turbo")
+	ctx := &types.RequestContext{RequestStats: &types.RequestStats{FallbackAttempt: 0}, LLMRequest: req}
+
+	assert.False(t, sr.CanFallback(ctx))
+}
+
+func TestCanFallbackAndFallback_DrainAll(t *testing.T) {
+	routingConfigs := []RouteConfig{
+		{URL: "http://fb1", Prefix: "a*", IsFallback: true, APIKey: "k1", Model: "m1"},
+		{URL: "http://fb2", Prefix: "b*", IsFallback: true, APIKey: "k2", Model: "m2"},
+		{URL: "http://fb3", Prefix: "c*", IsFallback: true, APIKey: "k3", Model: "m3"},
+	}
+	sr := NewServiceRouter(consts.RoutePolicyWeight, "")
+	sr.routingConfigs = routingConfigs
+	sr.setupFallbackConfigs(routingConfigs)
+
+	req := createTestRequest("test")
+	ctx := &types.RequestContext{RequestStats: &types.RequestStats{}, LLMRequest: req}
+
+	// Drain all fallbacks one by one via CanFallback + Fallback loop
+	expected := []struct {
+		url, apiKey, model string
+	}{
+		{"http://fb1", "k1", "m1"},
+		{"http://fb2", "k2", "m2"},
+		{"http://fb3", "k3", "m3"},
+	}
+
+	for i, exp := range expected {
+		assert.True(t, sr.CanFallback(ctx), "should have fallback at step %d", i)
+		ep, err := sr.Fallback(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, exp.url, ep.URL)
+		assert.Equal(t, exp.apiKey, ep.APIKey)
+		assert.Equal(t, exp.model, ep.Model)
+	}
+
+	// All exhausted
+	assert.False(t, sr.CanFallback(ctx))
+	_, err := sr.Fallback(ctx)
+	assert.Error(t, err)
+}
+
+func TestSetupFallbackConfigs_InternalURLFiltered(t *testing.T) {
+	routingConfigs := []RouteConfig{
+		{URL: consts.RouteInternalURL, Prefix: "*", IsFallback: true},
+		{URL: "http://external", Prefix: "gpt*", IsFallback: true},
+		{URL: consts.RouteInternalURL, Prefix: "llama*", IsFallback: true},
+	}
+
+	sr := NewServiceRouter(consts.RoutePolicyWeight, "")
+	sr.setupFallbackConfigs(routingConfigs)
+
+	assert.Equal(t, 1, len(sr.fallbackConfigs))
+	assert.Equal(t, "http://external", sr.fallbackConfigs[0].URL)
+}
+
+func TestSelectByWeight_InternalURL(t *testing.T) {
+	routingConfigs := []RouteConfig{
+		{URL: consts.RouteInternalURL, Weight: 100},
+	}
+	sr := NewServiceRouter(consts.RoutePolicyWeight, "")
+	sr.routingConfigs = routingConfigs
+
+	config, rType := sr.selectByWeight()
+	assert.Nil(t, config)
+	assert.Equal(t, RouteInternal, rType)
+}
+
+func TestSelectByPrefix_InternalURL(t *testing.T) {
+	routingConfigs := []RouteConfig{
+		{URL: consts.RouteInternalURL, Prefix: "gpt*"},
+	}
+	sr := NewServiceRouter(consts.RoutePolicyPrefix, "")
+	sr.routingConfigs = routingConfigs
+
+	req := createTestRequest("gpt-4")
+	config, rType := sr.selectByPrefix(&types.RequestContext{LLMRequest: req})
+	assert.Nil(t, config)
+	assert.Equal(t, RouteInternal, rType)
+}
+
+func TestRouteEndpoint_JoinURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		baseURL  string
+		path     string
+		expected string
+	}{
+		{
+			name:     "simple join",
+			baseURL:  "https://api.example.com",
+			path:     "/v1/chat/completions",
+			expected: "https://api.example.com/v1/chat/completions",
+		},
+		{
+			name:     "base with trailing slash",
+			baseURL:  "https://api.example.com/",
+			path:     "/v1/chat/completions",
+			expected: "https://api.example.com/v1/chat/completions",
+		},
+		{
+			name:     "base with /v1 strips path version prefix",
+			baseURL:  "https://api.example.com/v1",
+			path:     "/v1/chat/completions",
+			expected: "https://api.example.com/v1/chat/completions",
+		},
+		{
+			name:     "base without version keeps path version",
+			baseURL:  "https://api.example.com/compatible-mode",
+			path:     "/v1/chat/completions",
+			expected: "https://api.example.com/compatible-mode/v1/chat/completions",
+		},
+		{
+			name:     "base with /v3 strips path /v1",
+			baseURL:  "https://ark.cn-beijing.volces.com/api/v3",
+			path:     "/v1/chat/completions",
+			expected: "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ep := &RouteEndpoint{URL: tc.baseURL}
+			result := ep.JoinURL(tc.path)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+// --- End-to-end: construct from real JSON, then Route + Fallback ---
+
+func TestNewServiceRouter_EndToEnd_PrefixPolicy(t *testing.T) {
+	routeConfigJSON := `[
+		{"prefix":"*", "base_url":"local", "fallback":false},
+		{"prefix":"qwen-*", "api_key":"sk-qwen", "base_url":"https://dashscope.aliyuncs.com/compatible-mode/v1", "model":"qwen", "fallback":true},
+		{"prefix":"doubao-*", "api_key":"sk-doubao", "base_url":"https://ark.cn-beijing.volces.com/api/v3", "fallback":false}
+	]`
+	sr := NewServiceRouter(consts.RoutePolicyPrefix, routeConfigJSON)
+
+	// Internal model (matches catch-all `*` with base_url "local")
+	req := createTestRequest("llama-3")
+	ep, rType := sr.Route(&types.RequestContext{LLMRequest: req})
+	assert.Nil(t, ep)
+	assert.Equal(t, RouteInternal, rType)
+
+	// External model (matches "doubao-*")
+	req = createTestRequest("doubao-pro")
+	ep, rType = sr.Route(&types.RequestContext{LLMRequest: req})
+	assert.Equal(t, RouteExternal, rType)
+	assert.Equal(t, "https://ark.cn-beijing.volces.com/api/v3", ep.URL)
+	assert.Equal(t, "sk-doubao", ep.APIKey)
+
+	// Fallback available (qwen config has fallback=true)
+	ctx := &types.RequestContext{RequestStats: &types.RequestStats{}, LLMRequest: createTestRequest("test")}
+	assert.True(t, sr.CanFallback(ctx))
+	fbEp, err := sr.Fallback(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, "https://dashscope.aliyuncs.com/compatible-mode/v1", fbEp.URL)
+	assert.Equal(t, "sk-qwen", fbEp.APIKey)
+	assert.Equal(t, "qwen", fbEp.Model)
+
+	// No more fallbacks
+	assert.False(t, sr.CanFallback(ctx))
+}
+
+// --- Route → Unknown → CanFallback → Fallback chain ---
+
+func TestRoute_PrefixNoMatch_ThenFallback(t *testing.T) {
+	routeConfigJSON := `[
+		{"prefix":"gpt-*", "base_url":"http://gpt-service", "fallback":false},
+		{"prefix":"claude-*", "base_url":"http://fallback-1", "api_key":"k1", "model":"fb1", "fallback":true},
+		{"prefix":"qwen-*",   "base_url":"http://fallback-2", "api_key":"k2", "model":"fb2", "fallback":true}
+	]`
+	sr := NewServiceRouter(consts.RoutePolicyPrefix, routeConfigJSON)
+
+	req := createTestRequest("unknown-model")
+	ctx := &types.RequestContext{RequestStats: &types.RequestStats{}, LLMRequest: req}
+
+	// Route returns Unknown
+	ep, rType := sr.Route(ctx)
+	assert.Nil(t, ep)
+	assert.Equal(t, RouteUnknown, rType)
+
+	// Fallback chain
+	assert.True(t, sr.CanFallback(ctx))
+	fb1, err := sr.Fallback(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, "http://fallback-1", fb1.URL)
+	assert.Equal(t, "k1", fb1.APIKey)
+
+	assert.True(t, sr.CanFallback(ctx))
+	fb2, err := sr.Fallback(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, "http://fallback-2", fb2.URL)
+
+	assert.False(t, sr.CanFallback(ctx))
+}
+
+// --- Route returns full fields (URL + APIKey + Model) ---
+
+func TestRoute_ExternalReturnsAllFields(t *testing.T) {
+	routeConfigJSON := `[{"prefix":"gpt-*", "base_url":"http://svc", "api_key":"sk-123", "model":"gpt-override"}]`
+	sr := NewServiceRouter(consts.RoutePolicyPrefix, routeConfigJSON)
+
+	req := createTestRequest("gpt-4")
+	ep, rType := sr.Route(&types.RequestContext{LLMRequest: req})
+
+	assert.Equal(t, RouteExternal, rType)
+	assert.Equal(t, "http://svc", ep.URL)
+	assert.Equal(t, "sk-123", ep.APIKey)
+	assert.Equal(t, "gpt-override", ep.Model)
+}
+
+// --- selectByPrefix: `*` catch-all ---
+
+func TestSelectByPrefix_CatchAll(t *testing.T) {
+	routingConfigs := []RouteConfig{
+		{URL: consts.RouteInternalURL, Prefix: "*"},
+	}
+	sr := NewServiceRouter(consts.RoutePolicyPrefix, "")
+	sr.routingConfigs = routingConfigs
+
+	// Any model should match `*` and route internally
+	for _, model := range []string{"gpt-4", "claude-3", "llama", "anything"} {
+		req := createTestRequest(model)
+		config, rType := sr.selectByPrefix(&types.RequestContext{LLMRequest: req})
+		assert.Nil(t, config, "model=%s", model)
+		assert.Equal(t, RouteInternal, rType, "model=%s", model)
+	}
+}
+
+func TestSelectByPrefix_CatchAllExternal(t *testing.T) {
+	routingConfigs := []RouteConfig{
+		{URL: "http://catch-all-proxy", Prefix: "*"},
+	}
+	sr := NewServiceRouter(consts.RoutePolicyPrefix, "")
+	sr.routingConfigs = routingConfigs
+
+	req := createTestRequest("any-model")
+	config, rType := sr.selectByPrefix(&types.RequestContext{LLMRequest: req})
+	assert.NotNil(t, config)
+	assert.Equal(t, RouteExternal, rType)
+	assert.Equal(t, "http://catch-all-proxy", config.URL)
+}
+
+// Specific prefix beats catch-all `*`
+func TestSelectByPrefix_SpecificBeforeWildcard(t *testing.T) {
+	routingConfigs := []RouteConfig{
+		{URL: consts.RouteInternalURL, Prefix: "*"},
+		{URL: "http://gpt-service", Prefix: "gpt-*"},
+	}
+	sr := NewServiceRouter(consts.RoutePolicyPrefix, "")
+	sr.routingConfigs = routingConfigs
+
+	// "gpt-4" matches both `*` (len 0) and `gpt-` (len 4) → longest wins
+	req := createTestRequest("gpt-4")
+	config, rType := sr.selectByPrefix(&types.RequestContext{LLMRequest: req})
+	assert.Equal(t, RouteExternal, rType)
+	assert.Equal(t, "http://gpt-service", config.URL)
+
+	// "llama" only matches `*` → internal
+	req = createTestRequest("llama")
+	config, rType = sr.selectByPrefix(&types.RequestContext{LLMRequest: req})
+	assert.Nil(t, config)
+	assert.Equal(t, RouteInternal, rType)
+}
+
+// --- selectByWeight: mixed internal + external ---
+
+func TestSelectByWeight_MixedInternalExternal(t *testing.T) {
+	routingConfigs := []RouteConfig{
+		{URL: consts.RouteInternalURL, Weight: 50},
+		{URL: "http://external", Weight: 50},
+	}
+	sr := NewServiceRouter(consts.RoutePolicyWeight, "")
+	sr.routingConfigs = routingConfigs
+
+	internalCount := 0
+	externalCount := 0
+	for i := 0; i < 1000; i++ {
+		_, rType := sr.selectByWeight()
+		switch rType {
+		case RouteInternal:
+			internalCount++
+		case RouteExternal:
+			externalCount++
+		default:
+			t.Fatalf("unexpected RouteType: %v", rType)
+		}
+	}
+
+	// Both should be selected, roughly 50/50
+	assert.Greater(t, internalCount, 300)
+	assert.Greater(t, externalCount, 300)
+}
+
+// --- setupFallbackConfigs: all non-fallback → empty ---
+
+func TestSetupFallbackConfigs_AllNonFallback(t *testing.T) {
+	routingConfigs := []RouteConfig{
+		{URL: "http://a", Prefix: "a*", IsFallback: false},
+		{URL: "http://b", Prefix: "b*", IsFallback: false},
+	}
+	sr := NewServiceRouter(consts.RoutePolicyWeight, "")
+	sr.setupFallbackConfigs(routingConfigs)
+
+	assert.Equal(t, 0, len(sr.fallbackConfigs))
 }
 
 func TestGetFallbackLength(t *testing.T) {
