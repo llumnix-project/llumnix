@@ -38,7 +38,7 @@ For the engine-side exporting path, existing designs typically suffer from three
 
 These three gaps together create load staleness and biased scheduling decisions, even when the engine exports status regularly.
 
-### 3.2 Scheduler-side bookkeeping path
+### Scheduler-side bookkeeping path
 
 For the scheduler-side bookkeeping path, existing designs are constrained by one inherent limitation and one implementation defect:
 
