@@ -4,7 +4,9 @@ Llumnix is a full-stack solution for distributed LLM inference serving. It has b
 
 Llumnix provides key functionalities for modern distributed serving deployments (e.g., PD disaggregation, wide EP), such as LLM-specialized request gateway, intelligent and dynamic scheduling, high-performance KV cache transfer/storage support, etc. With a scheduler + rescheduler architecture and white-box scheduling design, Llumnix achieves fully dynamic request scheduling and pushes the performance of inference engines to the limit.
 
-Note that with this new repository, we are re-architecting Llummix to a more modular and cloud-native design (Llumnix v1). The old Ray-based architecture (Llumnix v0) is a better choice for local deployments and quick prototyping and experimentation of scheduling ideas.
+Note that with this new repository, we are re-architecting Llummix to a more modular and cloud-native design (Llumnix v1). The old Ray-based architecture ([Llumnix v0](https://github.com/llumnix-project/llumnix-ray)) is a better choice for local deployments and quick prototyping and experimentation of scheduling ideas.
+
+[[Documentation](https://llumnix.ai)]
 
 # Key Features
 - **Scheduler + rescheduler architecture** for fully dynamic request scheduling: initial routing + continuous migration
