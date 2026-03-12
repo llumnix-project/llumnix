@@ -1,6 +1,6 @@
 # Rescheduler
 
-## 1. Introduction
+## Introduction
 
 Llumnix's rescheduler is a request rescheduling component that continuously rebalances load, maximizes SLO attainment and resource efficiency under fluctuating workloads, and proactively migrates requests from unhealthy instances. Operating in a **scheduler + rescheduler** architecture, the rescheduler complements the initial dispatch by performing ongoing rescheduling of running/waiting requests through two integrated components:
 
@@ -11,15 +11,15 @@ The rescheduler serves three primary functions:
 
 1. **Load Balancing**: Continuously monitors instance load and migrates requests from overloaded instances to underutilized ones, mitigating fragmentation and eliminating hotspots for improved latency.
 
-2. **Adaptive PD Rescheduling**: Enhances adaptive prefill-decode disaggregation by migrating decode requests based on predicted TPOT, consolidating underutilized instances and mitigating overloaded ones to further improve SLO attainment and resource efficiency. See [Adaptive PD Scheduling](./scheduling/adaptive_pd_scheduling.md) for details.
+2. **Adaptive PD Rescheduling**: Enhances adaptive prefill-decode disaggregation by migrating decode requests based on predicted TPOT, consolidating underutilized instances and mitigating overloaded ones to further improve SLO attainment and resource efficiency. See [Adaptive PD Scheduling](./adaptive_pd_scheduling.md) for details.
 
 3. **Failover**: Detects unhealthy or unschedulable instances and proactively migrates their requests to healthy instances within configurable failure domains (instance/node/unit domain).
 
 ---
 
-## 2. Architecture
+## Architecture
 
-### 2.1 Architectural Overview
+### Architectural Overview
 
 The rescheduler operates within Llumnix's scheduling layer:
 
@@ -70,7 +70,7 @@ The rescheduler operates within Llumnix's scheduling layer:
         └───────────────────────────────────────────┘
 ```
 
-### 2.2 Execution Flow
+### Execution Flow
 
 The rescheduler executes in a continuous loop with the following steps:
 
@@ -88,11 +88,11 @@ The rescheduler executes in a continuous loop with the following steps:
 5. **Cycle Completion**: Returns to sleep until next interval, then repeats from step 2.
 ---
 
-## 3. Rescheduling Policies
+## Rescheduling Policies
 
 The rescheduler implements a **multi-policy** architecture where each policy operates independently and produces migration pairs. Policies are configured via comma-separated lists (`--rescheduling-policies`).
 
-### 3.1 Policy Registry
+### Policy Registry
 
 Built-in policies (defined in `pkg/consts/consts.go`):
 
@@ -108,7 +108,7 @@ Built-in policies (defined in `pkg/consts/consts.go`):
 
 Each policy implements its own metric calculation, instance filtering, and pair selection logic. See sections 3.2-3.4 for detailed mechanisms.
 
-### 3.2 Load Balance Policy
+### Load Balance Policy
 
 **Purpose**: Reduces load imbalance across instances of the same infer type within a configurable scope (cluster-wide or per-unit).
 
@@ -135,9 +135,9 @@ Each policy implements its own metric calculation, instance filtering, and pair 
 3. Pair: (0.9 → 0.2), (0.8 → 0.3)
 4. Migrate specified number of tokens from source to destination.
 
-### 3.3 Adaptive PD Rescheduling Policies
+### Adaptive PD Rescheduling Policies
 
-For the full design of adaptive PD scheduling (including scheduler dispatch logic and rescheduling), see [Adaptive PD Scheduling](./scheduling/adaptive_pd_scheduling.md).
+For the full design of adaptive PD scheduling (including scheduler dispatch logic and rescheduling), see [Adaptive PD Scheduling](./adaptive_pd_scheduling.md).
 
 **Purpose**: Enhances adaptive prefill-decode disaggregation by migrating decode requests based on predicted TPOT, consolidating underutilized instances and mitigating overloaded ones to further improve SLO attainment and resource efficiency.
 
@@ -172,9 +172,9 @@ For the full design of adaptive PD scheduling (including scheduler dispatch logi
 
 **Example - Consolidation**: Instance D3 has predicted TPOT = 25ms (below 0.60 × 50ms = 30ms floor) with active decode requests. Policy migrates all requests from D3 to D4 (predicted TPOT = 40ms, heavily loaded but SLO-compliant), freeing D3 for prefill assignment.
 
-> **Note**: For details, see [Adaptive PD Scheduling](./scheduling/adaptive_pd_scheduling.md).
+> **Note**: For details, see [Adaptive PD Scheduling](./adaptive_pd_scheduling.md).
 
-### 3.4 Failover Policy
+### Failover Policy
 
 **Purpose**: Responds to unhealthy or unschedulable instances by migrating their requests to healthy instances outside the failure domain.
 
@@ -204,9 +204,9 @@ For the full design of adaptive PD scheduling (including scheduler dispatch logi
 
 ---
 
-## 4. Migration Implementation
+## Migration Implementation
 
-### 4.1 Migration Request Types
+### Migration Request Types
 
 The rescheduler supports three migration granularities (defined in `pkg/consts/consts.go`):
 
@@ -216,7 +216,7 @@ The rescheduler supports three migration granularities (defined in `pkg/consts/c
 | `TOKEN` | `MigrationReqSelectRuleToken` | Migrate N tokens |
 | `RATIO` | `MigrationReqSelectRuleRatio` | Migrate N% of KV cache |
 
-### 4.2 Migration Request Ordering
+### Migration Request Ordering
 
 When selecting which requests to migrate, the following ordering policies are supported:
 
@@ -229,7 +229,7 @@ When selecting which requests to migrate, the following ordering policies are su
 | `FCW` | `MigrationReqSelectOrderFCW` | First Come Waiting: the first request to come (among waiting requests) |
 | `FCWSR` | `MigrationReqSelectOrderFCWSR` | First Come Waiting, if none exist, then Shortest Running |
 
-### 4.3 Execution Pipeline
+### Execution Pipeline
 
 The migration execution pipeline (lines 177-259 in `rescheduling_policy.go`):
 
@@ -251,9 +251,9 @@ The migration execution pipeline (lines 177-259 in `rescheduling_policy.go`):
 
 ---
 
-## 5. Configuration
+## Configuration
 
-### 5.1 Core Rescheduling Flags
+### Core Rescheduling Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -263,7 +263,7 @@ The migration execution pipeline (lines 177-259 in `rescheduling_policy.go`):
 | `--colocated-rescheduling-mode` | `false` | Run rescheduler inside scheduler process |
 | `--standalone-rescheduling-mode` | `false` | Run rescheduler as separate process |
 
-### 5.2 Load Balance Configuration
+### Load Balance Configuration
 
 | Flag | Default | Description|
 |------|---------|-------------|
@@ -274,7 +274,7 @@ The migration execution pipeline (lines 177-259 in `rescheduling_policy.go`):
 | `--rescheduling-load-balance-threshold` | `0.0` | Minimum load difference required to trigger migration |
 | `--rescheduling-load-balance-scope` | `"cluster"` | Balancing scope: `cluster` or `unit` |
 
-### 5.3 Adaptive PD Configuration
+### Adaptive PD Configuration
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -287,16 +287,16 @@ The migration execution pipeline (lines 177-259 in `rescheduling_policy.go`):
 | `--rescheduling-policies` | `"binpacking_mitigation,binpacking_consolidation"` | Rescheduling policies for adaptive PD|
 | `--rescheduling-interval-ms` | `500` | Interval between rescheduling iterations (use `100` for adaptive PD) |
 
-> **Note**: For details, see [Adaptive PD Scheduling](./scheduling/adaptive_pd_scheduling.md).
+> **Note**: For details, see [Adaptive PD Scheduling](./adaptive_pd_scheduling.md).
 
-### 5.4 Failover Configuration
+### Failover Configuration
 
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--failover-domain` | `"instance"` | Failure domain: `instance`, `node`, `instance-unit`, `node-unit` |
 | `--instance-staleness-seconds` | `60` | Time after which an instance is considered stale |
 
-### 5.5 Migration Request Configuration
+### Migration Request Configuration
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -304,7 +304,7 @@ The migration execution pipeline (lines 177-259 in `rescheduling_policy.go`):
 | `--rescheduling-req-select-order` | `"SR"` | Migration request selection order: `LCR`, `FCR`, `LR`, `SR`, `FCW`, `FCWSR` |
 | `--rescheduling-req-select-value` | `1024` | Number of requests/tokens or KV cache ratio to migrate |
 
-### 5.6 gRPC Configuration
+### gRPC Configuration
 
 | Flag | Default | Description |
 |------|---------|-------------|
@@ -313,7 +313,7 @@ The migration execution pipeline (lines 177-259 in `rescheduling_policy.go`):
 
 ---
 
-## 6. Deployment Modes
+## Deployment Modes
 
 | Mode | Flag | Process |
 |------|------|---------|

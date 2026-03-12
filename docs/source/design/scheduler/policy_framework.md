@@ -1,9 +1,9 @@
-# Policy Framework Overview
+# Policy Framework
 
 Llumnix scheduling policies follow a **metrics → filters → selectors** pipeline.
 
 - **Per-infer-mode composition**: each policy defines separate metrics, filters, and selector for `prefill`, `decode`, and `neutral` infer types.
-- **Execution flow**: the dispatcher (`DispatchPolicy.Schedule`) builds a cluster view — a snapshot of all instance states and metadata grouped by infer type, sourced from CMS (Cluster Metadata Store, enabled in full-mode) or LRS (Local Realtime State, enabled in lite-mode) — then for each infer type:
+- **Execution flow**: the dispatcher (`DispatchPolicy.Schedule`) builds a cluster view — a snapshot of all instance states and metadata grouped by infer type, sourced from CMS (Cluster Metadata Store, enabled in full-mode) or LRS (Local Real-time State, enabled in lite-mode) — then for each infer type:
   1. **Metric computation**: computes configured metrics for every candidate instance.
   2. **Filtering**: removes unsuitable candidate instances (with a fallback pass if no candidates found).
   3. **Selection**: picks the target instance, e.g., based on metric comparison.

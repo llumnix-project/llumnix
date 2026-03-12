@@ -12,12 +12,13 @@ author = 'AlibabaPAI'
 mermaid_output_format = "raw"
 
 extensions = [
-    "sphinx.ext.napoleon",    
-    "sphinx.ext.intersphinx", 
-    "sphinx_copybutton",                 
-    "myst_parser",            
-    "sphinx_design",          
-    "sphinx_togglebutton",    
+    "sphinx.ext.napoleon",
+    "sphinx.ext.intersphinx",
+    "sphinx.ext.mathjax",
+    "sphinx_copybutton",
+    "myst_parser",
+    "sphinx_design",
+    "sphinx_togglebutton",
     "sphinxcontrib.mermaid",
 ]
 
@@ -29,6 +30,12 @@ myst_enable_extensions = [
     "dollarmath",
     "amsmath",
 ]
+
+# Configure dollarmath to properly convert $...$ to math nodes
+myst_dmath_allow_labels = True
+myst_dmath_allow_space = True
+myst_dmath_allow_digits = True
+myst_dmath_double_inline = False
 
 myst_heading_anchors = 3
 
@@ -57,3 +64,16 @@ autodoc_mock_imports = [
 
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
+html_js_files = ["custom.js"]
+
+# MathJax 3 configuration
+mathjax3_config = {
+    "tex": {
+        "inlineMath": [["$", "$"], ["\\(", "\\)"]],
+        "displayMath": [["$$", "$$"], ["\\[", "\\]"]],
+        "processEscapes": True,
+    },
+    "options": {
+        "skipHtmlTags": ["script", "noscript", "style", "textarea", "pre"],
+    },
+}

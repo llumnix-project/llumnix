@@ -6,7 +6,7 @@ Prefill computation scales quadratically with prompt length. Prefix caching miti
 
 ## Design and implementation
 
-```mermaid
+```{mermaid}
 graph TB
     Request([Request])
 
@@ -94,11 +94,11 @@ When cache-aware scheduling is enabled, the cache locality metric (default `cach
 
 Prefill compute load is proportional to uncomputed prefill tokens. Cached prefix tokens require zero computation, so raw prompt token count and request count that do not account for cache hits are coarse metrics that systematically overestimate prefill load.
 
-The local account leverages cache hit query results from the KVS metadata service to close this gap, recording `numUncomputedTokens = numTokens - prefixHitNumTokens` per request instead of the full token count, so that load reflects the true uncomputed prefill cost.
+The **instance status local account** (defined in [Instant and Accurate Load — Dispatch-time account with reconciliation](instant_accurate_load.md#cms-engine-side-path)) leverages cache hit query results from the KVS metadata service to close this gap, recording `numUncomputedTokens = numTokens - prefixHitNumTokens` per request instead of the full token count, so that load reflects the true uncomputed prefill cost.
 
 This correction applies at two levels:
 
-- **Inflight requests**: accumulates `numUncomputedTokens` into `NumUncomputedTokensInflightDispatchPrefillRequests`, so that pending dispatch load reflects actual computation cost.
+- **In-flight requests** (defined in [Instant and Accurate Load — Dispatch-time account with reconciliation](instant_accurate_load.md#cms-engine-side-path)): accumulates `numUncomputedTokens` into `NumUncomputedTokensInflightDispatchPrefillRequests`, so that pending dispatch load reflects actual computation cost.
 - **Engine waiting requests**: when CMS reports waiting request IDs, recomputes `NumUncomputedTokensAllWaitingPrefills` by summing each request's `NumUncomputedTokens`, replacing the engine-reported raw token count.
 
 ## Usage

@@ -1,6 +1,6 @@
-# Instant and Accurate Load for LLM Scheduling
+# Instant and Accurate Load
 
-## 1. Goal and definition
+## Goal and definition
 
 Modern LLM workloads, especially agentic workflows, generate highly heterogeneous request lengths and heavy KV cache reuse, so both step duration and per-step load fluctuate significantly. In this regime, temporal gaps between observed (by the central scheduler) and actual load (on the inference engine), and accuracy gaps between approximate scheduling metrics and true engine compute, can significantly degrade scheduling quality.
 
@@ -12,7 +12,7 @@ We say the scheduler has **Ial** when its view of load is both:
 
 ---
 
-## 2. Existing paradigms
+## Existing paradigms
 
 Modern LLM schedulers typically adopt one of two paradigms for maintaining load:
 
@@ -26,9 +26,9 @@ Llumnix supports both paradigms via its **CMS (Cluster Metadata Store)** path an
 
 ---
 
-## 3. Limitations of existing paradigms
+## Limitations of existing paradigms
 
-### 3.1 Engine-side exporting path
+### Engine-side exporting path
 
 For the engine-side exporting path, existing designs typically suffer from three structural temporal gaps between observed and actual load:
 
@@ -47,35 +47,35 @@ For the scheduler-side bookkeeping path, existing designs are constrained by one
 
 ---
 
-## 4. Llumnix Ial solutions
+## Llumnix Ial solutions
 
 Ial has two dimensions: how load status is observed and how compute load is modeled for scheduling decisions.
 
-### 4.1 Metrics for prefill and decode
+### Metrics for prefill and decode
 
 Beyond how load status is observed, Ial also depends on how instance load is *modeled* by scheduling metrics.
 
 1. **Prefill compute load**  
    For prefill, the true compute load is
-   \[
-   C_\text{prefill} \propto N_\text{uncomputed prefill tokens},
-   \]
-   where \(N_\text{uncomputed prefill tokens}\) is the number of prompt tokens that have not yet been computed on the instance. Request count and raw prompt token count are only coarse proxies: they ignore three critical facts: (a) cached prefix tokens contribute **zero** prefill compute load on the instance that holds them, (b) in chunked prefill, only the not-yet-computed suffix of each prompt generates new prefill work at the current step, and (c) requests in the decode phase and their tokens must not be counted toward prefill compute load. As a result, these coarse metrics systematically mis-estimate prefill compute load, especially when prefix caching or chunked-prefill are enabled.
+   ```{math}
+   C_{\text{prefill}} \propto N_{\text{uncomputed prefill tokens}},
+   ```
+   where $N_{\text{uncomputed prefill tokens}}$ is the number of prompt tokens that have not yet been computed on the instance. Request count and raw prompt token count are only coarse proxies: they ignore three critical facts: (a) cached prefix tokens contribute **zero** prefill compute load on the instance that holds them, (b) in chunked prefill, only the not-yet-computed suffix of each prompt generates new prefill work at the current step, and (c) requests in the decode phase and their tokens must not be counted toward prefill compute load. As a result, these coarse metrics systematically mis-estimate prefill compute load, especially when prefix caching or chunked-prefill are enabled.
 
 2. **Decode compute load**  
    For decode in MoE-style architectures, the true compute load depends on two independent factors:
-   \[
-   C_\text{decode} \propto N_\text{batch} + \sum_{r \in \text{running batch}} L_r,
-   \]
-   where \(N_\text{batch}\) is the number of requests in the active decode batch (which determines expert-routing cost), and \(\sum L_r\) is the sum of sequence lengths across those requests (which determines attention cost). This also differs fundamentally from KV cache usage: different decode requests in the running batch may share a common prefix in the KV cache, so storage usage does not reflect running batch compute load.
+   ```{math}
+   C_{\text{decode}} \propto N_{\text{batch}} + \sum_{r \in \text{running batch}} L_r,
+   ```
+   where $N_{\text{batch}}$ is the number of requests in the active decode batch (which determines expert-routing cost), and $\sum L_r$ is the sum of sequence lengths across those requests (which determines attention cost). This also differs fundamentally from KV cache usage: different decode requests in the running batch may share a common prefix in the KV cache, so storage usage does not reflect running batch compute load.
 
 A Ial-oriented scheduler must therefore design metrics that accurately model their actual compute load  (which is what Llumnix implements), rather than relying solely on coarse-grained metrics such as request count, raw prompt tokens, or KV cache usage.
 
 ---
 
-### 4.2 CMS (engine-side) path
+### CMS (engine-side) path
 
-```mermaid
+```{mermaid}
 graph TB
     Request([Request]) --> Gateway
 
@@ -120,7 +120,7 @@ Llumnix’s full-mode uses a CMS-backed status path (engine → llumlet → CMS 
    - **Usage**: This feature is enabled by default in full-mode
 
 2. **Dispatch-time account with reconciliation (fixes dispatch blindness)**  
-   The scheduler maintains an account that records a load increment at each dispatch. This account represents load known to exist (because the scheduler created it) but not yet reflected in engine-exported status. When the engine exports a status that includes this load, the scheduler reconciles the account via a combine operation, removing the corresponding entries to avoid double-counting. The account is a temporary compensating ledger: it holds only net increments not yet reflected on the engine side and shrinks back to zero as confirmations arrive.
+   The scheduler maintains a per-instance **instance status local account** that records a load increment at each dispatch. Requests that have been dispatched but not yet reflected in engine-exported status are called **in-flight requests**; the local account accumulates load increments from all in-flight requests on that instance. When the engine exports a status that includes an in-flight request, the scheduler reconciles the local account via a combine operation, subtracting the confirmed request's load increment to avoid double-counting. The local account is a temporary compensating ledger: it holds only net load increments from in-flight requests and shrinks back to zero as engine-side confirmations arrive.
    - **Usage**: This feature is enabled by default in full-mode. To enable accurate prompt token counting for load calculation, the gateway must be configured with either `--tokenizer-path` (for local tokenizer files) or `--tokenizer-name` (for built-in tokenizers) to properly tokenize incoming requests.
 
 3. **Status forward-prediction (fixes discrete vs continuous mismatch)**  
@@ -131,9 +131,9 @@ Together, these mechanisms make the CMS path provide the most instant load view 
 
 ---
 
-### 4.3 LRS (scheduler-side) path
+### LRS (scheduler-side) path
 
-```mermaid
+```{mermaid}
 graph TB
     Request([Request]) --> GW
 
@@ -168,7 +168,7 @@ The remaining limitation on the LRS path is informational rather than temporal: 
 
 ---
 
-### 4.4 Summary of Llumnix Ial solution
+### Summary of Llumnix Ial solution
 
 - **CMS solution**: event-triggered exporting, dispatch-time accounting, and status forward-prediction close the structural gaps of existing engine-side status export, yielding a most instant and accurate load basis for scheduling within this paradigm.
 - **LRS solution**: dispatch- and streaming-driven request/token count updates provide temporally optimal bookkeeping given the information available to the scheduler, with the only remaining inaccuracies arising from engine-internal states that are fundamentally opaque to this path.

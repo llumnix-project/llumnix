@@ -11,7 +11,7 @@ The workflow is as follows:
 
 ## Architecture
 
-```mermaid
+```{mermaid}
 graph LR
     Client[Client]
 

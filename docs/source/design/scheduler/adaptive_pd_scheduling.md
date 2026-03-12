@@ -84,7 +84,7 @@ For adaptive PD related rescheduling, only decode requests will be migrated and 
 | `--reschedule-policies` | `binpacking_mitigation,binpacking_consolidation` | Reschedule policies. |
 | `--tpot-migrate-out-ceil-threshold` | `0.95` | Fraction of TPOT SLO above which overload rescheduling triggers. |
 | `--tpot-migrate-out-floor-threshold` | `0.60` | Fraction of TPOT SLO below which underload rescheduling triggers. |
-| `--enable-instance-status-local-account`(Optional) | `true` | Enable instance status local account. |
+| `--enable-instance-status-local-account` (Optional) | `true` | Enable instance status local account. |
 
 ---
 

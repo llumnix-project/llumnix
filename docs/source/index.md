@@ -28,22 +28,21 @@ New to Llumnix? Start here.
 Understand how Llumnix works internally.
 
 - [Architecture Overview](design/architecture.md) — Full-stack component design
-- Scheduler
-	- [Scheduling Policy Framework](./design/scheduling/policy_framework.md) — Scheduling policy design
-	- [Instant and Accurate Load for Scheduling](./design/scheduling/instant_accurate_load.md) — Instance load obervation and modeling
-	- [KV-aware Scheduling](./design/scheduling/cache_aware_scheduling.md) — Scheduling with KV cache state awareness
-    - [SLO-aware Scheduling](./design/scheduling/slo_aware_scheduling.md) — Scheduling with SLO awareness
-	- [Adaptive PD Scheduling](./design/scheduling/adaptive_pd_scheduling.md) — Adaptive P/D role assignment to maximize SLO attainment
-- Rescheduler
-	- [Rescheduler](./design/rescheduler.md) — Continuous rescheduling via request migration
 - Gateway
   - [Gateway Architecture](./design/gateway/gateway_architecture.md) - Gateway architecture and basic functionalities
-	- [PDD Protocol](./design/gateway/pdd_protocol.md) — Prefill-Decode disaggregation protocol
-	- [Batch Inference](./design/gateway/batch_inference.md) — Batch inference support
+  - [PDD Protocol](./design/gateway/pdd_protocol.md) — Prefill-Decode disaggregation protocol
+  - [Batch Inference](./design/gateway/batch_inference.md) — Batch inference support
+- Scheduler
+  - [Scheduling Policy Framework](./design/scheduler/policy_framework.md) — Scheduling policy design
+  - [Instant and Accurate Load for Scheduling](./design/scheduler/instant_accurate_load.md) — Instance load obervation and modeling
+  - [Cache-aware Scheduling](./design/scheduler/cache_aware_scheduling.md) — Scheduling with KV cache state awareness
+  - [SLO-aware Scheduling](./design/scheduler/slo_aware_scheduling.md) — Scheduling with SLO awareness
+  - [Adaptive PD Scheduling](./design/scheduler/adaptive_pd_scheduling.md) — Adaptive P/D role assignment to maximize SLO attainment
+  - [Rescheduler](./design/scheduler/rescheduler.md) — Continuous rescheduling via request migration
 - Llumlet
-	- [Llumlet & Llumlet Proxy](./design/llumlet/Llumlet&Llumlet_proxy.md) — Engine-side agent bridging local engine and global scheduler
-	- [Realtime Instance Status Tracking](./design/scheduling/real_time_instance_status_tracking.md) — How Llumnix tracks engine state with minimal delay and overhead
-	- [Migration](./design/llumlet/request_migration.md) — Request migration implementation
+  - [Llumlet and Llumlet Proxy](./design/llumlet/llumlet_and_llumlet_proxy.md) — Engine-side agent bridging local engine and global scheduler
+  - [Real-time Instance Status Tracking](./design/llumlet/realtime_instance_status_tracking.md) — How Llumnix tracks engine state with minimal delay and overhead
+  - [Migration](./design/llumlet/request_migration.md) — Request migration implementation
 
 ---
 
@@ -70,8 +69,7 @@ develop/image_build
 :caption: Design Documents
 
 design/architecture
-design/scheduling/index
-design/llumlet/index
 design/gateway/index
-design/rescheduler
+design/scheduler/index
+design/llumlet/index
 :::

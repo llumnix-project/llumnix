@@ -101,7 +101,7 @@ For non-PD deployments, a single request is sent to the selected instance. For P
 
 The following describes how a `/v1/chat/completions` request travels through the gateway.
 
-```mermaid
+```{mermaid}
 %%{init: {'flowchart': {'curve': 'basis', 'nodeSpacing': 30}}}%%
 graph TB
     Client[Client]

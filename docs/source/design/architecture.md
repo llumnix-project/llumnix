@@ -9,7 +9,7 @@ LlumSched is the central scheduling component. It operates in two roles:
 - **Scheduler**: makes initial routing decisions for incoming requests, selecting the target instance based on scheduling policy and current instance load
 - **Rescheduler**: continuously monitors instance status and migrates in-flight requests between instances for multiple purposes, e.g., to rebalance load, to satisfy SLO, to handle engine failures
 
-LlumSched implements a **metrics → filters → selectors** scheduling pipeline. See [Scheduling Policy Framework](./scheduling/policy_framework.md) for details on built-in policies, scheduling modes.
+LlumSched implements a **metrics → filters → selectors** scheduling pipeline. See [Scheduling Policy Framework](./scheduler/policy_framework.md) for details on built-in policies, scheduling modes.
 
 #### 2. Llumlet
 Llumlet is an engine-side agent deployed alongside each inference engine instance. It bridges the global scheduling components and the local inference engine:
@@ -17,7 +17,7 @@ Llumlet is an engine-side agent deployed alongside each inference engine instanc
 - Collects engine-internal status directly from the engine
 - Writes instance status to the Cluster Metadata Store (CMS) for the scheduler to consume
 - Enables live request migration between instances
-- Llumlet is deployed only in full mode. See [Llumlet & Llumlet Proxy](./llumlet/Llumlet&Llumlet_proxy.md) for implementation details.
+- Llumlet is deployed only in full mode. See [Llumlet and Llumlet Proxy](./llumlet/llumlet_and_llumlet_proxy.md) for implementation details.
 
 #### 3. Cluster meta store
 Cluster meta store (CMS) is a shared store for real-time instance status. It serves as the source of truth for the scheduler's view of the cluster in full mode:
@@ -49,17 +49,17 @@ Beyond its core components, Llumnix provides the following features:
 
 1. **Scheduler + rescheduler architecture** for fully dynamic request scheduling
    - Scheduler for initial routing
-   - [Rescheduler](./rescheduler.md) for continuous migration
+   - [Rescheduler](./scheduler/rescheduler.md) for continuous migration
 
 2. **Advanced scheduling policies** for modern distributed serving
-   - Extreme load balancing for PD+EP: migration-enhanced DPLB, predictor-based prefill scheduling, [SLO-based scheduling](./scheduling/slo_aware_scheduling.md)
-   - Precise [KV-aware Scheduling](./scheduling/cache_aware_scheduling.md)
-   - [Adaptive PD disaggregation](./scheduling/adaptive_pd_scheduling.md): taming instantaneous P-D load fluctuation
+   - Extreme load balancing for PD+EP: migration-enhanced DPLB, predictor-based prefill scheduling, [SLO-based scheduling](./scheduler/slo_aware_scheduling.md)
+   - Precise [Cache-aware Scheduling](./scheduler/cache_aware_scheduling.md)
+   - [Adaptive PD disaggregation](./scheduler/adaptive_pd_scheduling.md): taming instantaneous P-D load fluctuation
 
-3. **Realtime tracking of instance status** for optimal scheduling quality
-   - Lightweight scheduler-engine sync to eliminate information lag — see [Instant and Accurate Load](./scheduling/instant_accurate_load.md)
+3. **Real-time tracking of instance status** for optimal scheduling quality
+   - Lightweight scheduler-engine sync to eliminate information lag — see [Instant and Accurate Load](./scheduler/instant_accurate_load.md)
 
-4. **Modular, extensible scheduling policy framework** for easily implementing and composing new policies — see [Schedule Policy Framework](./scheduling/policy_framework.md)
+4. **Modular, extensible scheduling policy framework** for easily implementing and composing new policies — see [Schedule Policy Framework](./scheduler/policy_framework.md)
 
 5. **Dual-mode scheduling**
    - Full-mode for max performance with engine participation (white-box)

@@ -14,7 +14,7 @@ Note that with this new repository, we are re-architecting Llummix to a more mod
 - **Dual-mode scheduling**
   - Full mode (white-box) for max performance with engine participation
   - Lite mode (black-box) for engine-transparent deployments
-- **Realtime instance status tracking** for optimal scheduling quality
+- **Real-time instance status tracking** for optimal scheduling quality
 - **Modular, extensible policy framework** for easily implementing and composing scheduling policies
 - **LLM-specialized request gateway**: tokenizers, diverse request routing / disaggregation protocols, batch API, etc.
 - **High-performance KV cache support** (see [llumnix-kv](https://github.com/llumnix-project/llumnix-kv))

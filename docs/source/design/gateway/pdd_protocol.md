@@ -1,6 +1,6 @@
-# Request Forwarding Protocol for Prefill-Decode Disaggregation 
+# PDD Forwarding Protocol
 
-## 1. Introduction
+## Introduction
 
 PDD (Prefill-Decode disaggregation) decouples LLM inference into separate prefill and decode services, enabling independent scaling and optimization of each stage for improved resource utilization and performance. The emergence of diverse inference engines, connectors, and KV cache transfer backends creates protocol heterogeneity that demands flexible abstraction for low-effort PDD protocol integration and future extensibility.
 
@@ -11,9 +11,9 @@ Llumnix's current supported PDD protocol implementations:
 
 ---
 
-## 2. Design
+## Design
 
-### 2.1 Forwarder Processing Flow
+### Forwarder Processing Flow
 
 The core request forwarding architecture enables the Llumnix gateway to handle diverse inference engines and transfer backends combinations through a unified forwarding abstraction:
 
@@ -23,7 +23,7 @@ The core request forwarding architecture enables the Llumnix gateway to handle d
 4. **Request Dispatch**: Forwarder sends constructed requests to target inference engines
 5. **Response Post-processing**: SSE Reader processes streaming responses and passes them to OpenAI handler for post-processing
 
-### 2.2 Forwarder Logic Abstraction
+### Forwarder Logic Abstraction
 
 The forwarder abstraction enables different protocols to share the same execution framework while implementing protocol-specific logic:
 
@@ -41,9 +41,9 @@ The forwarder abstraction enables different protocols to share the same executio
 
 ---
 
-## 3. Protocol Implementation Details
+## Protocol Implementation Details
 
-### 3.1 VLLM-KVT Protocol
+### VLLM-KVT Protocol
 
 **Core Features**
 - Support both batch scheduling mode and staged scheduling mode
@@ -64,7 +64,7 @@ The forwarder abstraction enables different protocols to share the same executio
 5. **Decode KV Transfer Parameters Config**: `do_remote_prefill = true`, setting scheduled prefill instance information in KV transfer parameters, KV transfer backend configures decode instance for remote prefill mode, pulling KV cache from prefill instance
 6. **Decode Dispatch**: Dispatch request with KV transfer parameters containing scheduled prefill instance information to decode instance, enabling decode instance to pull KV cache from remote prefill
 
-### 3.2 VLLM-Mooncake Protocol
+### VLLM-Mooncake Protocol
 
 **Core Features**
 - Support both batch scheduling mode and staged scheduling mode
@@ -86,7 +86,7 @@ All steps are the same as VLLM-KVT's Staged Scheduling Mode, except the fourth s
 
 ---
 
-## 4. Usage
+## Usage
 
 ### Configuration
 
