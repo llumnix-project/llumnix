@@ -41,7 +41,6 @@ def generate_e2e_config():
             update_configs.append(tmp_config)
     base_configs = update_configs
 
-    base_configs = [{'policy': 'round-robin', 'enable_full_mode_scheduling': False, 'connector_type': 'HybridConnector', 'enable_pd': False, 'separate_pd_scheduling': False}]
     return base_configs
 
 
