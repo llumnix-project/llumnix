@@ -29,7 +29,6 @@ from llumnix.compat.hybrid_connector_compat import (
     PlaceholderModule,
     core_update_params,
     req2corereq,
-    _get_inst_id,
     rpc_port,
     CODE_OK,
     MIGRATE_TO_REQ,
@@ -43,13 +42,11 @@ from llumnix.compat.hybrid_connector_compat import (
     _g_migrate_out_req_info_lock,
     _g_migrate_in_req_info_lock,
     MigrateResp,
-    PeerManager,
     ConnManager,
 )
 
 try:
     import blade_kvt
-    from blade_kvt.kv_transfer import connect_naming
 except ImportError:
     blade_kvt = PlaceholderModule("blade_kvt")
     connect_naming = blade_kvt.placeholder_attr("connect_naming")
