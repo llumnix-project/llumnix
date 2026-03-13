@@ -34,7 +34,7 @@ Understand how Llumnix works internally.
   - [Batch Inference](./design/gateway/batch_inference.md) — Batch inference support
 - Scheduler
   - [Scheduling Policy Framework](./design/scheduler/policy_framework.md) — Scheduling policy design
-  - [Instant and Accurate Load for Scheduling](./design/scheduler/instant_accurate_load.md) — Instance load obervation and modeling
+  - [Instant and Accurate Load](./design/scheduler/instant_accurate_load.md) — Instance load obervation and modeling
   - [Cache-aware Scheduling](./design/scheduler/cache_aware_scheduling.md) — Scheduling with KV cache state awareness
   - [Predictor-Enhanced Scheduling](./design/scheduler/predictor_enhanced_scheduling.md) — Online latency prediction for accurate prefill load estimation
   - [SLO-aware Scheduling](./design/scheduler/slo_aware_scheduling.md) — Scheduling with SLO awareness
