@@ -1,4 +1,4 @@
-# Batch API
+# Batch Inference
 
 Llumnix LLM Gateway supports OpenAI's [Batch API](https://platform.openai.com/docs/guides/batch) (i.e., batch inference), following the OpenAI interface specification. Batch inference processes large volumes of inference requests asynchronously, making it ideal for running during idle periods to fully utilize machine resources.
 
@@ -49,7 +49,7 @@ To enable Batch API support in LLM Gateway, you need:
 - A **Redis instance** for storing batch metadata.
 - A **scheduler** and **inference engine** (e.g., vLLM) deployed alongside the gateway.
 
-A complete deployment example is provided under `deploy/batch-api/`. It consists of the following components:
+A complete deployment example is provided under `deploy/batch-inference/`. It consists of the following components:
 
 | Component | Description |
 | --- | --- |
@@ -121,7 +121,7 @@ Deploy all components using kustomize:
 ```bash
 cd deploy/
 
-bash group_deploy.sh batch-api-test batch-api
+bash group_deploy.sh batch-inference-test batch-inference
 ```
 
 ## Deployment Parameters

@@ -66,8 +66,9 @@ Beyond its core components, Llumnix provides the following features:
    - Lite-mode for engine-transparent deployments (black-box)
 
 6. **LLM-specialized request gateway**
-   - Different [PD disaggregation protocols](./gateway/pdd_protocol.md)
-   - [Batch API](./gateway/batch_inference.md)
+   - Different [PD disaggregation fowarding protocols](./gateway/pdd_protocol.md)
+   - [Batch Inference](./gateway/batch_inference.md)
+   - [Traffic Splitting](./gateway/traffic_splitting.md): split traffic across internal and external endpoints by weight or model prefix, with automatic fallback on failure
 
 7. **Fault tolerance**
    - Fault tolerance for Llumnix components

@@ -30,11 +30,12 @@ Understand how Llumnix works internally.
 - [Architecture Overview](design/architecture.md) — Full-stack component design
 - Gateway
   - [Gateway Architecture](./design/gateway/gateway_architecture.md) - Gateway architecture and basic functionalities
-  - [PDD Protocol](./design/gateway/pdd_protocol.md) — Prefill-Decode disaggregation protocol
+  - [PDD Forwarding Protocol](./design/gateway/pdd_protocol.md) — Prefill-Decode disaggregation forwarding protocol
   - [Batch Inference](./design/gateway/batch_inference.md) — Batch inference support
+  - [Traffic Splitting](./design/gateway/traffic_splitting.md) — Split traffic across internal and external endpoints with fallback
 - Scheduler
   - [Scheduling Policy Framework](./design/scheduler/policy_framework.md) — Scheduling policy design
-  - [Instant and Accurate Load for Scheduling](./design/scheduler/instant_accurate_load.md) — Instance load obervation and modeling
+  - [Instant and Accurate Load](./design/scheduler/instant_accurate_load.md) — Instance load obervation and modeling
   - [Cache-aware Scheduling](./design/scheduler/cache_aware_scheduling.md) — Scheduling with KV cache state awareness
   - [SLO-aware Scheduling](./design/scheduler/slo_aware_scheduling.md) — Scheduling with SLO awareness
   - [Adaptive PD Scheduling](./design/scheduler/adaptive_pd_scheduling.md) — Adaptive P/D role assignment to maximize SLO attainment

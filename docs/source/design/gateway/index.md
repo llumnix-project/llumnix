@@ -9,4 +9,5 @@ The gateway component handles request routing and dispatching in Llumnix.
 gateway_architecture
 pdd_protocol
 batch_inference
+traffic_splitting
 ```
