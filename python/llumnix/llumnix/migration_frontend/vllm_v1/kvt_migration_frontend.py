@@ -6,6 +6,7 @@ from typing import Any, List, Optional, Tuple
 import struct
 import msgspec
 
+import vllm.envs as vllm_envs
 from vllm.config import VllmConfig
 from vllm.v1.request import Request
 
@@ -62,8 +63,6 @@ class KVTMigrationFrontend(BaseMigrationFrontend):
         super().__init__(vllm_config, dp_rank, scheduler)
 
         self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._pmgr = None
-        self._naming_cli = None
         self._enc = MsgpackEncoder()
         self._migration_out_tasks = set()
 
@@ -130,16 +129,7 @@ class KVTMigrationFrontend(BaseMigrationFrontend):
 
         assert self._cfg.kv_transfer_config is not None
         self.peer_addr_port = (get_ip(), rpc_port(self._cfg))
-
-        self._inst_id = _get_inst_id(self._cfg)
-        self._naming_url = self._cfg.kv_transfer_config.get_from_extra_config(
-            "naming_url", "badbad"
-        )
-        self._naming_cli = connect_naming(self._inst_id, self._naming_url)
-        self._conn_mgr = ConnManager()
-        self._pmgr = PeerManager(self._naming_cli, None, self._conn_mgr)
-        assert self._loop is not None
-        self._pmgr.start(self._loop)
+        self._conn_mgr = ConnManager(vllm_envs.VLLM_PD_CONNMANAGER_CAP)
 
         # init zmq server for migration
         self.migration_finish_event = threading.Event()
@@ -360,8 +350,6 @@ class KVTMigrationFrontend(BaseMigrationFrontend):
     async def _do_migrate(
         self, msgbuf, retry: int, dst_host: str, dst_port: int
     ) -> "MigrateResp":
-        if not self._pmgr:
-            raise RuntimeError("PeerManager not initialized")
         peer_addr_port = (dst_host, dst_port)
         res = await self._rpc(peer_addr_port, msgbuf, MIGRATE_TO_RESP, retry)
         return res

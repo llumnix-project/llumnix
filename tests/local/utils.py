@@ -106,6 +106,7 @@ def get_scheduler_command(
         command += "--rescheduling-neutral-load-threshold=0 "
         command += "--rescheduling-decode-load-threshold=0 "
         command += "--rescheduling-req-select-rule=NUM_REQ "
+        command += "--rescheduling-req-select-value=1 "
     else:
         command += "--colocated-rescheduling-mode=false "
         command += "--enable-rescheduling=false "
@@ -136,8 +137,7 @@ def get_vllm_command(
             backend = "kvt+migration"
         kv_transfer_config = (
             f'{{"kv_connector":"HybridConnector", "kv_role": "{kv_role}",'
-            f'"kv_connector_extra_config": {{"backend":"{backend}",'
-            f'"naming_url": "file:{NAMING_DIR}","kvt_inst_id": "{tag}",'
+            f'"kv_connector_extra_config": {{"backend":"{backend}","kvt_inst_id": "{tag}",'
             f'"rpc_port":{port + KVT_PORT_OFFSET}}}}}'
         )
     elif connector_type == "MooncakeConnector":
@@ -167,6 +167,8 @@ def get_vllm_command(
     if enable_full_mode_scheduling:
         command = "LLUMNIX_ENABLE_MIGRATION=1 " + command
         command = "VLLM_ENABLE_LLUMNIX=1 " + command
+        command = "LLUMNIX_MAX_REQ_MIG_IN=50 " + command
+        command = "LLUMNIX_MAX_REQ_MIG_OUT=50 " + command
 
     command = "VLLM_USE_MODELSCOPE=true " + command
 

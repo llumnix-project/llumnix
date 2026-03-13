@@ -1,5 +1,5 @@
-protobuf<5.0dev
+protobuf
 grpcio
-grpcio-tools==1.62.3
+grpcio-tools
 redis
 aiohttp
