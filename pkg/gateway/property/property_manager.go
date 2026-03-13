@@ -64,8 +64,8 @@ func NewConfigManager(configPaths map[string]string) *ConfigManager {
 }
 
 func (cm *ConfigManager) GetMirrorConfig() MirrorConfig {
-	cm.mutex.Lock()
-	defer cm.mutex.Unlock()
+	cm.mutex.RLock()
+	defer cm.mutex.RUnlock()
 	return *cm.mirrorConfig
 }
 

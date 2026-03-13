@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"llumnix/cmd/gateway/app/options"
+	"llumnix/pkg/gateway/property"
 	"llumnix/pkg/types"
 	"math/rand"
 	"net"
@@ -15,14 +15,18 @@ import (
 	"k8s.io/klog/v2"
 )
 
-type Mirror struct {
-	config *options.GatewayConfig
-	client *http.Client
+type ConfigProvider interface {
+	GetMirrorConfig() property.MirrorConfig
 }
 
-func NewMirror(config *options.GatewayConfig) *Mirror {
+type Mirror struct {
+	configProvider ConfigProvider
+	client         *http.Client
+}
+
+func NewMirror(provider ConfigProvider) *Mirror {
 	return &Mirror{
-		config: config,
+		configProvider: provider,
 		client: &http.Client{
 			Transport: &http.Transport{
 				DialContext: (&net.Dialer{Timeout: 3 * time.Second}).DialContext,
@@ -32,11 +36,10 @@ func NewMirror(config *options.GatewayConfig) *Mirror {
 }
 
 func (m *Mirror) Enabled() bool {
-	propertyManager := m.config.GetConfigManager()
-	if propertyManager == nil {
+	if m.configProvider == nil {
 		return false
 	}
-	mirrorConfig := propertyManager.GetMirrorConfig()
+	mirrorConfig := m.configProvider.GetMirrorConfig()
 	return mirrorConfig.Enable
 }
 
@@ -50,13 +53,11 @@ func (m *Mirror) TryMirror(req *types.RequestContext) {
 			}
 		}()
 
-		// Get the newest mirror configuration directly from property manager
-		propertyManager := m.config.GetConfigManager()
-		mirrorConfig := propertyManager.GetMirrorConfig()
+		mirrorConfig := m.configProvider.GetMirrorConfig()
 
 		if mirrorConfig.EnableLog {
-			klog.Infof("[%s] Mirror request enabled, target: %s, ratio: %.2f, token: %s, timeout: %.2f",
-				req.Id, mirrorConfig.Target, mirrorConfig.Ratio, mirrorConfig.Authorization, mirrorConfig.Timeout)
+			klog.Infof("[%s] Mirror request enabled, target: %s, ratio: %.2f, timeout: %.2f",
+				req.Id, mirrorConfig.Target, mirrorConfig.Ratio, mirrorConfig.Timeout)
 		}
 
 		// If mirror target is not configured or ratio is not positive, skip mirroring
@@ -65,7 +66,7 @@ func (m *Mirror) TryMirror(req *types.RequestContext) {
 		}
 
 		// Check if we should mirror this request based on the ratio
-		if float64(rand.Intn(100)) >= mirrorConfig.Ratio {
+		if rand.Float64()*100 >= mirrorConfig.Ratio {
 			return
 		}
 
@@ -100,13 +101,15 @@ func (m *Mirror) TryMirror(req *types.RequestContext) {
 			mirrorReq = mirrorReq.WithContext(ctx)
 		}
 		resp, err := m.client.Do(mirrorReq)
-		if err != nil && mirrorConfig.EnableLog {
-			klog.Errorf("Mirror request failed: %v", err)
+		if err != nil {
+			if mirrorConfig.EnableLog {
+				klog.Errorf("Mirror request failed: %v", err)
+			}
 			return
 		}
 		defer resp.Body.Close()
 
-		_, _ = io.ReadAll(resp.Body)
+		_, _ = io.Copy(io.Discard, resp.Body)
 
 		if mirrorConfig.EnableLog {
 			klog.Infof("[%s] Mirror request sent to %s, status: %d", req.Id, mirrorURL, resp.StatusCode)

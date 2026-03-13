@@ -1,0 +1,28 @@
+# ConfigMap for traffic mirror configuration.
+# Mounted at /mnt/mirror.json inside the gateway pod.
+#
+# To hot-reload, edit this ConfigMap:
+#   kubectl edit configmap mirror-config -n <namespace>
+# The gateway watches /mnt/mirror.json every 10 seconds and auto-reloads.
+#
+# NOTE: ConfigMap volume updates may take up to 60s (kubelet sync period).
+# For faster updates, exec into the pod and write the file directly:
+#   kubectl exec -it deployment/gateway -n <ns> -- \
+#     sh -c 'echo '"'"'{"Enable":false}'"'"' > /mnt/mirror.json'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mirror-config
+  labels:
+    app: gateway
+    role: config
+data:
+  mirror.json: |
+    {
+      "Enable": true,
+      "Target": "http://mirror-target:8000",
+      "Ratio": 100,
+      "Timeout": 5000,
+      "Authorization": "",
+      "EnableLog": true
+    }

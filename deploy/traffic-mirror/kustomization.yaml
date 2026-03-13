@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Scenario: Traffic mirroring from gateway to a lightweight echo service.
+#
+# internal.yaml      -- Deployment, Qwen3-8B (1 GPU, full-mode scheduling)
+#                        Contains discovery sidecar + LLUMNIX_* env vars
+#
+# mirror-target.yaml -- Deployment + Service, Python echo server (no GPU)
+#                        Accepts any POST and returns 200; check stdout logs
+#                        to verify mirror traffic arrived.
+#
+# gateway.yaml       -- Gateway with /mnt/mirror.json mounted from ConfigMap
+#
+# scheduler.yaml     -- Standard scheduler for internal service
+#
+# mirror-config.yaml -- ConfigMap for /mnt/mirror.json (hot-reloadable)
+
+resources:
+  - ../base
+  - internal.yaml
+  - mirror-target.yaml
+  - gateway.yaml
+  - scheduler.yaml
+  - mirror-config.yaml

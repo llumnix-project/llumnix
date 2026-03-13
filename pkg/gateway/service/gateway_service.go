@@ -113,7 +113,7 @@ func NewGatewayService(c *options.GatewayConfig) *LlmGatewayService {
 	lgs.router = router.NewServiceRouter(c.RoutePolicy, c.RouteConfigRaw)
 
 	// Create traffic mirror component
-	lgs.mirror = mirror.NewMirror(c)
+	lgs.mirror = mirror.NewMirror(c.GetConfigManager())
 
 	// Initialize batch service if OSS path is configured
 	var err error

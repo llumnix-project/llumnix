@@ -1,0 +1,156 @@
+# Source: deploy/service-router/weight/gateway.yaml
+# Changes:
+#   - Removed --route-policy/--route-config (default internal routing)
+#   - Added writable /mnt volume (emptyDir) with init container that seeds
+#     mirror.json from the ConfigMap, so the test script can hot-reload config
+#     by writing directly to /mnt/mirror.json inside the pod.
+#
+# Flow:
+#   Request -> gateway -> internal (primary)
+#                      -> mirror-target (mirrored copy, fire-and-forget)
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  labels:
+    app: gateway
+    role: gateway
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8089
+      targetPort: 8089
+      protocol: TCP
+      name: http
+  selector:
+    app: gateway
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  labels:
+    app: gateway
+    role: gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+        role: gateway
+    spec:
+      terminationGracePeriodSeconds: 300
+      initContainers:
+      - name: init-mirror-config
+        image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/python3:3.12-slim-bookworm
+        command: ["/bin/sh", "-c"]
+        args:
+        - cp /mirror-config-src/mirror.json /mnt/mirror.json
+        volumeMounts:
+        - name: mirror-config-src
+          mountPath: /mirror-config-src
+          readOnly: true
+        - name: mirror-data
+          mountPath: /mnt
+        resources:
+          requests:
+            memory: "16Mi"
+            cpu: "50m"
+          limits:
+            memory: "32Mi"
+            cpu: "100m"
+      - name: download-tokenizer
+        image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/python3:3.12-slim-bookworm
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          pip3 install modelscope -i https://mirrors.aliyun.com/pypi/simple/ && \
+          python3 << 'EOF'
+          from modelscope import snapshot_download
+          
+          model_dir = snapshot_download(
+              'Qwen/Qwen3-8B',
+              cache_dir='/tokenizers',
+              allow_patterns=['tokenizer.json', 'tokenizer_config.json']
+          )
+          
+          print(f"download tokenizer done: {model_dir}")
+          EOF
+        volumeMounts:
+        - name: tokenizer-storage
+          mountPath: /tokenizers
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+      containers:
+      - name: gateway
+        image: ${REPOSITORY}/gateway:${GATEWAY_IMAGE_TAG}
+        imagePullPolicy: Always
+        command: ["/usr/local/bin/gateway"]
+        args:
+        - "--port"
+        - "8089"
+        - "-v"
+        - "3"
+        - "--discovery-redis-status-ttl-ms"
+        - "60000"
+        - "--scheduler-endpoints"
+        - "scheduler:8088"
+        - "--llm-backend-discovery"
+        - "redis"
+        - "--scheduler-discovery"
+        - "endpoints"
+        - "--discovery-redis-host"
+        - "redis"
+        - "--discovery-redis-port"
+        - "6379"
+        - "--scheduling-policy"
+        - "load-balance"
+        - "--tokenizer-path"
+        - "/tokenizers/Qwen/Qwen3-8B"
+        - "--enable-full-mode-scheduling=true"
+        ports:
+        - containerPort: 8089
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8089
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8089
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: tokenizer-storage
+          mountPath: /tokenizers
+          readOnly: true
+        - name: mirror-data
+          mountPath: /mnt
+      volumes:
+      - name: tokenizer-storage
+        emptyDir: {}
+      - name: mirror-data
+        emptyDir: {}
+      - name: mirror-config-src
+        configMap:
+          name: mirror-config
