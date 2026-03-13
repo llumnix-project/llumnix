@@ -189,25 +189,6 @@ These features require **full-mode scheduling** (`--enable-full-mode-scheduling`
 
 ---
 
-## Usage and extension guidelines
-
-- **Choosing a policy and mode**
-  - SLO-restricted workloads with profiling data: **SLO + full-mode**.
-  - Utilization-focused workloads with cache locality needs: **load-balance + full-mode + cache-aware scheduling**.
-  - Simple deployments without CMS: **load-balance + lite-mode**, with `num_requests` or `num_tokens` as the load metric.
-
-- **Switching between full-mode and lite-mode**
-  - Flag: `--enable-full-mode-scheduling`.
-  - **Full-mode (default)**: `--enable-full-mode-scheduling=true`.
-  - **Lite-mode**: `--enable-full-mode-scheduling=false`.
-  - Advanced scheduling features require full-mode.
-
-- **Extending with new policies**
-  - Reuse existing metrics, filters, and selectors; rewire combinations per infer type.
-  - For new signals: implement `instanceSchedulingMetric` in `metrics.go`, register in `getSchedulingMetric`, configure in `schedule_policy_registry.go`.
-
----
-
 ## Future work
 
 - **More advanced scheduling features**: with the general-purpose **metrics + filters + selectors** framework in place, Llumnix will open-source more advanced features built on top of it, including **elastic EP** and **adaptive PD**.
