@@ -76,6 +76,7 @@ jobs:
         timeout-minutes: 10
         run: |
           echo "Cleaning up existing resources in namespace: ${{ inputs.test_namespace }}"
+          kubectl delete leaderworkersets --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
           kubectl delete jobs --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
           kubectl delete deployments --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
           kubectl delete statefulsets --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
@@ -240,6 +241,7 @@ jobs:
         if: always()
         run: |
           echo "Cleaning up resources in namespace..."
+          kubectl delete leaderworkersets --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
           kubectl delete jobs --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
           kubectl delete deployments --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
           kubectl delete statefulsets --all -n ${{ inputs.test_namespace }} --ignore-not-found=true || true
