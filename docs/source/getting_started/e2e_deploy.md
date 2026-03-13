@@ -156,8 +156,8 @@ cd deploy
 
 ```
 Using repository: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix
-Gateway tag:      20260312-143526
-Scheduler tag:    20260312-204249
+Gateway tag:      20260313-094911
+Scheduler tag:    20260313-094904
 vLLM tag:         20260130-105854
 Creating namespace: llumnix
 ...
@@ -471,8 +471,8 @@ After modifying any yaml files, apply changes using:
 
 # Or call group_update.sh directly (requires env vars to be set)
 export REPOSITORY="llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix"
-export GATEWAY_IMAGE_TAG="20260312-143526"
-export SCHEDULER_IMAGE_TAG="20260312-204249"
+export GATEWAY_IMAGE_TAG="20260313-094911"
+export SCHEDULER_IMAGE_TAG="20260313-094904"
 export VLLM_IMAGE_TAG="20260306-165123"
 export DISCOVERY_IMAGE_TAG="20260302-203317"
 
