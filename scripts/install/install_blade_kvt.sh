@@ -43,13 +43,13 @@ setup_cuda_env() {
 }
 
 main() {
-    local repo_url="http://gitlab.alibaba-inc.com/PAI-LLM/blade-kvt.git"
-    local branch="zy-oc"
+    local repo_url="https://github.com/llumnix-project/llumnix-kv.git"
+    local branch="main"
     local work_dir="/tmp/blade-kvt"
 
     rm -rf "$work_dir"
     git clone "$repo_url" -b "$branch" "$work_dir"
-    
+
     setup_cuda_env
     
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

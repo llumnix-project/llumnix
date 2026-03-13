@@ -120,6 +120,8 @@ def check_migration_logs(connector_type: str):
     print(f"Total - Migrate out count: {migrate_out_count}")
     print(f"Total - Traceback count: {traceback_count}")
 
+    assert migrate_in_count > 0, "No migration logs found!"
+
     assert (
         migrate_in_count == migrate_out_count
     ), f"Migration count mismatch! Migrate in: {migrate_in_count}, Migrate out: {migrate_out_count}"
