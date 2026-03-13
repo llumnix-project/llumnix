@@ -7,8 +7,8 @@ import (
 	"k8s.io/klog/v2"
 
 	"llumnix/cmd/gateway/app/options"
-	"llumnix/pkg/resolver"
 	"llumnix/pkg/consts"
+	"llumnix/pkg/resolver"
 	"llumnix/pkg/types"
 )
 
@@ -152,7 +152,7 @@ func (bp *CompositeBalancer) localGet(req *types.RequestContext) (types.Scheduli
 // Get selects appropriate endpoints for the request based on the current balance mode.
 // It implements the Balancer interface.
 func (bp *CompositeBalancer) Get(req *types.RequestContext) (types.SchedulingResult, error) {
-	if req.SchedulingCtx.NeedScheduling {
+	if req.SchedulingCtx.NotNeedScheduling {
 		return bp.localGet(req)
 	}
 

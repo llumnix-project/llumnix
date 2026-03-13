@@ -193,9 +193,10 @@ def get_discovery_command(
         f"--dp_size_local {dp_size_local} "
         f"--redis_address 127.0.0.1 "
         f"--redis_port 6379 "
+        f"--interval 5"
     )
 
-    print(f"runtime command: {command}")
+    print(f"discovery command: {command}")
 
     return command
 

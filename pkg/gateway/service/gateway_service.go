@@ -669,7 +669,7 @@ func (lgs *LlmGatewayService) HandleOpenAIRequest(w http.ResponseWriter, r *http
 func (lgs *LlmGatewayService) HandleSimpleRequest(w http.ResponseWriter, r *http.Request) {
 	// For this scenario, create a request context but disable scheduling
 	reqCtx := types.NewRequestContext(r.Context(), r, w)
-	reqCtx.SchedulingCtx.NeedScheduling = false
+	reqCtx.SchedulingCtx.NotNeedScheduling = true
 
 	// Get an available endpoint from the balancer
 	schResult, err := lgs.balancer.Get(reqCtx)

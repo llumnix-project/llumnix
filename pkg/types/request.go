@@ -208,8 +208,7 @@ type SchedulingContext struct {
 	GatewayId string
 
 	// whether to schedule the request
-	NeedScheduling bool
-
+	NotNeedScheduling bool
 }
 
 // ErrorResponse is used when the engine returns an error directly.
