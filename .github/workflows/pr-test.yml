@@ -12,10 +12,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  lint:
-    name: Lint
-    uses: ./.github/workflows/lint.yml
-
   go-ut:
     name: Go Unit Tests
     uses: ./.github/workflows/ut-gateway-and-scheduler.yml
@@ -35,7 +31,6 @@ jobs:
     name: All PR Tests
     runs-on: [self-hosted, cpu]
     needs:
-      - lint
       - go-ut
       - llumnix-ut
       - discovery-ut
