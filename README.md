@@ -45,8 +45,8 @@ Components:
 View our [documentation](https://docs.llumnix.ai) to learn more.
 
 - [Quick start](https://docs.llumnix.aigetting_started/quick_start)
-- [Deployment guide](dhttps://docs.llumnix.aigetting_started/e2e_deploy)
-- [Development guide](dhttps://docs.llumnix.aidevelop/developer_guide)
+- [Deployment guide](https://docs.llumnix.aigetting_started/e2e_deploy)
+- [Development guide](https://docs.llumnix.aidevelop/developer_guide)
 
 
 # License
