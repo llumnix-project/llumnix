@@ -125,7 +125,7 @@ Llumnix’s full-mode uses a CMS-backed status path (engine → llumlet → CMS 
 
 3. **Status forward-prediction (fixes discrete vs continuous mismatch)**  
    The scheduler uses a predictor that takes the last exported status and the elapsed time since its timestamp as input. It forward-predicts this snapshot to the current query time, estimating how much work has been completed and how much load remains. This converts discrete, step-bound status into a load estimate that is valid at arbitrary scheduling times.
-   - **Usage**: This experimental feature is enabled by setting `--enable-predictor-enhanced-scheduling=true` in full-mode
+   - **Usage**: See [Predictor-Enhanced Scheduling](predictor_enhanced_scheduling.md) for design details and configuration.
 
 Together, these mechanisms make the CMS path provide the most instant load view achievable under the engine-side exporting paradigm, eliminating the structural temporal gaps that exist in existing designs.
 
