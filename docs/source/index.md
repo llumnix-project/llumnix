@@ -74,4 +74,5 @@ design/architecture
 design/gateway/index
 design/scheduler/index
 design/llumlet/index
+design/llumnix_kv/index
 :::
