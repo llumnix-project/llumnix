@@ -52,12 +52,12 @@ Beyond its core components, Llumnix provides the following features:
    - [Rescheduler](./scheduler/rescheduler.md) for continuous migration
 
 2. **Advanced scheduling policies** for modern distributed serving
-   - Extreme load balancing for PD+EP: migration-enhanced DPLB, predictor-based prefill scheduling, [SLO-based scheduling](./scheduler/slo_aware_scheduling.md)
+   - Extreme load balancing for PD+EP: migration-enhanced DPLB, [Predictor-Enhanced Scheduling](./scheduler/predictor_enhanced_scheduling.md), [SLO-based scheduling](./scheduler/slo_aware_scheduling.md)
    - Precise [Cache-aware Scheduling](./scheduler/cache_aware_scheduling.md)
    - [Adaptive PD disaggregation](./scheduler/adaptive_pd_scheduling.md): taming instantaneous P-D load fluctuation
 
 3. **Real-time tracking of instance status** for optimal scheduling quality
-   - Lightweight scheduler-engine sync to eliminate information lag — see [Instant and Accurate Load](./scheduler/instant_accurate_load.md)
+   - Lightweight scheduler-engine sync to eliminate information lag — see [Instant and Accurate Load](./scheduler/instant_accurate_load.md) and [Real-time Instance Status Tracking](./llumlet/realtime_instance_status_tracking.md)
 
 4. **Modular, extensible scheduling policy framework** for easily implementing and composing new policies — see [Schedule Policy Framework](./scheduler/policy_framework.md)
 
