@@ -31,30 +31,6 @@ This adjusted metric is used by all scheduling policies that rely on `allPrefill
 
 ---
 
-## Configuration
-
-### Scheduler flags
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--enable-predictor-enhanced-scheduling` | `false` | Enable predictor-enhanced scheduling |
-| `--max-num-batched-tokens` | `65536` | Maximum tokens per prefill batch; must match the inference engine's `max_num_batched_tokens` |
-| `--num-predictor-warmup-samples` | `20` | Minimum profiling samples before fitting the predictor model |
-
-### Engine environment variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `LLUMNIX_ENABLE_PROFILING` | `0` | Set to `1` to enable profiling data collection on the engine side |
-| `LLUMNIX_PROFILING_STEPS` | `50` | Number of profiling samples to collect per instance |
-
-### Constraints
-
-- **Full-mode only**: Requires `--enable-full-mode-scheduling=true` and CMS. The scheduler forcibly disables this feature when full-mode is not enabled.
-- **`max-num-batched-tokens` alignment**: The scheduler-side `--max-num-batched-tokens` must match the inference engine's `max_num_batched_tokens` configuration. A mismatch causes inaccurate step simulation and degrades prediction quality.
-
----
-
 ## Current Limitations and Future Direction
 
 Online profiling embeds historical latency characteristics into the predictor. Any inference-service change that alters step latency invalidates the fitted model, and the stale samples cannot be purged without restarting the scheduler. A future revision plans to adopt offline profiling to eliminate this coupling. The production-ready design is under active development.

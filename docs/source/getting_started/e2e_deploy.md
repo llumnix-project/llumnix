@@ -35,7 +35,7 @@
 > embedded within the vLLM engine to collect and report instance metrics to
 > the CMS. If you need to customize metric collection
 > frequency, migration behavior, or CMS connection settings, refer to the
-> [Llumlet Configuration Guide](./engine_conf.md).
+> [Llumlet Configuration Guide](../user_manual/engine_conf.md).
 
 
 ## Prerequisites
@@ -457,7 +457,7 @@ management layer. It is responsible for:
 
 The default environment variables in the provided YAML files are sufficient
 for most deployments. If you need to customize the following, refer to the
-[Llumlet Configuration Guide](./engine_conf.md):
+[Llumlet Configuration Guide](../user_manual/engine_conf.md):
 
 ## Update and Teardown
 
