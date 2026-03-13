@@ -6,7 +6,7 @@ Llumnix provides key functionalities for modern distributed serving deployments 
 
 Note that with this new repository, we are re-architecting Llummix to a more modular and cloud-native design (Llumnix v1). The old Ray-based architecture ([Llumnix v0](https://github.com/llumnix-project/llumnix-ray)) is a better choice for local deployments and quick prototyping and experimentation of scheduling ideas.
 
-[[Documentation](https://llumnix.ai)]
+[[Documentation](https://docs.llumnix.ai)]
 
 # Key Features
 - **Scheduler + rescheduler architecture** for fully dynamic request scheduling: initial routing + continuous migration
@@ -16,9 +16,11 @@ Note that with this new repository, we are re-architecting Llummix to a more mod
   - Lite mode (black-box) for engine-transparent deployments
 - **Real-time instance status tracking** for optimal scheduling quality
 - **Modular, extensible policy framework** for easily implementing and composing scheduling policies
-- **LLM-specialized request gateway**: tokenizers, diverse request routing / disaggregation protocols, batch API, etc.
+- **LLM-specialized request gateway**
+  - Tokenizers, diverse request routing / disaggregation protocols, batch API
+  - Traffic management: splitting, mirroring, throttling, etc.
 - **High-performance KV cache support** (see [llumnix-kv](https://github.com/llumnix-project/llumnix-kv))
-  - Efficient, flexible data plane for KV cache transfer (blade-kvt)
+  - Efficient, flexible data plane for KV cache transfer supporting diverse cache layouts and transport protocols (blade-kvt)
   - Unified control plane for PD disaggregation, migration, KV storage (hybrid-connector)
 - **High availability**
   - Fault tolerance for Llumnix components
@@ -40,11 +42,11 @@ Components:
 6. Hybrid Connector: unified KV cache control plane, using blade-kvt for KV transfer and external KV storage for offloading
 
 # Getting Started
-View our [documentation](https://github.com/llumnix-project/llumnix/tree/docs/docs/source) to learn more (the official documentation website is coming soon!).
+View our [documentation](https://docs.llumnix.ai) to learn more.
 
-- [Quick start](docs/source/getting_started/quick_start.md)
-- [Deployment guide](docs/source/getting_started/e2e_deploy.md)
-- [Development guide](docs/source/develop/developer_guide.md)
+- [Quick start](https://docs.llumnix.aigetting_started/quick_start)
+- [Deployment guide](dhttps://docs.llumnix.aigetting_started/e2e_deploy)
+- [Development guide](dhttps://docs.llumnix.aidevelop/developer_guide)
 
 
 # License
