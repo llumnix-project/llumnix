@@ -185,7 +185,7 @@ These features require **full-mode scheduling** (`--enable-full-mode-scheduling`
   - Uses latency predictors to estimate completion prefill tokens since last instance status update and adjusts `all_prefills_tokens_num` accordingly.
 
 - **Rescheduling (`--enable-rescheduling`)**
-  - Launches the rescheduler process for continuous request migration (see [Rescheduler](../rescheduler.md) for details).
+  - Launches the rescheduler process for continuous request migration (see [Rescheduler](./rescheduler.md) for details).
 
 ---
 
