@@ -45,10 +45,11 @@ jobs:
           docker run --rm \
             --network host \
             --gpus all \
+            --device=/dev/infiniband/uverbs0 --device=/dev/infiniband/uverbs1 --device=/dev/infiniband/rdma_cm --ulimit memlock=-1 \
             -v "$(pwd):/workspace" \
             -w /workspace \
             ${{ env.DEV_IMAGE }} \
-            bash -c "go mod tidy && cd python/llumnix && make check_pytest_installed && cd /workspace && make e2e-test"
+            bash -c "go mod tidy && make discovery-install && make llumlet-install && make blade-kvt-install && cd python/llumnix && make check_pytest_installed && cd /workspace && make e2e-test"
 
       - name: Fix file ownership
         if: always()
