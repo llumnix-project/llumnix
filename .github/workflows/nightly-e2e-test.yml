@@ -41,3 +41,41 @@ jobs:
       test_namespace: 'llumnix-daily-test'
       kustomize_dir: 'neutral/full-mode-scheduling/load-balance'
     secrets: inherit
+
+  notify-failure:
+    name: Send DingTalk Notification on Failure
+    needs: e2e-test
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get workflow run information
+        id: get-info
+        run: |
+          echo "workflow_url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> $GITHUB_OUTPUT
+          echo "commit_sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "branch=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+
+      - name: Send DingTalk notification
+        run: |
+          WORKFLOW_URL="${{ steps.get-info.outputs.workflow_url }}"
+          COMMIT_SHA="${{ steps.get-info.outputs.commit_sha }}"
+          BRANCH="${{ steps.get-info.outputs.branch }}"
+          TAG="${{ needs.generate-tag.outputs.tag }}"
+          
+          # Create markdown message for DingTalk
+          MESSAGE="{
+            \"msgtype\": \"markdown\",
+            \"markdown\": {
+              \"title\": \"Nightly E2E Test Failed\",
+              \"text\": \"## ❌ Nightly E2E Test Failed\\n\\n**Project**: llumnix\\n**Branch**: ${BRANCH}\\n**Commit**: ${COMMIT_SHA}\\n**Tag**: ${TAG}\\n**Workflow**: [View Workflow Run](${WORKFLOW_URL})\\n**Time**: $(date '+%Y-%m-%d %H:%M:%S') (UTC)\\n\\n⚠️ Please check the workflow logs for details.\"
+            },
+            \"at\": {
+              \"isAtAll\": true
+            }
+          }"
+          
+          # Send request to DingTalk webhook
+          curl -X POST \
+            -H 'Content-Type: application/json' \
+            -d "$MESSAGE" \
+            '${{ secrets.DINGTALK_WEBHOOK_URL }}'
