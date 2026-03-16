@@ -1,4 +1,4 @@
-name: Gateway and Scheduler Unit Tests
+name: Local E2E Test
 
 on:
   workflow_call:
@@ -8,9 +8,9 @@ env:
   DEV_IMAGE: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225
 
 jobs:
-  go-unit-test:
-    name: Go Unit Tests
-    runs-on: [self-hosted, cpu]
+  local-e2e-test:
+    name: Local E2E Test
+    runs-on: [self-hosted, gpu]
     permissions:
       contents: read
 
@@ -35,14 +35,15 @@ jobs:
         with:
           dev_image: ${{ env.DEV_IMAGE }}
 
-      - name: Run Go unit tests in dev container
+      - name: Run E2E test in dev container
         run: |
           docker run --rm \
             --network host \
+            --gpus all \
             -v "$(pwd):/workspace" \
             -w /workspace \
             ${{ env.DEV_IMAGE }} \
-            bash -c "go mod tidy && make unit-test"
+            bash -c "go mod tidy && make e2e-test"
 
       - name: Fix file ownership
         if: always()

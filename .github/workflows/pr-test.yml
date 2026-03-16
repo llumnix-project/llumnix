@@ -27,6 +27,11 @@ jobs:
     uses: ./.github/workflows/ut-discovery.yml
     secrets: inherit
 
+  local-e2e-test:
+    name: Local E2E Test
+    uses: ./.github/workflows/local-e2e-test.yml
+    secrets: inherit
+
   all-pr-tests:
     name: All PR Tests
     runs-on: [self-hosted, cpu]
@@ -34,6 +39,7 @@ jobs:
       - go-ut
       - llumnix-ut
       - discovery-ut
+      - local-e2e-test
     steps:
       - name: All tests passed
         run: echo "All tests passed!"

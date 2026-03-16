@@ -119,10 +119,14 @@ echo "Waiting for pod to be created..."
 POD_NAME=""
 for i in $(seq 1 30); do
     POD_NAME=$(kubectl get pods -n "$NAMESPACE" -l job-name="$JOB_NAME" \
-        -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+        -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
     [ -n "$POD_NAME" ] && break
     sleep 2
 done
+
+if [ -z "$POD_NAME" ]; then
+    echo "Warning: Pod was not created within 60s, job may still be pending"
+fi
 
 echo ""
 echo "Benchmark job submitted successfully!"
