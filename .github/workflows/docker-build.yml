@@ -76,6 +76,12 @@ jobs:
       contents: read
 
     steps:
+      - name: Cleanup previous build artifacts
+        run: |
+          sudo rm -rf python/llumnix/build
+          sudo rm -rf python/discovery/build
+          echo "✓ Cleanup completed"
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -114,6 +120,12 @@ jobs:
       contents: read
 
     steps:
+      - name: Cleanup previous build artifacts
+        run: |
+          sudo rm -rf python/llumnix/build
+          sudo rm -rf python/discovery/build
+          echo "✓ Cleanup completed"
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
