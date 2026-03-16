@@ -41,6 +41,7 @@ jobs:
           dev_image: ${{ env.DEV_IMAGE }}
 
       - name: Run E2E test in dev container
+        id: e2e-test
         run: |
           docker run --rm \
             --network host \
@@ -50,6 +51,17 @@ jobs:
             -w /workspace \
             ${{ env.DEV_IMAGE }} \
             bash -c "go mod tidy && make discovery-install && make llumlet-install && make blade-kvt-install && cd python/llumnix && make check_pytest_installed && cd /workspace && make e2e-test"
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-logs
+          path: |
+            logs/*.log
+            logs/naming.vllm/*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Fix file ownership
         if: always()
