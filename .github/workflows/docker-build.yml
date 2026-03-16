@@ -45,7 +45,7 @@ jobs:
   # ── Resolve image tag ─────────────────────────────────────────────────────
   resolve-tag:
     name: Resolve Image Tag
-    runs-on: [self-hosted, cpu]
+    runs-on: [self-hosted, cpu, japan]
     permissions:
       contents: read
     outputs:
@@ -66,7 +66,7 @@ jobs:
   # ── Build gateway ─────────────────────────────────────────────────────────
   build-gateway:
     name: Build Gateway Image
-    runs-on: [self-hosted, cpu]
+    runs-on: [self-hosted, cpu, japan]
     needs: resolve-tag
     if: >
       github.event_name != 'workflow_dispatch' ||
@@ -110,7 +110,7 @@ jobs:
   # ── Build scheduler ───────────────────────────────────────────────────────
   build-scheduler:
     name: Build Scheduler Image
-    runs-on: [self-hosted, cpu]
+    runs-on: [self-hosted, cpu, japan]
     needs: resolve-tag
     if: >
       github.event_name != 'workflow_dispatch' ||
@@ -154,7 +154,7 @@ jobs:
   # ── Build discovery ───────────────────────────────────────────────────────
   build-discovery:
     name: Build Discovery Image
-    runs-on: [self-hosted, cpu]
+    runs-on: [self-hosted, cpu, japan]
     needs: resolve-tag
     if: >
       github.event_name != 'workflow_dispatch' ||
@@ -185,7 +185,7 @@ jobs:
   # ── Build vllm ────────────────────────────────────────────────────────────
   build-vllm:
     name: Build vLLM Image
-    runs-on: [self-hosted, cpu]
+    runs-on: [self-hosted, cpu, japan]
     needs: resolve-tag
     if: >
       github.event_name != 'workflow_dispatch' ||
