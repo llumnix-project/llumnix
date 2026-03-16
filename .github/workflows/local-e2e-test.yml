@@ -48,7 +48,7 @@ jobs:
             -v "$(pwd):/workspace" \
             -w /workspace \
             ${{ env.DEV_IMAGE }} \
-            bash -c "go mod tidy && make e2e-test"
+            bash -c "go mod tidy && cd python/llumnix && make check_pytest_installed && cd /workspace && make e2e-test"
 
       - name: Fix file ownership
         if: always()
