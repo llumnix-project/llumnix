@@ -22,7 +22,7 @@ runs:
 
     - name: Cache tokenizer build artifact
       id: cache-tokenizers
-      uses: actions/cache@v4
+      uses: actions/cache/restore@v4
       with:
         path: lib/sglang/sgl-model-gateway/bindings/golang/target/release
         key: ${{ steps.cache-key.outputs.key }}
@@ -31,3 +31,10 @@ runs:
       if: steps.cache-tokenizers.outputs.cache-hit != 'true'
       run: ./scripts/build_tokenizers.sh --image ${{ inputs.dev_image }}
       shell: bash
+
+    - name: Save tokenizer cache
+      if: steps.cache-tokenizers.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: lib/sglang/sgl-model-gateway/bindings/golang/target/release
+        key: ${{ steps.cache-key.outputs.key }}

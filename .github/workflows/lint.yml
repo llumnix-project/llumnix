@@ -29,7 +29,12 @@ jobs:
           SGLANG_DIR="lib/sglang"
           git -C "$SGLANG_DIR" checkout -- .
           git -C "$SGLANG_DIR" clean -fd sgl-model-gateway/bindings/golang/
-          git -C "$SGLANG_DIR" apply patches/sgl-model-gateway/sgl_model_gateway_*.patch
+          for patch in "$(pwd)"/patches/sgl-model-gateway/*.patch; do
+            if [ -f "$patch" ]; then
+              echo "Applying patch: $patch"
+              git -C "$SGLANG_DIR" apply "$patch"
+            fi
+          done
 
       - name: Setup tokenizer cache and build
         id: setup-tokenizer
