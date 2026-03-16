@@ -164,6 +164,12 @@ jobs:
       contents: read
 
     steps:
+      - name: Cleanup previous build artifacts
+        run: |
+          sudo rm -rf python/llumnix/build
+          sudo rm -rf python/discovery/build
+          echo "✓ Cleanup completed"
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -171,6 +177,10 @@ jobs:
 
       - name: Build discovery wheel
         run: bash scripts/build_discovery_whl.sh
+
+      - name: Fix file ownership
+        if: always()
+        run: sudo chown -R $(id -u):$(id -g) .
 
       - name: Log in to ACR (release registry)
         uses: docker/login-action@v3
@@ -195,6 +205,12 @@ jobs:
       contents: read
 
     steps:
+      - name: Cleanup previous build artifacts
+        run: |
+          sudo rm -rf python/llumnix/build
+          sudo rm -rf python/discovery/build
+          echo "✓ Cleanup completed"
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -202,6 +218,10 @@ jobs:
 
       - name: Build llumnix wheel
         run: bash scripts/build_llumnix_whl.sh
+
+      - name: Fix file ownership
+        if: always()
+        run: sudo chown -R $(id -u):$(id -g) .
 
       - name: Log in to ACR (release registry)
         uses: docker/login-action@v3
