@@ -69,6 +69,7 @@ spec:
         args:
         - |
           pip3 install modelscope -i https://mirrors.aliyun.com/pypi/simple/ && \
+          pip3 install packaging -i https://mirrors.aliyun.com/pypi/simple/ && \
           python3 << 'EOF'
           from modelscope import snapshot_download
           
