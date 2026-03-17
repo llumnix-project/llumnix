@@ -15,6 +15,13 @@ jobs:
       contents: read
 
     steps:
+      - name: Fix file ownership
+        if: always()
+        run: |
+          if [ -d "$GITHUB_WORKSPACE" ]; then
+            sudo chown -R $(id -u):$(id -g) "$GITHUB_WORKSPACE"
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
