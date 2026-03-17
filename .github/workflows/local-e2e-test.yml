@@ -51,9 +51,12 @@ jobs:
             -w /workspace \
             ${{ env.DEV_IMAGE }} \
             bash -c "\
+              sed -i 's|http://archive.ubuntu.com|https://mirrors.aliyun.com|g; s|http://security.ubuntu.com|https://mirrors.aliyun.com|g' /etc/apt/sources.list && \
               apt-get update && \
-              apt-get install -y --fix-broken && \
-              apt-get install -y wget udev && \
+              apt-get install -f -y && \
+              apt-get install -y udev && \
+              make mooncake-install && \
+              GOVER=1.24.10 bash /workspace/scripts/install/install_go.sh && \
               cd /tmp && \
               wget -O erdma_installer.tar.gz http://mirrors.cloud.aliyuncs.com/erdma/erdma_installer-1.4.5.tar.gz && \
               tar xzf erdma_installer.tar.gz && \
@@ -65,7 +68,6 @@ jobs:
               make discovery-install && \
               make llumlet-install && \
               make blade-kvt-install && \
-              make mooncake-install && \
               make e2e-test"
 
       - name: Upload logs on failure
