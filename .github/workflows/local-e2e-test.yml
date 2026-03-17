@@ -51,6 +51,13 @@ jobs:
             -w /workspace \
             ${{ env.DEV_IMAGE }} \
             bash -c "\
+              apt-get update && \
+              apt-get install -y wget && \
+              cd /tmp && \
+              wget -O erdma_installer.tar.gz http://mirrors.cloud.aliyuncs.com/erdma/erdma_installer-1.4.5.tar.gz && \
+              tar xzf erdma_installer.tar.gz && \
+              dpkg -i --force-overwrite erdma_installer/DEBS/ubuntu22/x86_64/{rdma-core,libibverbs1,ibverbs-providers,ibverbs-utils,librdmacm1,libibumad3}_*.deb && \
+              rm -rf /tmp/erdma_installer /tmp/erdma_installer.tar.gz && \
               go mod tidy && \
               make vllm-install && \
               make discovery-install && \
