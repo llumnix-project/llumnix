@@ -4,6 +4,7 @@
 
 For detailed design information about the Scheduler, please refer to
 the [Scheduler Architecture Design Document](../design/scheduler/index.md).
+
 ---
 
 ## policy_framework

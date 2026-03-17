@@ -24,7 +24,8 @@ Key configuration flags (`cmd/config/config.go`):
 
 For a complete Kubernetes deployment example with vllm-mooncake PDD protocol, see
 `deploy/pd/full-mode-scheduling/load-balance`. For vllm-kvt PDD protocol, see
-`deploy/pd-kvs/full-mode-scheduling/load-balance`
+`deploy/pd-kvs/full-mode-scheduling/load-balance`.
+
 ---
 
 ## Traffic Splitting
