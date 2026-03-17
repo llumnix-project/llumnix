@@ -159,7 +159,7 @@ def vllm_servers(
     for port in all_available_ports:
         print("Waiting for vllm services...")
         vllm_health_url = f"http://localhost:{port}/health"
-        if not wait_for_service(vllm_health_url, timeout=600):
+        if not wait_for_service(vllm_health_url, timeout=180):
             cleanup_processes(processes)
             raise TimeoutError("Service startup timeout")
 
