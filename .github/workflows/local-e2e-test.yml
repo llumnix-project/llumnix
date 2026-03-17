@@ -65,6 +65,7 @@ jobs:
               make discovery-install && \
               make llumlet-install && \
               make blade-kvt-install && \
+              make mooncake-install && \
               make e2e-test"
 
       - name: Upload logs on failure
