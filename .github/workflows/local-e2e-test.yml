@@ -55,7 +55,6 @@ jobs:
               apt-get update && \
               apt-get install -f -y && \
               apt-get install -y udev && \
-              make mooncake-install && \
               GOVER=1.24.10 bash /workspace/scripts/install/install_go.sh && \
               cd /tmp && \
               wget -O erdma_installer.tar.gz http://mirrors.cloud.aliyuncs.com/erdma/erdma_installer-1.4.5.tar.gz && \
