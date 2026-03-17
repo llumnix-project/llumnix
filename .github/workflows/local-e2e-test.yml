@@ -68,6 +68,7 @@ jobs:
               make discovery-install && \
               make llumlet-install && \
               make blade-kvt-install && \
+              cp /workspace/patches/vllm/mooncake/mooncake_connector_v1.py /usr/local/lib/python3.12/dist-packages/mooncake/mooncake_connector_v1.py && \
               make e2e-test"
 
       - name: Upload logs on failure
