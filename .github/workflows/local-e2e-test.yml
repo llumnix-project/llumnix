@@ -59,6 +59,7 @@ jobs:
               tar xzf erdma_installer.tar.gz && \
               dpkg -i --force-overwrite erdma_installer/DEBS/ubuntu22/x86_64/{rdma-core,libibverbs1,ibverbs-providers,ibverbs-utils,librdmacm1,libibumad3}_*.deb && \
               rm -rf /tmp/erdma_installer /tmp/erdma_installer.tar.gz && \
+              cd /workspace && \
               go mod tidy && \
               make vllm-install && \
               make discovery-install && \
