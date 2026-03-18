@@ -129,6 +129,10 @@ returned.
 3. **Monitor actual latencies**: Compare predicted latencies with actual observed latencies and adjust profiling data if
    systematic bias is detected.
 
+### Deployment Example
+
+For a complete Kubernetes deployment example with SLO-aware scheduling, see `deploy/slo-aware/base/`.
+
 ---
 
 ## Adaptive PD Scheduling
@@ -148,6 +152,10 @@ returned.
 | `--tpot-migrate-out-ceil-threshold`                 | `0.95`                                           | Fraction of TPOT SLO above which overload rescheduling triggers.               |
 | `--tpot-migrate-out-floor-threshold`                | `0.60`                                           | Fraction of TPOT SLO below which underload rescheduling triggers.              |
 | `--enable-instance-status-local-account` (Optional) | `true`                                           | Enable instance status local account.                                          |
+
+### Deployment Example
+
+For a complete Kubernetes deployment example with adaptive PD scheduling, see `deploy/slo-aware/adaptive-pd/`.
 
 ---
 
