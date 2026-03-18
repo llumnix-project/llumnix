@@ -94,5 +94,60 @@ For complete Kubernetes deployment examples with service routing, see:
 - **Prefix-based routing**: `deploy/service-router/prefix/`
 - **Weight-based routing**: `deploy/service-router/weight/`
 
-Both examples deploy an internal vLLM instance (Llumnix-managed with service discovery) and an external standalone vLLM
-instance, with the gateway configured to route between them and fall back to the external service on internal failure.
+Each example includes an integration test that verifies routing and fallback behavior by sending requests through the gateway and checking that traffic is correctly distributed and fallback occurs on failure.
+
+---
+
+## Traffic Mirror
+
+### Configuration
+
+Traffic mirroring asynchronously copies a configurable percentage of requests to a secondary target without affecting client responses. Configure mirroring via a JSON file mounted at `/mnt/mirror.json` inside the gateway pod.
+
+#### Mirror configuration fields
+
+| Field           | Type    | Description                                               |
+|-----------------|---------|-----------------------------------------------------------|
+| `Enable`        | bool    | Master switch for mirroring                               |
+| `Target`        | string  | Base URL of the mirror target                             |
+| `Ratio`         | float64 | Percentage of requests to mirror (0-100)                  |
+| `Timeout`       | float64 | Mirror request timeout in ms (0 = use request context)    |
+| `Authorization` | string  | Override Authorization header for mirror requests         |
+| `EnableLog`     | bool    | Enable mirror-related logging in gateway                  |
+
+#### Example configuration
+
+```json
+{
+  "Enable": true,
+  "Target": "http://mirror-target:8000",
+  "Ratio": 10,
+  "Timeout": 5000,
+  "Authorization": "",
+  "EnableLog": true
+}
+```
+
+With this configuration, approximately 10% of requests are mirrored to the target endpoint.
+
+#### Hot-reload
+
+The gateway watches `/mnt/mirror.json` every 10 seconds and applies changes without restart. Two approaches to update:
+
+**Via ConfigMap** (standard Kubernetes update, may take up to 60s):
+```bash
+kubectl edit configmap mirror-config -n <namespace>
+```
+
+**Direct pod write** (immediate effect):
+```bash
+kubectl exec -it deployment/gateway -n <namespace> -c gateway -- \
+  sh -c 'echo '\''{"Enable":false,"Target":"http://mirror-target:8000","Ratio":0}'\'' > /mnt/mirror.json'
+```
+
+### Deployment example
+
+For a complete Kubernetes deployment example with traffic mirroring, see `deploy/traffic-mirror/`. This example includes an integration test (`test_traffic_mirror.sh`) that verifies:
+- Requests are mirrored when mirroring is enabled
+- Hot-reload disables mirroring without restarting the gateway
+- Hot-reload re-enables mirroring and traffic resumes

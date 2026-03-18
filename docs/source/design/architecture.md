@@ -35,8 +35,11 @@ Llumnix integrates with vLLM as the underlying inference engines. In full mode, 
 #### 5. Gateway
 The Gateway is the entry point for all client requests. Beyond simple request forwarding, it provides LLM-specialized capabilities:
 
-- Tokenization: tokenizes prompts to compute token counts for scheduling decisions
-- Request routing: supports routing protocols for different PD disaggregation schemes
+- **Tokenization**: tokenizes prompts to compute token counts for scheduling decisions
+- **Request routing**: supports routing protocols for different PD disaggregation schemes
+- **Traffic splitting**: distributes traffic across internal and external endpoints by weight or model prefix, with automatic fallback on routing failure
+- **Traffic mirroring**: asynchronously mirrors a configurable percentage of requests to a secondary target for shadow testing and traffic capture
+- **Batch inference**: supports asynchronous batch processing of large request volumes with result persistence
 
 #### 6. Hybrid Connector
 Hybrid connector ([llumnix-kv](https://github.com/llumnix-project/llumnix-kv)) serves as a unified control plane for KV cache transfer and storage, mixing multiple paths in one KV connector:
@@ -69,6 +72,7 @@ Beyond its core components, Llumnix provides the following features:
    - Different [PD disaggregation fowarding protocols](./gateway/pdd_protocol.md)
    - [Batch Inference](./gateway/batch_inference.md)
    - [Traffic Splitting](./gateway/traffic_splitting.md): split traffic across internal and external endpoints by weight or model prefix, with automatic fallback on failure
+   - [Traffic Mirror](./gateway/traffic_mirror.md): asynchronously mirror a configurable percentage of requests to a secondary target for shadow testing and traffic capture
 
 7. **Fault tolerance**
    - Fault tolerance for Llumnix components

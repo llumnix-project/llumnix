@@ -17,7 +17,7 @@ Note that with this new repository, we are re-architecting Llummix to a more mod
 - **Real-time instance status tracking** for optimal scheduling quality
 - **Modular, extensible policy framework** for easily implementing and composing scheduling policies
 - **LLM-specialized request gateway**
-  - Tokenizers, diverse request routing / disaggregation protocols, batch API
+  - Tokenizers, diverse request routing / disaggregation protocols, batch inference
   - Traffic management: splitting, mirroring, throttling, etc.
 - **High-performance KV cache support** (see [llumnix-kv](https://github.com/llumnix-project/llumnix-kv))
   - Efficient, flexible data plane for KV cache transfer supporting diverse cache layouts and transport protocols (blade-kvt)
@@ -38,7 +38,7 @@ Components:
 2. Llumlet: an engine-side process that bridges global components and the inference engine
 3. Cluster meta store: tracking realtime instance status
 4. Engine: the inference engine (vLLM/SGLang) with Llumnix utility codes for scheduling enhancements (if using full mode)
-5. Gateway: LLM-specialized capabilities, such as tokenizers, routing protocols
+5. Gateway: LLM-specialized capabilities, such as tokenizers, routing protocols, traffic management, batch inference
 6. Hybrid Connector: unified KV cache control plane, using blade-kvt for KV transfer and external KV storage for offloading
 
 # Getting Started

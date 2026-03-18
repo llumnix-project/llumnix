@@ -40,6 +40,7 @@ Understand how Llumnix works internally.
   - [PDD Forwarding Protocol](./design/gateway/pdd_protocol.md) — Prefill-Decode disaggregation forwarding protocol
   - [Batch Inference](./design/gateway/batch_inference.md) — Batch inference support
   - [Traffic Splitting](./design/gateway/traffic_splitting.md) — Split traffic across internal and external endpoints with fallback
+  - [Traffic Mirror](./design/gateway/traffic_mirror.md) — Asynchronously mirror requests to a secondary target
 - Scheduler
   - [Scheduling Policy Framework](./design/scheduler/policy_framework.md) — Scheduling policy design
   - [Instant and Accurate Load](./design/scheduler/instant_accurate_load.md) — Instance load obervation and modeling
