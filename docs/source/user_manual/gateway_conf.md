@@ -9,9 +9,7 @@ the [Gateway Architecture Design Document](../design/gateway/gateway_architectur
 
 ## PDD Forwarding Protocol
 
-### Usage
-
-#### Configuration
+### Configuration
 
 Key configuration flags (`cmd/config/config.go`):
 
@@ -20,7 +18,7 @@ Key configuration flags (`cmd/config/config.go`):
 | `--pd-disagg-protocol`     | `""`    | PDD protocol type: vllm-kvt/vllm-mooncake                         |
 | `--separate-pd-scheduling` | `false` | Enable staged scheduling mode, batched scheduling mode when false |
 
-#### Deployment example
+### Deployment Example
 
 For a complete Kubernetes deployment example with vllm-mooncake PDD protocol, see
 `deploy/pd/full-mode-scheduling/load-balance`. For vllm-kvt PDD protocol, see
@@ -31,8 +29,6 @@ For a complete Kubernetes deployment example with vllm-mooncake PDD protocol, se
 ## Traffic Splitting
 
 ### Configuration
-
-#### Route configuration flags
 
 | Flag                             | Default         | Description                                                                     |
 |----------------------------------|-----------------|---------------------------------------------------------------------------------|
@@ -46,7 +42,7 @@ For a complete Kubernetes deployment example with vllm-mooncake PDD protocol, se
 | `--fallback-retry-init-delay-ms` | `500`           | Initial backoff delay (ms) for 429 retries                                      |
 | `--fallback-retry-max-delay-ms`  | `5000`          | Max backoff delay (ms) for 429 retries                                          |
 
-#### Route config JSON format
+### Route Config JSON Format
 
 The `--route-config` flag accepts a JSON array. Each element describes one endpoint:
 
@@ -91,7 +87,7 @@ The `--route-config` flag accepts a JSON array. Each element describes one endpo
 ]
 ```
 
-### Deployment example
+### Deployment Example
 
 For complete Kubernetes deployment examples with service routing, see:
 

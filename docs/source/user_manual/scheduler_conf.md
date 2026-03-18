@@ -7,9 +7,9 @@ the [Scheduler Architecture Design Document](../design/scheduler/index.md).
 
 ---
 
-## policy_framework
+## Policy Framework
 
-### Usage and extension guidelines
+### Usage and Extension Guidelines
 
 - **Choosing a policy and mode**
     - SLO-restricted workloads with profiling data: **SLO + full-mode**.
@@ -30,7 +30,7 @@ the [Scheduler Architecture Design Document](../design/scheduler/index.md).
 
 ---
 
-## cache_aware_scheduling
+## Cache-Aware Scheduling
 
 ### Prerequisites
 
@@ -63,18 +63,18 @@ Environment variables:
 |----------------|---------|-----------------------------------------------------------------------------------------------------|
 | `GO_HASH_SEED` | `"0"`   | Hash seed for algorithms that require one (e.g. `sha256_cbor`). Must match the seed used by the KVS |
 
-### Deployment example
+### Deployment Example
 
 For a complete Kubernetes deployment example with PD disaggregation, Mooncake as KVS, and cache-aware scheduling
 enabled, see `deploy/pd-kvs/full-mode-scheduling/load-balance/`.
 
 ---
 
-## predictor_enhanced_scheduling
+## Predictor-Enhanced Scheduling
 
 ### Configuration
 
-#### Scheduler flags
+#### Scheduler Flags
 
 | Flag                                     | Default | Description                                                                                  |
 |------------------------------------------|---------|----------------------------------------------------------------------------------------------|
@@ -82,7 +82,7 @@ enabled, see `deploy/pd-kvs/full-mode-scheduling/load-balance/`.
 | `--max-num-batched-tokens`               | `65536` | Maximum tokens per prefill batch; must match the inference engine's `max_num_batched_tokens` |
 | `--num-predictor-warmup-samples`         | `20`    | Minimum profiling samples before fitting the predictor model                                 |
 
-#### Engine environment variables
+#### Engine Environment Variables
 
 | Variable                   | Default | Description                                                       |
 |----------------------------|---------|-------------------------------------------------------------------|
@@ -99,7 +99,7 @@ enabled, see `deploy/pd-kvs/full-mode-scheduling/load-balance/`.
 
 ---
 
-## slo_aware_scheduling
+## SLO-Aware Scheduling
 
 ### Configuration
 
@@ -115,7 +115,7 @@ enabled, see `deploy/pd-kvs/full-mode-scheduling/load-balance/`.
 | `--tpot-slo-dispatch-threshold` | Multiplier for TPOT dispatch threshold | `1.0`                             |
 
 The effective dispatch threshold is computed as `SLO * DispatchThreshold`. Instances with predicted latency exceeding
-this threshold are filtered out. If no instances meet the threshold, a scheduling error(ErrorNoAvailableEndpoint) is
+this threshold are filtered out. If no instances meet the threshold, a scheduling error (ErrorNoAvailableEndpoint) is
 returned.
 
 ### Best Practices
@@ -131,7 +131,7 @@ returned.
 
 ---
 
-## adaptive_pd_scheduling
+## Adaptive PD Scheduling
 
 ### Configuration
 
@@ -151,7 +151,7 @@ returned.
 
 ---
 
-## rescheduler
+## Rescheduler
 
 ### Configuration
 

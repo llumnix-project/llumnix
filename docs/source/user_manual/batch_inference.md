@@ -249,7 +249,7 @@ Example output.jsonl content:
 
 ## Batch Task Statuses
 ### Status List
-| **Status** | **Description** | **Phase** | **Actions** |
+| Status | Description | Phase | Actions |
 | --- | --- | --- | --- |
 | pending | Pending: Waiting to be processed. | Preparation | Can be cancelled. |
 | validating | Validating: Checking the input file format and validating content parameters. | Preparation | Can be cancelled (if validation fails, the task transitions to `failed`). |
@@ -267,7 +267,7 @@ The LLM Gateway Batch APIs are largely consistent with the OpenAI specification.
 
 ### Batch
 #### Batch Object
-| **Parameter** | **Type** | **Description** |
+| Parameter | Type | Description |
 | --- | --- | --- |
 | id | string | Unique identifier for the batch task. |
 | object | string | The type of the object, always "batch". |
@@ -522,7 +522,7 @@ curl -s "<YOUR_GATEWAY_URL>/v1/batches" \
 
 **Request Parameters**
 
-| **Parameter** | **Type** | **Required** | **Description** |
+| Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | limit | integer | No | Maximum number of results to return. |
 | after | string | No | The last batch_id from the previous request. |
@@ -530,7 +530,7 @@ curl -s "<YOUR_GATEWAY_URL>/v1/batches" \
 
 **Response Parameters**
 
-| **Parameter** | **Type** | **Description** |
+| Parameter | Type | Description |
 | --- | --- | --- |
 | object | string | Always "list". |
 | data | array | A list of Batch objects, sorted in reverse chronological order (newest first). |
@@ -541,7 +541,7 @@ curl -s "<YOUR_GATEWAY_URL>/v1/batches" \
 
 ### File
 #### File Object
-| **Parameter** | **Type** | **Description** |
+| Parameter | Type | Description |
 | --- | --- | --- |
 | id | string | Unique identifier for the file. |
 | object | string | The type of the object, always "file". |
@@ -554,7 +554,7 @@ curl -s "<YOUR_GATEWAY_URL>/v1/batches" \
 
 **Input File Format**
 
-| **Parameter** | **Type** | **Required** | **Description** |
+| Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | custom_id | string | Yes | A custom request ID; must be unique across all requests. |
 | method | string | Yes | The HTTP method for the inference request, typically POST. |
@@ -604,7 +604,7 @@ curl -s "<YOUR_GATEWAY_URL>/v1/files" \
 
 **Request Parameters**
 
-| **Parameter** | **Type** | **Required** | **Description** |
+| Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | file | File | Yes | The file to upload (multipart/form-data). |
 | purpose | string | Yes | The purpose of the file; must be "batch" (multipart/form-data). |
@@ -660,7 +660,7 @@ None.
 
 **Response Parameters**
 
-| **Parameter** | **Type** | **Description** |
+| Parameter | Type | Description |
 | --- | --- | --- |
 | object | string | Always "list". |
 | data | array | A list of File objects, sorted in reverse chronological order (newest first). |
@@ -731,7 +731,7 @@ curl -s "<YOUR_GATEWAY_URL>/v1/files/batch_input_11fb297e-653d-47cf-bb6a-a80209d
 
 **Response Parameters**
 
-| **Parameter** | **Type** | **Description** |
+| Parameter | Type | Description |
 | --- | --- | --- |
 | id | string | The file ID. |
 | object | string | The file type, always "file". |
