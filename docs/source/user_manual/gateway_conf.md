@@ -91,8 +91,8 @@ The `--route-config` flag accepts a JSON array. Each element describes one endpo
 
 For complete Kubernetes deployment examples with service routing, see:
 
-- **Prefix-based routing**: `deploy/service-router/prefix/`
-- **Weight-based routing**: `deploy/service-router/weight/`
+- **Prefix-based routing**: `deploy/traffic-splitting/prefix/`
+- **Weight-based routing**: `deploy/traffic-splitting/weight/`
 
 Each example includes an integration test that verifies routing and fallback behavior by sending requests through the gateway and checking that traffic is correctly distributed and fallback occurs on failure.
 

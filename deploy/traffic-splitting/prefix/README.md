@@ -1,10 +1,10 @@
 # Service Router Prefix Routing Tests
 
-Test script to validate the prefix-based routing and fallback behavior of the `service-router/prefix` deployment.
+Test script to validate the prefix-based routing and fallback behavior of the `traffic-splitting/prefix` deployment.
 
 ## Test File
 
-- `test_service_router.sh` - Bash test script (uses only `curl`, no dependencies)
+- `test_traffic_splitting.sh` - Bash test script (uses only `curl`, no dependencies)
 
 ## Test Scenarios
 
@@ -53,15 +53,15 @@ If you only want to verify basic routing (without fallback test):
 
 ```bash
 # Copy test script to gateway container
-kubectl cp test_service_router.sh <namespace>/gateway-xxx:/tmp/
+kubectl cp test_traffic_splitting.sh <namespace>/gateway-xxx:/tmp/
 
 # Execute in gateway container
 kubectl exec -it <namespace>/gateway-xxx -- bash
 cd /tmp
-chmod +x test_service_router.sh
+chmod +x test_traffic_splitting.sh
 
 # Run with --skip-fallback to skip the interactive fallback test
-./test_service_router.sh --skip-fallback
+./test_traffic_splitting.sh --skip-fallback
 ```
 
 This runs:
@@ -77,7 +77,7 @@ To run all three tests including the fallback scenario:
 # Terminal 1: Gateway container
 kubectl exec -it <namespace>/gateway-xxx -- bash
 cd /tmp
-./test_service_router.sh
+./test_traffic_splitting.sh
 
 # Script will pause during Test 3 and prompt you to run kubectl commands
 # in another terminal. Follow the on-screen instructions.
@@ -146,7 +146,7 @@ Since the test script runs inside the gateway container (no kubectl access), fol
 ### Terminal 1: Run Test Script
 ```bash
 kubectl exec -it <namespace>/gateway-xxx -- bash
-./test_service_router.sh
+./test_traffic_splitting.sh
 # When prompted for Step 1, switch to Terminal 2
 ```
 
@@ -261,7 +261,7 @@ MANUAL STEP 1: Stop internal service (simulate failure)
 
 Please open ANOTHER terminal and run:
 
-  kubectl scale deployment internal --replicas=0 -n service-router
+  kubectl scale deployment internal --replicas=0 -n traffic-splitting
 
 Press ENTER after internal pod is terminated...
 
@@ -276,7 +276,7 @@ MANUAL STEP 2: Restore internal service
 
 Please open ANOTHER terminal and run:
 
-  kubectl scale deployment internal --replicas=1 -n service-router
+  kubectl scale deployment internal --replicas=1 -n traffic-splitting
 
 Press ENTER after internal pod is restored (optional)...
 

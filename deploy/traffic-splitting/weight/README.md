@@ -54,7 +54,7 @@ Key configuration for weight routing:
 Send multiple requests and verify both services receive traffic (regardless of model name):
 
 ```bash
-./test_service_router.sh --count 10
+./test_traffic_splitting.sh --count 10
 ```
 
 **Expected**: Roughly 50% of requests go to internal, 50% to external. Since both services run the same model, each request is randomly routed.
@@ -64,7 +64,7 @@ Send multiple requests and verify both services receive traffic (regardless of m
 ### Deploy
 
 ```bash
-./deploy/group_deploy.sh <namespace> service-router/weight
+./deploy/group_deploy.sh <namespace> traffic-splitting/weight
 ```
 
 ### Copy Test Script to Gateway
@@ -74,13 +74,13 @@ Send multiple requests and verify both services receive traffic (regardless of m
 kubectl get pod -n <namespace> -l app=gateway
 
 # Copy test script
-kubectl cp test_service_router.sh <namespace>/gateway-xxx:/tmp/
+kubectl cp test_traffic_splitting.sh <namespace>/gateway-xxx:/tmp/
 
 # Execute
 kubectl exec -it <namespace>/gateway-xxx -- bash
 cd /tmp
-chmod +x test_service_router.sh
-./test_service_router.sh
+chmod +x test_traffic_splitting.sh
+./test_traffic_splitting.sh
 ```
 
 ## Verifying Logs
