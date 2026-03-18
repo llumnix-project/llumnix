@@ -27,24 +27,18 @@ jobs:
           SGLANG_DIR="lib/sglang"
           git -C "$SGLANG_DIR" checkout -- .
           git -C "$SGLANG_DIR" clean -fd sgl-model-gateway/bindings/golang/
-          git -C "$SGLANG_DIR" apply "$(pwd)/patches/sgl-model-gateway/sgl_model_gateway_820e97d6.patch"
+          for patch in "$(pwd)"/patches/sgl-model-gateway/*.patch; do
+            if [ -f "$patch" ]; then
+              echo "Applying patch: $patch"
+              git -C "$SGLANG_DIR" apply "$patch"
+            fi
+          done
 
-      - name: Compute cache key
-        id: cache-key
-        run: |
-          KEY="tokenizers-${{ runner.os }}-$(git submodule status lib/sglang | awk '{print $1}' | tr -d '+-')-$(find patches/sgl-model-gateway -type f | sort | xargs sha256sum | sha256sum | awk '{print $1}')"
-          echo "key=${KEY}" >> $GITHUB_OUTPUT
-
-      - name: Cache tokenizer build artifact
-        id: cache-tokenizers
-        uses: actions/cache@v4
+      - name: Setup tokenizer cache and build
+        id: setup-tokenizer
+        uses: ./.github/actions/setup-tokenizer-cache-and-build
         with:
-          path: lib/sglang/sgl-model-gateway/bindings/golang/target/release
-          key: ${{ steps.cache-key.outputs.key }}
-
-      - name: Build tokenizer library in dev container
-        if: steps.cache-tokenizers.outputs.cache-hit != 'true'
-        run: ./scripts/build_tokenizers.sh --image ${{ env.DEV_IMAGE }}
+          dev_image: ${{ env.DEV_IMAGE }}
 
       - name: Run Go unit tests in dev container
         run: |

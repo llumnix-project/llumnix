@@ -1,0 +1,93 @@
+name: Local E2E Test
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+env:
+  DEV_IMAGE: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225
+
+jobs:
+  local-e2e-test:
+    name: Local E2E Test
+    runs-on: [self-hosted, gpu]
+    permissions:
+      contents: read
+
+    steps:
+      - name: Fix file ownership
+        if: always()
+        run: |
+          if [ -d "$GITHUB_WORKSPACE" ]; then
+            sudo chown -R $(id -u):$(id -g) "$GITHUB_WORKSPACE"
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          submodules: recursive
+          clean: true
+
+      - name: Apply sgl-model-gateway patch
+        run: |
+          SGLANG_DIR="lib/sglang"
+          git -C "$SGLANG_DIR" checkout -- .
+          git -C "$SGLANG_DIR" clean -fd sgl-model-gateway/bindings/golang/
+          for patch in "$(pwd)"/patches/sgl-model-gateway/*.patch; do
+            if [ -f "$patch" ]; then
+              echo "Applying patch: $patch"
+              git -C "$SGLANG_DIR" apply "$patch"
+            fi
+          done
+
+      - name: Setup tokenizer cache and build
+        id: setup-tokenizer
+        uses: ./.github/actions/setup-tokenizer-cache-and-build
+        with:
+          dev_image: ${{ env.DEV_IMAGE }}
+
+      - name: Run E2E test in dev container
+        id: e2e-test
+        run: |
+          docker run --rm \
+            --network host \
+            --gpus all \
+            --device=/dev/infiniband/uverbs0 --device=/dev/infiniband/uverbs1 --device=/dev/infiniband/rdma_cm --ulimit memlock=-1 \
+            -v "$(pwd):/workspace" \
+            -w /workspace \
+            ${{ env.DEV_IMAGE }} \
+            bash -c "\
+              sed -i 's|http://archive.ubuntu.com|https://mirrors.aliyun.com|g; s|http://security.ubuntu.com|https://mirrors.aliyun.com|g' /etc/apt/sources.list && \
+              apt-get update && \
+              apt-get install -f -y && \
+              apt-get install -y udev && \
+              GOVER=1.24.10 bash /workspace/scripts/install/install_go.sh && \
+              cd /tmp && \
+              wget -O erdma_installer.tar.gz http://mirrors.cloud.aliyuncs.com/erdma/erdma_installer-1.4.5.tar.gz && \
+              tar xzf erdma_installer.tar.gz && \
+              dpkg -i --force-overwrite erdma_installer/DEBS/ubuntu22/x86_64/{rdma-core,libibverbs1,ibverbs-providers,ibverbs-utils,librdmacm1,libibumad3}_*.deb && \
+              rm -rf /tmp/erdma_installer /tmp/erdma_installer.tar.gz && \
+              cd /workspace && \
+              go mod tidy && \
+              make vllm-install && \
+              make discovery-install && \
+              make llumlet-install && \
+              make blade-kvt-install && \
+              cp /workspace/patches/vllm/mooncake/mooncake_connector_v1.py /usr/local/lib/python3.12/dist-packages/mooncake/mooncake_connector_v1.py && \
+              make e2e-test"
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-logs
+          path: |
+            logs/*.log
+            logs/naming.vllm/*.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Fix file ownership
+        if: always()
+        run: sudo chown -R $(id -u):$(id -g) .

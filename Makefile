@@ -25,7 +25,7 @@ llumlet-install:
 mooncake-install:
 	pip uninstall -y mooncake-transfer-engine || true
 	rm -rf /tmp/Mooncake
-	git clone https://github.com/kvcache-ai/Mooncake.git /tmp/Mooncake
+	git clone --recursive https://github.com/kvcache-ai/Mooncake.git /tmp/Mooncake
 	cd /tmp/Mooncake && bash dependencies.sh
 	cd /tmp/Mooncake && mkdir -p build && cd build && \
 		cmake .. \

@@ -149,6 +149,7 @@ def get_vllm_command(
         f"VLLM_LOGGING_LEVEL=DEBUG "
         f"vllm serve "
         f"--enforce-eager "
+        f"--max-model-len=16384 "
         f"--model {MODEL_PATH} "
         f"--port {port} "
         f"--kv-transfer-config '{kv_transfer_config}' "

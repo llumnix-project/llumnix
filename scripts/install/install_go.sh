@@ -7,7 +7,7 @@ RED="\033[0;31m"
 NC="\033[0m" # No Color
 
 # Configuration
-GOVER=1.23.8
+GOVER=${GOVER:-1.23.8}
 
 # Function to print success messages
 print_success() {

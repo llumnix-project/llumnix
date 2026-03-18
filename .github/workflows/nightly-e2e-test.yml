@@ -56,11 +56,21 @@ jobs:
           echo "branch=${{ github.ref_name }}" >> $GITHUB_OUTPUT
 
       - name: Send DingTalk notification
+        env:
+          DINGTALK_WEBHOOK_URL: ${{ secrets.DINGTALK_WEBHOOK_URL }}
+          DINGTALK_WEBHOOK_SECRET: ${{ secrets.DINGTALK_WEBHOOK_SECRET }}
         run: |
           WORKFLOW_URL="${{ steps.get-info.outputs.workflow_url }}"
           COMMIT_SHA="${{ steps.get-info.outputs.commit_sha }}"
           BRANCH="${{ steps.get-info.outputs.branch }}"
           TAG="${{ needs.generate-tag.outputs.tag }}"
+          
+          # Compute HmacSHA256 signature for DingTalk
+          TIMESTAMP=$(date +%s%3N)
+          STRING_TO_SIGN="${TIMESTAMP}\n${DINGTALK_WEBHOOK_SECRET}"
+          SIGN=$(echo -ne "$STRING_TO_SIGN" | openssl dgst -sha256 -hmac "${DINGTALK_WEBHOOK_SECRET}" -binary | base64)
+          SIGN_ENCODED=$(python3 -c "import urllib.parse; print(urllib.parse.quote_plus('$SIGN'))")
+          WEBHOOK_URL="${DINGTALK_WEBHOOK_URL}&timestamp=${TIMESTAMP}&sign=${SIGN_ENCODED}"
           
           # Create markdown message for DingTalk
           MESSAGE="{
@@ -75,7 +85,7 @@ jobs:
           }"
           
           # Send request to DingTalk webhook
-          curl -X POST \
+          curl --fail -X POST \
             -H 'Content-Type: application/json' \
             -d "$MESSAGE" \
-            '${{ secrets.DINGTALK_WEBHOOK_URL }}'
+            "$WEBHOOK_URL"

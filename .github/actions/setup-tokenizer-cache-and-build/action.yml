@@ -1,0 +1,40 @@
+name: 'Setup Tokenizer Cache and Build'
+description: 'Compute cache key, restore tokenizer cache, and build if cache miss'
+inputs:
+  dev_image:
+    description: 'Dev container image to use for building'
+    required: true
+    default: 'llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225'
+outputs:
+  cache_hit:
+    description: 'Whether cache was hit'
+    value: ${{ steps.cache-tokenizers.outputs.cache-hit }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Compute cache key
+      id: cache-key
+      run: |
+        KEY="tokenizers-${{ runner.os }}-$(git submodule status lib/sglang | awk '{print $1}' | tr -d '+-')-$(find patches/sgl-model-gateway -type f | sort | xargs sha256sum | sha256sum | awk '{print $1}')"
+        echo "key=${KEY}" >> $GITHUB_OUTPUT
+      shell: bash
+
+    - name: Cache tokenizer build artifact
+      id: cache-tokenizers
+      uses: actions/cache/restore@v4
+      with:
+        path: lib/sglang/sgl-model-gateway/bindings/golang/target/release
+        key: ${{ steps.cache-key.outputs.key }}
+
+    - name: Build tokenizer library in dev container
+      if: steps.cache-tokenizers.outputs.cache-hit != 'true'
+      run: ./scripts/build_tokenizers.sh --image ${{ inputs.dev_image }}
+      shell: bash
+
+    - name: Save tokenizer cache
+      if: steps.cache-tokenizers.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: lib/sglang/sgl-model-gateway/bindings/golang/target/release
+        key: ${{ steps.cache-key.outputs.key }}
