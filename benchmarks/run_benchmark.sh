@@ -120,7 +120,7 @@ POD_NAME=""
 for i in $(seq 1 30); do
     POD_NAME=$(kubectl get pods -n "$NAMESPACE" -l job-name="$JOB_NAME" \
         -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
-    [ -n "$POD_NAME" ] && break
+    if [ -n "$POD_NAME" ]; then break; fi
     sleep 2
 done
 
