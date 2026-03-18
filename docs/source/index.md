@@ -12,7 +12,14 @@ New to Llumnix? Start here.
 - [Quick Start](getting_started/quick_start.md) — Deploy your first Llumnix cluster in minutes
 - [Deployment Guide](getting_started/e2e_deploy.md) - Full deployment guide covering all modes: neutral, PD, and PD-KVS
 - [Benchmark](getting_started/benchmark.md) - Performance benchmarks for Llumnix on Kubernetes 
-- [Llumlet Configuration](getting_started/engine_conf.md) — Configure Llumlet
+
+---
+
+## 📖 User Manual
+- [Llumlet Configuration](user_manual/engine_conf.md) — Configure Llumlet
+- [Gateway Configuration](user_manual/gateway_conf.md) — Configure Gateway
+- [Scheduler Configuration](user_manual/scheduler_conf.md) — Configure Scheduler
+- [Batch Inference](user_manual/batch_inference.md) — Batch Inference
 
 ---
 
@@ -54,8 +61,17 @@ Understand how Llumnix works internally.
 
 getting_started/quick_start
 getting_started/e2e_deploy
-getting_started/engine_conf
 getting_started/benchmark
+:::
+
+:::{toctree}
+:hidden:
+:caption: User Manual
+
+user_manual/engine_conf
+user_manual/gateway_conf
+user_manual/scheduler_conf
+user_manual/batch_inference
 :::
 
 :::{toctree}

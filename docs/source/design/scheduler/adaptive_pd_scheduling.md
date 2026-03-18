@@ -70,24 +70,6 @@ For adaptive PD related rescheduling, only decode requests will be migrated and 
 
 ---
 
-## Configuration
-
-| Flag | Setting | Description |
-|------|---------|-------------|
-| `--enable-full-mode-scheduling` | `true` | Requires full-mode scheduling. |
-| `--scheduling-policy` | `slo` | Must be set to `slo` for adaptive PD. |
-| `--enable-adaptive-pd` | `true` | Enable adaptive PD scheduling. |
-| `--tpot-slo` | `50` | TPOT SLO target (ms). |
-| `--tpot-slo-dispatch-threshold` | `0.85` | Fraction of TPOT SLO used as the dispatch filter threshold. |
-| `--colocated-reschedule-mode` | `true` | Enable colocated reschedule mode. (standalone rescheduling is also supported). |
-| `--reschedule-interval-ms` | `100` | Reschedule interval. |
-| `--reschedule-policies` | `binpacking_mitigation,binpacking_consolidation` | Reschedule policies. |
-| `--tpot-migrate-out-ceil-threshold` | `0.95` | Fraction of TPOT SLO above which overload rescheduling triggers. |
-| `--tpot-migrate-out-floor-threshold` | `0.60` | Fraction of TPOT SLO below which underload rescheduling triggers. |
-| `--enable-instance-status-local-account` (Optional) | `true` | Enable instance status local account. |
-
----
-
 ## Performance
 
 Setup: Qwen3-32B, TP=1 (H20), evaluated on [the Azure LLM Inference Trace (Conversational) dataset](https://github.com/Azure/AzurePublicDataset/blob/master/data/AzureLLMInferenceTrace_conv.csv), deployed on 8 vLLM instances.

@@ -83,20 +83,3 @@ The forwarder abstraction enables different protocols to share the same executio
 All steps are the same as VLLM-KVT's Staged Scheduling Mode, except the fourth step follows VLLM-Mooncake's approach.
 
 > **Note**: Due to VLLM-Mooncake's protocol limitation that does not support single-stage dispatch that direct dispatch request to decode instance with scheduled prefill instance information, and only supports two-stage serial dispatch where requests are first sent to prefill instances and then to decode instances after prefill completion, the staged scheduling mode is optimal for VLLM-Mooncake protocol.
-
----
-
-## Usage
-
-### Configuration
-
-Key configuration flags (`cmd/config/config.go`):
-
-| Flag | Default | Description |
-|---|---|---|
-| `--pd-disagg-protocol` | `""` | PDD protocol type: vllm-kvt/vllm-mooncake |
-| `--separate-pd-scheduling` | `false` | Enable staged scheduling mode, batched scheduling mode when false |
-
-### Deployment example
-
-For a complete Kubernetes deployment example with vllm-mooncake PDD protocol, see `deploy/pd/full-mode-scheduling/load-balance`. For vllm-kvt PDD protocol, see `deploy/pd-kvs/full-mode-scheduling/load-balance`
