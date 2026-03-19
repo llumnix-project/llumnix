@@ -5,7 +5,7 @@
 # Tests weight-based routing between internal (50%) and external (50%) services.
 #
 # Usage:
-#   ./test_service_router.sh [--gateway-url <url>] [--count <n>]
+#   ./test_traffic_splitting.sh [--gateway-url <url>] [--count <n>]
 
 set -e
 

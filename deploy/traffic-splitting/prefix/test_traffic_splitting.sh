@@ -2,20 +2,20 @@
 #
 # Service Router Prefix Routing Test Script
 #
-# Tests three scenarios for the service-router/prefix deployment:
+# Tests three scenarios for the traffic-splitting/prefix deployment:
 # 1. Route to local (internal): Qwen/Qwen3-8B -> internal llumnix-managed pool
 # 2. Route to external: Qwen/Qwen2.5-7B -> vllm-external:8000
 # 3. Local fails then fallback to external: internal failure -> retry -> fallback to external
 #
 # Usage:
 #   # Run from within gateway container (or any pod with network access to gateway)
-#   ./test_service_router.sh [--gateway-url <url>] [--skip-fallback]
+#   ./test_traffic_splitting.sh [--gateway-url <url>] [--skip-fallback]
 #
 #   # Run with custom gateway URL
-#   ./test_service_router.sh --gateway-url http://gateway:8089
+#   ./test_traffic_splitting.sh --gateway-url http://gateway:8089
 #
 #   # Run without fallback test (manual mode)
-#   ./test_service_router.sh --skip-fallback
+#   ./test_traffic_splitting.sh --skip-fallback
 
 set -e
 
@@ -257,7 +257,7 @@ test_fallback_after_local_failure() {
     echo "Please open ANOTHER terminal and run:"
     echo ""
     # Try to detect namespace
-    local ns="service-router"
+    local ns="traffic-splitting"
     echo "  kubectl scale deployment internal --replicas=0 -n ${ns}"
     echo ""
     echo "Then wait for the internal pod to terminate:"

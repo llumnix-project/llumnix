@@ -1,4 +1,4 @@
-# Source: deploy/service-router/weight/gateway.yaml
+# Source: deploy/traffic-splitting/weight/gateway.yaml
 # Changes:
 #   - Removed --route-policy/--route-config (default internal routing)
 #   - Added writable /mnt volume (emptyDir) with init container that seeds
