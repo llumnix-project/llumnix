@@ -20,5 +20,5 @@ install:
 
 .PHONY: test
 test:
-	@pip install pytest --quiet
+	@pip install pytest pytest-asyncio --quiet
 	@pytest tests/ -v

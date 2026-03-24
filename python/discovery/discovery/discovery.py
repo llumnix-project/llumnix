@@ -366,7 +366,7 @@ class EtcdDiscoveryBackend(DiscoveryBackend):
             try:
                 await self._keepalive_task
             except asyncio.CancelledError:
-                pass
+                pass  # Expected on close(); suppress to allow clean shutdown
 
         for key, lease_id in self._leases.items():
             try:

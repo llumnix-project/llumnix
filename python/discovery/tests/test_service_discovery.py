@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 
 from discovery.heartbeat import HeartbeatConfig
-from discovery.discovery import ServiceDiscovery, REDIS_DISCOVERY_PREFIX, ETCD_DISCOVERY_PREFIX
+from discovery.discovery import ServiceDiscovery, REDIS_DISCOVERY_PREFIX
 from discovery.proto.redis_discovery_pb2 import InstanceDiscoveryInfo
 
 
