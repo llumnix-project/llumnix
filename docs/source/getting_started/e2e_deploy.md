@@ -7,18 +7,18 @@
 
 | Mode | Prefill/Decode | KV Transfer | Scheduler | Best For |
 |------|---------------|-------------|-----------|------|
-| **Neutral** | Combined | N/A | Optional | Getting started, simple deployments |
-| **PD** | PD disaggregation | HybridConnector | Required | Production, PD disaggregation |
-| **PD-KVS** | PD disaggregation  | HybridConnector  | Required | Production, prefix caching, cache-aware scheduling |
+| **Neutral** | Combined | N/A | Optional | Simple isomorphic deployment |
+| **PD** | PD disaggregation | HybridConnector | Optional | PD disaggregation |
+| **PD-KVS** | PD disaggregation  | HybridConnector  | Required | PD disaggregation with distributed KV cache store and cache-aware scheduling |
 | **SLO-Aware** | PD disaggregation | HybridConnector | Required | Latency-sensitive workloads with TTFT/TPOT SLO enforcement |
-| **SLO-Aware Adaptive-PD** | PD disaggregation | HybridConnector | Required | SLO enforcement with dynamic PD ratio adjustment and migration |
+| **SLO-Aware Adaptive-PD** | PD disaggregation | HybridConnector | Required | SLO enforcement with dynamic PD role adjustment|
 
 ### Scheduling Variants
 
 | Directory | Scheduling | Routing | Scheduler Pod | Best For |
 |-----------|-----------|---------|--------------|---------|
-| `full-mode-scheduling/load-balance` | Full Mode | Load Balance | Yes | **Recommended.** Load-aware routing with CMS state |
-| `lite-mode-scheduling/load-balance` | Lite Mode | Load Balance | Yes | Lightweight, no CMS state tracking |
+| `full-mode-scheduling/load-balance` | Full Mode | Load Balance | Yes | **Recommended.** Load-aware scheduling with CMS state |
+| `lite-mode-scheduling/load-balance` | Lite Mode | Load Balance | Yes | Lightweight, Load-aware scheduling with LRS state |
 | `lite-mode-scheduling/round-robin` | Lite Mode | Round Robin | No | Simplest setup, stateless routing |
 
 #### Full Mode vs Lite Mode
@@ -35,7 +35,7 @@
 > embedded within the vLLM engine to collect and report instance metrics to
 > the CMS. If you need to customize metric collection
 > frequency, migration behavior, or CMS connection settings, refer to the
-> [Llumlet Configuration Guide](../user_manual/engine_conf.md).
+> [Llumlet Configuration Guide](../user_manual/llumlet_conf.md).
 
 
 ## Prerequisites
@@ -209,12 +209,12 @@ prefill-0           0/2     Running   gpu-node-b
 redis-xxx           1/1     Running   node-a
 scheduler-xxx       1/1     Running   node-a
 ```
-> Note: `prefill-0` and `decode-0 ` will show `0/2 Running` while vLLM loads the model. This typically takes a few minutes.
+> Note: `prefill-0` and `decode-0` will show `0/2 Running` while vLLM loads the model. This typically takes a few minutes.
 
 
 ## PD-KVS Mode
 
-PD-KVS mode extends PD mode by introducing a **KV Cache Store** (backed by Mooncake) for centralized KV Cache management. This enables **prefix caching** and **cache-aware scheduling**.
+PD-KVS mode extends PD mode by introducing **distributed KV cache store** (backed by Mooncake) and **cache-aware scheduling**, which pools host DRAM across nodes to extend KV cache capacity beyond GPU memory.
 
 ### Additional Requirements
 
@@ -233,9 +233,9 @@ PD-KVS mode requires RDMA hardware for KV Cache transfer:
 	```
 
 3. Update device_name in prefill.yaml to match your hardware:
-  ```yaml
-   "device_name": "erdma_0"   # Replace with your actual device name
-  ```
+    ```yaml
+    "device_name": "erdma_0"   # Replace with your actual device name
+    ```
 
 
 ### Default Resource Requirements
@@ -280,20 +280,22 @@ redis-xxx                   1/1     Running   node-a
 scheduler-xxx               1/1     Running   node-a
 ```
 
-## SLO-Aware Mode
+## SLO-aware Mode
 
-SLO-Aware base mode targets **latency-sensitive production workloads** where Time-to-First-Token (TTFT) and Time-per-Output-Token (TPOT) Service Level Objectives (SLOs) must be satisfied. But in adaptive PD mode, the Scheduler always returns an instance even if it does not satisfy the SLOs. It builds on PD disaggregation (the same HybridConnector + kvt KV transfer as PD mode), but the Scheduler uses an SLO-driven policy backed by per-model profiling data to make dispatch decisions.
+SLO-aware base mode targets **latency-sensitive production workloads** where Time-to-First-Token (TTFT) and Time-per-Output-Token (TPOT) Service Level Objectives (SLOs) must be satisfied. It builds on PD disaggregation (the same HybridConnector + KVT as PD mode), but the Scheduler uses an SLO-driven policy backed by per-model profiling data to make dispatch decisions.
+
+> **Note**: In base SLO mode, requests whose SLOs cannot be met are rejected. In adaptive PD mode, the Scheduler always dispatches to an instance even when SLOs cannot be satisfied.
 
 Two sub-variants are provided:
 
 | Variant | Directory | Adaptive PD | Migration | Best For |
 |---------|-----------|-------------|-----------|----------|
 | **Base** | `slo-aware/base` | ❌ | ❌ | SLO enforcement with fixed PD ratio |
-| **Adaptive-PD** | `slo-aware/adaptive-pd` | ✅ | ✅ | SLO constraints with dynamic PD ratio and request migration |
+| **Adaptive-PD** | `slo-aware/adaptive-pd` | ✅ | ✅ | SLO constraints with adaptive PD role |
 
 ### Additional Requirements
 
-SLO-Aware mode requires RDMA hardware for KV Cache transfer (same as PD mode):
+SLO-aware mode requires RDMA hardware for KV Cache transfer (same as PD mode):
 
 1. An RDMA-capable network adapter must be present. Verify with:
    ```bash
@@ -319,10 +321,10 @@ SLO-Aware mode requires RDMA hardware for KV Cache transfer (same as PD mode):
 ```bash
 cd deploy
 
-# SLO-Aware base (fixed PD ratio)
+# SLO-aware base (fixed PD ratio)
 ./group_deploy.sh llumnix slo-aware/base
 
-# SLO-Aware with Adaptive PD (dynamic PD ratio + migration)
+# SLO-aware with Adaptive PD (adaptive PD role)
 ./group_deploy.sh llumnix slo-aware/adaptive-pd
 ```
 
@@ -353,7 +355,7 @@ The profiling data is automatically downloaded at Scheduler startup from `https:
 
 ### Adaptive PD (`slo-aware/adaptive-pd`)
 
-The Adaptive-PD variant adds dynamic PD ratio adjustment and request migration on top of the base SLO policy. When a decode instance is predicted to violate the TPOT SLO, the Scheduler can migrate in-flight requests to other decode instances. The additional Scheduler flags are:
+The Adaptive-PD variant builds on the base SLO policy, adaptively assigning P/D roles to instances at runtime to maximize SLO attainment. The additional Scheduler flags are:
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|
@@ -457,7 +459,7 @@ management layer. It is responsible for:
 
 The default environment variables in the provided YAML files are sufficient
 for most deployments. If you need to customize the following, refer to the
-[Llumlet Configuration Guide](../user_manual/engine_conf.md):
+[Llumlet Configuration Guide](../user_manual/llumlet_conf.md):
 
 ## Update and Teardown
 

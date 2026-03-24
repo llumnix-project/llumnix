@@ -7,6 +7,34 @@ the [Scheduler Architecture Design Document](../design/scheduler/index.md).
 
 ---
 
+## Service Discovery
+
+### Configuration
+
+The Scheduler discovers backend inference instances differently depending on the scheduling mode:
+
+- **Lite-mode**: Uses the same Redis/etcd discovery as the Gateway (via `--llm-backend-discovery`).
+- **Full-mode**: Uses CMS (Cluster Management Service) exclusively, polling instance metadata and status from a dedicated Redis.
+
+#### Lite-mode discovery flags
+
+These flags are shared with the Gateway. See the [Gateway Service Discovery configuration](gateway_conf.md#service-discovery) for the full flag reference (`--llm-backend-discovery`, `--discovery-redis-*`, `--discovery-etcd-*`).
+
+#### Full-mode CMS flags
+
+| Flag                              | Default   | Description                                          |
+|-----------------------------------|-----------|------------------------------------------------------|
+| `--cms-redis-host`                | `"redis"` | CMS Redis host                                      |
+| `--cms-redis-port`                | `"6379"`  | CMS Redis port                                      |
+| `--cms-redis-username`            | `""`      | CMS Redis username                                  |
+| `--cms-redis-password`            | `""`      | CMS Redis password                                  |
+| `--cms-redis-timeout`             | `1.0`     | CMS Redis socket timeout in seconds                 |
+| `--cms-redis-retry-times`         | `1`       | CMS Redis retry times on connection failure          |
+| `--cms-pull-status-interval-ms`   | `500`     | Polling interval (ms) for instance status from CMS   |
+| `--cms-pull-metadata-interval-ms` | `10000`   | Polling interval (ms) for instance metadata from CMS |
+
+---
+
 ## Policy Framework
 
 ### Usage and Extension Guidelines

@@ -7,6 +7,60 @@ the [Gateway Architecture Design Document](../design/gateway/gateway_architectur
 
 ---
 
+## Service Discovery
+
+For detailed design information about service discovery, please refer to
+the [Service Discovery Design Document](../design/service_discovery.md).
+
+### Configuration
+
+The Gateway discovers backend inference instances through Redis or etcd. The discovery backend is selected via `--llm-backend-discovery` and configured with backend-specific flags.
+
+#### General flags
+
+| Flag                       | Default   | Description                                                  |
+|----------------------------|-----------|--------------------------------------------------------------|
+| `--llm-backend-discovery`  | `"redis"` | Discovery backend for LLM instances: `redis`, `etcd`, or `endpoints` |
+
+#### Redis discovery flags
+
+| Flag                                  | Default   | Description                                          |
+|---------------------------------------|-----------|------------------------------------------------------|
+| `--discovery-redis-host`              | `"redis"` | Redis host                                           |
+| `--discovery-redis-port`              | `6379`    | Redis port                                           |
+| `--discovery-redis-username`          | `""`      | Redis username                                       |
+| `--discovery-redis-password`          | `""`      | Redis password                                       |
+| `--discovery-redis-socket-timeout`    | `1.0`     | Redis socket timeout in seconds                      |
+| `--discovery-redis-retry-times`       | `1`       | Redis retry times on connection failure              |
+| `--discovery-redis-status-ttl-ms`     | `60000`   | TTL in milliseconds for discovery entries; entries older than this are considered expired |
+| `--discovery-redis-refresh-interval-ms` | `1000`  | Polling interval in milliseconds for refreshing the instance list from Redis |
+
+#### etcd discovery flags
+
+| Flag                                      | Default    | Description                                                                 |
+|-------------------------------------------|------------|-----------------------------------------------------------------------------|
+| `--discovery-etcd-endpoints`              | `"etcd:2379"` | etcd endpoints, comma-separated (e.g. `etcd-0:2379,etcd-1:2379`)       |
+| `--discovery-etcd-username`               | `""`       | etcd username                                                               |
+| `--discovery-etcd-password`               | `""`       | etcd password                                                               |
+| `--discovery-etcd-dial-timeout`           | `5.0`      | etcd dial timeout in seconds                                                |
+| `--discovery-etcd-lease-ttl`              | `60`       | etcd lease TTL in seconds; instances whose lease expires are automatically removed |
+| `--discovery-etcd-refresh-interval-sec`   | `3600`     | Periodic full-refresh interval in seconds (safety net for missed Watch events) |
+
+#### Static endpoint discovery flags
+
+For development or testing, instances can be specified as a static comma-separated list instead of using Redis or etcd:
+
+| Flag                      | Default | Description                                                    |
+|---------------------------|---------|----------------------------------------------------------------|
+| `--llm-backend-endpoints` | `""`    | Static backend endpoints (e.g. `0.0.0.0:8090,0.0.0.0:8091`)  |
+
+### Deployment Example
+
+- **Redis-based discovery** (default): See `deploy/base/redis.yaml` for the Redis deployment and any standard deployment example (e.g. `deploy/neutral/lite-mode-scheduling/load-balance/`).
+- **etcd-based discovery**: See `deploy/etcd-discovery/` for a 3-node etcd StatefulSet deployment with an integration test (`test_etcd_failover.sh`) that validates Gateway discovery recovery across single-node failure, quorum loss, full cluster restart with data loss, and instance pod restart.
+
+---
+
 ## PDD Forwarding Protocol
 
 ### Configuration

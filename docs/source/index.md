@@ -16,7 +16,7 @@ New to Llumnix? Start here.
 ---
 
 ## 📖 User Manual
-- [Llumlet Configuration](user_manual/engine_conf.md) — Configure Llumlet
+- [Llumlet Configuration](user_manual/llumlet_conf.md) — Configure Llumlet
 - [Gateway Configuration](user_manual/gateway_conf.md) — Configure Gateway
 - [Scheduler Configuration](user_manual/scheduler_conf.md) — Configure Scheduler
 - [Batch Inference](user_manual/batch_inference.md) — Batch Inference
@@ -35,6 +35,7 @@ New to Llumnix? Start here.
 Understand how Llumnix works internally.
 
 - [Architecture Overview](design/architecture.md) — Full-stack component design
+- [Service Discovery](design/service_discovery.md) — Discovery sidecar and CMS discovery paths
 - Gateway
   - [Gateway Architecture](./design/gateway/gateway_architecture.md) - Gateway architecture and basic functionalities
   - [PDD Forwarding Protocol](./design/gateway/pdd_protocol.md) — Prefill-Decode disaggregation forwarding protocol
@@ -69,9 +70,9 @@ getting_started/benchmark
 :hidden:
 :caption: User Manual
 
-user_manual/engine_conf
 user_manual/gateway_conf
 user_manual/scheduler_conf
+user_manual/llumlet_conf
 user_manual/batch_inference
 :::
 
@@ -88,6 +89,7 @@ develop/image_build
 :caption: Design Documents
 
 design/architecture
+design/service_discovery
 design/gateway/index
 design/scheduler/index
 design/llumlet/index

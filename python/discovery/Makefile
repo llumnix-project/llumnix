@@ -1,5 +1,11 @@
+.PHONY: check-grpcio-tools
+check-grpcio-tools:
+	@echo "Checking grpcio-tools..."
+	@python3 -c "import grpc_tools" 2>/dev/null || \
+	    (echo "grpcio-tools not found, installing..." && pip3 install grpcio-tools)
+
 .PHONY: proto
-proto:
+proto: check-grpcio-tools
 	@find . -type d -name "proto" -not -path "./build/*" | while read dir; do \
 	    dir_base=$$(dirname $$dir); \
 	    find $$dir -name "*.proto" | while read proto_file; do \
@@ -14,5 +20,5 @@ install:
 
 .PHONY: test
 test:
-	@pip install pytest --quiet
+	@pip install pytest pytest-asyncio --quiet
 	@pytest tests/ -v

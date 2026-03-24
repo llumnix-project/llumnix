@@ -18,15 +18,35 @@ type DiscoveryConfig struct {
 	SchedulerDiscovery  string
 
 	RedisDiscoveryConfig
+	EtcdDiscoveryConfig
 	EndpointDiscoveryConfig
 }
 
 func (c *DiscoveryConfig) AddDiscoveryConfigFlags(flags *pflag.FlagSet) {
-	flags.StringVar(&c.LLMBackendDiscovery, "llm-backend-discovery", "redis", "use redis/endpoints to discovery backend services.")
+	flags.StringVar(&c.LLMBackendDiscovery, "llm-backend-discovery", "redis", "use redis/etcd/endpoints to discovery backend services.")
 	flags.StringVar(&c.SchedulerDiscovery, "scheduler-discovery", "endpoints", "use endpoints to discovery scheduler services.")
 
 	c.RedisDiscoveryConfig.AddRedisDiscoveryConfigFlags(flags)
+	c.EtcdDiscoveryConfig.AddEtcdDiscoveryConfigFlags(flags)
 	c.EndpointDiscoveryConfig.AddEndpointDiscoveryConfigFlags(flags)
+}
+
+type EtcdDiscoveryConfig struct {
+	DiscoveryEtcdEndpoints          string
+	DiscoveryEtcdUsername           string
+	DiscoveryEtcdPassword           string
+	DiscoveryEtcdDialTimeout        float64
+	DiscoveryEtcdLeaseTTL           int
+	DiscoveryEtcdRefreshIntervalSec int
+}
+
+func (c *EtcdDiscoveryConfig) AddEtcdDiscoveryConfigFlags(flags *pflag.FlagSet) {
+	flags.StringVar(&c.DiscoveryEtcdEndpoints, "discovery-etcd-endpoints", "etcd:2379", "etcd discovery endpoints, comma-separated (e.g. etcd-0:2379,etcd-1:2379)")
+	flags.StringVar(&c.DiscoveryEtcdUsername, "discovery-etcd-username", "", "etcd discovery username")
+	flags.StringVar(&c.DiscoveryEtcdPassword, "discovery-etcd-password", "", "etcd discovery password")
+	flags.Float64Var(&c.DiscoveryEtcdDialTimeout, "discovery-etcd-dial-timeout", 5.0, "etcd discovery dial timeout in seconds")
+	flags.IntVar(&c.DiscoveryEtcdLeaseTTL, "discovery-etcd-lease-ttl", 60, "etcd discovery lease TTL in seconds")
+	flags.IntVar(&c.DiscoveryEtcdRefreshIntervalSec, "discovery-etcd-refresh-interval-sec", 3600, "etcd discovery periodic refresh interval in seconds (safety net for missed Watch events)")
 }
 
 type EndpointDiscoveryConfig struct {

@@ -72,6 +72,18 @@ func CreateBackendServiceResolver(config *config.DiscoveryConfig, inferType cons
 			klog.Fatalf("create redis resolver failed: %v", err)
 		}
 		return r
+	case consts.DiscoveryEtcd:
+		uri := EtcdUriPrefix + config.DiscoveryEtcdEndpoints
+		buildArgs["etcd_username"] = config.DiscoveryEtcdUsername
+		buildArgs["etcd_password"] = config.DiscoveryEtcdPassword
+		buildArgs["etcd_dial_timeout"] = config.DiscoveryEtcdDialTimeout
+		buildArgs["etcd_lease_ttl"] = config.DiscoveryEtcdLeaseTTL
+		buildArgs["etcd_refresh_interval_sec"] = config.DiscoveryEtcdRefreshIntervalSec
+		r, err := BuildLlmResolver(uri, buildArgs)
+		if err != nil {
+			klog.Fatalf("create etcd resolver failed: %v", err)
+		}
+		return r
 	case consts.DiscoveryEndpoints:
 		uri := fmt.Sprintf("%s://%s", EndpointsLlmUriPrefix, config.LLMBackendEndpoints)
 		r, err := BuildLlmResolver(uri, buildArgs)

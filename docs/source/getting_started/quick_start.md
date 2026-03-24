@@ -21,10 +21,10 @@ Available kustomize directories:
 
 | Directory | Description |
 |---|---|
-| `neutral/lite-mode-scheduling/load-balance` | Neutral mode, lite scheduling |
-| `neutral/full-mode-scheduling/load-balance` | Neutral mode, full scheduling |
-| `pd/full-mode-scheduling/load-balance` | Prefill-decode separated mode, full scheduling |
-| `pd-kvs/full-mode-scheduling/load-balance` | Prefill-decode separated mode, full scheduling, with cache-aware scheduling based on prefix cache |
+| `neutral/lite-mode-scheduling/load-balance` | Neutral mode, lite-mode scheduling |
+| `neutral/full-mode-scheduling/load-balance` | Neutral mode, full-mode scheduling |
+| `pd/full-mode-scheduling/load-balance` | Prefill-decode disaggregation mode, full-mode scheduling |
+| `pd-kvs/full-mode-scheduling/load-balance` | Prefill-decode disaggregation mode, full-mode scheduling, with cache-aware scheduling based on distributed KV cache store (e.g. Mooncake) |
 
 ### Deploy
 
