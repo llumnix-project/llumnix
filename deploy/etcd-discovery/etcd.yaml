@@ -1,0 +1,86 @@
+# 3-node etcd StatefulSet for service discovery
+apiVersion: v1
+kind: Service
+metadata:
+  name: etcd
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: etcd
+  ports:
+  - port: 2379
+    name: client
+  - port: 2380
+    name: peer
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: etcd
+spec:
+  serviceName: etcd
+  replicas: 3
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: etcd
+  template:
+    metadata:
+      labels:
+        app: etcd
+    spec:
+      containers:
+      - name: etcd
+        image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/etcd:v3.5.9
+        command:
+        - etcd
+        - --name=$(POD_NAME)
+        - --data-dir=/etcd-data
+        - --listen-client-urls=http://0.0.0.0:2379
+        - --advertise-client-urls=http://$(POD_NAME).etcd:2379
+        - --listen-peer-urls=http://0.0.0.0:2380
+        - --initial-advertise-peer-urls=http://$(POD_NAME).etcd:2380
+        - --initial-cluster=etcd-0=http://etcd-0.etcd:2380,etcd-1=http://etcd-1.etcd:2380,etcd-2=http://etcd-2.etcd:2380
+        - --initial-cluster-token=llumnix-etcd
+        - --initial-cluster-state=new
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: ETCDCTL_API
+          value: "3"
+        ports:
+        - containerPort: 2379
+          name: client
+        - containerPort: 2380
+          name: peer
+        volumeMounts:
+        - name: etcd-data
+          mountPath: /etcd-data
+        livenessProbe:
+          exec:
+            command:
+            - etcdctl
+            - --endpoints=http://localhost:2379
+            - endpoint
+            - health
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - etcdctl
+            - --endpoints=http://localhost:2379
+            - endpoint
+            - health
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: etcd-data
+        # Uses emptyDir for simplicity. etcd data is lost on pod restart;
+        # discovery sidecars detect the lease loss and re-register via their
+        # heartbeat loop. For production, replace with a PersistentVolumeClaim
+        # to preserve data across restarts and avoid the re-registration delay.
+        emptyDir: {}

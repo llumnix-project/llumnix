@@ -1,0 +1,119 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  labels:
+    app: gateway
+    role: gateway
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8089
+      targetPort: 8089
+      protocol: TCP
+      name: http
+  selector:
+    app: gateway
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  labels:
+    app: gateway
+    role: gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+        role: gateway
+    spec:
+      terminationGracePeriodSeconds: 300
+      initContainers:
+      - name: download-tokenizer
+        image: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/python3:3.12-slim-bookworm
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          pip3 install modelscope -i https://mirrors.aliyun.com/pypi/simple/ && \
+          pip3 install packaging -i https://mirrors.aliyun.com/pypi/simple/ && \
+          python3 << 'EOF'
+          from modelscope import snapshot_download
+          
+          model_dir = snapshot_download(
+              'Qwen/Qwen3-8B',
+              cache_dir='/tokenizers',
+              allow_patterns=['tokenizer.json', 'tokenizer_config.json']
+          )
+          
+          print(f"download tokenizer done: {model_dir}")
+          EOF
+        volumeMounts:
+        - name: tokenizer-storage
+          mountPath: /tokenizers
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+      containers:
+      - name: gateway
+        image: ${REPOSITORY}/gateway:${GATEWAY_IMAGE_TAG}
+        imagePullPolicy: Always
+        command: ["/usr/local/bin/gateway"]
+        args:
+        - "--port"
+        - "8089"
+        - "-v"
+        - "3"
+        - "--scheduler-discovery"
+        - "endpoints"
+        - "--scheduler-endpoints"
+        - "scheduler:8088"
+        - "--llm-backend-discovery"
+        - "etcd"
+        - "--discovery-etcd-endpoints"
+        - "etcd-0.etcd:2379,etcd-1.etcd:2379,etcd-2.etcd:2379"
+        - "--scheduling-policy"
+        - "load-balance"
+        - "--tokenizer-path"
+        - "/tokenizers/Qwen/Qwen3-8B"
+        - "--enable-full-mode-scheduling=true"
+        - "--discovery-etcd-refresh-interval-sec=60"
+        ports:
+        - containerPort: 8089
+          name: http
+          protocol: TCP
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8089
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8089
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: tokenizer-storage
+          mountPath: /tokenizers
+          readOnly: true
+      volumes:
+      - name: tokenizer-storage
+        emptyDir: {}

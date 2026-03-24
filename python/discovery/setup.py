@@ -13,8 +13,9 @@ class BuildPyCommand(build_py):
     """Custom build command to generate protobuf files before building."""
 
     def run(self):
-        # Run make proto command
-        subprocess.check_call(["make", "proto"])
+        if not os.environ.get("SKIP_PROTO"):
+            # Run make proto command
+            subprocess.check_call(["make", "proto"])
         # Run the standard build process
         super().run()
 

@@ -111,6 +111,7 @@ const (
 const (
 	DiscoveryEndpoints = "endpoints"
 	DiscoveryRedis     = "redis"
+	DiscoveryEtcd      = "etcd"
 )
 
 const (
