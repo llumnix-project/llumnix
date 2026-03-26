@@ -278,6 +278,13 @@ func (h *OpenAIHandler) Handle(req *types.RequestContext) error {
 				break
 			}
 			klog.Errorf("error during stream inference: %v", chunk.Err)
+			// If no response has been sent yet, return the error so the caller
+			// (internalRouteRequest) can handle retry/release logic correctly.
+			// Otherwise, write the error to ResponseChan and return nil to avoid
+			// interfering with the already-started response stream.
+			if !req.HttpRequest.HeaderResponded {
+				return chunk.Err
+			}
 			writeErrorResponse(req, chunk.Err)
 			return nil
 		}
