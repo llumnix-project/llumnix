@@ -200,7 +200,7 @@ func (p *DispatchPolicy) Schedule(request *types.SchedulingRequest) error {
 	tStart := time.Now()
 	defer func() {
 		elapsed := time.Since(tStart).Milliseconds()
-		klog.V(3).Infof("Llumnix GetToken took %dms, request id: %v, promptTokenIds len: %v",
+		klog.V(3).Infof("Llumnix Schedule took %dms, request id: %v, promptTokenIds len: %v",
 			elapsed, request.Id, request.PromptNumTokens)
 	}()
 
@@ -211,7 +211,7 @@ func (p *DispatchPolicy) Schedule(request *types.SchedulingRequest) error {
 		}
 	}
 
-	klog.V(4).Infof("GetToken request received, promptTokenIds length: %d", request.PromptNumTokens)
+	klog.V(4).Infof("Schedule request received, promptTokenIds length: %d", request.PromptNumTokens)
 
 	startTime := time.Now()
 
