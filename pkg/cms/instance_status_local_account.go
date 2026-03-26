@@ -157,38 +157,23 @@ func (e *InstanceStatusLocalAccountEditor) deleteRequestLocalAccount(
 
 // addRequestLocalAccount adds or updates a request's local account on an instance.
 //
-// Dedup invariant:
-// removeRequestLocalAccount uses the reverse index (requestToInstanceIds) to find all instances
-// a request was dispatched to, and calls deleteRequestLocalAccount once per instance to decrement
-// counters based on the stored InferType. The reverse index does not track how many times counters
-// were incremented for the same (requestId, instanceId) pair. Therefore, addRequestLocalAccount
-// must guarantee that counters are incremented at most once per stage per (requestId, instanceId).
-// Without this dedup, retries that schedule to the same instance would increment counters multiple
-// times, but deleteRequestLocalAccount would only decrement once, causing counter leaks.
-//
 // Scheduling scenarios and their add behavior:
 //
 // 1. Neutral scheduling:
 //   - Single add with InferType=Neutral. Increments both prefill and decode counters.
-//   - Retry to same instance: existing.InferType==Neutral matches incoming Neutral → skip (dedup).
 //
-// 2. PD batch scheduling (different instances):
+// 2. PD scheduling (different instances):
 //   - Two adds: Prefill on inst-A, Decode on inst-B. Each is a fresh add on its instance.
-//   - Retry: each instance sees existing.InferType==inferType → skip.
 //
-// 3. PD batch scheduling (same instance):
+// 3. PD scheduling (same instance):
 //   - First add: Prefill → creates account with InferType=Prefill.
 //   - Second add: Decode → existing.InferType=Prefill ≠ Decode, not Neutral → firstAdd=false
 //     → increments decode counters, then sets InferType=Neutral.
-//   - Retry: existing.InferType=Neutral → skip for both Prefill and Decode.
 //
-// 4. PD separate scheduling (different instances):
-//   - Same as case 2. Gateway calls scheduler twice; each instance gets one fresh add.
-//
-// 5. PD separate scheduling (same instance):
-//   - Same as case 3. First call adds Prefill; second call finds existing Prefill,
-//     falls through as firstAdd=false, increments decode counters, sets Neutral.
-//   - Retry of either call: existing.InferType=Neutral → skip.
+// Retry ordering guarantee:
+// Release is synchronous on the gateway side, so the previous scheduling state is fully
+// released before a retry issues a new Schedule. The scheduler never sees a stale entry for
+// the same requestId on retry, making duplicate-add impossible by construction.
 func (e *InstanceStatusLocalAccountEditor) addRequestLocalAccount(
 	instanceView *InstanceView,
 	inferType consts.InferType,
@@ -202,14 +187,14 @@ func (e *InstanceStatusLocalAccountEditor) addRequestLocalAccount(
 
 	firstAdd := true
 	if existing, exists := instanceView.InstanceStatusLocalAccount.RequestLocalAccount[requestId]; exists {
-		// Request already exists on this instance. Distinguish two cases:
-		// 1. Same or covered inferType (e.g. retry to same instance) → true duplicate, skip entirely.
-		// 2. Different inferType (e.g. PD separate scheduling, decode hits same instance as prefill)
-		//    → not a duplicate, fall through as firstAdd=false to add the other stage's counters.
+		// PD scheduling to the same instance: first add was Prefill, this add is Decode (or vice versa).
+		// Fall through as firstAdd=false to add the other stage's counters.
 		if existing.InferType == inferType || existing.InferType == consts.InferTypeNeutral {
-			klog.Infof(
+			// Should not happen: Release is synchronous, so the old entry is always removed
+			// before a retry reaches here. Log a warning for defensive monitoring.
+			klog.Warningf(
 				"[addRequestLocalAccount] [%v] request %v already exists with inferType=%v (incoming=%v), "+
-					"skip duplicate add (retry to same instance)",
+					"unexpected duplicate add, skipping",
 				instanceView.GetInstanceId(), requestId, existing.InferType, inferType)
 			return
 		}
@@ -244,9 +229,8 @@ func (e *InstanceStatusLocalAccountEditor) addRequestLocalAccount(
 
 	if !firstAdd {
 		// Both prefill and decode counters have been incremented on this instance.
-		// Set InferType to Neutral so that:
-		// 1. Retry adds are correctly deduped (existing.InferType==Neutral → skip).
-		// 2. deleteRequestLocalAccount decrements both prefill and decode counters.
+		// Set InferType to Neutral so that deleteRequestLocalAccount decrements
+		// both prefill and decode counters.
 		instanceView.InstanceStatusLocalAccount.RequestLocalAccount[requestId].InferType = consts.InferTypeNeutral
 	}
 }
