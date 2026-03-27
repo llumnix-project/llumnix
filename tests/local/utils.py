@@ -148,6 +148,7 @@ def get_vllm_command(
     command = (
         f"VLLM_LOGGING_LEVEL=DEBUG "
         f"vllm serve "
+        f"--enable-log-requests "
         f"--enforce-eager "
         f"--max-model-len=16384 "
         f"--model {MODEL_PATH} "
@@ -157,6 +158,7 @@ def get_vllm_command(
     if connector_type == "MooncakeConnector":
         command = f"VLLM_MOONCAKE_SIDE_CHANNEL_PORT={16557 + 8 * cuda} " + command
         command = f"VLLM_MOONCAKE_MIGRATION_BASE_PORT={17557 + 8 * cuda} " + command
+        command = f"VLLM_MOONCAKE_BOOTSTRAP_PORT={18557 + 8 * cuda} " + command
     elif connector_type == "HybridConnector":
         command = f"BLLM_KVTRANS_PORT_BASE={33218 + 8 * cuda} " + command
 
@@ -166,12 +168,16 @@ def get_vllm_command(
     command = "LLUMNIX_ENGINE_GET_STATUS_TIMEOUT=1 " + command
 
     if enable_full_mode_scheduling:
-        command = "LLUMNIX_ENABLE_MIGRATION=1 " + command
+        if connector_type == "MooncakeConnector":
+            command = "LLUMNIX_ENABLE_MIGRATION=0 " + command
+        else:
+            command = "LLUMNIX_ENABLE_MIGRATION=1 " + command
         command = "VLLM_ENABLE_LLUMNIX=1 " + command
         command = "LLUMNIX_MAX_REQ_MIG_IN=50 " + command
         command = "LLUMNIX_MAX_REQ_MIG_OUT=50 " + command
 
     command = "VLLM_USE_MODELSCOPE=true " + command
+    command = "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION=1 " + command
 
     print(f"vllm command: {command}")
 

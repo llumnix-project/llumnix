@@ -9,7 +9,7 @@ import concurrent.futures
 import numpy as np
 import pytest
 
-from utils import download_and_cache_file, send_request, LOG_DIR
+from .utils import download_and_cache_file, send_request, LOG_DIR
 
 INVALID = -9999
 
@@ -17,7 +17,7 @@ INVALID = -9999
 def generate_mig_correct_config():
     base_configs = [
         {
-            "policy": "load-balance",
+            "policy": "flood",
             "enable_full_mode_scheduling": True,
             "enable_migration": True,
             "enable_pd": True,

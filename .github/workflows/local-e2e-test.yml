@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 env:
-  DEV_IMAGE: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225
+  DEV_IMAGE: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260326-165612
 
 jobs:
   local-e2e-test:
@@ -62,7 +62,6 @@ jobs:
               apt-get update && \
               apt-get install -f -y && \
               apt-get install -y udev && \
-              GOVER=1.24.10 bash /workspace/scripts/install/install_go.sh && \
               cd /tmp && \
               wget -O erdma_installer.tar.gz http://mirrors.cloud.aliyuncs.com/erdma/erdma_installer-1.4.5.tar.gz && \
               tar xzf erdma_installer.tar.gz && \
@@ -74,7 +73,6 @@ jobs:
               make discovery-install && \
               make llumlet-install && \
               make blade-kvt-install && \
-              cp /workspace/patches/vllm/mooncake/mooncake_connector_v1.py /usr/local/lib/python3.12/dist-packages/mooncake/mooncake_connector_v1.py && \
               make e2e-test"
 
       - name: Upload logs on failure

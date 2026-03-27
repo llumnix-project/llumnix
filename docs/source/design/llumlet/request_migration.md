@@ -60,9 +60,10 @@ The transfer of KV Cache state relies on an migration backend. The b
 
 * Mooncake Transfer Engine: A general-purpose, community-driven open-source backend. It provides a versatile and widely adopted standard for distributed KV cache transmission.
 	* GitHub Repository: [https://github.com/kvcache-ai/Mooncake](https://github.com/kvcache-ai/Mooncake)
+	* **Note**: Mooncake Transfer Engine does not support request migration on vLLM versions higher than v0.12.0. For newer vLLM versions, please use Blade-KVT instead.
 
-* Blade-KVT: Our natively developed transfer solution that we have also open-sourced to the community. While Mooncake focuses on broad generality, Blade-KVT is tailor-made and deeply optimized for our specific serving architecture. It provides seamless integration and out-of-the-box high performance for our customized scheduling systems.
-    
+* Blade-KVT **(Recommended)**: Our natively developed transfer solution that we have also open-sourced to the community. While Mooncake focuses on broad generality, Blade-KVT is tailor-made and deeply optimized for our specific serving architecture. It provides seamless integration and out-of-the-box high performance for our customized scheduling systems.
+
 Similar to PD disaggregation, initiating a migration also depends on the KV connector （commonly activated by specifying the `--kv-transfer-config` parameter. And to enable migration triggering, the existing connector interfaces must be extended. This extension involves adding new interfaces  specifically for initiating migration tasks. Both Mooncake Connector and Hybrid Connector are currently supported. 
     
 ### KV connector implementation

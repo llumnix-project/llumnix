@@ -6,10 +6,10 @@ This guide covers setting up a development environment on your local machine.
 
 ## Development Image
 
-We provide a pre-built development image with all necessary dependencies pre-installed:
+We provide a pre-built development image with all necessary dependencies pre-installed (vLLM v0.18.0):
 
 ```
-llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225
+llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260326-165612
 ```
 
 If you need to build a custom development image, see [Build Development Image](#build-development-image-optional).
@@ -52,7 +52,7 @@ Inside the container, run:
 go mod tidy
 
 # Install patched vLLM
-make vllm-install
+make vllm-install VLLM_VERSION=v0.18.0
 
 # Install Llumlet package
 make llumlet-install

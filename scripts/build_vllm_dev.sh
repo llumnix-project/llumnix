@@ -4,12 +4,14 @@ set -e
 
 PUSH_IMAGE=false
 CUSTOM_TAG=""
+BASE_IMAGE="vllm/vllm-openai:v0.18.0"
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --push) PUSH_IMAGE=true ;;
         --tag) CUSTOM_TAG="$2"; shift ;;
-        *) echo "Unknown parameter: $1"; echo "Usage: $0 [--push] [--tag <image-tag>]"; exit 1 ;;
+        --base-image) BASE_IMAGE="$2"; shift ;;
+        *) echo "Unknown parameter: $1"; echo "Usage: $0 [--push] [--tag <image-tag>] [--base-image <base-image>]"; exit 1 ;;
     esac
     shift
 done
@@ -20,6 +22,8 @@ IMAGE_TAG="${CUSTOM_TAG:-dev-${TIMESTAMP}}"
 
 DOCKER_BUILDKIT=1 docker build \
     --no-cache \
+    --network=host \
+    --build-arg BASE_IMAGE=${BASE_IMAGE} \
     -t ${REPOSITORY}:${IMAGE_TAG} \
     -f ./container/Dockerfile.vllm_dev \
     .
