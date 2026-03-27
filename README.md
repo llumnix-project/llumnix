@@ -44,9 +44,9 @@ Components:
 # Getting Started
 View our [documentation](https://docs.llumnix.ai) to learn more.
 
-- [Quick start](https://docs.llumnix.aigetting_started/quick_start)
-- [Deployment guide](https://docs.llumnix.aigetting_started/e2e_deploy)
-- [Development guide](https://docs.llumnix.aidevelop/developer_guide)
+- [Quick start](https://docs.llumnix.ai/getting_started/quick_start)
+- [Deployment guide](https://docs.llumnix.ai/getting_started/e2e_deploy)
+- [Development guide](https://docs.llumnix.ai/develop/developer_guide)
 
 
 # License
