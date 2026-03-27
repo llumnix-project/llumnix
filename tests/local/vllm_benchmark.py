@@ -6,8 +6,10 @@ import time
 import pytest
 from modelscope import snapshot_download
 
-from utils import GATEWAY_PORT, MODEL_PATH
 from benchmarks.benchmark_serving import run_benchmark, set_global_args
+
+from .utils import GATEWAY_PORT, MODEL_PATH
+
 
 MILLISECONDS_TO_SECONDS_CONVERSION = 1000
 DATASET_NAME = "gliang1001/ShareGPT_V3_unfiltered_cleaned_split"

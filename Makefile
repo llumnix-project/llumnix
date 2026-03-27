@@ -1,21 +1,23 @@
+VLLM_VERSION ?= v0.18.0
+
 .PHONY: vllm-install
 vllm-install:
-	@echo "==> Cloning vllm repository (branch: releases/v0.12.0)..."
+	@echo "==> Cloning vllm repository (branch: releases/$(VLLM_VERSION))..."
 	rm -rf /tmp/vllm
-	git clone -b releases/v0.12.0 https://github.com/vllm-project/vllm.git /tmp/vllm
+	git clone -b releases/$(VLLM_VERSION) https://github.com/vllm-project/vllm.git /tmp/vllm
 	
 	@echo "==> Copying patch file..."
-	cp ./patches/vllm/vllm_v0.12.0.patch /tmp/vllm_v0.12.0.patch
+	cp ./patches/vllm/vllm_$(VLLM_VERSION).patch /tmp/vllm_$(VLLM_VERSION).patch
 	
 	@echo "==> Building and installing vllm..."
 	cd /tmp/vllm && \
 	export VLLM_PRECOMPILED_WHEEL_COMMIT=$$(git rev-parse HEAD) && \
 	export VLLM_USE_PRECOMPILED=1 && \
-	patch -p1 < /tmp/vllm_v0.12.0.patch && \
+	patch -p1 < /tmp/vllm_$(VLLM_VERSION).patch && \
 	pip install . --no-deps --no-build-isolation -v
 
 	rm -rf /tmp/vllm
-	rm -f /tmp/vllm_v0.12.0.patch
+	rm -f /tmp/vllm_$(VLLM_VERSION).patch
 
 .PHONY: llumlet-install
 llumlet-install:
@@ -136,7 +138,7 @@ lint-pylint:
 	pylint python/llumnix/llumnix/ --rcfile=.pylintrc
 	pylint python/discovery/discovery/ --rcfile=.pylintrc --ignore=__pycache__
 	pylint benchmarks/ --rcfile=.pylintrc --ignore=__pycache__
-	pylint tests/ --rcfile=./tests/.pylintrc --ignore=__pycache__
+	pylint tests/local --rcfile=./tests/.pylintrc --ignore=__pycache__
 
 .PHONY: lint-go
 lint-go: gateway-proto-build

@@ -7,7 +7,7 @@ from typing import Generator, List, Dict, Any
 import pytest
 from modelscope import snapshot_download
 
-from utils import (
+from .utils import (
     wait_for_service,
     start_process,
     cleanup_processes,

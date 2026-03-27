@@ -5,7 +5,7 @@ import requests
 import asyncio
 import grpc
 
-from llumnix.llumlet.proto import llumlet_server_pb2_grpc, llumlet_server_pb2
+from llumnix.server.proto import llumlet_server_pb2_grpc, llumlet_server_pb2
 from llumnix.utils import MigrationType, RequestMigrationPolicy
 
 

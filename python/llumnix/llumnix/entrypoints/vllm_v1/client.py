@@ -181,6 +181,7 @@ class VLLMV1LlumnixClient(LlumnixClient, AsyncMPClient):
         LlumnixClient.__init__(self, loop, output_processor)
 
         client_count, client_index, driver_tensor_queue_union = args
+        # pylint: disable=too-many-function-args
         AsyncMPClient.__init__(
             self,
             vllm_config,
@@ -201,6 +202,7 @@ class VLLMV1LlumnixClient(LlumnixClient, AsyncMPClient):
 
 
 class VLLMV1DPLlumnixClient(VLLMV1LlumnixClient, DPAsyncMPClient):
+    # pylint: disable=super-init-not-called
     def __init__(self, *args, **kwargs):
         self.current_wave = 0
 

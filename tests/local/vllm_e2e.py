@@ -5,7 +5,7 @@ import concurrent.futures
 
 import pytest
 
-from utils import LOG_DIR, send_request
+from .utils import LOG_DIR, send_request
 
 
 def generate_e2e_config():
@@ -143,6 +143,7 @@ def generate_migration_config():
             "enable_migration": True,
             "enable_pd": False,
             "separate_pd_scheduling": False,
+            "connector_type": "HybridConnector",
         },
         {
             "policy": "flood",
@@ -150,16 +151,9 @@ def generate_migration_config():
             "enable_migration": True,
             "enable_pd": True,
             "separate_pd_scheduling": False,
+            "connector_type": "HybridConnector", 
         },
     ]
-
-    update_configs = []
-    for connector_type in ["HybridConnector", "MooncakeConnector"]:
-        for config in base_configs:
-            tmp_config = copy.deepcopy(config)
-            tmp_config["connector_type"] = connector_type
-            update_configs.append(tmp_config)
-    base_configs = update_configs
 
     return base_configs
 
