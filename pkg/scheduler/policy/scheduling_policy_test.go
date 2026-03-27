@@ -1277,13 +1277,16 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 	}
 
 	promptTokenIds := []uint32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	req := &types.SchedulingRequest{
-		SchedulingMode:  types.SchedulingModeNeutral,
-		PromptNumTokens: len(promptTokenIds),
-		PromptTokenIds:  promptTokenIds,
+	newReq := func(id string) *types.SchedulingRequest {
+		return &types.SchedulingRequest{
+			Id:              id,
+			SchedulingMode:  types.SchedulingModeNeutral,
+			PromptNumTokens: len(promptTokenIds),
+			PromptTokenIds:  promptTokenIds,
+		}
 	}
 
-	result1 := policy.schedule(req, clusterViewScheduling)
+	result1 := policy.schedule(newReq("req-1"), clusterViewScheduling)
 	assert.Equal(t, int32(1), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(10), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumUncomputedTokensInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(0), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
@@ -1294,7 +1297,7 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 	instanceViews["instance-neutral-1"].metrics = map[string]instanceSchedulingMetric{}
 	instanceViews["instance-neutral-2"].metrics = map[string]instanceSchedulingMetric{}
 
-	result2 := policy.schedule(req, clusterViewScheduling)
+	result2 := policy.schedule(newReq("req-2"), clusterViewScheduling)
 	assert.Equal(t, int32(2), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(20), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumUncomputedTokensInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(0), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
@@ -1305,10 +1308,82 @@ func TestEnableInstanceStatusLocalAccountScheduleNeutral(t *testing.T) {
 	instanceViews["instance-neutral-1"].metrics = map[string]instanceSchedulingMetric{}
 	instanceViews["instance-neutral-2"].metrics = map[string]instanceSchedulingMetric{}
 
-	result3 := policy.schedule(req, clusterViewScheduling)
+	result3 := policy.schedule(newReq("req-3"), clusterViewScheduling)
 	assert.Equal(t, int32(2), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(20), instanceViews["instance-neutral-1"].cmsView.InstanceStatusLocalAccount.NumUncomputedTokensInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(1), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
 	assert.Equal(t, int32(10), instanceViews["instance-neutral-2"].cmsView.InstanceStatusLocalAccount.NumUncomputedTokensInflightDispatchPrefillRequests)
 	assert.Equal(t, 8002, result3[0][0].GetInstance().Endpoint.Port)
+}
+
+// TestReleaseRequestLocalAccount verifies that ReleaseRequestLocalAccount removes
+// the local account from the scheduled instance and clears all associated counters.
+func TestReleaseRequestLocalAccount(t *testing.T) {
+	c := newConfig()
+	c.EnableInstanceStatusLocalAccount = true
+	policy := newDispatchPolicy(t, c, "neutral")
+
+	instanceView := &cms.InstanceView{
+		Instance: &types.LLMInstance{
+			Endpoint:  types.Endpoint{Host: "127.0.0.1", Port: 8001},
+			InferType: consts.InferTypeNeutral,
+		},
+		Status: &cms.InstanceStatus{
+			InstanceId:        "instance-neutral-1",
+			NumTotalGpuTokens: 100,
+			NumUsedGpuTokens:  10,
+			Schedulable:       true,
+			TimestampMs:       time.Now().UnixMilli(),
+		},
+		Metadata: &cms.InstanceMetadata{
+			InstanceId:   "instance-neutral-1",
+			InstanceType: "neutral",
+		},
+		InstanceStatusLocalAccount: cms.InstanceStatusLocalAccount{
+			RequestLocalAccount:                                map[string]*cms.RequestLocalAccount{},
+			NumInflightDispatchRequests:                        0,
+			NumInflightDispatchPrefillRequests:                 0,
+			NumUncomputedTokensInflightDispatchPrefillRequests: 0,
+		},
+	}
+
+	// Register instanceView into cmsClient.instanceViews so that
+	// RemoveRequestLocalAccount can locate it via the reverse index.
+	policy.cmsClient.GetInstanceViews()["instance-neutral-1"] = instanceView
+
+	// Build local account directly through cmsClient to populate the reverse index.
+	policy.cmsClient.AddRequestLocalAccount(
+		instanceView, consts.InferTypeNeutral, 10, 0, "req-release")
+	assert.Equal(t, int32(1), instanceView.InstanceStatusLocalAccount.NumInflightDispatchRequests)
+	assert.Equal(t, int32(1), instanceView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
+	assert.Contains(t, instanceView.InstanceStatusLocalAccount.RequestLocalAccount, "req-release")
+
+	// Simulate gateway calling release: ReleaseRequestLocalAccount should clean up the account.
+	policy.ReleaseRequestLocalAccount("req-release")
+	assert.NotContains(t, instanceView.InstanceStatusLocalAccount.RequestLocalAccount, "req-release")
+	assert.Equal(t, int32(0), instanceView.InstanceStatusLocalAccount.NumInflightDispatchRequests)
+	assert.Equal(t, int32(0), instanceView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests)
+	assert.Equal(t, int32(0), instanceView.InstanceStatusLocalAccount.NumUncomputedTokensInflightDispatchPrefillRequests)
+}
+
+// TestReleaseRequestLocalAccount_Disabled verifies that ReleaseRequestLocalAccount
+// is a no-op when EnableInstanceStatusLocalAccount is false.
+func TestReleaseRequestLocalAccount_Disabled(t *testing.T) {
+	c := newConfig()
+	c.EnableInstanceStatusLocalAccount = false
+	policy := newDispatchPolicy(t, c, "neutral")
+
+	// Should not panic
+	policy.ReleaseRequestLocalAccount("req-any")
+}
+
+// TestReleaseRequestLocalAccount_NonExistent verifies that releasing a request
+// that has no local account is a safe no-op.
+func TestReleaseRequestLocalAccount_NonExistent(t *testing.T) {
+	c := newConfig()
+	c.EnableInstanceStatusLocalAccount = true
+	policy := newDispatchPolicy(t, c, "neutral")
+
+	// Should not panic even when the request was never scheduled
+	policy.ReleaseRequestLocalAccount("req-never-scheduled")
 }

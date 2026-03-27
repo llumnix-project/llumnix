@@ -6,20 +6,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"llumnix/pkg/lrs"
-	"llumnix/pkg/metrics"
-	"strings"
-
-	"llumnix/cmd/gateway/app/options"
 	"net/http"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/mux"
 	"k8s.io/klog/v2"
 
+	"llumnix/cmd/gateway/app/options"
 	"llumnix/pkg/consts"
 	"llumnix/pkg/gateway/batch"
 	"llumnix/pkg/gateway/handler"
@@ -28,6 +25,8 @@ import (
 	"llumnix/pkg/gateway/mirror"
 	"llumnix/pkg/gateway/queue"
 	"llumnix/pkg/gateway/router"
+	"llumnix/pkg/lrs"
+	"llumnix/pkg/metrics"
 	"llumnix/pkg/types"
 )
 
@@ -407,6 +406,7 @@ func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext)
 
 		originErr = lgs.reqHandler.Handle(reqCtx)
 		if originErr == nil {
+			reqCtx.ForwardSucceeded = true
 			return
 		}
 
@@ -841,10 +841,13 @@ func (h *RequestStateManagementHooks) OnPostPrefill(req *types.RequestContext) {
 	}
 }
 
+// OnPostRequest releases scheduling state after request completion.
+//   - lite-mode: always releases neutral/decode instances to maintain scheduler LRS state.
+//   - full-mode: releases only on failure to remove stale CMS local accounts;
+//     on success, local accounts are cleared by CMS reconciliation.
 func (h *RequestStateManagementHooks) OnPostRequest(req *types.RequestContext) {
 	if h.gateway.config.EnableRequestStateTracking() {
-		klog.V(3).Infof("[%s] Post-request hook triggered", req.Id)
-
+		klog.V(3).Infof("[%s] Post-request hook triggered (lite-mode scheduling)", req.Id)
 		nInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByInferType(consts.InferTypeNeutral)
 		if nInstance != nil {
 			h.balancer.Release(req, nInstance)
@@ -852,6 +855,11 @@ func (h *RequestStateManagementHooks) OnPostRequest(req *types.RequestContext) {
 		dInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByInferType(consts.InferTypeDecode)
 		if dInstance != nil {
 			h.balancer.Release(req, dInstance)
+		}
+	} else if h.gateway.config.EnableFullModeScheduling && !req.ForwardSucceeded {
+		klog.V(3).Infof("[%s] Post-request hook triggered (full-mode scheduling)", req.Id)
+		for i := range req.SchedulingCtx.SchedulingResults {
+			h.balancer.Release(req, &req.SchedulingCtx.SchedulingResults[i])
 		}
 	}
 }

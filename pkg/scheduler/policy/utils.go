@@ -204,7 +204,7 @@ func logSelectedInstance(
 		}
 	}
 	loadMetric.Calculate(nil, instance)
-	klog.V(3).Infof("[GetToken] dispatch request %s to %s instance %s for %s, %s: %.4f",
+	klog.V(3).Infof("[Schedule] dispatch request %s to %s instance %s for %s, %s: %.4f",
 		requestId, instance.GetInferType(), instance.GetInstanceId(), requestInferType,
 		loadMetric.GetName(), loadMetric.GetValue())
 }

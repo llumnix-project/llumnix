@@ -65,6 +65,11 @@ type SchedulingPolicy interface {
 
 	// Schedule attempts to acquire an instance for processing a new request.
 	Schedule(*types.SchedulingRequest) error
+
+	// ReleaseRequestLocalAccount cleans up CMS local accounts for a released request.
+	// Called when the gateway releases scheduling resources (e.g., forwarding failure during retry)
+	// to immediately remove stale local accounts.
+	ReleaseRequestLocalAccount(requestId string)
 }
 
 func NewSchedulingPolicy(
@@ -176,6 +181,13 @@ func (p *DispatchPolicy) Name() string {
 	return p.schedulingPolicy
 }
 
+func (p *DispatchPolicy) ReleaseRequestLocalAccount(requestId string) {
+	if !p.c.EnableInstanceStatusLocalAccount || p.cmsClient == nil {
+		return
+	}
+	p.cmsClient.RemoveRequestLocalAccount(requestId)
+}
+
 func Uint32ToInt64(arr []uint32) []int64 {
 	result := make([]int64, len(arr))
 	for i, v := range arr {
@@ -188,7 +200,7 @@ func (p *DispatchPolicy) Schedule(request *types.SchedulingRequest) error {
 	tStart := time.Now()
 	defer func() {
 		elapsed := time.Since(tStart).Milliseconds()
-		klog.V(3).Infof("Llumnix GetToken took %dms, request id: %v, promptTokenIds len: %v",
+		klog.V(3).Infof("Llumnix Schedule took %dms, request id: %v, promptTokenIds len: %v",
 			elapsed, request.Id, request.PromptNumTokens)
 	}()
 
@@ -199,7 +211,7 @@ func (p *DispatchPolicy) Schedule(request *types.SchedulingRequest) error {
 		}
 	}
 
-	klog.V(4).Infof("GetToken request received, promptTokenIds length: %d", request.PromptNumTokens)
+	klog.V(4).Infof("Schedule request received, promptTokenIds length: %d", request.PromptNumTokens)
 
 	startTime := time.Now()
 
@@ -322,7 +334,7 @@ func (p *DispatchPolicy) schedule(
 				if p.c.EnableInstanceStatusLocalAccount {
 					p.cmsClient.AddRequestLocalAccount(
 						neutral.cmsView, consts.InferTypeNeutral, numTokens,
-						int32(neutral.schedulingCtx.prefixHitTokens), requestId, true)
+						int32(neutral.schedulingCtx.prefixHitTokens), requestId)
 				}
 			} else {
 				klog.V(4).Info("No neutral instance selected")
@@ -349,7 +361,7 @@ func (p *DispatchPolicy) schedule(
 			if p.c.EnableInstanceStatusLocalAccount {
 				p.cmsClient.AddRequestLocalAccount(
 					prefill.cmsView, consts.InferTypePrefill, numTokens,
-					int32(prefill.schedulingCtx.prefixHitTokens), requestId, true)
+					int32(prefill.schedulingCtx.prefixHitTokens), requestId)
 			}
 		}
 	}
@@ -369,7 +381,7 @@ func (p *DispatchPolicy) schedule(
 			if p.c.EnableInstanceStatusLocalAccount {
 				p.cmsClient.AddRequestLocalAccount(
 					decode.cmsView, consts.InferTypeDecode, numTokens, int32(decode.schedulingCtx.prefixHitTokens),
-					requestId, decode != prefill)
+					requestId)
 			}
 		}
 	}

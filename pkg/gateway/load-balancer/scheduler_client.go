@@ -6,9 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"llumnix/pkg/keepalive"
-	"llumnix/pkg/resolver"
-
 	"net/http"
 	"time"
 
@@ -16,6 +13,8 @@ import (
 
 	"llumnix/cmd/gateway/app/options"
 	"llumnix/pkg/consts"
+	"llumnix/pkg/keepalive"
+	"llumnix/pkg/resolver"
 	"llumnix/pkg/types"
 )
 
@@ -185,6 +184,15 @@ func (cb *SchedulerClient) createReleaseRequest(req *types.RequestContext, insta
 	}
 }
 
+// Release synchronously sends a release request to the scheduler to free scheduling state
+// (local account, LRS) for the given request and instance.
+//
+// Synchronous execution guarantees that the previous state is fully released before
+// the retry path issues a new Schedule, preventing stale-entry races at the scheduler.
+// Release never blocks the response-producing critical path:
+//   - Prefill stage: released in OnPostPrefill after the first decode token arrives.
+//   - Retry path: released before issuing the next Schedule.
+//   - Decode stage: released in OnPostRequest after the response completes.
 func (cb *SchedulerClient) Release(req *types.RequestContext, instance *types.LLMInstance) {
 	if req == nil || instance == nil {
 		return
@@ -197,45 +205,43 @@ func (cb *SchedulerClient) Release(req *types.RequestContext, instance *types.LL
 		return
 	}
 
-	go func() {
-		releaseRequest := cb.createReleaseRequest(req, instance)
-		klog.V(3).Infof("release request: %v", releaseRequest.String())
-		data, err := json.Marshal(releaseRequest)
-		if err != nil {
-			klog.Errorf("marshal release request error: %v", err)
-			return
-		}
+	releaseRequest := cb.createReleaseRequest(req, instance)
+	klog.V(3).Infof("release request: %v", releaseRequest.String())
+	data, err := json.Marshal(releaseRequest)
+	if err != nil {
+		klog.Errorf("marshal release request error: %v", err)
+		return
+	}
 
-		endpoint := cb.kac.GetRemoteEndpoint()
-		url := fmt.Sprintf("http://%s/release", endpoint.String())
-		httpReq, _ := http.NewRequest("POST", url, bytes.NewBuffer(data))
-		if len(cb.config.ServiceToken) > 0 {
-			httpReq.Header.Add("Authorization", cb.config.ServiceToken)
+	endpoint := cb.kac.GetRemoteEndpoint()
+	url := fmt.Sprintf("http://%s/release", endpoint.String())
+	httpReq, _ := http.NewRequest("POST", url, bytes.NewBuffer(data))
+	if len(cb.config.ServiceToken) > 0 {
+		httpReq.Header.Add("Authorization", cb.config.ServiceToken)
+	}
+	retry := releaseTryCount
+RETRY:
+	resp, err := cb.schClient.Do(httpReq)
+	retry--
+	if err != nil {
+		// retry when some network error occurs
+		if retry > 0 {
+			time.Sleep(500 * time.Millisecond)
+			goto RETRY
 		}
-		retry := releaseTryCount
-	RETRY:
-		resp, err := cb.schClient.Do(httpReq)
-		retry--
-		if err != nil {
-			// retry when some network error occurs
-			if retry > 0 {
-				time.Sleep(500 * time.Millisecond)
-				goto RETRY
-			}
-			klog.Warningf("release state for request %s fail: %v\n", req.Id, err)
-			return
-		}
+		klog.Warningf("release state for request %s fail: %v\n", req.Id, err)
+		return
+	}
 
-		defer resp.Body.Close()
+	defer resp.Body.Close()
 
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			klog.Warningf("release state for request %s: could not read body: %v", req.Id, err)
-			return
-		}
-		if resp.StatusCode != http.StatusOK {
-			klog.Errorf("release state for request %s: error: %d, %s", req.Id, resp.StatusCode, string(body))
-			return
-		}
-	}()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		klog.Warningf("release state for request %s: could not read body: %v", req.Id, err)
+		return
+	}
+	if resp.StatusCode != http.StatusOK {
+		klog.Errorf("release state for request %s: error: %d, %s", req.Id, resp.StatusCode, string(body))
+		return
+	}
 }
