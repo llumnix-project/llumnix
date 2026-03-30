@@ -6,11 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"llumnix/pkg/keepalive"
-	"llumnix/pkg/lrs"
-	"llumnix/pkg/metrics"
-	"llumnix/pkg/resolver"
-	"llumnix/pkg/scheduler/policy"
 	"net/http"
 	"time"
 
@@ -19,6 +14,11 @@ import (
 
 	"llumnix/cmd/scheduler/app/options"
 	"llumnix/pkg/consts"
+	"llumnix/pkg/keepalive"
+	"llumnix/pkg/lrs"
+	"llumnix/pkg/metrics"
+	"llumnix/pkg/resolver"
+	"llumnix/pkg/scheduler/policy"
 	"llumnix/pkg/types"
 )
 
@@ -101,18 +101,18 @@ func (ss *SchedulerService) handleKeepalive(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-    if ss.config.EnableRequestStateTracking() {
-        // add gateway for local realtime state
-        ss.lrsClient.AddGateway(remoteEndpoint.String())
-    }
+	if ss.config.EnableRequestStateTracking() {
+		// add gateway for local realtime state
+		ss.lrsClient.AddGateway(remoteEndpoint.String())
+	}
 
 	// block and do keepalive with gateway
 	kac.StartKeepAlive(func() {
-        if ss.config.EnableRequestStateTracking() {
-            // If the goroutine terminates, it indicates that an anomaly occurred with the connection, which could be due to a ping pong
-            // failure or an abnormal TCP disconnection. Ultimately, we need to reclaim the request states that are in use.
-            ss.lrsClient.RemoveGateway(remoteEndpoint.String())
-        }
+		if ss.config.EnableRequestStateTracking() {
+			// If the goroutine terminates, it indicates that an anomaly occurred with the connection, which could be due to a ping pong
+			// failure or an abnormal TCP disconnection. Ultimately, we need to reclaim the request states that are in use.
+			ss.lrsClient.RemoveGateway(remoteEndpoint.String())
+		}
 	})
 }
 
@@ -208,9 +208,17 @@ func (ss *SchedulerService) handleRelease(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	for _, instance := range schReq.SchedulingResult {
-		reqState := lrs.NewRequestState(schReq.Id, 0, instance.Id(), schReq.GatewayId)
-		ss.lrsClient.ReleaseRequestState(instance.InferType, reqState)
+	if ss.config.EnableRequestStateTracking() {
+		for _, instance := range schReq.SchedulingResult {
+			reqState := lrs.NewRequestState(schReq.Id, 0, instance.Id(), schReq.GatewayId)
+			ss.lrsClient.ReleaseRequestState(instance.InferType, reqState)
+		}
+	}
+
+	// Clean up CMS local accounts for the released request to avoid stale accounts
+	// lingering until timeout when request forwarding fails.
+	if ss.config.EnableFullModeScheduling {
+		ss.schedulingPolicy.ReleaseRequestLocalAccount(schReq.Id)
 	}
 
 	klog.V(3).Infof("%vms| do release request by %s: %v", time.Since(tStart).Milliseconds(), schReq.GatewayId, string(body))

@@ -136,7 +136,7 @@ func (b *PDDisaggVllmKvtForwarder) doDecode(
 }
 
 func (b *PDDisaggVllmKvtForwarder) stagedSchedulingForward(req *types.RequestContext) (<-chan StreamChunk, error) {
-	return stagedScheduleForward(req,
+	return stagedSchedulingForward(req,
 		b.doPrefill,
 		func(req *types.RequestContext, chunkChan chan StreamChunk, pInstance, dInstance *types.LLMInstance) {
 			b.doDecode(req, chunkChan, pInstance, dInstance)

@@ -2,11 +2,12 @@ package forwarder
 
 import (
 	"fmt"
-	"llumnix/pkg/consts"
-	"llumnix/pkg/types"
 	"sync"
 
 	"k8s.io/klog/v2"
+
+	"llumnix/pkg/consts"
+	"llumnix/pkg/types"
 )
 
 const (
@@ -68,9 +69,9 @@ func BuildForwarder(forwarderType string, schedulingMode types.SchedulingMode) (
 	return factory(schedulingMode)
 }
 
-// stagedScheduleForward extracts the common staged PD scheduling flow:
+// stagedSchedulingForward extracts the common staged PD scheduling flow:
 // get prefill instance -> doPrefill -> ScheduleDecode -> get decode instance -> doDecode.
-func stagedScheduleForward(
+func stagedSchedulingForward(
 	req *types.RequestContext,
 	doPrefill func(req *types.RequestContext, pInstance *types.LLMInstance) error,
 	doDecode func(req *types.RequestContext, chunkChan chan StreamChunk, pInstance, dInstance *types.LLMInstance),

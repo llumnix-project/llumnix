@@ -10,6 +10,14 @@ import (
 	"llumnix/pkg/consts"
 )
 
+// RequestLocalAccount tracks the local accounting state for a single dispatched request on an instance.
+//
+// InferType reflects the scheduling role of this instance for the request:
+//   - Prefill / Decode: only one stage's counters are incremented.
+//   - Neutral: both prefill and decode counters are incremented (either neutral scheduling,
+//     or PD scheduling where the same instance is selected for both stages).
+//
+// deleteRequestLocalAccount uses InferType to determine which stage counters to decrement.
 type RequestLocalAccount struct {
 	ScheduleTimestampMs int64
 	InferType           consts.InferType
@@ -30,6 +38,9 @@ type InstanceStatusLocalAccount struct {
 type InstanceStatusLocalAccountEditor struct {
 	instanceStatusRequestLocalAccountStalenessSeconds int32
 	enableCacheAwareScheduling                        bool
+	// requestToInstanceIds maps requestId -> list of instanceIds (InstanceMetadata.InstanceId)
+	// for O(1) reverse lookup when releasing request local accounts.
+	requestToInstanceIds map[string][]string
 }
 
 func newInstanceStatusLocalAccountEditor(
@@ -39,6 +50,7 @@ func newInstanceStatusLocalAccountEditor(
 	return &InstanceStatusLocalAccountEditor{
 		instanceStatusRequestLocalAccountStalenessSeconds: instanceStatusRequestLocalAccountStalenessSeconds,
 		enableCacheAwareScheduling:                        enableCacheAwareScheduling,
+		requestToInstanceIds:                              make(map[string][]string),
 	}
 }
 
@@ -66,6 +78,7 @@ func (e *InstanceStatusLocalAccountEditor) updateInstanceStatusLocalAccount(
 			// and not exists in waiting requests
 			// (request local account is required to update num tokens of waiting requests).
 			delete(instanceView.InstanceStatusLocalAccount.RequestLocalAccount, reqID)
+			e.removeInstanceFromRequestIndex(reqID, instanceID)
 		}
 		if !requestLocalAccount.FoundInCMS && !waitingReqs.Has(reqID) &&
 			(time.Now().UnixMilli()-requestLocalAccount.ScheduleTimestampMs)/1000 >=
@@ -107,6 +120,8 @@ func (e *InstanceStatusLocalAccountEditor) updateInstanceStatusLocalAccount(
 	}
 }
 
+// deleteRequestLocalAccount decrements the stage counters (prefill/decode) based on the request's InferType,
+// and optionally removes the request entry and reverse index.
 func (e *InstanceStatusLocalAccountEditor) deleteRequestLocalAccount(
 	instanceView *InstanceView, instanceID string, reqID string, deleteRequest bool) {
 	requestLocalAccount, exists := instanceView.InstanceStatusLocalAccount.RequestLocalAccount[reqID]
@@ -136,22 +151,59 @@ func (e *InstanceStatusLocalAccountEditor) deleteRequestLocalAccount(
 
 	if deleteRequest {
 		delete(instanceView.InstanceStatusLocalAccount.RequestLocalAccount, reqID)
+		e.removeInstanceFromRequestIndex(reqID, instanceID)
 	}
 }
 
+// addRequestLocalAccount adds or updates a request's local account on an instance.
+//
+// Scheduling scenarios and their add behavior:
+//
+// 1. Neutral scheduling:
+//   - Single add with InferType=Neutral. Increments both prefill and decode counters.
+//
+// 2. PD scheduling (different instances):
+//   - Two adds: Prefill on inst-A, Decode on inst-B. Each is a fresh add on its instance.
+//
+// 3. PD scheduling (same instance):
+//   - First add: Prefill → creates account with InferType=Prefill.
+//   - Second add: Decode → existing.InferType=Prefill ≠ Decode, not Neutral → firstAdd=false
+//     → increments decode counters, then sets InferType=Neutral.
+//
+// Retry ordering guarantee:
+// Release is synchronous on the gateway side, so the previous scheduling state is fully
+// released before a retry issues a new Schedule. The scheduler never sees a stale entry for
+// the same requestId on retry, making duplicate-add impossible by construction.
 func (e *InstanceStatusLocalAccountEditor) addRequestLocalAccount(
 	instanceView *InstanceView,
 	inferType consts.InferType,
 	numTokens int32,
 	prefixHitNumTokens int32,
-	requestId string,
-	firstAdd bool) {
+	requestId string) {
 	numUncomputedTokens := numTokens
 	if e.enableCacheAwareScheduling {
 		numUncomputedTokens -= prefixHitNumTokens
 	}
 
-	if firstAdd {
+	firstAdd := true
+	if existing, exists := instanceView.InstanceStatusLocalAccount.RequestLocalAccount[requestId]; exists {
+		// PD scheduling to the same instance: first add was Prefill, this add is Decode (or vice versa).
+		// Fall through as firstAdd=false to add the other stage's counters.
+		if existing.InferType == inferType || existing.InferType == consts.InferTypeNeutral {
+			// Should not happen: Release is synchronous, so the old entry is always removed
+			// before a retry reaches here. Log a warning for defensive monitoring.
+			klog.Warningf(
+				"[addRequestLocalAccount] [%v] request %v already exists with inferType=%v (incoming=%v), "+
+					"unexpected duplicate add, skipping",
+				instanceView.GetInstanceId(), requestId, existing.InferType, inferType)
+			return
+		}
+		klog.Infof(
+			"[addRequestLocalAccount] [%v] request %v already exists with inferType=%v, "+
+				"adding %v stage counters (PD scheduling to same instance)",
+			instanceView.GetInstanceId(), requestId, existing.InferType, inferType)
+		firstAdd = false
+	} else {
 		klog.Infof("InstanceStatusLocalAccount: %+v", instanceView.InstanceStatusLocalAccount)
 		instanceView.InstanceStatusLocalAccount.NumInflightDispatchRequests += 1
 		instanceView.InstanceStatusLocalAccount.RequestLocalAccount[requestId] =
@@ -162,6 +214,7 @@ func (e *InstanceStatusLocalAccountEditor) addRequestLocalAccount(
 				NumUncomputedTokens: numUncomputedTokens,
 				FoundInCMS:          false,
 			}
+		e.requestToInstanceIds[requestId] = append(e.requestToInstanceIds[requestId], instanceView.GetInstanceId())
 	}
 
 	if inferType == consts.InferTypePrefill || inferType == consts.InferTypeNeutral {
@@ -175,8 +228,9 @@ func (e *InstanceStatusLocalAccountEditor) addRequestLocalAccount(
 	}
 
 	if !firstAdd {
-		// Not first update means that this instance is selected as both prefill and decode,
-		// so this instance should be considered as neutral infer type.
+		// Both prefill and decode counters have been incremented on this instance.
+		// Set InferType to Neutral so that deleteRequestLocalAccount decrements
+		// both prefill and decode counters.
 		instanceView.InstanceStatusLocalAccount.RequestLocalAccount[requestId].InferType = consts.InferTypeNeutral
 	}
 }
@@ -190,6 +244,46 @@ func (e *InstanceStatusLocalAccountEditor) revertRequestPrefillLocalAccount(
 	instanceView.InstanceStatusLocalAccount.NumInflightDispatchPrefillRequests -= 1
 	instanceView.InstanceStatusLocalAccount.NumUncomputedTokensInflightDispatchPrefillRequests -= numTokens
 	delete(instanceView.InstanceStatusLocalAccount.RequestLocalAccount, requestId)
+	delete(e.requestToInstanceIds, requestId)
+}
+
+// removeRequestLocalAccount removes the local accounts for a request from all instances
+// it was scheduled to, using the reverse index for O(1) lookup.
+func (e *InstanceStatusLocalAccountEditor) removeRequestLocalAccount(
+	requestId string, instanceViews map[string]*InstanceView) {
+	instanceIds, exists := e.requestToInstanceIds[requestId]
+	if !exists {
+		return
+	}
+	for _, instanceId := range instanceIds {
+		instanceView, ok := instanceViews[instanceId]
+		if !ok {
+			// instanceView not found, only clean up the reverse index.
+			e.removeInstanceFromRequestIndex(requestId, instanceId)
+			continue
+		}
+		if _, exists := instanceView.InstanceStatusLocalAccount.RequestLocalAccount[requestId]; exists {
+			// deleteRequestLocalAccount cleans up both the account and the reverse index internally.
+			e.deleteRequestLocalAccount(instanceView, instanceId, requestId, true)
+			klog.V(3).Infof("[removeRequestLocalAccount] removed request %s from instance %s",
+				requestId, instanceId)
+		}
+	}
+}
+
+// removeInstanceFromRequestIndex removes a specific instanceId from the reverse index
+// for the given reqID. If the list becomes empty, the entire entry is deleted.
+func (e *InstanceStatusLocalAccountEditor) removeInstanceFromRequestIndex(reqID string, instanceID string) {
+	ids := e.requestToInstanceIds[reqID]
+	for i, id := range ids {
+		if id == instanceID {
+			e.requestToInstanceIds[reqID] = append(ids[:i], ids[i+1:]...)
+			break
+		}
+	}
+	if len(e.requestToInstanceIds[reqID]) == 0 {
+		delete(e.requestToInstanceIds, reqID)
+	}
 }
 
 func trimRequestIDsToSets(rawRequestIDs []string) sets.Set[string] {
