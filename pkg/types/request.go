@@ -257,6 +257,9 @@ type RequestContext struct {
 	// hooks for pd separate scheduling
 	pdSeparateSchedulingHooks PDSeparateSchedulingHooks
 
+	// whether the request forwarding succeeded
+	ForwardSucceeded bool
+
 	// hooks for realtime state management
 	requestStateManagementHooks RequestStateManagementHooks
 }

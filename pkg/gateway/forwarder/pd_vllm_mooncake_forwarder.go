@@ -132,7 +132,7 @@ func (b *PDDisaggVllmMoonCakeForwarder) batchSchedulingForward(req *types.Reques
 }
 
 func (b *PDDisaggVllmMoonCakeForwarder) stagedSchedulingForward(req *types.RequestContext) (<-chan StreamChunk, error) {
-	return stagedScheduleForward(req,
+	return stagedSchedulingForward(req,
 		b.doPrefill,
 		func(req *types.RequestContext, chunkChan chan StreamChunk, _, dInstance *types.LLMInstance) {
 			b.doDecode(req, chunkChan, dInstance)

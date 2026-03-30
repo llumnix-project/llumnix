@@ -3,9 +3,6 @@ package cms
 import (
 	"context"
 	"fmt"
-	"llumnix/pkg/metrics"
-	"llumnix/pkg/redis"
-	"llumnix/pkg/scheduler/predictor"
 	"math"
 	"strings"
 	"sync"
@@ -16,6 +13,9 @@ import (
 	"k8s.io/klog/v2"
 
 	"llumnix/pkg/consts"
+	"llumnix/pkg/metrics"
+	"llumnix/pkg/redis"
+	"llumnix/pkg/scheduler/predictor"
 	"llumnix/pkg/types"
 )
 
@@ -671,8 +671,20 @@ func (c *CMSReadClient) setReservedInstance() {
 	}
 }
 
+// AddRequestLocalAccount and RevertRequestPrefillLocalAccount are called from within
+// Schedule(), which already holds a lock on CMSReadClient:
+//   - allowConcurrentSchedule=true:  Schedule holds RLock for read-concurrent scheduling.
+//     Writing local accounts requires Lock, but Go's sync.RWMutex does not support atomic
+//     RLock→Lock upgrade. So we manually release RLock, acquire Lock, do the write, then
+//     restore RLock on return. The brief unlocked window is safe because the write does not
+//     depend on any intermediate state read under the previous RLock.
+//   - allowConcurrentSchedule=false: Schedule already holds Lock, so no lock operation is
+//     needed here.
+//
+// In contrast, RemoveRequestLocalAccount is called from handleRelease (HTTP handler) which
+// holds no CMSReadClient lock, so it acquires Lock directly.
 func (c *CMSReadClient) AddRequestLocalAccount(
-	instanceInfo *InstanceView, inferType consts.InferType, numTokens int32, prefixHitNumTokens int32, requestId string, firstUpdate bool) {
+	instanceInfo *InstanceView, inferType consts.InferType, numTokens int32, prefixHitNumTokens int32, requestId string) {
 	if c.allowConcurrentSchedule {
 		c.RUnlock()
 		defer c.RLock()
@@ -680,7 +692,7 @@ func (c *CMSReadClient) AddRequestLocalAccount(
 		defer c.Unlock()
 	}
 	c.instanceStatusLocalAccountEditor.addRequestLocalAccount(
-		instanceInfo, inferType, numTokens, prefixHitNumTokens, requestId, firstUpdate)
+		instanceInfo, inferType, numTokens, prefixHitNumTokens, requestId)
 }
 
 func (c *CMSReadClient) RevertRequestPrefillLocalAccount(
@@ -693,6 +705,22 @@ func (c *CMSReadClient) RevertRequestPrefillLocalAccount(
 	}
 	c.instanceStatusLocalAccountEditor.revertRequestPrefillLocalAccount(
 		instanceInfo, numTokens, prefixHitNumTokens, requestId)
+}
+
+// RemoveRequestLocalAccount removes the local accounts for a request from all instances
+// it was scheduled to. Called from handleRelease (scheduler HTTP handler) when the gateway
+// releases scheduling resources (e.g., forwarding failure during retry) to immediately
+// clean up stale local accounts instead of waiting for the staleness timeout.
+// Unlike AddRequestLocalAccount/RevertRequestPrefillLocalAccount which are called from
+// Schedule() (already holding RLock/Lock), this method is called from an external HTTP
+// handler that holds no CMSReadClient lock, so it acquires Lock directly.
+func (c *CMSReadClient) RemoveRequestLocalAccount(requestId string) {
+	if !c.enableInstanceStatusLocalAccount {
+		return
+	}
+	c.Lock()
+	defer c.Unlock()
+	c.instanceStatusLocalAccountEditor.removeRequestLocalAccount(requestId, c.instanceViews)
 }
 
 func (c *CMSReadClient) addSampleToTTFTPredictor(instanceID string) {
