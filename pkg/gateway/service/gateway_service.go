@@ -440,6 +440,16 @@ func (lgs *LlmGatewayService) internalRouteRequest(reqCtx *types.RequestContext)
 			reqCtx.RequestStats.RecordFailedInstance(instanceID)
 		}
 		reqCtx.RequestStats.RetryCount++
+		// Record retry metric with model and status_code labels.
+		retryStatusCode := "network_error"
+		var upstreamErr *consts.UpstreamError
+		if errors.As(originErr, &upstreamErr) {
+			retryStatusCode = strconv.Itoa(upstreamErr.StatusCode)
+		}
+		metrics.Counter("request_retry_total", metrics.Labels{
+			{Name: "model", Value: reqCtx.LLMRequest.Model},
+			{Name: "status_code", Value: retryStatusCode},
+		}).Inc()
 
 		klog.Warningf("request [%s] attempt %d failed with retryable error: %v, will retry",
 			reqCtx.Id, attempt, originErr)
@@ -490,6 +500,21 @@ func (lgs *LlmGatewayService) tryFallback(reqCtx *types.RequestContext, skipURLs
 		klog.Infof("request [%s] will fallback to: %s", reqCtx.Id, fdst.URL)
 
 		err = lgs.proxyToExternal(reqCtx, fdst)
+
+		// Record fallback metric after proxy call so we can capture the status code.
+		fallbackStatusCode := "success"
+		if err != nil {
+			fallbackStatusCode = "network_error"
+			var upstreamErr *consts.UpstreamError
+			if errors.As(err, &upstreamErr) {
+				fallbackStatusCode = strconv.Itoa(upstreamErr.StatusCode)
+			}
+		}
+		metrics.Counter("request_fallback_total", metrics.Labels{
+			{Name: "model", Value: reqCtx.LLMRequest.Model},
+			{Name: "status_code", Value: fallbackStatusCode},
+		}).Inc()
+
 		if err == nil {
 			return nil
 		}
@@ -511,6 +536,10 @@ func (lgs *LlmGatewayService) tryFallback(reqCtx *types.RequestContext, skipURLs
 				select {
 				case result := <-retryResultCh:
 					if result.Err == nil {
+						// Record fallback retry success metric with model label.
+						metrics.Counter("request_fallback_retry_success_total", metrics.Labels{
+							{Name: "model", Value: reqCtx.LLMRequest.Model},
+						}).Inc()
 						return nil
 					}
 					klog.Warningf("request [%s] rate-limit retry for fallback %s failed: %v",
@@ -657,7 +686,10 @@ func (lgs *LlmGatewayService) HandleOpenAIRequest(w http.ResponseWriter, r *http
 	// Wait for and write responses (supports both streaming and non-streaming)
 	lgs.writeResponseUntilDone(reqCtx)
 
-	// Log request access logs and metrics
+	// Record request metrics
+	recordRequestMetrics(reqCtx)
+
+	// Log request access
 	lgs.LogRequestAccess(reqCtx)
 }
 
@@ -701,6 +733,8 @@ func (lgs *LlmGatewayService) Run() {
 
 	// Register health check route
 	r.HandleFunc("/healthz", lgs.Healthz)
+	// Register Prometheus metrics endpoint
+	r.Handle("/metrics", metrics.NewPrometheusHandler())
 	// handle all LLM inference requests
 	r.HandleFunc("/v1/chat/completions", lgs.HandleOpenAIRequest)
 	r.HandleFunc("/v1/completions", lgs.HandleOpenAIRequest)
@@ -723,11 +757,11 @@ func (lgs *LlmGatewayService) StartMetricRecord() {
 	for {
 		time.Sleep(consts.MetricRecordDuration)
 		// Calculate pending requests: queued + being scheduled
-		pendingRequests := float32(lgs.bufferQueue.Length() + lgs.bufferQueue.BusyWorkers())
-		metrics.StatusValue("gateway_pending_requests", []metrics.Label{}).Set(pendingRequests)
+		pendingRequests := float64(lgs.bufferQueue.Length() + lgs.bufferQueue.BusyWorkers())
+		metrics.Gauge("gateway_pending_requests", []metrics.Label{}).Set(pendingRequests)
 		// Record current total active requests
-		requests := float32(lgs.numReqs.Load())
-		metrics.StatusValue("gateway_requests", []metrics.Label{}).Set(requests)
+		requests := float64(lgs.numReqs.Load())
+		metrics.Gauge("gateway_current_requests", []metrics.Label{}).Set(requests)
 	}
 }
 
@@ -770,17 +804,6 @@ func (lgs *LlmGatewayService) LogRequestInput(req *types.RequestContext) {
 func (lgs *LlmGatewayService) LogRequestAccess(req *types.RequestContext) {
 	stats := req.RequestStats
 	httpReq := req.HttpRequest
-	stats.ProcessTime = time.Now()
-	// Only record latency metrics for successful requests
-	if httpReq.StatusCode == http.StatusOK {
-		metrics.Latency("llm_response_time", stats.DefaultLabels).Add(time.Since(stats.HandleTime).Milliseconds())
-	}
-	// Record request counter metric with status code label
-	requestsLabel := stats.DefaultLabels.Append(metrics.Label{Name: "status_code", Value: strconv.Itoa(httpReq.StatusCode)})
-	metrics.Counter("llm_requests", requestsLabel).IncrByOne()
-
-	metrics.Latency("llm_ttft", stats.DefaultLabels).Add(stats.TTFT())
-	metrics.Latency("llm_tpot", stats.DefaultLabels).AddMany(req.RequestStats.ITLs)
 
 	// Calculate request counts at different stages
 	queueSize := lgs.bufferQueue.Length()                     // Requests waiting in queue
@@ -802,6 +825,54 @@ func (lgs *LlmGatewayService) LogRequestAccess(req *types.RequestContext) {
 		workSize,
 		stats.RetryCount,
 		req.LLMRequest.Model)
+}
+
+// recordRequestMetrics records all request-level metrics including latency, token counts, and pipeline stages.
+func recordRequestMetrics(req *types.RequestContext) {
+	stats := req.RequestStats
+	httpReq := req.HttpRequest
+	stats.ProcessTime = time.Now()
+
+	// Populate per-request default labels for all metrics.
+	// Model is resolved during request parsing (openai_handler.go).
+	stats.DefaultLabels = metrics.Labels{
+		{Name: "model", Value: req.LLMRequest.Model},
+	}
+	// Only record latency metrics for successful requests
+	if httpReq.StatusCode == http.StatusOK {
+		metrics.Histogram("request_e2e_latency_seconds", stats.DefaultLabels).Observe(time.Since(stats.HandleTime).Seconds())
+	}
+	// Record request counter metric with status code label
+	requestsLabel := stats.DefaultLabels.Append(metrics.Label{Name: "status_code", Value: strconv.Itoa(httpReq.StatusCode)})
+	metrics.Counter("request_total", requestsLabel).Inc()
+
+	metrics.Histogram("request_ttft_milliseconds", stats.DefaultLabels).ObserveInt(stats.TTFT())
+
+	// ITL (Inter-Token Latency): each individual gap between consecutive tokens.
+	// One request contributes (output_tokens - 1) observations → token-weighted in histogram.
+	metrics.Histogram("request_itl_milliseconds", stats.DefaultLabels).ObserveManyInt(stats.ITLs)
+
+	// TPOT (Time Per Output Token): mean generation speed per request = (E2E - TTFT) / (output_tokens - 1).
+	// One request contributes 1 observation → request-weighted in histogram.
+	if outputTokens := int(stats.OutputTokensLen); outputTokens > 1 {
+		e2e := time.Since(stats.HandleTime).Milliseconds()
+		tpot := (e2e - stats.TTFT()) / int64(outputTokens-1)
+		metrics.Histogram("request_tpot_milliseconds", stats.DefaultLabels).ObserveInt(tpot)
+	}
+
+	// Record request pipeline stage metrics
+	metrics.Histogram("request_queue_duration_milliseconds", stats.DefaultLabels).ObserveInt(stats.QueueTime())
+	metrics.Histogram("request_schedule_duration_milliseconds", stats.DefaultLabels).ObserveInt(stats.ScheduleTime())
+	metrics.Histogram("request_preprocess_duration_milliseconds", stats.DefaultLabels).ObserveInt(stats.PreprocessTime())
+	metrics.Histogram("request_postprocess_duration_milliseconds", stats.DefaultLabels).ObserveInt(stats.PostprocessTime())
+
+	// Record token metrics for request analysis and throughput statistics
+	inputTokens := int64(stats.InputTokensLen)
+	outputTokens := int(stats.OutputTokensLen)
+	metrics.Histogram("request_input_tokens", stats.DefaultLabels).ObserveInt(inputTokens)
+	metrics.Histogram("request_output_tokens", stats.DefaultLabels).ObserveInt(int64(outputTokens))
+	metrics.Counter("request_input_tokens_total", stats.DefaultLabels).Add(int(inputTokens))
+	metrics.Counter("request_output_tokens_total", stats.DefaultLabels).Add(outputTokens)
 }
 
 type PDSeparateSchedulingHooks struct {
@@ -833,6 +904,9 @@ func (h *RequestStateManagementHooks) OnPostPrefill(req *types.RequestContext) {
 	if h.gateway.config.EnableRequestStateTracking() {
 		klog.V(3).Infof("[%s] Post-prefill hook triggered", req.Id)
 
+		// Report prefill complete to scheduler for waiting state tracking
+		h.gateway.requestStateTracker.ReportPrefillComplete(req)
+
 		pInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByInferType(consts.InferTypePrefill)
 		if pInstance != nil {
 			h.balancer.Release(req, pInstance)
@@ -848,6 +922,10 @@ func (h *RequestStateManagementHooks) OnPostPrefill(req *types.RequestContext) {
 func (h *RequestStateManagementHooks) OnPostRequest(req *types.RequestContext) {
 	if h.gateway.config.EnableRequestStateTracking() {
 		klog.V(3).Infof("[%s] Post-request hook triggered (lite-mode scheduling)", req.Id)
+
+		// Delete request state after request completes
+		h.gateway.requestStateTracker.DeleteRequestState(req.Id)
+
 		nInstance := req.SchedulingCtx.SchedulingResults.GetInstanceByInferType(consts.InferTypeNeutral)
 		if nInstance != nil {
 			h.balancer.Release(req, nInstance)
@@ -880,7 +958,6 @@ func (h *RequestStateManagementHooks) OnPostDecodeFirstStreamResponse(req *types
 		reqTokenState := lrs.NewRequestTokenState(req, req.LLMRequest.Model, inferType, instanceID, req.SchedulingCtx.GatewayId)
 		h.gateway.requestStateTracker.AddRequestState(reqTokenState)
 		req.RequestTokenState = reqTokenState
-		defer h.gateway.requestStateTracker.DeleteRequestState(req.Id)
 	}
 }
 

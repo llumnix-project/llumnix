@@ -53,7 +53,6 @@ func newReschedulingPolicy(c *options.SchedulerConfig) *ReschedulingPolicy {
 		c.EnableInstanceStatusLocalAccount,
 		c.EnableCacheAwareScheduling,
 		c.RequestLocalAccountStalenessSeconds,
-		c.CmsRecordMetricsInterval,
 		c.EnablePredictorEnhancedScheduling,
 		c.NumPredictorWarmupSamples,
 		c.EnableAdaptivePD)
@@ -199,7 +198,7 @@ func (p *ReschedulingPolicy) executeMigrations(reschedulingPairs []*rescheduling
 				{Name: "rescheduling_req_select_rule", Value: rp.reqSelectRule},
 				{Name: "rescheduling_req_select_order", Value: rp.reqSelectOrder},
 			}
-			metrics.IncrLlumnixCounterByOne(metrics.LlumnixMetricReschedulingCount, labels)
+			metrics.Counter("scheduler_rescheduling_total", labels).Inc()
 			klog.V(4).Infof("Start to migrate from %s to %s, rule is %s",
 				pair.srcView.cmsView.Metadata.Ip+":"+strconv.Itoa(int(pair.srcView.cmsView.Metadata.ApiServerPort)),
 				pair.dstView.cmsView.Metadata.Ip+":"+strconv.Itoa(int(pair.dstView.cmsView.Metadata.ApiServerPort)),
@@ -261,7 +260,7 @@ func (p *ReschedulingPolicy) executeMigrations(reschedulingPairs []*rescheduling
 	for i := 0; i < len(reschedulingPairs); i++ {
 		result := <-results
 		if result.err != nil || !result.migrateResponse.Success {
-			metrics.IncrLlumnixCounterByOne(metrics.LlumnixMetricReschedulingFailedCount, metrics.Labels{})
+			metrics.Counter("scheduler_rescheduling_failed_total", metrics.Labels{}).Inc()
 		}
 		migrationResults = append(migrationResults, &result)
 	}

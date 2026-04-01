@@ -7,6 +7,10 @@ spec:
   leaderWorkerTemplate:
     size: 1
     workerTemplate:
+      metadata:
+        labels:
+          llumnix.io/infer-type: "prefill"
+          llumnix.io/model: "Qwen3-32B"
       spec:
         terminationGracePeriodSeconds: 30
         containers:

@@ -36,6 +36,7 @@ Understand how Llumnix works internally.
 
 - [Architecture Overview](design/architecture.md) — Full-stack component design
 - [Service Discovery](design/service_discovery.md) — Discovery sidecar and CMS discovery paths
+- [Observability](./design/observability.md) — Monitoring setup and Grafana dashboards
 - Gateway
   - [Gateway Architecture](./design/gateway/gateway_architecture.md) - Gateway architecture and basic functionalities
   - [PDD Forwarding Protocol](./design/gateway/pdd_protocol.md) — Prefill-Decode disaggregation forwarding protocol
@@ -90,6 +91,7 @@ develop/image_build
 
 design/architecture
 design/service_discovery
+design/observability
 design/gateway/index
 design/scheduler/index
 design/llumlet/index

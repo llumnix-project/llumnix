@@ -7,6 +7,7 @@ import (
 	"k8s.io/klog/v2"
 
 	"llumnix/pkg/cms"
+	"llumnix/pkg/metrics"
 	"llumnix/pkg/scheduler/kvs"
 )
 
@@ -85,6 +86,7 @@ func getInstancesPrefixCacheHitLen(
 
 	start := time.Now()
 	prefixHashHitKVSInstances := kvsClient.BatchQueryCacheHitKVSInstances(prefixHashes)
+	metrics.Histogram("request_query_prefix_cache_hit_duration_milliseconds", metrics.Labels{}).ObserveInt(time.Since(start).Milliseconds())
 	klog.V(3).Infof("BatchQueryCacheHitKVSInstances took: %.2fms", time.Since(start).Seconds()*1e3)
 	klog.V(5).Infof("BatchQueryCacheHitKVSInstances result: %+v", prefixHashHitKVSInstances)
 
@@ -95,11 +97,13 @@ func getInstancesPrefixCacheHitLen(
 
 	start = time.Now()
 	instancePrefixHitLen := calcInstancesPrefixCacheHitLen(chunkSize, prefixHashes, prefixHashHitInstances)
+	metrics.Histogram("request_calc_prefix_cache_hit_duration_milliseconds", metrics.Labels{}).ObserveInt(time.Since(start).Milliseconds())
 	klog.V(3).Infof("CalcInstancesCacheHitLen took: %.2fms", time.Since(start).Seconds()*1e3)
 	klog.V(3).Infof("CalcInstancesCacheHitLen result: %+v", instancePrefixHitLen)
 
 	start = time.Now()
 	updateCount := 0
+	var maxPrefixHitRatio float32
 	for instanceId, prefixHitLen := range instancePrefixHitLen {
 		if instanceView, ok := instanceViews[instanceId]; ok {
 			instanceView.schedulingCtx.prefixHitTokens = prefixHitLen
@@ -108,6 +112,9 @@ func getInstancesPrefixCacheHitLen(
 			} else {
 				instanceView.schedulingCtx.prefixHitRatio = 0.0
 			}
+			if instanceView.schedulingCtx.prefixHitRatio > maxPrefixHitRatio {
+				maxPrefixHitRatio = instanceView.schedulingCtx.prefixHitRatio
+			}
 			instanceView.schedulingCtx.prefixMissTokens = numPromptTokens - prefixHitLen
 			updateCount++
 			klog.V(4).Infof("Updated instance %s with prefixHitTokens: %d", instanceId, prefixHitLen)
@@ -115,6 +122,7 @@ func getInstancesPrefixCacheHitLen(
 			klog.Warningf("Instance %s not found in instanceViews", instanceId)
 		}
 	}
+	metrics.Histogram("request_max_prefix_cache_hit_percent", metrics.Labels{}).ObserveInt(int64(maxPrefixHitRatio * 100))
 	klog.V(3).Infof("Update instanceViews took: %.2fms", time.Since(start).Seconds()*1e3)
 }
 

@@ -84,6 +84,32 @@ func (m *RequestStats) TTFT() int64 {
 	}
 }
 
+// QueueTime returns the time spent waiting in queue (ms)
+func (m *RequestStats) QueueTime() int64 {
+	if !m.DeQueueTime.IsZero() && !m.EnQueueTime.IsZero() {
+		return m.DeQueueTime.Sub(m.EnQueueTime).Milliseconds()
+	}
+	return 0
+}
+
+// ScheduleTime returns the time spent in scheduling (ms)
+func (m *RequestStats) ScheduleTime() int64 {
+	if !m.BalanceTime.IsZero() && !m.DeQueueTime.IsZero() {
+		return m.BalanceTime.Sub(m.DeQueueTime).Milliseconds()
+	}
+	return 0
+}
+
+// PreprocessTime returns the preprocess duration (ms)
+func (m *RequestStats) PreprocessTime() int64 {
+	return m.PreprocessCost.Milliseconds()
+}
+
+// PostprocessTime returns the postprocess duration (ms)
+func (m *RequestStats) PostprocessTime() int64 {
+	return m.PostprocessCost.Milliseconds()
+}
+
 func (m *RequestStats) String() string {
 	var durationCost []string
 

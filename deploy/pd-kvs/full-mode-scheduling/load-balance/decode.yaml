@@ -7,6 +7,10 @@ spec:
   leaderWorkerTemplate:
     size: 1
     workerTemplate:
+      metadata:
+        labels:
+          llumnix.io/infer-type: "decode"
+          llumnix.io/model: "Qwen2.5-7B"
       spec:
         terminationGracePeriodSeconds: 30
         containers:
