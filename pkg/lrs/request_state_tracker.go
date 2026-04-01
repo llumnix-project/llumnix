@@ -5,17 +5,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"llumnix/cmd/gateway/app/options"
-	"llumnix/pkg/consts"
-	"llumnix/pkg/gateway/tokenizer"
-	"llumnix/pkg/resolver"
-	"llumnix/pkg/types"
 	"net/http"
 	"runtime/debug"
 	"sync"
 	"time"
 
 	"k8s.io/klog/v2"
+
+	"llumnix/cmd/gateway/app/options"
+	"llumnix/pkg/consts"
+	"llumnix/pkg/gateway/tokenizer"
+	"llumnix/pkg/resolver"
+	"llumnix/pkg/types"
 )
 
 type RequestStateTracker struct {
@@ -63,13 +64,23 @@ func (r *RequestStateTracker) DeleteRequestState(id string) {
 	delete(r.reqTokenState, id)
 }
 
+type (
+	Kind string
+)
+
+const (
+	KindStateUpdate Kind = "state_update"
+	KindPrefillDone Kind = "prefill_done"
+)
+
 type RequestReportData struct {
-	Id         string          `json:"id"`
-	Model      string          `json:"model"`
+	Kind       Kind             `json:"kind"`
+	Id         string           `json:"id"`
+	Model      string           `json:"model"`
 	InferType  consts.InferType `json:"infer_type"`
-	InstanceId string          `json:"instance_id"`
-	GatewayId  string          `json:"gateway_id"`
-	NumTokens  uint64          `json:"num_tokens"`
+	InstanceId string           `json:"instance_id"`
+	GatewayId  string           `json:"gateway_id"`
+	NumTokens  uint64           `json:"num_tokens"`
 }
 
 type RequestReportDataArray = []RequestReportData
@@ -79,6 +90,7 @@ func (r *RequestStateTracker) report() {
 	r.mux.RLock()
 	for _, rs := range r.reqTokenState {
 		reportDatas = append(reportDatas, RequestReportData{
+			Kind:       KindStateUpdate,
 			Id:         rs.req.Id,
 			Model:      rs.req.LLMRequest.Model,
 			InferType:  rs.InferType,
@@ -89,9 +101,15 @@ func (r *RequestStateTracker) report() {
 	}
 	r.mux.RUnlock()
 
+	if err := r.doReport(reportDatas); err != nil {
+		klog.Warningf("report: %v", err)
+	}
+}
+
+func (r *RequestStateTracker) doReport(reportDatas RequestReportDataArray) error {
 	endpoint, err := r.schedulerResolver.GetEndpoints()
 	if len(endpoint) == 0 || err != nil {
-		return
+		return fmt.Errorf("no scheduler endpoint available")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -99,11 +117,10 @@ func (r *RequestStateTracker) report() {
 
 	url := fmt.Sprintf("http://%s/report", endpoint[0].String())
 	data, _ := json.Marshal(reportDatas)
-	klog.V(3).Infof("report request data: %s", string(data))
+	klog.V(3).Infof("submit report data: %s", string(data))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
-		klog.Warningf("report: could not create request: %v, url: %s", err, url)
-		return
+		return fmt.Errorf("could not create request: %v, url: %s", err, url)
 	}
 	if len(r.config.ServiceToken) > 0 {
 		req.Header.Add("Authorization", r.config.ServiceToken)
@@ -111,15 +128,46 @@ func (r *RequestStateTracker) report() {
 
 	response, err := r.client.Do(req)
 	if err != nil {
-		klog.Warningf("report: could not send request: %v, url: %s", err, url)
-		return
+		return fmt.Errorf("could not send request: %v, url: %s", err, url)
 	}
 	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
-		klog.Warningf("report: request failed: %s, url: %s", response.Status, url)
+		return fmt.Errorf("request failed: %s, url: %s", response.Status, url)
+	}
+	return nil
+}
+
+// ReportPrefillComplete reports to scheduler that a request's prefill phase is complete.
+// Only used for neutral infer type since prefill/decode modes have separate instances.
+func (r *RequestStateTracker) ReportPrefillComplete(reqCtx *types.RequestContext) {
+	if r.schedulerResolver == nil {
 		return
 	}
+
+	go func() {
+		// Only support neutral infer type, because prefill complete report is not needed for prefill/decode
+		instance := reqCtx.SchedulingCtx.SchedulingResults.GetInstanceByInferType(consts.InferTypeNeutral)
+		if instance == nil {
+			return
+		}
+
+		reportData := RequestReportDataArray{
+			{
+				Kind:       KindPrefillDone,
+				Id:         reqCtx.Id,
+				Model:      reqCtx.LLMRequest.Model,
+				InferType:  consts.InferTypeNeutral,
+				InstanceId: instance.Id(),
+				GatewayId:  reqCtx.SchedulingCtx.GatewayId,
+				NumTokens:  0,
+			},
+		}
+		err := r.doReport(reportData)
+		if err != nil {
+			klog.Warningf("report prefill complete failed: %v", err)
+		}
+	}()
 }
 
 func (r *RequestStateTracker) reportLoop() {

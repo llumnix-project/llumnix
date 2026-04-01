@@ -49,6 +49,10 @@ func (iv *InstanceView) GetInferType() consts.InferType {
 	return iv.Instance.InferType
 }
 
+// instanceSchedulingMetricsRecorder is a callback for recording computed scheduling metrics per instance.
+// It is invoked during CMS status refresh with the instance's view and prometheus labels.
+type instanceSchedulingMetricsRecorder func(instanceView *InstanceView, labels metrics.Labels)
+
 type CMSReadClientInterface interface {
 	RLock()
 
@@ -114,7 +118,8 @@ type CMSReadClient struct {
 
 	enableCacheAwareScheduling bool
 
-	recordMetricsInterval int32
+	// Callback for recording computed scheduling metrics (injected by policy to avoid circular dependency)
+	instanceSchedulingMetricsRecorder instanceSchedulingMetricsRecorder
 
 	enablePredictorEnhancedScheduling bool
 	TTFTPredictor                     *predictor.QuadraticPredictor
@@ -127,6 +132,10 @@ type CMSReadClient struct {
 
 func (c *CMSReadClient) IsAlive() bool {
 	return c.isAlive
+}
+
+func (c *CMSReadClient) SetinstanceSchedulingMetricsRecorder(recorder instanceSchedulingMetricsRecorder) {
+	c.instanceSchedulingMetricsRecorder = recorder
 }
 
 func CreateOrGetClient(
@@ -142,7 +151,6 @@ func CreateOrGetClient(
 	enableInstanceStatusLocalAccount bool,
 	enableCacheAwareScheduling bool,
 	requestLocalAccountStalenessSeconds int32,
-	recordMetricsInterval int32,
 	enablePredictorEnhancedScheduling bool,
 	numPredictorWarmupSamples int,
 	enableAdaptivePD bool) (*CMSReadClient, error) {
@@ -160,7 +168,7 @@ func CreateOrGetClient(
 	}
 	client, err = NewCMSReadClient(
 		redisClient, pullStatusIntervalMs, pullMetadataIntervalMs, allowConcurrentSchedule, enableInstanceStatusLocalAccount,
-		enableCacheAwareScheduling, requestLocalAccountStalenessSeconds, recordMetricsInterval,
+		enableCacheAwareScheduling, requestLocalAccountStalenessSeconds,
 		enablePredictorEnhancedScheduling, numPredictorWarmupSamples, enableAdaptivePD)
 
 	return client, err
@@ -174,7 +182,6 @@ func NewCMSReadClient(
 	enableInstanceStatusLocalAccount bool,
 	enableCacheAwareScheduling bool,
 	requestLocalAccountStalenessSeconds int32,
-	recordMetricsInterval int32,
 	enablePredictorEnhancedScheduling bool,
 	numPredictorWarmupSamples int,
 	enableAdaptivePD bool) (*CMSReadClient, error) {
@@ -200,7 +207,6 @@ func NewCMSReadClient(
 		allowConcurrentSchedule:           allowConcurrentSchedule,
 		enableCacheAwareScheduling:        enableCacheAwareScheduling,
 		enableInstanceStatusLocalAccount:  enableInstanceStatusLocalAccount,
-		recordMetricsInterval:             recordMetricsInterval,
 		enablePredictorEnhancedScheduling: enablePredictorEnhancedScheduling,
 		enableAdaptivePD:                  enableAdaptivePD,
 	}
@@ -242,7 +248,6 @@ func (c *CMSReadClient) refreshMetadataLoop() {
 		klog.Warning("[refreshMetadataLoop] redisPullMetadataIntervalMs is less than 0, exiting refreshMetadataLoop")
 		return
 	}
-	metricRecordIndex := int32(0)
 	lastLogTime := time.Now()
 	for {
 		start := time.Now()
@@ -252,10 +257,7 @@ func (c *CMSReadClient) refreshMetadataLoop() {
 			klog.V(3).Infof("[refreshMetadataLoop] refreshInstanceMetadata took %v", elapsed)
 			lastLogTime = time.Now()
 		}
-		if c.recordMetricsInterval > 0 && metricRecordIndex == 0 {
-			metrics.AddLlumnixLatency(metrics.LlumnixMetricCmsRefreshInstanceMetadataLatencyMicroseconds, metrics.Labels{}, elapsed.Microseconds())
-			metricRecordIndex = (metricRecordIndex + 1) % c.recordMetricsInterval
-		}
+		metrics.Histogram("scheduler_cms_refresh_metadata_duration_milliseconds", metrics.Labels{}).Observe(elapsed.Seconds() * 1000)
 		sleepTime := time.Duration(c.redisPullMetadataIntervalMs)*time.Millisecond - elapsed
 		if sleepTime < 0 {
 			sleepTime = 0
@@ -274,24 +276,16 @@ func (c *CMSReadClient) refreshStatusLoop() {
 		klog.Warning("[refreshStatusLoop] redisPullStatusIntervalMs is less than 0, exiting refreshStatusLoop")
 		return
 	}
-	metricRecordIndex := int32(0)
 	lastLogTime := time.Now()
 	for {
 		start := time.Now()
-		needRecordMetrics := false
-		if c.recordMetricsInterval > 0 {
-			needRecordMetrics = metricRecordIndex == 0
-			metricRecordIndex = (metricRecordIndex + 1) % c.recordMetricsInterval
-		}
-		c.refreshInstanceStatus(needRecordMetrics)
+		c.refreshInstanceStatus()
 		elapsed := time.Since(start)
 		if time.Since(lastLogTime) > LogIntervalS*time.Second {
 			klog.V(4).Infof("[refreshStatusLoop] refreshInstanceStatus took %v", elapsed)
 			lastLogTime = time.Now()
 		}
-		if needRecordMetrics {
-			metrics.AddLlumnixLatency(metrics.LlumnixMetricCmsRefreshInstanceStatusLatencyMicroseconds, metrics.Labels{}, elapsed.Microseconds())
-		}
+		metrics.Histogram("scheduler_cms_refresh_status_duration_milliseconds", metrics.Labels{}).Observe(elapsed.Seconds() * 1000)
 
 		sleepTime := time.Duration(c.redisPullStatusIntervalMs)*time.Millisecond - elapsed
 		if sleepTime < 0 {
@@ -448,7 +442,7 @@ func (c *CMSReadClient) removeFromIp2InstanceIDsMap(ip, instanceID string) {
 }
 
 // refreshInstanceStatus gets instance status from Redis and refreshes local cache
-func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
+func (c *CMSReadClient) refreshInstanceStatus() {
 	defer func() {
 		if r := recover(); r != nil {
 			klog.Errorf("[refreshInstanceStatus] Error refreshing data from Redis: %v", r)
@@ -590,14 +584,7 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 			c.addSampleToTTFTPredictor(instanceID)
 		}
 
-		if needRecordMetrics {
-			metrics.SetLlumnixStatusValue(metrics.LlumnixMetricInstanceNumUncomputedTokensAllWaitingPrefills,
-				metrics.Labels{{Name: "instance_id", Value: c.instanceStatuses[instanceID].InstanceId}},
-				float32(c.instanceStatuses[instanceID].NumUncomputedTokensAllWaitingPrefills))
-			metrics.SetLlumnixStatusValue(metrics.LlumnixMetricInstanceNumUsedGpuTokens,
-				metrics.Labels{{Name: "instance_id", Value: c.instanceStatuses[instanceID].InstanceId}},
-				float32(c.instanceStatuses[instanceID].NumUsedGpuTokens))
-		}
+		c.recordInstanceStatusMetrics(instanceID)
 	}
 
 	if c.enableAdaptivePD {
@@ -606,6 +593,46 @@ func (c *CMSReadClient) refreshInstanceStatus(needRecordMetrics bool) {
 
 	if c.enablePredictorEnhancedScheduling && !c.TTFTPredictor.Fitted() {
 		c.fitTTFTPredictor()
+	}
+}
+
+// recordInstanceStatusMetrics records instance status metrics for the given instance.
+func (c *CMSReadClient) recordInstanceStatusMetrics(instanceID string) {
+	status := c.instanceStatuses[instanceID]
+	instanceLabels := metrics.Labels{
+		{Name: "instance_id", Value: status.InstanceId},
+		{Name: "infer_type", Value: string(c.instanceViews[instanceID].GetInferType())},
+	}
+	// GPU tokens
+	metrics.Gauge("instance_cms_used_gpu_tokens", instanceLabels).Set(float64(status.NumUsedGpuTokens))
+	// Request counts
+	metrics.Gauge("instance_cms_waiting_requests", instanceLabels).Set(float64(status.NumWaitingRequests))
+	metrics.Gauge("instance_cms_loading_requests", instanceLabels).Set(float64(status.NumLoadingRequests))
+	metrics.Gauge("instance_cms_running_requests", instanceLabels).Set(float64(status.NumRunningRequests))
+	metrics.Gauge("instance_cms_scheduler_waiting_to_decode_requests", instanceLabels).Set(float64(status.SchedulerWaitingToDecodeRequestsNum))
+	metrics.Gauge("instance_cms_scheduler_running_to_decode_requests", instanceLabels).Set(float64(status.SchedulerRunningToDecodeRequestsNum))
+	metrics.Gauge("instance_cms_hybrid_scheduler_waiting_to_decode_requests", instanceLabels).Set(float64(status.HybridSchedulerWaitingToDecodeRequestsNum))
+	// Prefill tokens
+	metrics.Gauge("instance_cms_uncomputed_tokens_all_waiting_prefills", instanceLabels).Set(float64(status.NumUncomputedTokensAllWaitingPrefills))
+	metrics.Gauge("instance_cms_uncomputed_tokens_scheduler_running_prefills", instanceLabels).Set(float64(status.NumUncomputedTokensSchedulerRunningPrefills))
+	metrics.Gauge("instance_cms_unallocated_tokens_scheduler_running_prefills", instanceLabels).Set(float64(status.NumUnallocatedTokensSchedulerRunningPrefills))
+	// Decode tokens
+	metrics.Gauge("instance_cms_unallocated_tokens_hybrid_scheduler_waiting_decodes", instanceLabels).Set(float64(status.NumUnallocatedTokensHybridSchedulerWaitingDecodes))
+	metrics.Gauge("instance_cms_hybrid_scheduler_waiting_to_decode_tokens", instanceLabels).Set(float64(status.HybridSchedulerWaitingToDecodeTokensNum))
+	metrics.Gauge("instance_cms_scheduler_waiting_to_decode_tokens", instanceLabels).Set(float64(status.SchedulerWaitingToDecodeTokensNum))
+	metrics.Gauge("instance_cms_scheduler_running_to_decode_tokens", instanceLabels).Set(float64(status.SchedulerRunningToDecodeTokensNum))
+	metrics.Gauge("instance_cms_tokens_loading_requests", instanceLabels).Set(float64(status.NumTokensLoadingRequests))
+	// Local account
+	localAccount := c.instanceViews[instanceID].InstanceStatusLocalAccount
+	metrics.Gauge("instance_cms_inflight_dispatch_requests", instanceLabels).Set(float64(localAccount.NumInflightDispatchRequests))
+	metrics.Gauge("instance_cms_inflight_dispatch_prefill_requests", instanceLabels).Set(float64(localAccount.NumInflightDispatchPrefillRequests))
+	metrics.Gauge("instance_cms_inflight_dispatch_decode_requests", instanceLabels).Set(float64(localAccount.NumInflightDispatchDecodeRequests))
+	metrics.Gauge("instance_cms_uncomputed_tokens_inflight_dispatch_prefill_requests", instanceLabels).Set(float64(localAccount.NumUncomputedTokensInflightDispatchPrefillRequests))
+	metrics.Gauge("instance_cms_tokens_inflight_dispatch_decode_requests", instanceLabels).Set(float64(localAccount.NumTokensInflightDispatchDecodeRequests))
+
+	// Computed scheduling metrics via injected recorder (computation logic resides in policy package)
+	if c.instanceSchedulingMetricsRecorder != nil {
+		c.instanceSchedulingMetricsRecorder(c.instanceViews[instanceID], instanceLabels)
 	}
 }
 

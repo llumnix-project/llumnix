@@ -1,0 +1,195 @@
+{
+  "__inputs": [
+    { "name": "DS_PROMETHEUS", "label": "Prometheus", "description": "", "type": "datasource", "pluginId": "prometheus", "pluginName": "Prometheus" }
+  ],
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Time (s)" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "E2E Request Latency",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(vllm:e2e_request_latency_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))", "legendFormat": "P99" },
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(vllm:e2e_request_latency_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.9, sum by(le) (rate(vllm:e2e_request_latency_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))", "legendFormat": "P90" },
+        { "expr": "histogram_quantile(0.5, sum by(le) (rate(vllm:e2e_request_latency_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))", "legendFormat": "P50" },
+        { "expr": "rate(vllm:e2e_request_latency_seconds_sum{namespace=\"$namespace\"}[$__rate_interval]) / rate(vllm:e2e_request_latency_seconds_count{namespace=\"$namespace\"}[$__rate_interval])", "legendFormat": "Average" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Time (s)" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "title": "Time To First Token Latency",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(vllm:time_to_first_token_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))", "legendFormat": "P99" },
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(vllm:time_to_first_token_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.9, sum by(le) (rate(vllm:time_to_first_token_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))", "legendFormat": "P90" },
+        { "expr": "histogram_quantile(0.5, sum by(le) (rate(vllm:time_to_first_token_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))", "legendFormat": "P50" },
+        { "expr": "rate(vllm:time_to_first_token_seconds_sum{namespace=\"$namespace\"}[$__rate_interval]) / rate(vllm:time_to_first_token_seconds_count{namespace=\"$namespace\"}[$__rate_interval])", "legendFormat": "Average" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Time (s)" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "title": "Inter-Token Latency",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(vllm:inter_token_latency_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))", "legendFormat": "P99" },
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(vllm:inter_token_latency_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.9, sum by(le) (rate(vllm:inter_token_latency_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))", "legendFormat": "P90" },
+        { "expr": "histogram_quantile(0.5, sum by(le) (rate(vllm:inter_token_latency_seconds_bucket{namespace=\"$namespace\"}[$__rate_interval])))", "legendFormat": "P50" },
+        { "expr": "rate(vllm:inter_token_latency_seconds_sum{namespace=\"$namespace\"}[$__rate_interval]) / rate(vllm:inter_token_latency_seconds_count{namespace=\"$namespace\"}[$__rate_interval])", "legendFormat": "Average" }
+      ]
+    },
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 }, "id": 108, "title": "vLLM Engine", "type": "row" },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Requests" } },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 17 },
+      "id": 90, "title": "Scheduler State", "type": "timeseries",
+      "targets": [
+        { "expr": "vllm:num_requests_running{namespace=\"$namespace\"}", "legendFormat": "Num Running" },
+        { "expr": "vllm:num_requests_waiting{namespace=\"$namespace\"}", "legendFormat": "Num Waiting" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0, "max": 1, "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Utilization" } },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 17 },
+      "id": 91, "title": "Cache Utilization", "type": "timeseries",
+      "targets": [
+        { "expr": "vllm:kv_cache_usage_perc{namespace=\"$namespace\"}", "legendFormat": "KV Cache Usage" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "Tps", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens/s" } },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 17 },
+      "id": 92, "title": "Token Throughput", "type": "timeseries",
+      "targets": [
+        { "expr": "rate(vllm:prompt_tokens_total{namespace=\"$namespace\"}[$__rate_interval])", "legendFormat": "Prompt Tokens/Sec" },
+        { "expr": "rate(vllm:generation_tokens_total{namespace=\"$namespace\"}[$__rate_interval])", "legendFormat": "Generation Tokens/Sec" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Requests" } },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 25 },
+      "id": 93, "title": "Finish Reason", "type": "timeseries",
+      "targets": [
+        { "expr": "sum by(finished_reason) (increase(vllm:request_success_total{namespace=\"$namespace\"}[$__rate_interval]))", "legendFormat": "__auto" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Time (s)" } },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 25 },
+      "id": 94, "title": "Queue Time", "type": "timeseries",
+      "targets": [
+        { "expr": "rate(vllm:request_queue_time_seconds_sum{namespace=\"$namespace\"}[$__rate_interval]) / rate(vllm:request_queue_time_seconds_count{namespace=\"$namespace\"}[$__rate_interval])", "legendFormat": "Avg Queue Time" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Time (s)" } },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 25 },
+      "id": 95, "title": "Requests Prefill and Decode Time", "type": "timeseries",
+      "targets": [
+        { "expr": "rate(vllm:request_prefill_time_seconds_sum{namespace=\"$namespace\"}[$__rate_interval]) / rate(vllm:request_prefill_time_seconds_count{namespace=\"$namespace\"}[$__rate_interval])", "legendFormat": "Prefill" },
+        { "expr": "rate(vllm:request_decode_time_seconds_sum{namespace=\"$namespace\"}[$__rate_interval]) / rate(vllm:request_decode_time_seconds_count{namespace=\"$namespace\"}[$__rate_interval])", "legendFormat": "Decode" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": {} },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 33 },
+      "id": 96, "title": "Request Prompt Length", "type": "heatmap",
+      "options": {
+        "calculate": false, "cellGap": 1,
+        "color": { "exponent": 0.5, "fill": "dark-orange", "mode": "scheme", "reverse": false, "scale": "exponential", "scheme": "Spectral", "steps": 64 },
+        "filterValues": { "le": 1e-9 },
+        "legend": { "show": true },
+        "yAxis": { "axisLabel": "Prompt Length", "axisPlacement": "left", "reverse": false, "unit": "none" },
+        "tooltip": { "mode": "single", "showColorScale": false, "yHistogram": true }
+      },
+      "targets": [
+        { "expr": "sum by(le) (increase(vllm:request_prompt_tokens_bucket{namespace=\"$namespace\"}[$__rate_interval]))", "legendFormat": "{{le}}", "format": "heatmap" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": {} },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 33 },
+      "id": 97, "title": "Request Generation Length", "type": "heatmap",
+      "options": {
+        "calculate": false, "cellGap": 1,
+        "color": { "exponent": 0.5, "fill": "dark-orange", "mode": "scheme", "reverse": false, "scale": "exponential", "scheme": "Spectral", "steps": 64 },
+        "filterValues": { "le": 1e-9 },
+        "legend": { "show": true },
+        "yAxis": { "axisLabel": "Generation Length", "axisPlacement": "left", "reverse": false, "unit": "none" },
+        "tooltip": { "mode": "single", "showColorScale": false, "yHistogram": true }
+      },
+      "targets": [
+        { "expr": "sum by(le) (increase(vllm:request_generation_tokens_bucket{namespace=\"$namespace\"}[$__rate_interval]))", "legendFormat": "{{le}}", "format": "heatmap" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 41 },
+      "id": 98, "title": "Max Generation Token in Sequence Group", "type": "timeseries",
+      "targets": [
+        { "expr": "rate(vllm:request_max_num_generation_tokens_sum{namespace=\"$namespace\"}[$__rate_interval]) / rate(vllm:request_max_num_generation_tokens_count{namespace=\"$namespace\"}[$__rate_interval])", "legendFormat": "Avg Max Gen Tokens" }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["llumnix", "vllm"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "type": "datasource"
+      },
+      {
+        "current": {},
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "definition": "label_values(namespace)",
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "namespace",
+        "options": [],
+        "query": "label_values(namespace)",
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "vLLM Dashboard",
+  "uid": "vllm-dashboard",
+  "version": 1
+}

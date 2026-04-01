@@ -144,7 +144,6 @@ const (
 	DefaultCmsRedisRetryTimes        = 1
 	DefaultCmsPullStatusIntervalMs   = 50
 	DefaultCmsPullMetadataIntervalMs = 10000
-	DefaultCmsRecordMetricsInterval  = 0
 
 	// KvsMetaService defaults
 	DefaultEnableCacheAwareScheduling             = false
@@ -212,8 +211,6 @@ const (
 	// Llumlet defaults
 	DefaultLlumletGrpcConnectionPoolSize = -1
 	DefaultLlumletGrpcTimeoutSeconds     = -1
-
-	DefaultEnableMetrics = false
 )
 
 const AttrKeyReservedInferType = "ReservedInferType"

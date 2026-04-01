@@ -284,10 +284,6 @@ type FullModeSchedulingConfig struct {
 	// llumlet
 	LlumletGrpcConnectionPoolSize int
 	LlumletGrpcTimeoutSeconds     int
-
-	// metrics
-	EnableMetrics            bool
-	CmsRecordMetricsInterval int32
 }
 
 func (c *FullModeSchedulingConfig) AddFullModeSchedulingConfigFlags(flags *pflag.FlagSet) {
@@ -299,7 +295,6 @@ func (c *FullModeSchedulingConfig) AddFullModeSchedulingConfigFlags(flags *pflag
 	flags.IntVar(&c.CmsRedisRetryTimes, "cms-redis-retry-times", consts.DefaultCmsRedisRetryTimes, "Llumnix CMS redis retry times")
 	flags.Int32Var(&c.CmsPullStatusIntervalMs, "cms-pull-status-interval-ms", consts.DefaultCmsPullStatusIntervalMs, "Llumnix CMS pull status interval in milliseconds")
 	flags.Int32Var(&c.CmsPullMetadataIntervalMs, "cms-pull-metadata-interval-ms", consts.DefaultCmsPullMetadataIntervalMs, "Llumnix CMS pull metadata interval in milliseconds")
-	flags.Int32Var(&c.CmsRecordMetricsInterval, "cms-record-metrics-interval", consts.DefaultCmsRecordMetricsInterval, "Llumnix CMS record metrics interval")
 
 	flags.BoolVar(&c.EnableCacheAwareScheduling, "enable-cache-aware-scheduling", consts.DefaultEnableCacheAwareScheduling, "Llumnix enable cache aware scheduling")
 	flags.IntVar(&c.CacheAwareSchedulingMinTokens, "cache-aware-scheduling-min-tokens", consts.DefaultCacheAwareSchedulingMinTokens, "Llumnix cache aware scheduling min tokens")
@@ -363,8 +358,6 @@ func (c *FullModeSchedulingConfig) AddFullModeSchedulingConfigFlags(flags *pflag
 
 	flags.IntVar(&c.LlumletGrpcConnectionPoolSize, "llumlet-grpc-connection-pool-size", consts.DefaultLlumletGrpcConnectionPoolSize, "Llumnix llumlet grpc connection pool size")
 	flags.IntVar(&c.LlumletGrpcTimeoutSeconds, "llumlet-grpc-timeout-seconds", consts.DefaultLlumletGrpcTimeoutSeconds, "Llumnix llumlet grpc timeout seconds")
-
-	flags.BoolVar(&c.EnableMetrics, "enable-metrics", consts.DefaultEnableMetrics, "Llumnix enable recording metrics")
 }
 
 // safeSplitArgs safely splits a string by comma, handling quotes and square brackets.

@@ -2,13 +2,14 @@ package lrs
 
 import (
 	"fmt"
-	"llumnix/pkg/consts"
-	"llumnix/pkg/metrics"
-	"llumnix/pkg/types"
 	"runtime/debug"
 	"time"
 
 	"k8s.io/klog/v2"
+
+	"llumnix/pkg/consts"
+	"llumnix/pkg/metrics"
+	"llumnix/pkg/types"
 )
 
 // Notes on the scheduler state store shard Algorithm
@@ -56,7 +57,8 @@ type RequestState struct {
 	instanceId string
 	gatewayId  string
 
-	numTokens int64
+	numTokens        int64
+	prefillCompleted bool
 
 	updateTime time.Time
 }
@@ -101,6 +103,30 @@ func (iv *InstanceView) NumRequests() int64 {
 	return int64(len(iv.requestStates))
 }
 
+// NumWaitingRequests returns the count of requests that haven't completed prefill phase.
+// These requests are still in the waiting/prefill stage and not yet in decode phase.
+func (iv *InstanceView) NumWaitingRequests() int64 {
+	cnt := int64(0)
+	for _, reqState := range iv.requestStates {
+		if !reqState.prefillCompleted {
+			cnt += 1
+		}
+	}
+	return cnt
+}
+
+// NumWaitingTokens returns the total tokens for requests that haven't completed prefill.
+// This represents the token load that is still in the waiting/prefill stage.
+func (iv *InstanceView) NumWaitingTokens() int64 {
+	cnt := int64(0)
+	for _, reqState := range iv.requestStates {
+		if !reqState.prefillCompleted {
+			cnt += reqState.numTokens
+		}
+	}
+	return cnt
+}
+
 func (iv *InstanceView) GetRequestIds() []string {
 	reqIds := make([]string, 0, len(iv.requestStates))
 	for reqId := range iv.requestStates {
@@ -114,6 +140,17 @@ func (iv *InstanceView) AllocateRequestState(reqState *RequestState) {
 	iv.numTokens += reqState.numTokens
 	klog.V(3).Infof("instance %s add request %s, request num tokens: %d, instance num tokens: %d",
 		reqState.instanceId, reqState.reqId, reqState.numTokens, iv.numTokens)
+}
+
+// MarkPrefillComplete marks a request's prefill phase as completed.
+// This is a no-op if the request is not found in the instance.
+func (iv *InstanceView) MarkPrefillComplete(reqState *RequestState) {
+	innerReqState := iv.requestStates[reqState.reqId]
+	if innerReqState == nil {
+		return
+	}
+	innerReqState.prefillCompleted = true
+	klog.V(3).Infof("instance %s mark request %s prefill complete", reqState.instanceId, reqState.reqId)
 }
 
 func (iv *InstanceView) UpdateRequestState(reqState *RequestState) error {
@@ -350,6 +387,29 @@ func (lrs *LocalRealtimeState) UpdateRequestState(reqState *RequestState) error 
 	return lrs.instanceViews[reqState.instanceId].UpdateRequestState(reqState)
 }
 
+// MarkPrefillComplete marks the prefill phase of a request as complete.
+func (lrs *LocalRealtimeState) MarkPrefillComplete(reqState *RequestState) error {
+	if !lrs.requestExists(reqState.reqId) {
+		klog.Errorf("mark prefill complete request %s not exist.", reqState.reqId)
+		return consts.ErrorRequestNotExits
+	}
+
+	if !lrs.instanceExists(reqState.instanceId) {
+		klog.Warningf("mark prefill complete request %s scheduled instance %s not exist.",
+			reqState.reqId, reqState.instanceId)
+		return consts.ErrorRequestNotExits
+	}
+
+	if !lrs.gatewayExists(reqState.gatewayId) {
+		klog.Warningf("mark prefill complete request %s created gateway %s not exist.",
+			reqState.reqId, reqState.gatewayId)
+		return consts.ErrorGatewayNotFound
+	}
+
+	lrs.instanceViews[reqState.instanceId].MarkPrefillComplete(reqState)
+	return nil
+}
+
 func (lrs *LocalRealtimeState) ReleaseRequestState(reqState *RequestState) {
 	if !lrs.requestExists(reqState.reqId) {
 		klog.Warningf("release request %s not exist.", reqState.reqId)
@@ -385,15 +445,19 @@ func (lrs *LocalRealtimeState) SubmitMetric() {
 		for _, iv := range instanceViews {
 			instanceAddress := iv.GetInstance().Endpoint
 			tokens := iv.NumTokens()
+			waitingTokens := iv.NumWaitingTokens()
 			reqs := iv.NumRequests()
+			waitingReqs := iv.NumWaitingRequests()
 
 			labels := metrics.Labels{
 				{Name: "model", Value: iv.GetInstance().Model},
-				{Name: "instance_address", Value: instanceAddress.String()},
+				{Name: "instance_id", Value: instanceAddress.String()},
 				{Name: "infer_type", Value: string(iv.GetInferType())},
 			}
-			metrics.StatusValue("endpoint_llm_token_count", labels).Set(float32(tokens))
-			metrics.StatusValue("endpoint_active_token_count", labels).Set(float32(reqs))
+			metrics.Gauge("instance_lrs_total_tokens", labels).Set(float64(tokens))
+			metrics.Gauge("instance_lrs_waiting_tokens", labels).Set(float64(waitingTokens))
+			metrics.Gauge("instance_lrs_total_requests", labels).Set(float64(reqs))
+			metrics.Gauge("instance_lrs_waiting_requests", labels).Set(float64(waitingReqs))
 		}
 
 		time.Sleep(5 * time.Second)

@@ -118,7 +118,6 @@ func NewDispatchPolicy(
 			c.EnableInstanceStatusLocalAccount,
 			c.EnableCacheAwareScheduling,
 			c.RequestLocalAccountStalenessSeconds,
-			c.CmsRecordMetricsInterval,
 			c.EnablePredictorEnhancedScheduling,
 			c.NumPredictorWarmupSamples,
 			c.EnableAdaptivePD)
@@ -126,6 +125,7 @@ func NewDispatchPolicy(
 			panic(err)
 		}
 		cmsClient = client
+		cmsClient.SetinstanceSchedulingMetricsRecorder(recordCMSInstanceSchedulingMetrics)
 		clusterViewClient = cmsClient
 	} else {
 		clusterViewClient = lrsClient
@@ -226,8 +226,7 @@ func (p *DispatchPolicy) Schedule(request *types.SchedulingRequest) error {
 		} else {
 			p.clusterViewClient.Unlock()
 		}
-		metrics.AddLlumnixLatency(
-			metrics.LlumnixMetricSchedulingLatencyMicroseconds, metrics.Labels{}, time.Since(startTime).Microseconds())
+		metrics.Histogram("request_full_mode_schedule_duration_milliseconds", metrics.Labels{}).ObserveInt(time.Since(startTime).Milliseconds())
 	}()
 
 	if p.c.EnableFullModeScheduling {
@@ -260,6 +259,12 @@ func (p *DispatchPolicy) Schedule(request *types.SchedulingRequest) error {
 		schResults = append(schResults, targetInstance)
 		klog.V(4).Infof("Added token from instance: %s", instance.GetInstanceId())
 		logSelectedInstance(instance, request.Id, consts.InferTypePrefill, p.c.EnableFullModeScheduling)
+		if p.c.EnableFullModeScheduling {
+			recordSelectedInstanceSchedulingMetrics(instance, consts.InferTypePrefill)
+			if request.SchedulingMode == types.SchedulingModeNeutral {
+				recordSelectedInstanceSchedulingMetrics(instance, consts.InferTypeDecode)
+			}
+		}
 	}
 
 	if len(selectedInstances) > 1 {
@@ -275,6 +280,9 @@ func (p *DispatchPolicy) Schedule(request *types.SchedulingRequest) error {
 			schResults = append(schResults, targetInstance)
 			klog.V(4).Infof("Added token2 from instance: %s", instance.GetInstanceId())
 			logSelectedInstance(instance, request.Id, consts.InferTypeDecode, p.c.EnableFullModeScheduling)
+			if p.c.EnableFullModeScheduling {
+				recordSelectedInstanceSchedulingMetrics(instance, consts.InferTypeDecode)
+			}
 		}
 	}
 	request.SchedulingResult = schResults
@@ -336,6 +344,9 @@ func (p *DispatchPolicy) schedule(
 						neutral.cmsView, consts.InferTypeNeutral, numTokens,
 						int32(neutral.schedulingCtx.prefixHitTokens), requestId)
 				}
+				if p.c.EnableCacheAwareScheduling {
+					metrics.Histogram("request_prefix_cache_hit_percent", metrics.Labels{}).ObserveInt(int64(neutral.schedulingCtx.prefixHitRatio * 100))
+				}
 			} else {
 				klog.V(4).Info("No neutral instance selected")
 			}
@@ -362,6 +373,9 @@ func (p *DispatchPolicy) schedule(
 				p.cmsClient.AddRequestLocalAccount(
 					prefill.cmsView, consts.InferTypePrefill, numTokens,
 					int32(prefill.schedulingCtx.prefixHitTokens), requestId)
+			}
+			if p.c.EnableCacheAwareScheduling {
+				metrics.Histogram("request_prefix_cache_hit_percent", metrics.Labels{}).ObserveInt(int64(prefill.schedulingCtx.prefixHitRatio * 100))
 			}
 		}
 	}
@@ -497,4 +511,67 @@ func (p baseDispatchPolicy) selectInstance(
 		klog.V(4).Info("No instance selected")
 	}
 	return selected
+}
+
+// recordCMSInstanceSchedulingMetrics is the callback registered on CMSReadClient.
+// It wraps a cms.InstanceView into instanceViewScheduling and reuses Calculate methods
+// to record computed scheduling metrics during CMS status refresh.
+func recordCMSInstanceSchedulingMetrics(view *cms.InstanceView, labels metrics.Labels) {
+	iv := &instanceViewScheduling{
+		cmsView:              view,
+		InstanceViewInterface: view,
+	}
+	metricsToRecord := []struct {
+		gaugeName string
+		metric    instanceSchedulingMetric
+	}{
+		{"instance_cms_kv_cache_usage_ratio_projected", &kvCacheUsageRatioProjected{
+			baseMetric: baseMetric{name: consts.SchedulingMetricKVCacheUsageRatioProjected}}},
+		{"instance_cms_decode_batch_size", &decodeBatchSize{
+			baseMetric: baseMetric{name: consts.SchedulingMetricDecodeBatchSize}}},
+		{"instance_cms_all_prefills_tokens_num", &allPrefillsTokensNum{
+			baseMetric: baseMetric{name: consts.SchedulingMetricAllPrefillsTokensNum}}},
+		{"instance_cms_all_decodes_tokens_num", &allDecodesTokensNum{
+			baseMetric: baseMetric{name: consts.SchedulingMetricAllDecodesTokensNum}}},
+	}
+	for _, m := range metricsToRecord {
+		m.metric.Calculate(nil, iv)
+		metrics.Gauge(m.gaugeName, labels).Set(float64(m.metric.GetValue()))
+	}
+}
+
+func recordSelectedInstanceSchedulingMetrics(instance *instanceViewScheduling, inferType consts.InferType) {
+	if instance == nil || instance.cmsView == nil {
+		return
+	}
+	instanceLabels := metrics.Labels{
+		{Name: "infer_type", Value: string(inferType)},
+	}
+
+	// Reuse Calculate methods from metrics.go to compute values
+	metricsToRecord := []struct {
+		metricName string
+		metric     instanceSchedulingMetric
+	}{
+		{"selected_instance_kv_cache_usage_ratio_projected", &kvCacheUsageRatioProjected{
+			baseMetric: baseMetric{name: consts.SchedulingMetricKVCacheUsageRatioProjected}}},
+		{"selected_instance_decode_batch_size", &decodeBatchSize{
+			baseMetric: baseMetric{name: consts.SchedulingMetricDecodeBatchSize}}},
+		{"selected_instance_all_prefills_tokens_num", &allPrefillsTokensNum{
+			baseMetric: baseMetric{name: consts.SchedulingMetricAllPrefillsTokensNum}}},
+		{"selected_instance_all_decodes_tokens_num", &allDecodesTokensNum{
+			baseMetric: baseMetric{name: consts.SchedulingMetricAllDecodesTokensNum}}},
+	}
+	for _, m := range metricsToRecord {
+		m.metric.Calculate(nil, instance)
+		metrics.Histogram(m.metricName, instanceLabels).Observe(float64(m.metric.GetValue()))
+	}
+
+	// PredictedTtft and PredictedTpot: use pre-computed values from schedulingCtx if available
+	if m, ok := instance.schedulingCtx.metrics[consts.SchedulingMetricPredictedTtft]; ok {
+		metrics.Histogram("selected_instance_predicted_ttft", instanceLabels).Observe(float64(m.GetValue()))
+	}
+	if m, ok := instance.schedulingCtx.metrics[consts.SchedulingMetricPredictedTpot]; ok {
+		metrics.Histogram("selected_instance_predicted_tpot", instanceLabels).Observe(float64(m.GetValue()))
+	}
 }

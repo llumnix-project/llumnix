@@ -32,23 +32,23 @@ type SchedulerService struct {
 	addChan   <-chan types.LLMInstanceSlice
 	delChan   <-chan types.LLMInstanceSlice
 	lrsClient *lrs.LocalRealtimeStateClient
+
+	// Prometheus metrics handler for /metrics endpoint
+	prometheusHandler *metrics.PrometheusHandler
 }
 
 func NewSchedulerService(c *options.SchedulerConfig) *SchedulerService {
 	lrsClient := lrs.NewLocalRealtimeStateClient(c)
 
 	ss := &SchedulerService{
-		config:           c,
-		lrsClient:        lrsClient,
-		schedulingPolicy: policy.NewSchedulingPolicy(c.SchedulingPolicy, c, lrsClient),
+		config:            c,
+		lrsClient:         lrsClient,
+		schedulingPolicy:  policy.NewSchedulingPolicy(c.SchedulingPolicy, c, lrsClient),
+		prometheusHandler: metrics.NewPrometheusHandler(),
 	}
 
 	if c.ColocatedReschedulingMode {
 		ss.reschedulingPolicy = policy.NewReschedulingPolicy(c)
-	}
-
-	if c.EnableMetrics {
-		metrics.EnableLlumnixMetrics()
 	}
 
 	if ss.config.EnableRequestStateTracking() {
@@ -154,8 +154,7 @@ func (ss *SchedulerService) handleSchedule(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err != nil {
-		metrics.IncrLlumnixCounterByOne(
-			metrics.LlumnixMetricSchedulingFailedCount, metrics.Labels{{Name: "error_type", Value: err.Error()}})
+		metrics.Counter("scheduler_scheduling_failed_total", metrics.Labels{{Name: "error_type", Value: classifySchedulingError(err)}}).Inc()
 		w.WriteHeader(statusCode)
 		w.Write([]byte(err.Error()))
 		if ss.config.EnableLogInput {
@@ -163,6 +162,9 @@ func (ss *SchedulerService) handleSchedule(w http.ResponseWriter, r *http.Reques
 		}
 		return
 	}
+
+	// Record successful scheduling
+	metrics.Counter("scheduler_scheduling_total", metrics.Labels{}).Inc()
 
 	// record realtime state for the scheduled instance
 	if ss.config.EnableRequestStateTracking() {
@@ -243,9 +245,19 @@ func (ss *SchedulerService) handleReport(w http.ResponseWriter, r *http.Request)
 
 	for _, reqData := range reqDatas {
 		reqState := lrs.NewRequestState(reqData.Id, int64(reqData.NumTokens), reqData.InstanceId, reqData.GatewayId)
-		err := ss.lrsClient.UpdateRequestState(reqData.InferType, reqState)
-		if err != nil {
-			klog.Errorf("update request state failed: %v", err)
+		var err error
+		switch reqData.Kind {
+		case lrs.KindPrefillDone:
+			err = ss.lrsClient.MarkPrefillComplete(reqData.InferType, reqState)
+			if err != nil {
+				klog.Errorf("mark prefill complete failed: %v", err)
+			}
+		default:
+			// KindStateUpdate or default case
+			err = ss.lrsClient.UpdateRequestState(reqData.InferType, reqState)
+			if err != nil {
+				klog.Errorf("update request state failed: %v", err)
+			}
 		}
 	}
 }
@@ -262,6 +274,8 @@ func (ss *SchedulerService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ss.handleReport(w, r)
 	case "/healthz":
 		w.WriteHeader(http.StatusOK)
+	case "/metrics":
+		ss.prometheusHandler.ServeHTTP(w, r)
 	default:
 		http.Error(w, "Not found", http.StatusNotFound)
 	}
@@ -279,4 +293,25 @@ func (ss *SchedulerService) Start() error {
 	}
 
 	return nil
+}
+
+// classifySchedulingError maps scheduling errors to stable label values
+// to avoid high-cardinality from dynamic error messages.
+func classifySchedulingError(err error) string {
+	switch {
+	case errors.Is(err, consts.ErrorEndpointNotFound):
+		return "endpoint_not_found"
+	case errors.Is(err, consts.ErrorNoAvailableEndpoint):
+		return "no_available_endpoint"
+	case errors.Is(err, consts.ErrorAllEndpointBusy):
+		return "all_endpoints_busy"
+	case errors.Is(err, consts.ErrorNoMatchInferType):
+		return "no_match_infer_type"
+	case errors.Is(err, consts.ErrorCmsNotAvailable):
+		return "cms_not_available"
+	case errors.Is(err, consts.ErrorSchedulerNotReady):
+		return "scheduler_not_ready"
+	default:
+		return "unknown"
+	}
 }

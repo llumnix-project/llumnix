@@ -1,0 +1,482 @@
+{
+  "__inputs": [
+    { "name": "DS_PROMETHEUS", "label": "Prometheus", "description": "", "type": "datasource", "pluginId": "prometheus", "pluginName": "Prometheus" }
+  ],
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }, "id": 104, "title": "Instance Status (CMS) - Prefill", "type": "row" },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Requests" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 1 },
+      "id": 50,
+      "title": "CMS Requests (Prefill)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_running_requests{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} running" },
+        { "expr": "instance_cms_waiting_requests{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} waiting" },
+        { "expr": "instance_cms_loading_requests{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} loading" },
+        { "expr": "instance_cms_scheduler_waiting_to_decode_requests{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} scheduler-waiting-to-decode" },
+        { "expr": "instance_cms_scheduler_running_to_decode_requests{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} scheduler-running-to-decode" },
+        { "expr": "instance_cms_hybrid_scheduler_waiting_to_decode_requests{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} hybrid-scheduler-waiting-to-decode" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 1 },
+      "id": 51,
+      "title": "CMS Used Tokens (Prefill)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_used_gpu_tokens{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+      "id": 81,
+      "title": "CMS Prefill Tokens (Prefill)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_uncomputed_tokens_all_waiting_prefills{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} uncomputed-all-waiting-prefills" },
+        { "expr": "instance_cms_uncomputed_tokens_scheduler_running_prefills{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} uncomputed-scheduler-running-prefills" },
+        { "expr": "instance_cms_unallocated_tokens_scheduler_running_prefills{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} unallocated-scheduler-running-prefills" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+      "id": 82,
+      "title": "CMS Decode Tokens (Prefill)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_unallocated_tokens_hybrid_scheduler_waiting_decodes{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} unallocated-hybrid-scheduler-waiting-decodes" },
+        { "expr": "instance_cms_hybrid_scheduler_waiting_to_decode_tokens{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} hybrid-scheduler-waiting-to-decode" },
+        { "expr": "instance_cms_scheduler_waiting_to_decode_tokens{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} scheduler-waiting-to-decode" },
+        { "expr": "instance_cms_scheduler_running_to_decode_tokens{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} scheduler-running-to-decode" },
+        { "expr": "instance_cms_tokens_loading_requests{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} loading" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Requests" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 17 },
+      "id": 83,
+      "title": "CMS Inflight Dispatch Requests (Prefill)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_inflight_dispatch_requests{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} inflight-dispatch-total" },
+        { "expr": "instance_cms_inflight_dispatch_prefill_requests{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} inflight-dispatch-prefill" },
+        { "expr": "instance_cms_inflight_dispatch_decode_requests{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} inflight-dispatch-decode" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 17 },
+      "id": 185,
+      "title": "CMS Inflight Dispatch Tokens (Prefill)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_uncomputed_tokens_inflight_dispatch_prefill_requests{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} uncomputed-inflight-dispatch-prefill-tokens" },
+        { "expr": "instance_cms_tokens_inflight_dispatch_decode_requests{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} inflight-dispatch-decode-tokens" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Ratio" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 25 },
+      "id": 84,
+      "title": "CMS KV Cache Usage Ratio (Prefill)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_kv_cache_usage_ratio_projected{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} kv-cache-usage-ratio" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Batch Size" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 25 },
+      "id": 186,
+      "title": "CMS Decode Batch Size (Prefill)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_decode_batch_size{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} decode-batch-size" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 33 },
+      "id": 187,
+      "title": "CMS All Prefill Tokens (Prefill)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_all_prefills_tokens_num{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} all-prefills-tokens" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 33 },
+      "id": 191,
+      "title": "CMS All Decode Tokens (Prefill)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_all_decodes_tokens_num{namespace=\"$namespace\", infer_type=\"prefill\"}", "legendFormat": "{{ instance_id }} all-decodes-tokens" }
+      ]
+    },
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 41 }, "id": 200, "title": "Selected Instance Scheduling Metrics (Prefill)", "type": "row" },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Ratio" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 42 },
+      "id": 201,
+      "title": "Selected Instance KV Cache Usage Ratio (Prefill)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(selected_instance_kv_cache_usage_ratio_projected_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P99" },
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(selected_instance_kv_cache_usage_ratio_projected_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.9, sum by(le) (rate(selected_instance_kv_cache_usage_ratio_projected_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P90" },
+        { "expr": "histogram_quantile(0.5, sum by(le) (rate(selected_instance_kv_cache_usage_ratio_projected_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P50" },
+        { "expr": "sum(rate(selected_instance_kv_cache_usage_ratio_projected_sum{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])) / sum(rate(selected_instance_kv_cache_usage_ratio_projected_count{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval]))", "legendFormat": "Avg" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Batch Size" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 42 },
+      "id": 202,
+      "title": "Selected Instance Decode Batch Size (Prefill)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(selected_instance_decode_batch_size_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P99" },
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(selected_instance_decode_batch_size_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.9, sum by(le) (rate(selected_instance_decode_batch_size_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P90" },
+        { "expr": "histogram_quantile(0.5, sum by(le) (rate(selected_instance_decode_batch_size_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P50" },
+        { "expr": "sum(rate(selected_instance_decode_batch_size_sum{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])) / sum(rate(selected_instance_decode_batch_size_count{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval]))", "legendFormat": "Avg" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 50 },
+      "id": 203,
+      "title": "Selected Instance Prefill Tokens (Prefill)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(selected_instance_all_prefills_tokens_num_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P99" },
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(selected_instance_all_prefills_tokens_num_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.9, sum by(le) (rate(selected_instance_all_prefills_tokens_num_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P90" },
+        { "expr": "histogram_quantile(0.5, sum by(le) (rate(selected_instance_all_prefills_tokens_num_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P50" },
+        { "expr": "sum(rate(selected_instance_all_prefills_tokens_num_sum{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])) / sum(rate(selected_instance_all_prefills_tokens_num_count{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval]))", "legendFormat": "Avg" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 50 },
+      "id": 204,
+      "title": "Selected Instance Decode Tokens (Prefill)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(selected_instance_all_decodes_tokens_num_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P99" },
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(selected_instance_all_decodes_tokens_num_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.9, sum by(le) (rate(selected_instance_all_decodes_tokens_num_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P90" },
+        { "expr": "histogram_quantile(0.5, sum by(le) (rate(selected_instance_all_decodes_tokens_num_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P50" },
+        { "expr": "sum(rate(selected_instance_all_decodes_tokens_num_sum{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])) / sum(rate(selected_instance_all_decodes_tokens_num_count{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval]))", "legendFormat": "Avg" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Duration (ms)" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 58 },
+      "id": 205,
+      "title": "Selected Instance Predicted TTFT (Prefill)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(selected_instance_predicted_ttft_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P99" },
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(selected_instance_predicted_ttft_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.9, sum by(le) (rate(selected_instance_predicted_ttft_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P90" },
+        { "expr": "histogram_quantile(0.5, sum by(le) (rate(selected_instance_predicted_ttft_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P50" },
+        { "expr": "sum(rate(selected_instance_predicted_ttft_sum{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])) / sum(rate(selected_instance_predicted_ttft_count{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval]))", "legendFormat": "Avg" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Duration (ms)" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 58 },
+      "id": 206,
+      "title": "Selected Instance Predicted TPOT (Prefill)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(selected_instance_predicted_tpot_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P99" },
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(selected_instance_predicted_tpot_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.9, sum by(le) (rate(selected_instance_predicted_tpot_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P90" },
+        { "expr": "histogram_quantile(0.5, sum by(le) (rate(selected_instance_predicted_tpot_bucket{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])))", "legendFormat": "P50" },
+        { "expr": "sum(rate(selected_instance_predicted_tpot_sum{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval])) / sum(rate(selected_instance_predicted_tpot_count{namespace=\"$namespace\", infer_type=\"prefill\"}[$__rate_interval]))", "legendFormat": "Avg" }
+      ]
+    },
+
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 66 }, "id": 105, "title": "Instance Status (CMS) - Decode", "type": "row" },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Requests" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 67 },
+      "id": 150,
+      "title": "CMS Requests (Decode)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_running_requests{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} running" },
+        { "expr": "instance_cms_waiting_requests{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} waiting" },
+        { "expr": "instance_cms_loading_requests{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} loading" },
+        { "expr": "instance_cms_scheduler_waiting_to_decode_requests{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} scheduler-waiting-to-decode" },
+        { "expr": "instance_cms_scheduler_running_to_decode_requests{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} scheduler-running-to-decode" },
+        { "expr": "instance_cms_hybrid_scheduler_waiting_to_decode_requests{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} hybrid-scheduler-waiting-to-decode" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 67 },
+      "id": 151,
+      "title": "CMS Used Tokens (Decode)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_used_gpu_tokens{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }}" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 75 },
+      "id": 181,
+      "title": "CMS Prefill Tokens (Decode)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_uncomputed_tokens_all_waiting_prefills{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} uncomputed-all-waiting-prefills" },
+        { "expr": "instance_cms_uncomputed_tokens_scheduler_running_prefills{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} uncomputed-scheduler-running-prefills" },
+        { "expr": "instance_cms_unallocated_tokens_scheduler_running_prefills{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} unallocated-scheduler-running-prefills" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 75 },
+      "id": 182,
+      "title": "CMS Decode Tokens (Decode)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_unallocated_tokens_hybrid_scheduler_waiting_decodes{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} unallocated-hybrid-scheduler-waiting-decodes" },
+        { "expr": "instance_cms_hybrid_scheduler_waiting_to_decode_tokens{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} hybrid-scheduler-waiting-to-decode" },
+        { "expr": "instance_cms_scheduler_waiting_to_decode_tokens{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} scheduler-waiting-to-decode" },
+        { "expr": "instance_cms_scheduler_running_to_decode_tokens{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} scheduler-running-to-decode" },
+        { "expr": "instance_cms_tokens_loading_requests{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} loading" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Requests" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 83 },
+      "id": 183,
+      "title": "CMS Inflight Dispatch Requests (Decode)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_inflight_dispatch_requests{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} inflight-dispatch-total" },
+        { "expr": "instance_cms_inflight_dispatch_prefill_requests{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} inflight-dispatch-prefill" },
+        { "expr": "instance_cms_inflight_dispatch_decode_requests{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} inflight-dispatch-decode" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 83 },
+      "id": 188,
+      "title": "CMS Inflight Dispatch Tokens (Decode)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_uncomputed_tokens_inflight_dispatch_prefill_requests{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} uncomputed-inflight-dispatch-prefill-tokens" },
+        { "expr": "instance_cms_tokens_inflight_dispatch_decode_requests{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} inflight-dispatch-decode-tokens" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Ratio" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 91 },
+      "id": 184,
+      "title": "CMS KV Cache Usage Ratio (Decode)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_kv_cache_usage_ratio_projected{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} kv-cache-usage-ratio" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Batch Size" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 91 },
+      "id": 189,
+      "title": "CMS Decode Batch Size (Decode)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_decode_batch_size{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} decode-batch-size" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 99 },
+      "id": 190,
+      "title": "CMS All Prefill Tokens (Decode)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_all_prefills_tokens_num{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} all-prefills-tokens" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 99 },
+      "id": 192,
+      "title": "CMS All Decode Tokens (Decode)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "instance_cms_all_decodes_tokens_num{namespace=\"$namespace\", infer_type=\"decode\"}", "legendFormat": "{{ instance_id }} all-decodes-tokens" }
+      ]
+    },
+    { "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 107 }, "id": 207, "title": "Selected Instance Scheduling Metrics (Decode)", "type": "row" },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Ratio" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 108 },
+      "id": 208,
+      "title": "Selected Instance KV Cache Usage Ratio (Decode)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(selected_instance_kv_cache_usage_ratio_projected_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P99" },
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(selected_instance_kv_cache_usage_ratio_projected_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.9, sum by(le) (rate(selected_instance_kv_cache_usage_ratio_projected_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P90" },
+        { "expr": "histogram_quantile(0.5, sum by(le) (rate(selected_instance_kv_cache_usage_ratio_projected_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P50" },
+        { "expr": "sum(rate(selected_instance_kv_cache_usage_ratio_projected_sum{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])) / sum(rate(selected_instance_kv_cache_usage_ratio_projected_count{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval]))", "legendFormat": "Avg" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Batch Size" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 108 },
+      "id": 209,
+      "title": "Selected Instance Decode Batch Size (Decode)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(selected_instance_decode_batch_size_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P99" },
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(selected_instance_decode_batch_size_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.9, sum by(le) (rate(selected_instance_decode_batch_size_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P90" },
+        { "expr": "histogram_quantile(0.5, sum by(le) (rate(selected_instance_decode_batch_size_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P50" },
+        { "expr": "sum(rate(selected_instance_decode_batch_size_sum{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])) / sum(rate(selected_instance_decode_batch_size_count{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval]))", "legendFormat": "Avg" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 116 },
+      "id": 210,
+      "title": "Selected Instance Prefill Tokens (Decode)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(selected_instance_all_prefills_tokens_num_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P99" },
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(selected_instance_all_prefills_tokens_num_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.9, sum by(le) (rate(selected_instance_all_prefills_tokens_num_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P90" },
+        { "expr": "histogram_quantile(0.5, sum by(le) (rate(selected_instance_all_prefills_tokens_num_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P50" },
+        { "expr": "sum(rate(selected_instance_all_prefills_tokens_num_sum{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])) / sum(rate(selected_instance_all_prefills_tokens_num_count{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval]))", "legendFormat": "Avg" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Tokens" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 116 },
+      "id": 211,
+      "title": "Selected Instance Decode Tokens (Decode)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(selected_instance_all_decodes_tokens_num_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P99" },
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(selected_instance_all_decodes_tokens_num_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.9, sum by(le) (rate(selected_instance_all_decodes_tokens_num_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P90" },
+        { "expr": "histogram_quantile(0.5, sum by(le) (rate(selected_instance_all_decodes_tokens_num_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P50" },
+        { "expr": "sum(rate(selected_instance_all_decodes_tokens_num_sum{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])) / sum(rate(selected_instance_all_decodes_tokens_num_count{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval]))", "legendFormat": "Avg" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Duration (ms)" } },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 124 },
+      "id": 212,
+      "title": "Selected Instance Predicted TTFT (Decode)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(selected_instance_predicted_ttft_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P99" },
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(selected_instance_predicted_ttft_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.9, sum by(le) (rate(selected_instance_predicted_ttft_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P90" },
+        { "expr": "histogram_quantile(0.5, sum by(le) (rate(selected_instance_predicted_ttft_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P50" },
+        { "expr": "sum(rate(selected_instance_predicted_ttft_sum{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])) / sum(rate(selected_instance_predicted_ttft_count{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval]))", "legendFormat": "Avg" }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "drawStyle": "line", "fillOpacity": 0 }, "axisLabel": "Duration (ms)" } },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 124 },
+      "id": 213,
+      "title": "Selected Instance Predicted TPOT (Decode)",
+      "type": "timeseries",
+      "targets": [
+        { "expr": "histogram_quantile(0.99, sum by(le) (rate(selected_instance_predicted_tpot_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P99" },
+        { "expr": "histogram_quantile(0.95, sum by(le) (rate(selected_instance_predicted_tpot_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.9, sum by(le) (rate(selected_instance_predicted_tpot_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P90" },
+        { "expr": "histogram_quantile(0.5, sum by(le) (rate(selected_instance_predicted_tpot_bucket{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])))", "legendFormat": "P50" },
+        { "expr": "sum(rate(selected_instance_predicted_tpot_sum{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval])) / sum(rate(selected_instance_predicted_tpot_count{namespace=\"$namespace\", infer_type=\"decode\"}[$__rate_interval]))", "legendFormat": "Avg" }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["llumnix", "cms"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "type": "datasource"
+      },
+      {
+        "current": {},
+        "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+        "definition": "label_values(namespace)",
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "name": "namespace",
+        "options": [],
+        "query": "label_values(namespace)",
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Llumnix CMS Dashboard",
+  "uid": "llumnix-cms-dashboard",
+  "version": 1
+}
