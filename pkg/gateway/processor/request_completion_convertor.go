@@ -2,11 +2,12 @@ package processor
 
 import (
 	"fmt"
+
+	"k8s.io/klog/v2"
+
 	"llumnix/pkg/gateway/protocol"
 	"llumnix/pkg/gateway/tokenizer"
 	"llumnix/pkg/types"
-
-	"k8s.io/klog/v2"
 )
 
 type RequestCompletionConverter struct{}
@@ -63,6 +64,7 @@ func (rt *RequestCompletionConverter) PreProcess(req *types.RequestContext) erro
 				return fmt.Errorf("tokenize prompt to ids failed")
 			}
 			req.LLMRequest.CompletionRequest.Prompt.SetValue(ids)
+			req.RequestStats.InputTokensLen = uint64(len(ids))
 			return nil
 		}
 
@@ -76,6 +78,7 @@ func (rt *RequestCompletionConverter) PreProcess(req *types.RequestContext) erro
 					return fmt.Errorf("tokenize prompt to ids failed")
 				}
 				allIds = append(allIds, ids)
+				req.RequestStats.InputTokensLen += uint64(len(ids))
 			}
 			req.LLMRequest.CompletionRequest.Prompt.SetValue(allIds)
 			return nil
