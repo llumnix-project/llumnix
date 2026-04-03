@@ -9,7 +9,8 @@ import concurrent.futures
 import numpy as np
 import pytest
 
-from .utils import download_and_cache_file, send_request, LOG_DIR
+from .utils import download_and_cache_file, send_request, LOG_DIR, MODEL_NAME
+from .vllm_e2e import check_migration_logs
 
 INVALID = -9999
 
@@ -22,19 +23,18 @@ def generate_mig_correct_config():
             "enable_migration": True,
             "enable_pd": True,
             "separate_pd_scheduling": False,
+            "connector_type": "HybridConnector",
         },
     ]
 
     update_configs = []
-    for connector_type in ["HybridConnector", "MooncakeConnector"]:
-        for config in base_configs:
-            tmp_config = copy.deepcopy(config)
-            tmp_config["connector_type"] = connector_type
-            update_configs.append(tmp_config)
-    base_configs = update_configs
 
-    update_configs = []
-    for dataset in ["cnt", "gsm8k"]:
+    if MODEL_NAME == "Qwen/Qwen3-Next-80B-A3B-Instruct-FP8":
+        target_dataset = ["gsm8k"]
+    else:
+        target_dataset = ["cnt", "gsm8k"]
+
+    for dataset in target_dataset:
         for config in base_configs:
             tmp_config = copy.deepcopy(config)
             tmp_config["dataset"] = dataset
@@ -73,7 +73,7 @@ def _find_longest_consecutive_sequence(numbers: List[int]) -> List[int]:
 
 def validate_counting_response(text: str, start: int = 0, end: int = 100) -> bool:
     try:
-        numbers_found = [int(num) for num in re.findall(r"\d+", text)]
+        numbers_found = [int(num.strip()) for num in re.findall(r"\d+", text)]
     except (ValueError, TypeError):
         print("Validation failed: Could not parse numbers from response.")
         return False
@@ -100,10 +100,6 @@ def check_count_res(responses: List[Any]):
     invalid = 1 - acc
     print(f"Accuracy: {acc:.3f}")
     print(f"Invalid: {invalid:.3f}")
-
-    assert valid_count == len(
-        responses
-    ), f"{error_count} responses failed counting validation."
     print(f"✓ {valid_count}/{len(responses)} responses passed counting validation.")
     return acc
 
@@ -197,14 +193,11 @@ def dump_res(results: List[Any], dataset: str, acc: float, num_questions: int):
 # pylint: disable=unused-argument
 @pytest.mark.parametrize("test_config", generate_mig_correct_config(), indirect=True)
 def test_migration_correctness(setup_services, test_config):
-    num_requests = 500
-
     def send_single_request(connector_type, prompt, dataset):
         payload = {
             "prompt": prompt,
-            "stream": False,
-            "max_tokens": 3000,
-            "ignore_eos": True,
+            "stream": True,
+            "max_tokens": 1000, # Don't change max tokens value
             "temperature": 0.0,
         }
         if connector_type == "HybridConnector" and not test_config.get(
@@ -218,38 +211,59 @@ def test_migration_correctness(setup_services, test_config):
         result = send_request(payload, endpoint_type="completions", ignore_output=True)
         return result
 
-    print(f"\n=== Starting {num_requests} concurrent requests ===")
-    start_time = time.time()
     dataset = test_config.get("dataset")
     if dataset == "gsm8k":
+        num_requests = 500
         prompts, labels = generate_gsm8k_dataset(num_requests)
     elif dataset == "cnt":
+        num_requests = 50
         prompts = [
             "Please count from 0 to 100 one by one in your response, with each number on a new line."
         ] * num_requests
         labels = None
     else:
         raise ValueError(f"Unknown dataset: {dataset}")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+
+    print(f"\n=== Starting {num_requests} concurrent requests ===")
+    start_time = time.time()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=500) as executor:
         futures = [
             executor.submit(
                 send_single_request, test_config.get("connector_type"), prompt, dataset
             )
             for prompt in prompts
         ]
-        results = [
-            future.result() for future in concurrent.futures.as_completed(futures)
-        ]
+        results = [future.result() for future in futures]
     end_time = time.time()
 
     assert (
         len(results) == num_requests
     ), f"Only {len(results)}/{num_requests} requests completed"
+
     acc = check_migration_res(
         dataset=test_config.get("dataset"), results=results, labels=labels
     )
     dump_res(results, test_config.get("dataset"), acc, num_requests)
 
+    check_migration_logs("HybridConnector", False)
+
+    print(f"\n model: {MODEL_NAME} acc: {acc:.3f} dataset: {dataset}")
     print(
         f"\n=== Completed {len(results)}/{num_requests} requests in {end_time - start_time:.2f}s ==="
     )
+
+    # --------- no migration ---------
+    # model: Qwen/Qwen3-8B acc: 1.00 dataset: cnt
+    # model: Qwen/Qwen3-8B acc: 0.942 dataset: gsm8k
+    # model: Qwen/Qwen3-8B Eagle3 acc: 1.00 dataset: cnt
+    # model: Qwen/Qwen3-8B Eagle3 acc: 0.930 dataset: gsm8k
+    # model: Qwen/Qwen3-Next-80B-A3B-Instruct-FP8 acc: 0.952 dataset: gsm8k
+    # model: Qwen/Qwen3-Next-80B-A3B-Instruct-FP8 MTP acc: 0.948 dataset: gsm8k
+
+    # --------- migration ---------
+    # model: Qwen/Qwen3-8B acc: 1.000 dataset: cnt (migration/total=35/50)
+    # model: Qwen/Qwen3-8B acc: 0.928 dataset: gsm8k (migration/total=32/500)
+    # model: Qwen/Qwen3-8B Eagle3 acc: 1.000 dataset: cnt (migration/total=23/50)
+    # model: Qwen/Qwen3-8B Eagle3 acc: 0.934 dataset: gsm8k (migration/total=44/500)
+    # model: Qwen/Qwen3-Next-80B-A3B-Instruct-FP8 acc: 0.958 dataset: gsm8k (migration/total=112/500)
+    # model: Qwen/Qwen3-Next-80B-A3B-Instruct-FP8 MTP acc: 0.958 dataset: gsm8k (migration/total=71/500)

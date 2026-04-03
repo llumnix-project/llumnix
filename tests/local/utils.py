@@ -17,7 +17,7 @@ KVT_PORT_OFFSET: int = 20000
 GATEWAY_PORT: int = 18089
 SCHEDULER_PORT: int = 18088
 GATEWAY_URL = f"http://localhost:{GATEWAY_PORT}/v1/completions"
-MODEL_NAME: str = "Qwen/Qwen2.5-7B"
+MODEL_NAME: str = os.environ.get("MODEL_NAME", "Qwen/Qwen2.5-7B")
 MODEL_PATH: str = os.environ.get("MODEL_PATH", f"/models/{MODEL_NAME}")
 
 
@@ -150,11 +150,26 @@ def get_vllm_command(
         f"vllm serve "
         f"--enable-log-requests "
         f"--enforce-eager "
-        f"--max-model-len=16384 "
+        f"--max-model-len 16384 "
+        f"--max-num-batched-tokens 4096 "
         f"--model {MODEL_PATH} "
         f"--port {port} "
         f"--kv-transfer-config '{kv_transfer_config}' "
     )
+
+    if MODEL_NAME == "Qwen/Qwen3-Next-80B-A3B-Instruct-FP8":
+        command += "--no-disable-hybrid-kv-cache-manager --no-async-scheduling --no-enable-prefix-caching "
+
+    if os.environ.get("USE_MTP", "0").lower() in ["1", "true"] \
+        and MODEL_NAME == "Qwen/Qwen3-Next-80B-A3B-Instruct-FP8":
+        speculative_config = '{{"method": "qwen3_next_mtp", "num_speculative_tokens": 2}}'
+        command += f"--speculative-config '{speculative_config}' "
+
+    if os.environ.get("USE_EAGLE3", "0").lower() in ["1", "true"] \
+        and MODEL_NAME == "Qwen/Qwen3-8B":
+        speculative_config = '{{"method": "eagle3", "model": "AngelSlim/Qwen3-8B_eagle3", "num_speculative_tokens": 3}}'
+        command += f"--speculative-config '{speculative_config}' "
+
     if connector_type == "MooncakeConnector":
         command = f"VLLM_MOONCAKE_SIDE_CHANNEL_PORT={16557 + 8 * cuda} " + command
         command = f"VLLM_MOONCAKE_MIGRATION_BASE_PORT={17557 + 8 * cuda} " + command
@@ -178,6 +193,7 @@ def get_vllm_command(
 
     command = "VLLM_USE_MODELSCOPE=true " + command
     command = "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION=1 " + command
+    command = "VLLM_DEEP_GEMM_WARMUP=skip " + command
 
     print(f"vllm command: {command}")
 
@@ -335,7 +351,7 @@ def send_request(
 
         assert len(chunks) > 0, "No streaming chunks received"
     else:
-        response = requests.post(url, json=payload, timeout=60)
+        response = requests.post(url, json=payload, timeout=180)
         response.raise_for_status()
         result = response.json()
 

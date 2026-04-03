@@ -87,14 +87,17 @@ Selector:
 func newLoadBalanceRescheduling(p *options.SchedulerConfig, inferType consts.InferType) *decodeLoadBalanceRescheduling {
 	var targetLoadMetric string
 	var targetLoadThreshold float32
+	var policyName string
 
 	switch inferType {
 	case consts.InferTypeDecode:
 		targetLoadMetric = p.ReschedulingDecodeLoadMetric
 		targetLoadThreshold = p.ReschedulingDecodeLoadThreshold
+		policyName = consts.ReschedulingPolicyDecodeLoad
 	case consts.InferTypeNeutral:
 		targetLoadMetric = p.ReschedulingNeutralLoadMetric
 		targetLoadThreshold = p.ReschedulingNeutralLoadThreshold
+		policyName = consts.ReschedulingPolicyNeutralLoad
 	default:
 		panic(fmt.Sprintf("unsupported failover rescheduling infer type: %s", inferType))
 	}
@@ -106,6 +109,7 @@ func newLoadBalanceRescheduling(p *options.SchedulerConfig, inferType consts.Inf
 
 	r := &decodeLoadBalanceRescheduling{
 		baseReschedulingPolicy: baseReschedulingPolicy{
+			name: policyName,
 			metrics: map[string]func() instanceSchedulingMetric{
 				targetLoadMetric: getSchedulingMetric(p, targetLoadMetric),
 			},
@@ -198,18 +202,23 @@ Selector:
 */
 func newFailoverRescheduling(p *options.SchedulerConfig, inferType consts.InferType) *failoverRescheduling {
 	var reschedulerMetric string
+	var policyName string
 	switch inferType {
 	case consts.InferTypePrefill:
 		reschedulerMetric = p.ReschedulingPrefillLoadMetric
+		policyName = consts.ReschedulingPolicyPrefillFailover
 	case consts.InferTypeDecode:
 		reschedulerMetric = p.ReschedulingDecodeLoadMetric
+		policyName = consts.ReschedulingPolicyDecodeFailover
 	case consts.InferTypeNeutral:
 		reschedulerMetric = p.ReschedulingNeutralLoadMetric
+		policyName = consts.ReschedulingPolicyNeutralFailover
 	default:
 		panic(fmt.Sprintf("unsupported failover rescheduling infer type: %s", inferType))
 	}
 	return &failoverRescheduling{
 		baseReschedulingPolicy: baseReschedulingPolicy{
+			name: policyName,
 			metrics: map[string]func() instanceSchedulingMetric{
 				reschedulerMetric: getSchedulingMetric(p, reschedulerMetric),
 			},
@@ -269,6 +278,7 @@ Selector:
 func newBinPackingMitigationRescheduling(p *options.SchedulerConfig) *binPackingMitigationRescheduling {
 	return &binPackingMitigationRescheduling{
 		baseReschedulingPolicy{
+			name: consts.ReschedulingPolicyBinPackingMitigation,
 			metrics: map[string]func() instanceSchedulingMetric{
 				consts.SchedulingMetricPredictedTpot: getSchedulingMetric(p, consts.SchedulingMetricPredictedTpot),
 			},
@@ -345,6 +355,7 @@ Selector:
 func newBinPackingConsolidationRescheduling(p *options.SchedulerConfig) *binPackingConsolidationRescheduling {
 	return &binPackingConsolidationRescheduling{
 		baseReschedulingPolicy{
+			name: consts.ReschedulingPolicyBinPackingConsolidation,
 			metrics: map[string]func() instanceSchedulingMetric{
 				consts.SchedulingMetricPredictedTpot:   getSchedulingMetric(p, consts.SchedulingMetricPredictedTpot),
 				consts.SchedulingMetricDecodeBatchSize: getSchedulingMetric(p, consts.SchedulingMetricDecodeBatchSize),

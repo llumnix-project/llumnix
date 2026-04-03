@@ -141,7 +141,7 @@ func (p *ReschedulingPolicy) getMigrationPairs(
 		srcInstanceViews, dstInstanceViews := policy.filter(instanceViews)
 		selectedPairs := policy.selectPairs(srcInstanceViews, dstInstanceViews)
 		reqSelectPolicy := policy.getMigrationReqSelectPolicy()
-		reschedulingPairs = p.validateAndAppendPairs(selectedPairs, reqSelectPolicy, reschedulingPairs)
+		reschedulingPairs = p.validateAndAppendPairs(selectedPairs, reqSelectPolicy, policy.getName(), reschedulingPairs)
 		if len(reschedulingPairs) > 0 {
 			klog.V(4).Infof("Generate reschedule pairs for policy %T, pairs: %v", policy, reschedulingPairs)
 		}
@@ -152,6 +152,7 @@ func (p *ReschedulingPolicy) getMigrationPairs(
 func (p *ReschedulingPolicy) validateAndAppendPairs(
 	selectedPairs []*reschedulingPair,
 	reqSelectPolicy migrationReqSelectPolicy,
+	policyName string,
 	reschedulingPairs []*reschedulingPair) []*reschedulingPair {
 
 	// make sure pairs in reschedulingPairs is not conflict
@@ -169,6 +170,7 @@ func (p *ReschedulingPolicy) validateAndAppendPairs(
 		selectPair.reqSelectRule = reqSelectPolicy.rule
 		selectPair.reqSelectOrder = reqSelectPolicy.order
 		selectPair.reqSelectValue = reqSelectPolicy.value
+		selectPair.triggerPolicy = policyName
 		reschedulingPairs = append(reschedulingPairs, selectPair)
 	}
 	return reschedulingPairs
@@ -219,6 +221,7 @@ func (p *ReschedulingPolicy) executeMigrations(reschedulingPairs []*rescheduling
 				DstEnginePort:      rp.dstView.cmsView.Metadata.KvtPort,
 				MigrationType:      rp.reqSelectRule,
 				MigrationReqPolicy: rp.reqSelectOrder,
+				TriggerPolicy:      rp.triggerPolicy,
 			}
 			switch rp.reqSelectRule {
 			case consts.MigrationReqSelectRuleNumReq:
@@ -281,15 +284,21 @@ type reschedulingPolicyInternal interface {
 		srcInstanceView,
 		dstInstanceView map[string]*instanceViewScheduling) []*reschedulingPair
 	getMigrationReqSelectPolicy() migrationReqSelectPolicy
+	getName() string
 }
 
 type baseReschedulingPolicy struct {
+	name                     string
 	metrics                  map[string]func() instanceSchedulingMetric
 	srcSingleInstanceFilters []singleInstanceFilter
 	srcGlobalFilters         []globalFilter
 	dstSingleInstanceFilters []singleInstanceFilter
 	dstGlobalFilters         []globalFilter
 	selector                 reschedulingSelector
+}
+
+func (brp *baseReschedulingPolicy) getName() string {
+	return brp.name
 }
 
 func (brp *baseReschedulingPolicy) calculateMetrics(instances map[string]*instanceViewScheduling) {
@@ -333,6 +342,7 @@ type reschedulingPair struct {
 	reqSelectRule    string
 	reqSelectOrder   string
 	reqSelectValue   float32
+	triggerPolicy    string
 }
 
 func (rp *reschedulingPair) equal(rp2 *reschedulingPair) bool {

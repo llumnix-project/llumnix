@@ -35,6 +35,7 @@ from llumnix.compat.hybrid_connector_compat import (
     MIGRATE_TO_RESP,
     SRC_INFO,
     OUTPUT_TOKENS_N,
+    MIGRATION_TRIGGER_POLICY,
     _g_migrate_out_req_ids,
     _g_migrate_in_req_ids,
     _g_migrate_out_req_info,
@@ -272,7 +273,8 @@ class KVTMigrationFrontend(BaseMigrationFrontend):
             return False
         try:
             res = await self._dispatch_and_collect_tasks(
-                migrated_out_requests, dst_engine_host, dst_engine_port
+                migrated_out_requests, dst_engine_host, dst_engine_port,
+                trigger_policy=migration_params.trigger_policy,
             )
         except Exception as e:  # pylint: disable=broad-except
             logger.exception("Failed to get migration dispatch results: %s", e)
@@ -287,6 +289,7 @@ class KVTMigrationFrontend(BaseMigrationFrontend):
         requests_to_migrate: list[Tuple["EngineCoreRequest", int]],
         dst_engine_host: str,
         dst_engine_port: int,
+        trigger_policy: str = "",
     ) -> bool:
         tasks = [
             self.migrate(
@@ -294,6 +297,7 @@ class KVTMigrationFrontend(BaseMigrationFrontend):
                 dst_host=dst_engine_host,
                 dst_port=dst_engine_port,
                 num_output_tokens=num_tokens,
+                trigger_policy=trigger_policy,
             )
             for req, num_tokens in requests_to_migrate
         ]
@@ -357,9 +361,11 @@ class KVTMigrationFrontend(BaseMigrationFrontend):
         dst_host: str,
         dst_port: int,
         num_output_tokens: int,
+        trigger_policy: str = "",
     ) -> "MigrateResp":
         core_update_params(req, {SRC_INFO: self.peer_addr_port})
         core_update_params(req, {OUTPUT_TOKENS_N: num_output_tokens})
+        core_update_params(req, {MIGRATION_TRIGGER_POLICY: trigger_policy})
         msgbuf = bytearray.fromhex("00 00 00 00 00 00 00 00")
         struct.pack_into("=II", msgbuf, 0, MIGRATE_TO_REQ, 0)
         reqbufs = self._enc.encode_into(req, msgbuf, 8)
@@ -372,8 +378,8 @@ class KVTMigrationFrontend(BaseMigrationFrontend):
                 return res
             # pylint: disable=broad-except
             except Exception:
-                logger.exception("migration failed: reqid=%s try=%s", reqid, idx)
-        raise RuntimeError(f"Migration for reqid={reqid} failed after retries.")
+                logger.exception("migration failed: reqid=%s try=%s, dst_host=%s, dst_port=%d", reqid, idx, dst_host, dst_port)
+        raise RuntimeError(f"Migration for reqid={reqid} failed after retries, dst_host={dst_host}, dst_port={dst_port}.")
 
     def update_migration_status(self, instance_status: InstanceStatus):
         instance_status.num_migrate_in_reqs = len(_g_migrate_in_req_ids)
@@ -416,6 +422,12 @@ class KVTMigrationFrontend(BaseMigrationFrontend):
         dst_engine_host: str,
         dst_engine_port: int,
     ) -> bool:
+        if self._cfg.model_config.is_hybrid:
+            logger.info(
+                "Hybrid model does not support pre-stop migration."
+            )
+            return False
+
         if not self.migration_finish_event.is_set():
             logger.info(
                 "A pre-stop migration is requested, but another is in progress. Waiting for it to complete..."
@@ -441,7 +453,8 @@ class KVTMigrationFrontend(BaseMigrationFrontend):
             return False
         try:
             coro = self._dispatch_and_collect_tasks(
-                migrated_out_requests, dst_engine_host, dst_engine_port
+                migrated_out_requests, dst_engine_host, dst_engine_port,
+                trigger_policy=migration_params.trigger_policy,
             )
             future = asyncio.run_coroutine_threadsafe(coro, self._loop)
             res = future.result(timeout=MIGRATION_FRONTEND_TIMEOUT)
@@ -459,7 +472,8 @@ class KVTMigrationFrontend(BaseMigrationFrontend):
 
             self.latest_running_snapshot = latest_running
             self.latest_waiting_snapshot = latest_waiting
-            logger.info("Fetched new scheduler state and updated local snapshots.")
+            logger.info("Fetched new scheduler state and updated local snapshots, len(latest_running_snapshot)=%s, "
+                        "len(latest_waiting_snapshot)=%s.",len(latest_running), len(latest_waiting))
             if (
                 self.latest_running_snapshot is None
                 or self.latest_waiting_snapshot is None

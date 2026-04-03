@@ -19,6 +19,7 @@ from .utils import (
     VLLM_BASE_PORT,
     LOG_DIR,
     NAMING_DIR,
+    MODEL_NAME,
     MODEL_PATH,
 )
 
@@ -27,7 +28,7 @@ from .utils import (
 def pytest_sessionstart(session):
     if os.path.exists(MODEL_PATH):
         return
-    model_dir = snapshot_download("Qwen/Qwen2.5-7B", cache_dir="/models")
+    model_dir = snapshot_download(MODEL_NAME, cache_dir="/models")
     print(f"Downloaded model to {model_dir}")
 
 
