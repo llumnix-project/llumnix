@@ -75,14 +75,14 @@ def test_simple_requests(setup_services):
                 assert result == "How"
 
 
-def check_migration_logs(connector_type: str):
+def check_migration_logs(connector_type: str, strict: bool = True):
     if connector_type == "MooncakeConnector":
         migrate_in_pattern = r"update success migrate in request.*"
         migrate_out_pattern = r"Migration .* suceess"
         traceback_pattern = r"Traceback"
     elif connector_type == "HybridConnector":
         migrate_in_pattern = r"migration end.*"
-        migrate_out_pattern = r"suspend end:*"
+        migrate_out_pattern = r"migration transfer kv and suspend req.*"
         traceback_pattern = r"Traceback"
     else:
         raise ValueError(f"Unknown connector type: {connector_type}")
@@ -122,9 +122,10 @@ def check_migration_logs(connector_type: str):
 
     assert migrate_in_count > 0, "No migration logs found!"
 
-    assert (
-        migrate_in_count == migrate_out_count
-    ), f"Migration count mismatch! Migrate in: {migrate_in_count}, Migrate out: {migrate_out_count}"
+    if strict:
+        assert (
+            migrate_in_count == migrate_out_count
+        ), f"Migration count mismatch! Migrate in: {migrate_in_count}, Migrate out: {migrate_out_count}"
 
     assert (
         traceback_count == 0

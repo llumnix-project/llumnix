@@ -107,7 +107,10 @@ migration-tests: llumlet-proto-build discovery-proto-build gateway-build schedul
 
 .PHONY: migration-correctness-tests
 migration-correctness-tests: llumlet-proto-build discovery-proto-build gateway-build scheduler-build
-	pytest -x -v -s ./tests/local/vllm_mig_correctness.py::test_migration_correctness
+	MODEL_NAME=Qwen/Qwen3-8B pytest -x -v -s ./tests/local/vllm_migration_correctness.py::test_migration_correctness
+	MODEL_NAME=Qwen/Qwen3-8B USE_EAGLE3=1 pytest -x -v -s ./tests/local/vllm_migration_correctness.py::test_migration_correctness
+	MODEL_NAME=Qwen/Qwen3-Next-80B-A3B-Instruct-FP8 pytest -x -v -s ./tests/local/vllm_migration_correctness.py::test_migration_correctness
+	MODEL_NAME=Qwen/Qwen3-Next-80B-A3B-Instruct-FP8 USE_MTP=1 pytest -x -v -s ./tests/local/vllm_migration_correctness.py::test_migration_correctness
 
 .PHONY: benchmark-tests
 benchmark-tests: llumlet-proto-build discovery-proto-build gateway-build scheduler-build

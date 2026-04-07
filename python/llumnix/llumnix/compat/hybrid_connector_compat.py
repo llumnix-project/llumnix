@@ -58,6 +58,7 @@ try:
         MigrateResp,
         OUTPUT_TOKENS_N,
         SRC_INFO,
+        MIGRATION_TRIGGER_POLICY,
     )
 except ImportError:
     try:
@@ -73,6 +74,7 @@ except ImportError:
             MigrateResp,
             OUTPUT_TOKENS_N,
             SRC_INFO,
+            MIGRATION_TRIGGER_POLICY,
         )
     except ImportError as e:
         raise ImportError(

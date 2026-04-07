@@ -16,7 +16,7 @@ class LlumletClient:
         self.stub = None
 
     async def connect(self):
-        print(f"Connecting to llumlet server at localhost:{self.port}...")
+        print(f"\nConnecting to llumlet server at localhost:{self.port}...")
         self.channel = grpc.aio.insecure_channel(f"localhost:{self.port}")
         self.stub = llumlet_server_pb2_grpc.LlumletStub(self.channel)
 
@@ -30,6 +30,10 @@ class LlumletClient:
             raise RuntimeError("Client is not connected. Call connect() first.")
 
         print("Sending migrate request...")
+
+        trigger_policy, num_reqs = "neutral_load", 1
+        # trigger_policy, num_reqs = "neutral_failover", -1
+
         request = llumlet_server_pb2.MigrateRequest(
             src_engine_id="src",
             dst_engine_id="dst",
@@ -37,8 +41,8 @@ class LlumletClient:
             dst_engine_port=dst_port,
             migration_req_policy=RequestMigrationPolicy.SR,
             migration_type=MigrationType.NUM_REQ,
-            num_reqs=1,
-            trigger_policy="NEUTRAL_LOAD",
+            num_reqs=num_reqs,
+            trigger_policy=trigger_policy,
         )
         try:
             response = await self.stub.Migrate(request)
@@ -66,7 +70,7 @@ async def async_run_stream_generate(num_requests: int, host: str, port: int):
         messages = [
             {
                 "role": "system",
-                "content": "Please count from 1 to 500 one by one in your response.",
+                "content": "Please count from 1 to 100 one by one in your response.",
             },
         ]
         req = {
@@ -135,7 +139,7 @@ if __name__ == "__main__":
         help="llumlet grpc port for migration",
     )
     parser.add_argument(
-        "--dst_host", type=str, default="localhost", help="host ip for dst instance"
+        "--dst_host", type=str, default="0.0.0.0", help="host ip for dst instance"
     )
     parser.add_argument(
         "--dst_port", type=int, default=29876, help="kvt port for dst instance"
@@ -143,12 +147,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     stream_process = multiprocessing.Process(
-        target=run_stream_generate, args=(args.num_requests, args.host, args.port)
+        target=run_stream_generate, args=(args.num_requests, args.host, args.port), daemon=True
     )
     stream_process.start()
 
     migration_process = multiprocessing.Process(
-        target=trigger_migration, args=(args.llumlet_port, args.dst_host, args.dst_port)
+        target=trigger_migration, args=(args.llumlet_port, args.dst_host, args.dst_port), daemon=True
     )
     migration_process.start()
 

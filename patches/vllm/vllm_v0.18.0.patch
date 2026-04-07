@@ -1,7 +1,7 @@
-From 644e113c2f4a8b8b37c88cb7faad640a04afc92c Mon Sep 17 00:00:00 2001
+From 9014829324ab43f1de6207183a99aae4d8e48708 Mon Sep 17 00:00:00 2001
 From: "cuikuilong.ckl" <cuikuilong.ckl@alibaba-inc.com>
 Date: Fri, 27 Mar 2026 14:32:26 +0800
-Subject: [PATCH] vllm v0.18.0 patch
+Subject: [PATCH] add migrate_in_pd
 
 ---
  .gitignore                                    |   3 +
@@ -11,14 +11,14 @@ Subject: [PATCH] vllm v0.18.0 patch
  .../kv_transfer/kv_transfer_state.py          |   9 +-
  vllm/entrypoints/api_server.py                |   4 +
  vllm/entrypoints/openai/api_server.py         |   2 +
- vllm/envs.py                                  |  77 +++++
+ vllm/envs.py                                  |  81 +++++
  vllm/v1/core/kv_cache_manager.py              |   2 +-
  vllm/v1/core/sched/interface.py               |   4 +
  vllm/v1/core/sched/output.py                  |   2 +
- vllm/v1/core/sched/scheduler.py               |  13 +-
+ vllm/v1/core/sched/scheduler.py               |  27 +-
  vllm/v1/engine/__init__.py                    |   9 +-
  vllm/v1/engine/async_llm.py                   |   1 +
- vllm/v1/engine/core.py                        | 302 +++++++++++++++++-
+ vllm/v1/engine/core.py                        | 309 +++++++++++++++++-
  vllm/v1/engine/core_client.py                 |  12 +
  vllm/v1/metrics/loggers.py                    |   6 +
  vllm/v1/outputs.py                            |   1 +
@@ -27,7 +27,7 @@ Subject: [PATCH] vllm v0.18.0 patch
  vllm/v1/worker/gpu_model_runner.py            |   2 +-
  vllm/v1/worker/gpu_worker.py                  |   4 +-
  .../worker/kv_connector_model_runner_mixin.py |   6 +-
- 23 files changed, 483 insertions(+), 17 deletions(-)
+ 23 files changed, 508 insertions(+), 17 deletions(-)
 
 diff --git a/.gitignore b/.gitignore
 index d62536cfb..41db7faf9 100644
@@ -181,10 +181,10 @@ index 126e2b402..075532331 100644
          engine_args._api_process_count = client_config.get("client_count", 1)
          engine_args._api_process_rank = client_config.get("client_index", 0)
 diff --git a/vllm/envs.py b/vllm/envs.py
-index caa2fb38a..5d98b9f09 100755
+index caa2fb38a..8226b548f 100755
 --- a/vllm/envs.py
 +++ b/vllm/envs.py
-@@ -246,6 +246,23 @@ if TYPE_CHECKING:
+@@ -246,6 +246,25 @@ if TYPE_CHECKING:
      VLLM_ELASTIC_EP_DRAIN_REQUESTS: bool = False
      VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS: bool = False
      VLLM_NIXL_EP_MAX_NUM_RANKS: int = 32
@@ -205,10 +205,12 @@ index caa2fb38a..5d98b9f09 100755
 +    VLLM_KVS_ON_MIN_LENGTH: int = 1024
 +    VLLM_USE_SWAP_ENGINE: bool = False
 +    VLLM_USE_MIGRATION_BACKEND_RETURN_TOKEN: bool = False
++    LLUMNIX_MIGRATE_IN_PD_WAY: bool = True
++    LLUMNIX_MIGRATE_IN_PD_WAY_EXTRA_TOKENS: int = 10
  
  
  def get_default_cache_root():
-@@ -685,6 +702,25 @@ environment_variables: dict[str, Callable[[], Any]] = {
+@@ -685,6 +704,25 @@ environment_variables: dict[str, Callable[[], Any]] = {
      # If set to 1, vllm will trace function calls
      # Useful for debugging
      "VLLM_TRACE_FUNCTION": lambda: int(os.getenv("VLLM_TRACE_FUNCTION", "0")),
@@ -234,7 +236,7 @@ index caa2fb38a..5d98b9f09 100755
      # If set, vllm will use flashinfer sampler
      "VLLM_USE_FLASHINFER_SAMPLER": lambda: bool(
          int(os.environ["VLLM_USE_FLASHINFER_SAMPLER"])
-@@ -1639,6 +1675,47 @@ environment_variables: dict[str, Callable[[], Any]] = {
+@@ -1639,6 +1677,49 @@ environment_variables: dict[str, Callable[[], Any]] = {
      "VLLM_NIXL_EP_MAX_NUM_RANKS": lambda: int(
          os.getenv("VLLM_NIXL_EP_MAX_NUM_RANKS", "32")
      ),
@@ -279,6 +281,8 @@ index caa2fb38a..5d98b9f09 100755
 +    "VLLM_USE_MIGRATION_BACKEND_RETURN_TOKEN": lambda: bool(
 +        int(os.getenv("VLLM_USE_MIGRATION_BACKEND_RETURN_TOKEN", "0"))
 +    ),
++    "LLUMNIX_MIGRATE_IN_PD_WAY": lambda: os.getenv("LLUMNIX_MIGRATE_IN_PD_WAY", "1").lower() in ("1", "true"),
++    "LLUMNIX_MIGRATE_IN_PD_WAY_EXTRA_TOKENS": lambda: int(os.getenv("LLUMNIX_MIGRATE_IN_PD_WAY_EXTRA_TOKENS", "20")),
  }
  
  
@@ -331,10 +335,38 @@ index bdb97deca..2185f6716 100644
              sampling_params=request.sampling_params,
              pooling_params=request.pooling_params,
 diff --git a/vllm/v1/core/sched/scheduler.py b/vllm/v1/core/sched/scheduler.py
-index ea2c2a6cd..44722d8c0 100644
+index ea2c2a6cd..8e3519ef3 100644
 --- a/vllm/v1/core/sched/scheduler.py
 +++ b/vllm/v1/core/sched/scheduler.py
-@@ -645,7 +645,8 @@ class Scheduler(SchedulerInterface):
+@@ -64,6 +64,15 @@ from vllm.v1.utils import record_function_or_nullcontext
+ logger = init_logger(__name__)
+ 
+ 
++def skip_migrating_req(sched, reqid: str) -> bool:
++    if sched.vllm_config.kv_transfer_config is None or sched.vllm_config.kv_transfer_config.kv_connector is None or \
++        sched.vllm_config.kv_transfer_config.kv_connector != "HybridConnector":
++        return False
++
++    from blade_kvt.hybrid_connector.engine_proxy import sched_skip_migrating_req
++    return sched_skip_migrating_req(reqid)
++
++
+ class Scheduler(SchedulerInterface):
+     def __init__(
+         self,
+@@ -391,6 +400,11 @@ class Scheduler(SchedulerInterface):
+                 req_index += 1
+                 continue
+ 
++            if skip_migrating_req(self, request.request_id):
++                # request is migrating, no need to schedule
++                self.running.remove(request)
++                continue
++
+             num_new_tokens = (
+                 request.num_tokens_with_spec
+                 + request.num_output_placeholders
+@@ -645,7 +659,8 @@ class Scheduler(SchedulerInterface):
  
                  if load_kv_async:
                      # KVTransfer: loading remote KV, do not allocate for new work.
@@ -344,7 +376,7 @@ index ea2c2a6cd..44722d8c0 100644
                      num_new_tokens = 0
                  else:
                      # Number of tokens to be scheduled.
-@@ -732,6 +733,11 @@ class Scheduler(SchedulerInterface):
+@@ -732,6 +747,11 @@ class Scheduler(SchedulerInterface):
  
                  if new_blocks is None:
                      # The request cannot be scheduled.
@@ -356,7 +388,7 @@ index ea2c2a6cd..44722d8c0 100644
  
                      # NOTE: we need to untouch the request from the encode cache
                      # manager
-@@ -1426,6 +1432,10 @@ class Scheduler(SchedulerInterface):
+@@ -1426,6 +1446,10 @@ class Scheduler(SchedulerInterface):
                  or kv_transfer_params
                  or stopped
              ):
@@ -367,7 +399,7 @@ index ea2c2a6cd..44722d8c0 100644
                  # Add EngineCoreOutput for this Request.
                  outputs[request.client_index].append(
                      EngineCoreOutput(
-@@ -1443,6 +1453,7 @@ class Scheduler(SchedulerInterface):
+@@ -1443,6 +1467,7 @@ class Scheduler(SchedulerInterface):
                          num_external_computed_tokens=request.num_external_computed_tokens,
                          routed_experts=routed_experts,
                          num_nans_in_logits=request.num_nans_in_logits,
@@ -429,7 +461,7 @@ index a9c42e78e..600c3dc49 100644
  
          # Loggers.
 diff --git a/vllm/v1/engine/core.py b/vllm/v1/engine/core.py
-index 2f2acdd37..f66cc55fe 100644
+index 2f2acdd37..d277f6641 100644
 --- a/vllm/v1/engine/core.py
 +++ b/vllm/v1/engine/core.py
 @@ -7,7 +7,7 @@ import threading
@@ -449,10 +481,15 @@ index 2f2acdd37..f66cc55fe 100644
  from vllm.envs import enable_envs_cache
  from vllm.logger import init_logger
  from vllm.logging_utils.dump_input import dump_engine_exception
-@@ -75,6 +76,14 @@ from vllm.v1.structured_output import StructuredOutputManager
+@@ -75,6 +76,19 @@ from vllm.v1.structured_output import StructuredOutputManager
  from vllm.v1.utils import compute_iteration_details
  from vllm.version import __version__ as VLLM_VERSION
  
++
++try:
++    from blade_kvt.hybrid_connector.hybrid_modules import bypass_workflow
++except ImportError:
++    bypass_workflow = lambda x: x
 +
 +if envs.VLLM_ENABLE_LLUMNIX:
 +    from llumnix.instance_info import InstanceStatus
@@ -464,7 +501,7 @@ index 2f2acdd37..f66cc55fe 100644
  logger = init_logger(__name__)
  
  HANDSHAKE_TIMEOUT_MINS = 5
-@@ -82,6 +91,26 @@ HANDSHAKE_TIMEOUT_MINS = 5
+@@ -82,6 +96,26 @@ HANDSHAKE_TIMEOUT_MINS = 5
  _R = TypeVar("_R")  # Return type for collective_rpc
  
  
@@ -491,7 +528,7 @@ index 2f2acdd37..f66cc55fe 100644
  class EngineCore:
      """Inner loop of vLLM's Engine."""
  
-@@ -149,6 +178,8 @@ class EngineCore:
+@@ -149,6 +183,8 @@ class EngineCore:
          self.use_spec_decode = vllm_config.speculative_config is not None
          if self.scheduler.connector is not None:  # type: ignore
              self.model_executor.init_kv_output_aggregator(self.scheduler.connector)  # type: ignore
@@ -500,7 +537,7 @@ index 2f2acdd37..f66cc55fe 100644
  
          mm_registry = MULTIMODAL_REGISTRY
          self.mm_receiver_cache = mm_registry.engine_receiver_cache_from_config(
-@@ -214,6 +245,12 @@ class EngineCore:
+@@ -214,6 +250,12 @@ class EngineCore:
  
          self._idle_state_callbacks: list[Callable] = []
  
@@ -513,7 +550,7 @@ index 2f2acdd37..f66cc55fe 100644
          # Mark the startup heap as static so that it's ignored by GC.
          # Reduces pause times of oldest generation collections.
          freeze_gc_heap()
-@@ -319,11 +356,22 @@ class EngineCore:
+@@ -319,11 +361,22 @@ class EngineCore:
                  "Disabling KVTransfer for this request."
              )
  
@@ -536,10 +573,11 @@ index 2f2acdd37..f66cc55fe 100644
          # TODO: The scheduler doesn't really need to know the
          # specific finish reason, TBD whether we propagate that
          # (i.e. client-aborted vs stop criteria met).
-@@ -375,25 +423,55 @@ class EngineCore:
+@@ -375,25 +428,56 @@ class EngineCore:
          )
          self._iteration_index += 1
  
++    @bypass_workflow
 +    def _wait_model_output_future(
 +        self,
 +        model_output_future: \
@@ -594,7 +632,7 @@ index 2f2acdd37..f66cc55fe 100644
              if model_output is None:
                  model_output = self.model_executor.sample_tokens(grammar_output)
  
-@@ -403,6 +481,19 @@ class EngineCore:
+@@ -403,6 +487,19 @@ class EngineCore:
          engine_core_outputs = self.scheduler.update_from_output(
              scheduler_output, model_output
          )
@@ -614,7 +652,7 @@ index 2f2acdd37..f66cc55fe 100644
  
          return engine_core_outputs, scheduler_output.total_num_scheduled_tokens > 0
  
-@@ -436,15 +527,31 @@ class EngineCore:
+@@ -436,15 +533,31 @@ class EngineCore:
          batch_queue = self.batch_queue
          assert batch_queue is not None
  
@@ -646,7 +684,7 @@ index 2f2acdd37..f66cc55fe 100644
              with self.log_error_detail(scheduler_output):
                  exec_future = self.model_executor.execute_model(
                      scheduler_output, non_block=True
-@@ -478,14 +585,20 @@ class EngineCore:
+@@ -478,14 +591,20 @@ class EngineCore:
                      and len(batch_queue) < self.batch_queue_size
                      and not batch_queue[-1][0].done()
                  ):
@@ -668,7 +706,7 @@ index 2f2acdd37..f66cc55fe 100644
              return None, False
  
          # Block until the next result is available.
-@@ -494,7 +607,7 @@ class EngineCore:
+@@ -494,7 +613,7 @@ class EngineCore:
              self.log_error_detail(scheduler_output),
              self.log_iteration_details(scheduler_output),
          ):
@@ -677,7 +715,7 @@ index 2f2acdd37..f66cc55fe 100644
              if model_output is None:
                  # None from sample_tokens() implies that the original execute_model()
                  # call failed - raise that exception.
-@@ -507,6 +620,15 @@ class EngineCore:
+@@ -507,6 +626,15 @@ class EngineCore:
          engine_core_outputs = self.scheduler.update_from_output(
              scheduler_output, model_output
          )
@@ -693,7 +731,7 @@ index 2f2acdd37..f66cc55fe 100644
  
          # NOTE(nick): We can either handle the deferred tasks here or save
          # in a field and do it immediately once step_with_batch_queue is
-@@ -532,6 +654,8 @@ class EngineCore:
+@@ -532,6 +660,8 @@ class EngineCore:
              future = self.model_executor.sample_tokens(grammar_output, non_block=True)
              batch_queue.appendleft((future, deferred_scheduler_output, exec_future))
  
@@ -702,7 +740,7 @@ index 2f2acdd37..f66cc55fe 100644
          return engine_core_outputs, model_executed
  
      def _process_aborts_queue(self):
-@@ -550,6 +674,8 @@ class EngineCore:
+@@ -550,6 +680,8 @@ class EngineCore:
              self.model_executor.shutdown()
          if self.scheduler:
              self.scheduler.shutdown()
@@ -711,7 +749,7 @@ index 2f2acdd37..f66cc55fe 100644
  
      def profile(self, is_start: bool = True, profile_prefix: str | None = None):
          self.model_executor.profile(is_start, profile_prefix)
-@@ -756,6 +882,19 @@ class EngineCore:
+@@ -756,6 +888,19 @@ class EngineCore:
              self.structured_output_manager.grammar_init(req)
          return req, request.current_wave
  
@@ -731,7 +769,7 @@ index 2f2acdd37..f66cc55fe 100644
      def _eep_scale_up_before_kv_init(self):
          raise NotImplementedError
  
-@@ -773,6 +912,25 @@ class EngineShutdownState(IntEnum):
+@@ -773,6 +918,25 @@ class EngineShutdownState(IntEnum):
      SHUTTING_DOWN = 2
  
  
@@ -757,7 +795,7 @@ index 2f2acdd37..f66cc55fe 100644
  class EngineCoreProc(EngineCore):
      """ZMQ-wrapper for running EngineCore in background process."""
  
-@@ -835,6 +993,7 @@ class EngineCoreProc(EngineCore):
+@@ -835,6 +999,7 @@ class EngineCoreProc(EngineCore):
                      vllm_config=vllm_config,
                  )
              self._init_data_parallel(vllm_config)
@@ -765,7 +803,7 @@ index 2f2acdd37..f66cc55fe 100644
  
              super().__init__(
                  vllm_config,
-@@ -844,6 +1003,11 @@ class EngineCoreProc(EngineCore):
+@@ -844,6 +1009,11 @@ class EngineCoreProc(EngineCore):
                  internal_dp_balancing,
              )
  
@@ -777,7 +815,7 @@ index 2f2acdd37..f66cc55fe 100644
              # Background Threads and Queues for IO. These enable us to
              # overlap ZMQ socket IO with GPU since they release the GIL,
              # and to overlap some serialization/deserialization with the
-@@ -881,6 +1045,12 @@ class EngineCoreProc(EngineCore):
+@@ -881,6 +1051,12 @@ class EngineCoreProc(EngineCore):
                  assert addresses.coordinator_input is not None
                  logger.info("Waiting for READY message from DP Coordinator...")
  
@@ -790,7 +828,7 @@ index 2f2acdd37..f66cc55fe 100644
      @contextmanager
      def _perform_handshakes(
          self,
-@@ -1156,6 +1326,9 @@ class EngineCoreProc(EngineCore):
+@@ -1156,6 +1332,9 @@ class EngineCoreProc(EngineCore):
                  break
              if not block:
                  break
@@ -800,7 +838,7 @@ index 2f2acdd37..f66cc55fe 100644
  
          if waited:
              logger.debug("EngineCore loop active.")
-@@ -1170,9 +1343,14 @@ class EngineCoreProc(EngineCore):
+@@ -1170,9 +1349,14 @@ class EngineCoreProc(EngineCore):
  
          # Step the engine core.
          outputs, model_executed = self.step_fn()
@@ -818,7 +856,7 @@ index 2f2acdd37..f66cc55fe 100644
          # Post-step hook.
          self.post_step(model_executed)
  
-@@ -1320,6 +1498,9 @@ class EngineCoreProc(EngineCore):
+@@ -1320,6 +1504,9 @@ class EngineCoreProc(EngineCore):
      def _send_engine_dead(self):
          """Send EngineDead status to the EngineCoreClient."""
  
@@ -828,10 +866,11 @@ index 2f2acdd37..f66cc55fe 100644
          # Put ENGINE_CORE_DEAD in the queue.
          self.output_queue.put_nowait(EngineCoreProc.ENGINE_CORE_DEAD)
  
-@@ -1496,6 +1677,111 @@ class EngineCoreProc(EngineCore):
+@@ -1496,6 +1683,112 @@ class EngineCoreProc(EngineCore):
          )
          self._send_error_outputs_to_client([request.request_id], request.client_index)
  
++    @bypass_workflow
 +    def _wait_model_output_future(
 +        self,
 +        model_output_future: \
