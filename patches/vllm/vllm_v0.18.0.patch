@@ -1,4 +1,4 @@
-From 87843f6044ce20ca067ccdf7e34e9b89994b0da6 Mon Sep 17 00:00:00 2001
+From 9014829324ab43f1de6207183a99aae4d8e48708 Mon Sep 17 00:00:00 2001
 From: "cuikuilong.ckl" <cuikuilong.ckl@alibaba-inc.com>
 Date: Fri, 27 Mar 2026 14:32:26 +0800
 Subject: [PATCH] add migrate_in_pd
@@ -15,7 +15,7 @@ Subject: [PATCH] add migrate_in_pd
  vllm/v1/core/kv_cache_manager.py              |   2 +-
  vllm/v1/core/sched/interface.py               |   4 +
  vllm/v1/core/sched/output.py                  |   2 +
- vllm/v1/core/sched/scheduler.py               |  13 +-
+ vllm/v1/core/sched/scheduler.py               |  27 +-
  vllm/v1/engine/__init__.py                    |   9 +-
  vllm/v1/engine/async_llm.py                   |   1 +
  vllm/v1/engine/core.py                        | 309 +++++++++++++++++-
@@ -27,7 +27,7 @@ Subject: [PATCH] add migrate_in_pd
  vllm/v1/worker/gpu_model_runner.py            |   2 +-
  vllm/v1/worker/gpu_worker.py                  |   4 +-
  .../worker/kv_connector_model_runner_mixin.py |   6 +-
- 23 files changed, 494 insertions(+), 17 deletions(-)
+ 23 files changed, 508 insertions(+), 17 deletions(-)
 
 diff --git a/.gitignore b/.gitignore
 index d62536cfb..41db7faf9 100644
@@ -335,10 +335,38 @@ index bdb97deca..2185f6716 100644
              sampling_params=request.sampling_params,
              pooling_params=request.pooling_params,
 diff --git a/vllm/v1/core/sched/scheduler.py b/vllm/v1/core/sched/scheduler.py
-index ea2c2a6cd..44722d8c0 100644
+index ea2c2a6cd..8e3519ef3 100644
 --- a/vllm/v1/core/sched/scheduler.py
 +++ b/vllm/v1/core/sched/scheduler.py
-@@ -645,7 +645,8 @@ class Scheduler(SchedulerInterface):
+@@ -64,6 +64,15 @@ from vllm.v1.utils import record_function_or_nullcontext
+ logger = init_logger(__name__)
+ 
+ 
++def skip_migrating_req(sched, reqid: str) -> bool:
++    if sched.vllm_config.kv_transfer_config is None or sched.vllm_config.kv_transfer_config.kv_connector is None or \
++        sched.vllm_config.kv_transfer_config.kv_connector != "HybridConnector":
++        return False
++
++    from blade_kvt.hybrid_connector.engine_proxy import sched_skip_migrating_req
++    return sched_skip_migrating_req(reqid)
++
++
+ class Scheduler(SchedulerInterface):
+     def __init__(
+         self,
+@@ -391,6 +400,11 @@ class Scheduler(SchedulerInterface):
+                 req_index += 1
+                 continue
+ 
++            if skip_migrating_req(self, request.request_id):
++                # request is migrating, no need to schedule
++                self.running.remove(request)
++                continue
++
+             num_new_tokens = (
+                 request.num_tokens_with_spec
+                 + request.num_output_placeholders
+@@ -645,7 +659,8 @@ class Scheduler(SchedulerInterface):
  
                  if load_kv_async:
                      # KVTransfer: loading remote KV, do not allocate for new work.
@@ -348,7 +376,7 @@ index ea2c2a6cd..44722d8c0 100644
                      num_new_tokens = 0
                  else:
                      # Number of tokens to be scheduled.
-@@ -732,6 +733,11 @@ class Scheduler(SchedulerInterface):
+@@ -732,6 +747,11 @@ class Scheduler(SchedulerInterface):
  
                  if new_blocks is None:
                      # The request cannot be scheduled.
@@ -360,7 +388,7 @@ index ea2c2a6cd..44722d8c0 100644
  
                      # NOTE: we need to untouch the request from the encode cache
                      # manager
-@@ -1426,6 +1432,10 @@ class Scheduler(SchedulerInterface):
+@@ -1426,6 +1446,10 @@ class Scheduler(SchedulerInterface):
                  or kv_transfer_params
                  or stopped
              ):
@@ -371,7 +399,7 @@ index ea2c2a6cd..44722d8c0 100644
                  # Add EngineCoreOutput for this Request.
                  outputs[request.client_index].append(
                      EngineCoreOutput(
-@@ -1443,6 +1453,7 @@ class Scheduler(SchedulerInterface):
+@@ -1443,6 +1467,7 @@ class Scheduler(SchedulerInterface):
                          num_external_computed_tokens=request.num_external_computed_tokens,
                          routed_experts=routed_experts,
                          num_nans_in_logits=request.num_nans_in_logits,

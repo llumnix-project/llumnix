@@ -162,12 +162,12 @@ def get_vllm_command(
 
     if os.environ.get("USE_MTP", "0").lower() in ["1", "true"] \
         and MODEL_NAME == "Qwen/Qwen3-Next-80B-A3B-Instruct-FP8":
-        speculative_config = '{{"method": "qwen3_next_mtp", "num_speculative_tokens": 2}}'
+        speculative_config = '{"method": "qwen3_next_mtp", "num_speculative_tokens": 2}'
         command += f"--speculative-config '{speculative_config}' "
 
     if os.environ.get("USE_EAGLE3", "0").lower() in ["1", "true"] \
         and MODEL_NAME == "Qwen/Qwen3-8B":
-        speculative_config = '{{"method": "eagle3", "model": "AngelSlim/Qwen3-8B_eagle3", "num_speculative_tokens": 3}}'
+        speculative_config = '{"method": "eagle3", "model": "AngelSlim/Qwen3-8B_eagle3", "num_speculative_tokens": 3}'
         command += f"--speculative-config '{speculative_config}' "
 
     if connector_type == "MooncakeConnector":
