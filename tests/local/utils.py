@@ -158,7 +158,7 @@ def get_vllm_command(
     )
 
     if MODEL_NAME == "Qwen/Qwen3-Next-80B-A3B-Instruct-FP8":
-        command += "--no-disable-hybrid-kv-cache-manager --no-async-scheduling --no-enable-prefix-caching "
+        command += "--no-disable-hybrid-kv-cache-manager --no-enable-prefix-caching "
 
     if os.environ.get("USE_MTP", "0").lower() in ["1", "true"] \
         and MODEL_NAME == "Qwen/Qwen3-Next-80B-A3B-Instruct-FP8":
