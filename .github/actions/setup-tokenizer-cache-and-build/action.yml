@@ -4,7 +4,7 @@ inputs:
   dev_image:
     description: 'Dev container image to use for building'
     required: true
-    default: 'llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225'
+    default: 'llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260326-165612'
 outputs:
   cache_hit:
     description: 'Whether cache was hit'

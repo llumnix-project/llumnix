@@ -13,7 +13,7 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-DEFAULT_IMAGE="llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225"
+DEFAULT_IMAGE="llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260326-165612"
 IMAGE="${CUSTOM_IMAGE:-${DEFAULT_IMAGE}}"
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
