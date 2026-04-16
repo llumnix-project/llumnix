@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 env:
-  DEV_IMAGE: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225
+  DEV_IMAGE: llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260326-165612
 
 jobs:
   # ── cms tests ────────────────────────────────────────────────────────────

@@ -31,7 +31,7 @@ docker run -it --rm \
   --gpus all \
   -v $(pwd):/workspace \
   -w /workspace \
-  llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260204-140225 \
+  llumnix-registry.cn-beijing.cr.aliyuncs.com/llumnix/vllm:dev-20260326-165612 \
   bash
 ```
 

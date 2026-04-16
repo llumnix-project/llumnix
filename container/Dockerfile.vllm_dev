@@ -34,12 +34,12 @@ git-fetch-with-cli = true
 EOF
 
 # Install golang
-RUN wget https://golang.google.cn/dl/go1.23.7.linux-amd64.tar.gz \
-    && tar -C /usr/local -xzf go1.23.7.linux-amd64.tar.gz \
-    && rm go1.23.7.linux-amd64.tar.gz
+RUN wget https://golang.google.cn/dl/go1.24.1.linux-amd64.tar.gz \
+    && tar -C /usr/local -xzf go1.24.1.linux-amd64.tar.gz \
+    && rm go1.24.1.linux-amd64.tar.gz
 ENV GOROOT=/usr/local/go
 ENV GOPATH=/root/go
-ENV GOPROXY=https://goproxy.io,direct
+ENV GOPROXY=https://goproxy.cn|https://goproxy.io|https://proxy.golang.org|direct
 ENV PATH=$PATH:/usr/local/go/bin:/root/go/bin
 RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.5 \
     && go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.5.1
@@ -53,7 +53,7 @@ ENV CUDA_HOME=/usr/local/cuda \
 # vscode can't set env, so we need to set it manually
 RUN echo 'export GOROOT=/usr/local/go' >> ~/.bashrc && \
 echo 'export GOPATH=/root/go' >> ~/.bashrc && \
-echo 'export GOPROXY=https://goproxy.io,direct' >> ~/.bashrc && \
+echo 'export GOPROXY=https://goproxy.cn|https://goproxy.io|https://proxy.golang.org|direct' >> ~/.bashrc && \
 echo 'export PATH=$PATH:/usr/local/go/bin:/root/go/bin' >> ~/.bashrc && \
 echo 'export CUDA_HOME=/usr/local/cuda' >> ~/.bashrc && \
 echo 'export CUDA_PATH=/usr/local/cuda' >> ~/.bashrc && \

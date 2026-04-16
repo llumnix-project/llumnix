@@ -49,11 +49,14 @@ jobs:
 
       - name: Run E2E test in dev container
         id: e2e-test
+        env:
+          GOPROXY: https://goproxy.cn|https://goproxy.io|https://proxy.golang.org|direct
         run: |
           docker run --rm \
             --network host \
             --gpus all \
             --device=/dev/infiniband/uverbs0 --device=/dev/infiniband/uverbs1 --device=/dev/infiniband/rdma_cm --ulimit memlock=-1 \
+            -e GOPROXY="${{ env.GOPROXY }}" \
             -v "$(pwd):/workspace" \
             -w /workspace \
             ${{ env.DEV_IMAGE }} \
@@ -68,7 +71,7 @@ jobs:
               dpkg -i --force-overwrite erdma_installer/DEBS/ubuntu22/x86_64/{rdma-core,libibverbs1,ibverbs-providers,ibverbs-utils,librdmacm1,libibumad3}_*.deb && \
               rm -rf /tmp/erdma_installer /tmp/erdma_installer.tar.gz && \
               cd /workspace && \
-              go mod tidy && \
+              go mod download && \
               make vllm-install && \
               make discovery-install && \
               make llumlet-install && \

@@ -77,4 +77,6 @@ require (
 
 replace github.com/sglang/sglang-go-grpc-sdk => ./lib/sglang/sgl-model-gateway/bindings/golang
 
-go 1.24.10
+go 1.24.0
+
+toolchain go1.24.1
