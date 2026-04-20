@@ -42,6 +42,7 @@ type GatewayConfig struct {
 	config.ProcessorConfig
 	config.RouteConfig
 	config.PDDisaggConfig
+	config.EncoderDisaggConfig
 	config.SchedulingBaseConfig
 	config.LiteModeSchedulingConfig
 	config.BatchServiceConfig
@@ -53,6 +54,7 @@ func (c *GatewayConfig) AddFlags(flags *pflag.FlagSet) {
 	c.AddSchedulingBaseConfigFlags(flags)
 	c.AddLiteModeSchedulingConfigFlags(flags)
 	c.AddPDDisaggConfigFlags(flags)
+	c.AddEncoderDisaggConfigFlags(flags)
 	c.AddRouteConfigFlags(flags)
 	c.AddProcessorConfigFlags(flags)
 	c.AddBatchServiceConfigFlags(flags)

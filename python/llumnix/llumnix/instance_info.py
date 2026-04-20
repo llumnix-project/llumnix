@@ -1,12 +1,13 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List
+from typing import List, Optional
 
 
 class InstanceType(str, Enum):
     NEUTRAL = "neutral"
     PREFILL = "prefill"
     DECODE = "decode"
+    ENCODER = "encoder"
 
 
 class BackendType(str, Enum):
@@ -61,6 +62,13 @@ class InstanceMetaData:
 
     def __repr__(self):
         return f"InstanceInfo(instance_id={self.instance_id}, instance_type={self.instance_type})"
+
+
+@dataclass
+class MmModalityStatus:
+    num_items: int = 0
+    num_encoder_tokens: int = 0
+    num_encoder_embeds: int = 0
 
 
 @dataclass
@@ -123,3 +131,13 @@ class InstanceStatus:
     profiling_id: int = -1
     step_duration: float = 0.0
     num_scheduled_prefill_tokens: int = 0
+
+    # mm status - waiting
+    mm_waiting_image_status: Optional[MmModalityStatus] = None
+    mm_waiting_video_status: Optional[MmModalityStatus] = None
+    mm_waiting_audio_status: Optional[MmModalityStatus] = None
+
+    # mm status - running
+    mm_running_image_status: Optional[MmModalityStatus] = None
+    mm_running_video_status: Optional[MmModalityStatus] = None
+    mm_running_audio_status: Optional[MmModalityStatus] = None

@@ -194,29 +194,14 @@ def vllm_get_instance_meta_data(cfg: VllmConfig) -> dict:
     unit_id = gen_unit_id(cfg)
 
     # Check LLUMNIX_INSTANCE_TYPE environment variable first.
-    # Valid values: "prefill", "decode", "neutral". If not set, use engine config.
-    env_instance_type = envs.LLUMNIX_INSTANCE_TYPE
-    if env_instance_type:
-        if env_instance_type == "prefill":
-            instance_type = InstanceType.PREFILL.value
-        elif env_instance_type == "decode":
-            instance_type = InstanceType.DECODE.value
-        elif env_instance_type == "neutral":
-            instance_type = InstanceType.NEUTRAL.value
-        else:
-            raise ValueError(
-                f"Invalid LLUMNIX_INSTANCE_TYPE: '{env_instance_type}'. "
-                f"Valid values are: 'prefill', 'decode', 'neutral'"
-            )
-    elif not cfg.kv_transfer_config:
-        instance_type = InstanceType.NEUTRAL.value
-    else:
-        if cfg.kv_transfer_config.kv_role == "kv_producer":
-            instance_type = InstanceType.PREFILL.value
-        elif cfg.kv_transfer_config.kv_role == "kv_consumer":
-            instance_type = InstanceType.DECODE.value
-        elif cfg.kv_transfer_config.kv_role == "kv_both":
-            instance_type = InstanceType.NEUTRAL.value
+    # Valid values: "prefill", "decode", "neutral", "encoder".
+    try:
+        instance_type = InstanceType(envs.LLUMNIX_INSTANCE_TYPE)
+    except ValueError:
+        raise ValueError(
+            f"Invalid LLUMNIX_INSTANCE_TYPE: '{envs.LLUMNIX_INSTANCE_TYPE}'. "
+            f"Valid values are: 'prefill', 'decode', 'neutral', 'encoder'"
+        )
 
     try:
         api_server_port = int(os.getenv("LLUMNIX_VLLM_API_SERVER_PORT"))
@@ -229,7 +214,7 @@ def vllm_get_instance_meta_data(cfg: VllmConfig) -> dict:
             "eth0"
         ),  # Use the IP of eth0 to ensure that llm-gateway can reach the API server.
         "ip_kvs": get_host_ip(),
-        "instance_type": instance_type,  # pylint: disable=possibly-used-before-assignment
+        "instance_type": instance_type.value,
         "unit_id": unit_id,
         "api_server_port": api_server_port,
         "max_num_batched_tokens": cfg.scheduler_config.max_num_batched_tokens,

@@ -5,7 +5,7 @@ from vllm.v1.core.sched.output import SchedulerOutput
 from vllm.v1.request import Request
 from vllm.config import VllmConfig
 
-from llumnix.instance_info import ConnectorType, InstanceStatus
+from llumnix.instance_info import ConnectorType, InstanceStatus, MmModalityStatus
 from llumnix.logging.logger import init_logger
 from llumnix.metrics import generate_instance_status_mask, parse_used_metrics_from_env
 from llumnix.status_collector.vllm_v1.base_connector_status_collector import (
@@ -388,6 +388,40 @@ class InstanceStatusCollector:
         instance_status.num_tokens_loading_requests = (
             self.connector_update_collector.get_connector_num_tokens_loading_requests()
         )
+
+    @staticmethod
+    def _aggregate_mm_status(requests):
+        """Aggregate mm status from requests, returns {modality: MmModalityStatus}."""
+        stats = {}  # modality -> MmModalityStatus
+        for req in requests:
+            if not hasattr(req, 'mm_features') or not req.mm_features:
+                continue
+            for feature in req.mm_features:
+                modality = feature.modality
+                if modality not in stats:
+                    stats[modality] = MmModalityStatus()
+                stats[modality].num_items += 1
+                stats[modality].num_encoder_tokens += feature.mm_position.length
+                stats[modality].num_encoder_embeds += feature.mm_position.get_num_embeds()
+        return stats
+
+    @register("mm_waiting_status")
+    def _collect_mm_waiting_status(
+        self, instance_status: InstanceStatus
+    ) -> None:
+        stats = self._aggregate_mm_status(self.scheduler.waiting)
+        instance_status.mm_waiting_image_status = stats.get("image")
+        instance_status.mm_waiting_video_status = stats.get("video")
+        instance_status.mm_waiting_audio_status = stats.get("audio")
+
+    @register("mm_running_status")
+    def _collect_mm_running_status(
+        self, instance_status: InstanceStatus
+    ) -> None:
+        stats = self._aggregate_mm_status(self.scheduler.running)
+        instance_status.mm_running_image_status = stats.get("image")
+        instance_status.mm_running_video_status = stats.get("video")
+        instance_status.mm_running_audio_status = stats.get("audio")
 
     @register("num_running_requests")
     def _collect_num_running_requests(self, instance_status: InstanceStatus) -> None:

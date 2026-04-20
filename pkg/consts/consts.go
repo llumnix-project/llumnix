@@ -15,6 +15,7 @@ const (
 	InferTypeNeutral InferType = "neutral"
 	InferTypePrefill InferType = "prefill"
 	InferTypeDecode  InferType = "decode"
+	InferTypeEncoder InferType = "encoder"
 	InferTypeAll     InferType = "all" // Only for filtering purposes, will not appear in llm worker
 )
 
@@ -27,6 +28,7 @@ type SchedulingStage string
 const (
 	SchedulingStagePrefill SchedulingStage = "prefill"
 	SchedulingStageDecode  SchedulingStage = "decode"
+	SchedulingStageEncoder SchedulingStage = "encoder"
 )
 
 const (

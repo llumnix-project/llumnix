@@ -134,6 +134,14 @@ func (c *RouteConfig) AddRouteConfigFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&c.FallbackRetryMaxDelayMs, "fallback-retry-max-delay-ms", 5000, "upper bound (ms) for the exponential backoff delay between 429 retries on fallback endpoints")
 }
 
+type EncoderDisaggConfig struct {
+	SeparateEncoderScheduling bool
+}
+
+func (c *EncoderDisaggConfig) AddEncoderDisaggConfigFlags(flags *pflag.FlagSet) {
+	flags.BoolVar(&c.SeparateEncoderScheduling, "separate-encoder-scheduling", false, "Specify whether to separate encoder scheduling")
+}
+
 type PDDisaggConfig struct {
 	// The configuration of pd disaggregation
 	// LLM Gateway currently supports a variety of separate implementations of the prefill

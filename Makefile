@@ -81,6 +81,19 @@ scheduler-build: scheduler-proto-build
 	@CGO_ENABLED=1 go build -buildvcs=false -ldflags="-extldflags '-L./lib/sglang/sgl-model-gateway/bindings/golang/target/release/'" -o bin/scheduler ./cmd/scheduler
 	@echo "Building scheduler, done"
 
+.PHONY: proto
+proto:
+	@echo "\n==> Building gateway proto (Go)..."
+	@$(MAKE) gateway-proto-build
+	@echo "==> Gateway proto done.\n"
+	@echo "==> Building llumlet proto (Python)..."
+	@$(MAKE) llumlet-proto-build
+	@echo "==> Llumlet proto done.\n"
+	@echo "==> Building discovery proto (Python)..."
+	@$(MAKE) discovery-proto-build
+	@echo "==> Discovery proto done.\n"
+	@echo "==> All proto builds complete."
+
 .PHONY: discovery-proto-build
 discovery-proto-build:
 	cd ./python/discovery && make proto

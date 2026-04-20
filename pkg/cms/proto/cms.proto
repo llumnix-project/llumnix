@@ -35,6 +35,12 @@ message InstanceMetadata {
   int32 max_num_batched_tokens = 20;
 }
 
+message MmModalityStatus {
+  int32 num_items = 1;
+  int32 num_encoder_tokens = 2;
+  int32 num_encoder_embeds = 3;
+}
+
 message InstanceStatus {
   string instance_id = 1;
 
@@ -90,4 +96,14 @@ message InstanceStatus {
   int32 profiling_id = 38;
   double step_duration = 39;
   int32 num_scheduled_prefill_tokens = 40;
+
+  // mm status - waiting
+  MmModalityStatus mm_waiting_image_status = 41;
+  MmModalityStatus mm_waiting_video_status = 42;
+  MmModalityStatus mm_waiting_audio_status = 43;
+
+  // mm status - running
+  MmModalityStatus mm_running_image_status = 44;
+  MmModalityStatus mm_running_video_status = 45;
+  MmModalityStatus mm_running_audio_status = 46;
 }

@@ -34,6 +34,7 @@ class StatusUpdater:
         "num_waiting_requests",
         "num_loading_requests",
         "num_tokens_loading_requests",
+        "mm_waiting_status",
     }
 
     _RUNNING_STATUSES = {
@@ -42,6 +43,7 @@ class StatusUpdater:
         "scheduler_running_to_decode_requests_num",
         "scheduler_running_to_decode_tokens_num",
         "num_running_requests",
+        "mm_running_status",
     }
 
     def __init__(
