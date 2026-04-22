@@ -1,3 +1,16 @@
+<h1 align="center">
+Llumnix
+</h1>
+
+<h3 align="center">
+Efficient and easy <i>multi-instance</i> LLM serving
+</h3>
+<p align="center">
+| <a href="https://docs.llumnix.ai"><b>Documentation</b></a> | <a href="https://arxiv.org/abs/2406.03243"><b>Paper</b></a> | <a href="https://llumnix.slack.com"><b>Developer Slack</b></a> |
+</p>
+
+---
+
 # About
 
 Llumnix is a full-stack solution for distributed LLM inference serving. It has been a key part of the LLM serving infrastructure of [Alibaba Cloud PAI-EAS](https://help.aliyun.com/zh/pai/user-guide/overview-2?spm=a2c4g.11174283.help-menu-30347.d_3_3_0.3416192348t6Fw), a cloud-native inference serving platform, supporting production-grade inference deployments.
@@ -6,9 +19,15 @@ Llumnix provides key functionalities for modern distributed serving deployments 
 
 Note that with this new repository, we are re-architecting Llummix to a more modular and cloud-native design (Llumnix v1). The old Ray-based architecture ([Llumnix v0](https://github.com/llumnix-project/llumnix-ray)) is a better choice for local deployments and quick prototyping and experimentation of scheduling ideas.
 
-[[Documentation](https://docs.llumnix.ai)]
+# 🔥 Latest News
 
-# Key Features
+- [2026.3] Upgraded vLLM support to v0.18.0.
+- [2026.3] Officially released the re-architected Llumnix.
+- [2025.5] Launched our developer [Slack](https://llumnix.slack.com) community for discussion and collaboration.
+- [2024.7] Officially released the first version of [llumnix-ray](https://github.com/llumnix-project/llumnix-ray).
+- [2024.6] Published our OSDI '24 [research paper](https://arxiv.org/abs/2406.03243) on arXiv.
+
+# 🚀 Key Features
 - **Scheduler + rescheduler architecture** for fully dynamic request scheduling: initial routing + continuous migration
 - **Advanced scheduling policies**: load balancing, KV-aware, SLO/predictor-based scheduling, adaptive PD disaggregation, etc.
 - **Dual-mode scheduling**
