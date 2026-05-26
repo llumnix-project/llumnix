@@ -1,9 +1,10 @@
 name: Nightly E2E Test
 
 on:
-  schedule:
-    # 每天凌晨 3 点运行 (UTC 时间 19:00，对应北京时间 3:00)
-    - cron: '0 19 * * *'
+  # 已停用每天凌晨的定时任务，如需恢复请取消下方 schedule 的注释
+  # schedule:
+  #   # 每天凌晨 3 点运行 (UTC 时间 19:00，对应北京时间 3:00)
+  #   - cron: '0 19 * * *'
   workflow_dispatch:
 
 jobs:
